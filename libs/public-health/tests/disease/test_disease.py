@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree, ConfigurationError
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.state_machine import Transition
 from vivarium.engine.framework.utilities import from_yearly
 from vivarium.engine.testing_utilities import metadata
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.disease import (
@@ -49,7 +50,7 @@ def test_dwell_time(base_config, base_plugins, disease):
         disease, residual_state=healthy_state, states=[healthy_state, event_state, done_state]
     )
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -104,7 +105,7 @@ def test_dwell_time_with_mortality(base_config, base_plugins, disease):
         residual_state=healthy_state,
         states=[healthy_state, mortality_state, done_state],
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -154,7 +155,7 @@ def test_prevalence_single_state_with_migration(
     )
     model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
     base_config.update({"population": {"population_size": 5000}}, **metadata(__file__))
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -199,7 +200,7 @@ def test_prevalence_multiple_sequelae(
     )
 
     base_config.update({"population": {"population_size": 10000}}, **metadata(__file__))
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -237,7 +238,7 @@ def test_mortality_rate(base_config, base_plugins, disease):
 
     model = DiseaseModel(disease, residual_state=healthy, states=[healthy, mortality_state])
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -271,7 +272,7 @@ def test_incidence(base_config, base_plugins, disease):
 
     model = DiseaseModel(disease, residual_state=healthy, states=[healthy, sick])
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -318,7 +319,7 @@ def test_risk_deletion(base_config, base_plugins, disease):
                 modifier=lambda: data,
             )
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model, CalibrationConstantModifier()],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -369,7 +370,7 @@ def test_prevalence_birth_prevalence_initial_assignment(
         },
         **metadata(__file__),
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -425,7 +426,7 @@ def test_no_birth_prevalence_initial_assignment(
         },
         **metadata(__file__),
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -482,7 +483,7 @@ def test_birth_prevalence_initial_assignment(
         },
         **metadata(__file__),
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -559,7 +560,7 @@ def test_transition_rate_to_probability_configuration(
     )
 
     # Sets the configuration
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[BasePopulation(), model],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -621,7 +622,7 @@ def test_disease_model_rate_conversion_config_error(
 
     # Sets the configuration
     with pytest.raises(ConfigurationError):
-        InteractiveContext(
+        Simulation(
             components=[BasePopulation(), model],
             configuration=base_config,
             plugin_configuration=base_plugins,

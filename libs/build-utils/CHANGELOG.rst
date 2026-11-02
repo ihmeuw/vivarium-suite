@@ -1,4 +1,4 @@
-**4.12.0 - 10/28/26**
+**4.12.0 - 11/02/26**
 
 - Support beta releases (``X.Y.ZbN``) in ``PACKAGE_VERSION``, the Jenkins changelog
   check, and ``make validate-tag``
@@ -8,6 +8,16 @@
   publishes a beta
 - Run ``make validate-tag`` in the Jenkins deploy before tagging. Without a release
   tag set, it checks the tag ``make tag-version`` would create
+
+**4.11.2 - 10/29/26**
+
+- Fetch the git tags in the Jenkins checkout itself, with the job's credentials, instead of
+  in a separate ``git fetch`` that fails for private repos
+
+**4.11.1 - 10/29/26**
+
+- Fetch git tags after the Jenkins checkout, so setuptools_scm computes the real
+  version of the lib under test instead of ``0.0.1.dev``
 
 **4.11.0 - 10/27/26**
 

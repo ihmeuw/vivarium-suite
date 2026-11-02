@@ -27,9 +27,7 @@ from vivarium.cluster_tools.psimulate.worker.task_runner import (
     main,
     parse_args,
 )
-from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
-    ParallelSimulationContext,
-)
+from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import ParallelSimulation
 
 # Patch targets are the names as imported into task_runner.
 _WORK_HORSE = "vivarium.cluster_tools.psimulate.worker.task_runner.work_horse"
@@ -501,7 +499,7 @@ class TestEngineTerminalLoggingInteraction:
         stdout: the engine adds a terminal sink only when it sees none."""
         _configure_worker_logging(sim_verbosity=0)
 
-        ParallelSimulationContext()
+        ParallelSimulation()
 
         logger.info(_INFO_PROBE)
         logger.error("error-marker")

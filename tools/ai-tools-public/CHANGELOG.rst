@@ -1,3 +1,13 @@
+**0.5.0 - 10/28/26**
+
+- Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per
+  changed source file, with the columns Case, Error / success, Expected, and
+  Test. Every testing-strategy item gets a row, and an item with no test is
+  marked ``Not tested``. ``_finalize-core`` runs it for ``/simsci:pr-prep`` and
+  ``/simsci:framework-development``, takes optional strategy items and
+  outside-suite checks from its caller, and posts each table as a file-level
+  review comment on its file
+
 **0.4.0 - 10/26/26**
 
 - Add a local ``jira`` MCP server for IHME's Jira to replace IHME Infra's

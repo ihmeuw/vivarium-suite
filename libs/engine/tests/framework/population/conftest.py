@@ -10,7 +10,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from vivarium.engine import Component
-from vivarium.engine.framework.engine import Builder, SimulationContext
+from vivarium.engine.framework.engine import Builder, Simulation
 from vivarium.engine.framework.population import PopulationManager, SimulantData
 from vivarium.engine.framework.values import ValuesManager
 
@@ -74,8 +74,8 @@ def pies_and_cubes_pop_mgr(mocker: MockerFixture) -> PopulationManager:
 
     mgr = _PopulationManager()
 
-    # Use SimulationContext just for builder and mock as appropriate
-    sim = SimulationContext()
+    # Use Simulation just for builder and mock as appropriate
+    sim = Simulation()
     builder = sim._builder
     mocker.patch.object(ValuesManager, "logger", mocker.Mock(), create=True)
     mocker.patch.object(ValuesManager, "resources", mocker.Mock(), create=True)

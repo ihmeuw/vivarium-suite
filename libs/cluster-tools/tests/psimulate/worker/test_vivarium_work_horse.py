@@ -11,7 +11,7 @@ from pytest_mock import MockerFixture
 from tests.psimulate.conftest import make_job_parameters
 from vivarium.cluster_tools.psimulate.jobs import JobParameters
 from vivarium.cluster_tools.psimulate.worker.vivarium_work_horse import (
-    ParallelSimulationContext,
+    ParallelSimulation,
     get_backup,
     get_sim_from_backup,
     remove_backups,
@@ -147,10 +147,10 @@ def test_work_horse_does_not_report_its_own_failure(
 
 
 def test_get_sim_from_backup() -> None:
-    backup = ParallelSimulationContext()  # returned by get_backup
+    backup = ParallelSimulation()  # returned by get_backup
     event = {"start": time()}
     sim, exec_time = get_sim_from_backup(event, backup)
-    assert isinstance(sim, ParallelSimulationContext)
+    assert isinstance(sim, ParallelSimulation)
     assert isinstance(exec_time, dict)
     assert "setup_minutes" in exec_time.keys()
     assert backup == sim

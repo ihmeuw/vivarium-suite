@@ -3,11 +3,11 @@
 The Vivarium Engine
 ===================
 
-The engine houses the :class:`BaseSimulationContext` -- the key ``vivarium``
+The engine houses the :class:`BaseSimulation` -- the key ``vivarium``
 object for running and interacting with simulations. It is the top level manager
 for all state information in ``vivarium``.  By intention, it exposes a very
 simple interface for managing the
-:ref:`simulation lifecycle <lifecycle_concept>`. The :class:`SimulationContext`
+:ref:`simulation lifecycle <lifecycle_concept>`. The :class:`Simulation`
 extends it to run a simulation from start to finish.
 
 Also included here is the simulation :class:`Builder`, which is the main
@@ -61,7 +61,7 @@ from vivarium.engine.framework.values import ValuesInterface, ValuesManager
 from vivarium.engine.types import ClockTime
 
 
-class BaseSimulationContext(ABC):
+class BaseSimulation(ABC):
     """The simulation state and lifecycle shared by every simulation context.
 
     Builds the managers and components from a model specification and runs the
@@ -92,17 +92,14 @@ class BaseSimulationContext(ABC):
         a non-threadsafe operation.
         """
         if sim_name is None:
-            sim_number = len(BaseSimulationContext._created_simulation_contexts) + 1
+            sim_number = len(BaseSimulation._created_simulation_contexts) + 1
             sim_name = f"simulation_{sim_number}"
 
-        if sim_name in BaseSimulationContext._created_simulation_contexts:
-            msg = (
-                "Attempting to create two SimulationContexts "
-                f"with the same name {sim_name}"
-            )
+        if sim_name in BaseSimulation._created_simulation_contexts:
+            msg = "Attempting to create two Simulations " f"with the same name {sim_name}"
             raise VivariumError(msg)
 
-        BaseSimulationContext._created_simulation_contexts.add(sim_name)
+        BaseSimulation._created_simulation_contexts.add(sim_name)
         return sim_name
 
     @staticmethod
@@ -113,7 +110,7 @@ class BaseSimulationContext(ABC):
         -----
         This is primarily useful for testing purposes.
         """
-        BaseSimulationContext._created_simulation_contexts = set()
+        BaseSimulation._created_simulation_contexts = set()
 
     def __init__(
         self,
@@ -322,7 +319,7 @@ class BaseSimulationContext(ABC):
         return f"{type(self).__name__}({self.name})"
 
 
-class SimulationContext(BaseSimulationContext):
+class Simulation(BaseSimulation):
     """A simulation context that runs a simulation from start to finish.
 
     Adds running to the configured end time with optional backups, reporting and
@@ -405,10 +402,10 @@ class SimulationContext(BaseSimulationContext):
         return self._clock.time_steps_remaining
 
     @classmethod
-    def load_from_backup(cls, backup_path: Path) -> "SimulationContext":
+    def load_from_backup(cls, backup_path: Path) -> "Simulation":
         """Loads a simulation context from a backup file."""
         with open(backup_path, "rb") as f:
-            backup: SimulationContext = dill.load(f)
+            backup: Simulation = dill.load(f)
         return backup
 
 
@@ -421,7 +418,7 @@ class Builder:
     Notes
     -----
     A `Builder` should never be created directly. It will automatically be
-    created during the initialization of a :class:`SimulationContext`
+    created during the initialization of a :class:`Simulation`
 
     """
 

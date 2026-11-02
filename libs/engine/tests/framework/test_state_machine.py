@@ -5,9 +5,9 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.helpers import ColumnCreator
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.population import SimulantData
@@ -29,7 +29,7 @@ def test_initialize_with_initial_state() -> None:
     start_state = State("start")
     other_state = State("other")
     machine = Machine("state", states=[start_state, other_state], initial_state=start_state)
-    simulation = InteractiveContext(components=[machine])
+    simulation = Simulation(components=[machine])
     assert all(simulation.get_population("state") == "start")
 
 
@@ -58,9 +58,7 @@ def test_initialize_with_scalar_initialization_weights(
     state_a = State("a", initialization_weights=initialization_weights("state_a.weights"))
     state_b = State("b", initialization_weights=initialization_weights("state_b.weights"))
     machine = Machine("state", states=[state_a, state_b])
-    simulation = InteractiveContext(
-        components=[machine], configuration=base_config, setup=False
-    )
+    simulation = Simulation(components=[machine], configuration=base_config, setup=False)
     mocker.patch(
         "vivarium.engine.framework.artifact.interface.ArtifactInterface.load",
         side_effect=mock_load,
@@ -106,7 +104,7 @@ def test_initialize_with_array_initialization_weights(
     state_a = State("a", initialization_weights=initialization_weights("state_a.weights"))
     state_b = State("b", initialization_weights=initialization_weights("state_b.weights"))
     machine = Machine("state", states=[state_a, state_b])
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[machine, ColumnCreator()], configuration=config, setup=False
     )
     mocker.patch(
@@ -130,13 +128,13 @@ def test_error_if_initialize_with_both_initial_state_and_initialization_weights(
     machine = Machine("state", states=[start_state, other_state], initial_state=start_state)
 
     with pytest.raises(ValueError, match="Cannot specify both"):
-        InteractiveContext(components=[machine])
+        Simulation(components=[machine])
 
 
 def test_error_if_initialize_with_neither_initial_state_nor_initialization_weights() -> None:
     machine = Machine("state", states=[State("a"), State("b")])
     with pytest.raises(ValueError, match="Must specify either"):
-        InteractiveContext(components=[machine])
+        Simulation(components=[machine])
 
 
 @pytest.mark.parametrize("population_size", [1, 100])
@@ -158,7 +156,7 @@ def test_transition(
         start_state.add_transition(output_state=done_state)
     machine = Machine("state", states=[start_state, done_state], initial_state=start_state)
 
-    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    simulation = Simulation(components=[machine], configuration=base_config)
     assert np.all(simulation.get_population("state") == "start")
     simulation.step()
     assert np.all(simulation.get_population("state") == "done")
@@ -181,7 +179,7 @@ def test_no_null_transition(base_config: ConfigTree) -> None:
         "state", states=[start_state, a_state, b_state], initial_state=start_state
     )
 
-    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    simulation = Simulation(components=[machine], configuration=base_config)
     assert np.all(simulation.get_population("state") == "start")
 
     simulation.step()
@@ -204,7 +202,7 @@ def test_null_transition(base_config: ConfigTree) -> None:
 
     machine = Machine("state", states=[start_state, a_state], initial_state=start_state)
 
-    simulation = InteractiveContext(components=[machine], configuration=base_config)
+    simulation = Simulation(components=[machine], configuration=base_config)
     simulation.step()
     state = simulation.get_population("state")
     assert round((state == "a").mean(), 1) == 0.4
@@ -232,7 +230,7 @@ def test_side_effects() -> None:
     machine = Machine(
         "state", states=[start_state, counting_state], initial_state=start_state
     )
-    simulation = InteractiveContext(components=[machine])
+    simulation = Simulation(components=[machine])
     assert np.all(simulation.get_population("count") == 0)
 
     # transitioning to counting state

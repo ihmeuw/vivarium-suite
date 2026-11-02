@@ -36,7 +36,7 @@ import yaml
 from loguru import logger
 
 from vivarium.engine.examples import disease_model
-from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import Simulation
 from vivarium.engine.framework.logging import (
     configure_logging_to_file,
     configure_logging_to_terminal,
@@ -117,7 +117,7 @@ def run(
         input_data["artifact_path"] = artifact_path
     override_configuration = {"output_data": output_data, "input_data": input_data}
 
-    sim = SimulationContext(
+    sim = Simulation(
         model_specification=model_specification, configuration=override_configuration
     )
     with open(f"{results_directory}/model_specification.yaml", "w") as f:
@@ -146,7 +146,7 @@ def test() -> None:
     configure_logging_to_terminal(verbosity=2, long_format=False)
     model_specification = disease_model.get_model_specification_path()
 
-    sim = SimulationContext(model_specification)
+    sim = Simulation(model_specification)
 
     main = handle_exceptions(sim.run_simulation, logger, with_debugger=False)
     main()

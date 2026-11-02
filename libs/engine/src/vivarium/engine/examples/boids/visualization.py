@@ -1,14 +1,18 @@
+from __future__ import annotations
+
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.artist import Artist
 
-from vivarium.engine import InteractiveContext
+if TYPE_CHECKING:
+    from vivarium.interactive import Simulation
 
 
 # docs-start: plot_boids
-def plot_boids(simulation: InteractiveContext, plot_velocity: bool = False) -> None:
+def plot_boids(simulation: Simulation, plot_velocity: bool = False) -> None:
     width = simulation.configuration.field.width
     height = simulation.configuration.field.height
     pop = simulation.get_population(["x", "y", "color", "vx", "vy"])
@@ -26,7 +30,7 @@ def plot_boids(simulation: InteractiveContext, plot_velocity: bool = False) -> N
 # docs-end: plot_boids
 
 # docs-start: plot_boids_animated
-def plot_boids_animated(simulation: InteractiveContext) -> FuncAnimation:
+def plot_boids_animated(simulation: Simulation) -> FuncAnimation:
     width = simulation.configuration.field.width
     height = simulation.configuration.field.height
     pop = simulation.get_population(["x", "y", "color"])

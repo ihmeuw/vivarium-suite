@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import TestPopulation, metadata
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age, make_uniform_pop_data
 from vivarium.public_health import utilities
@@ -49,7 +49,7 @@ def crude_birth_rate_data(live_births=500):
 
 def _crude_birth_rate_sim(config, base_plugins, live_births=500):
     """Build a not-yet-set-up FertilityCrudeBirthRate sim with the live-births covariate."""
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[TestPopulation(), FertilityCrudeBirthRate()],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -72,7 +72,7 @@ def test_FertilityDeterministic(config):
     )
 
     components = [TestPopulation(), FertilityDeterministic()]
-    simulation = InteractiveContext(components=components, configuration=config)
+    simulation = Simulation(components=components, configuration=config)
     start_time = simulation.current_time
     simulation.run_for(duration=pd.Timedelta(days=num_days))
     end_time = simulation.current_time
@@ -89,7 +89,7 @@ def test_FertilityDeterministic(config):
 @pytest.fixture(scope="module")
 def stepped_crude_birth_rate_sim(
     base_config_factory, base_plugins
-) -> tuple[InteractiveContext, list[int]]:
+) -> tuple[Simulation, list[int]]:
     """Shared FertilityCrudeBirthRate sim (extrapolated, 5000 simulants), stepped 10 times.
 
     Returns the stepped sim plus the population size before the first step and after each of
@@ -179,7 +179,7 @@ def test_FertilityCrudeBirthRate_with_non_zero_initialization_age_min_error(
         ValueError,
         match=f"'initialization_age_min' must be 0 if using FertilityCrudeBirthRate. Provided value: {initialization_age_min}",
     ):
-        simulation = InteractiveContext(
+        simulation = Simulation(
             components=components,
             configuration=base_config,
             plugin_configuration=base_plugins,
@@ -203,7 +203,7 @@ def test_fertility_module(base_config, base_plugins):
     )
 
     components = [TestPopulation(), FertilityAgeSpecificRates()]
-    simulation = simulation = InteractiveContext(
+    simulation = simulation = Simulation(
         components=components,
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -301,7 +301,7 @@ class TestFertilityCrudeBirthRateDataSources:
             },
             layer="override",
         )
-        sim = InteractiveContext(
+        sim = Simulation(
             components=[BasePopulation(), FertilityCrudeBirthRate()],
             configuration=base_config,
             plugin_configuration=base_plugins,

@@ -32,6 +32,10 @@ python:
       path: libs/engine
       extra_requirements:
         - docs
+    # The tutorials run vivarium-interactive code. It depends on engine, so engine's
+    # extras can't pull it in from the tree; install it after engine instead.
+    - method: pip
+      path: libs/interactive
 
 formats:
   - pdf

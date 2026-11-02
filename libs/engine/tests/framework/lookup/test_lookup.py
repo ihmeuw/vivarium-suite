@@ -9,9 +9,10 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.helpers import LookupCreator
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
@@ -28,7 +29,7 @@ def lookup_manager(mocker: MockerFixture) -> LookupTableManager:
     """A ``LookupTableManager`` with the builder-supplied collaborators mocked.
 
     Suitable for tests that drive ``manager._build_table`` directly without
-    standing up an entire ``InteractiveContext``.
+    standing up an entire ``Simulation``.
     """
     manager = LookupTableManager()
     manager.clock = mocker.Mock()
@@ -119,7 +120,7 @@ def test_interpolated_tables(base_config: ConfigTree) -> None:
     )  # the results we're checking later assume interp order 1
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager.build_table(years_df, "", value_columns=())
     age_table = manager.build_table(ages_df, "", value_columns=())
@@ -172,7 +173,7 @@ def test_interpolated_tables_without_uninterpolated_columns(
     )  # the results we're checking later assume interp order 1
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager.build_table(years_df, "", value_columns=())
 
@@ -210,7 +211,7 @@ def test_interpolated_tables__exact_values_at_input_points(
     base_config.update({"population": {"population_size": 10000}})
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager._build_table(component, years_df, "", value_columns="value")
 
@@ -237,7 +238,7 @@ def test_interpolated_tables__only_categorical_parameters(
     base_config.update({"population": {"population_size": 10000}})
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     lookup_table = manager._build_table(component, input_data, "", value_columns="some_value")
 
@@ -258,7 +259,7 @@ def test_interpolated_table__continuous_and_multiple_categorical(
     value for every (sex, location) group when driven through the manager on a
     population index. Mirror ``test_interpolated_tables__only_categorical_parameters``
     for the categorical setup and ``test_interpolated_tables`` for the
-    age/year build_table + InteractiveContext setup.
+    age/year build_table + Simulation setup.
     """
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
@@ -287,7 +288,7 @@ def test_interpolated_table__continuous_and_multiple_categorical(
 
     base_config.update({"population": {"population_size": 10000}})
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     lookup_table = manager._build_table(component, data, "", value_columns="value")
 
@@ -315,7 +316,7 @@ def test_lookup_table_scalar_from_list(
     base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
 ) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns=["a", "b"])(
         simulation.get_population_index()
@@ -332,7 +333,7 @@ def test_lookup_table_scalar_from_single_value(
     base_config: ConfigTree, data: ScalarValue
 ) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns="a")(
         simulation.get_population_index()
@@ -352,7 +353,7 @@ def test_lookup_table_interpolated_return_types(base_config: ConfigTree) -> None
         },
     )
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns="value")(
         simulation.get_population_index()
@@ -563,7 +564,7 @@ class TestValidateBuildTableParameters:
 
 def test__build_table_from_dict(base_config: ConfigTree) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     # Both "b" groups share the same a bins: interpolation requires uniform bin
     # edges across categorical groups.
@@ -600,9 +601,7 @@ def test_uncreated_lookup_table_warning(
                 }
             }
 
-    InteractiveContext(
-        components=[ComponentWithUnusedLookupTable()], configuration=base_config
-    )
+    Simulation(components=[ComponentWithUnusedLookupTable()], configuration=base_config)
 
     # Check that the warning was logged at WARNING level
     warning_records = [record for record in caplog.records if record.levelname == "WARNING"]
@@ -956,7 +955,7 @@ class TestLookupTableSetData:
         """Create a simulation with all components, return components after post_setup."""
         components = self._make_components()
         components_dict = {c.name: c for c in components}
-        InteractiveContext(components=components, configuration=self._make_config())
+        Simulation(components=components, configuration=self._make_config())
         return components_dict
 
     @pytest.fixture(scope="class")
@@ -964,7 +963,7 @@ class TestLookupTableSetData:
         """Create a simulation with all components, run one time step, return components."""
         components = self._make_components()
         components_dict = {c.name: c for c in components}
-        sim = InteractiveContext(components=components, configuration=self._make_config())
+        sim = Simulation(components=components, configuration=self._make_config())
         sim.step()
         return components_dict
 
@@ -1350,7 +1349,7 @@ class TestIndexedInput:
         """Calling an indexed-table on a population index returns properly
         shaped output with the population index AND the correct per-row values."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_rate_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1364,7 +1363,7 @@ class TestIndexedInput:
 
     def test_indexed_series_call_returns_series(self, base_config: ConfigTree) -> None:
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series([0.1, 0.2], index=self._sex_index(), name="rate")
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1382,7 +1381,7 @@ class TestIndexedInput:
         """End-to-end exercise of a Series whose row index is a MultiIndex.
         Covers the ``Series.to_frame().reset_index()`` reshape path."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series(
             [0.1, 0.2, 0.3, 0.4],
             index=pd.MultiIndex.from_tuples(
@@ -1408,7 +1407,7 @@ class TestIndexedInput:
         """End-to-end exercise of indexed input that combines a key column
         (``sex``) with a continuous binned parameter (``age``)."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_age_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1423,7 +1422,7 @@ class TestIndexedInput:
         """Calling an indexed lookup on an empty index returns an empty result
         of the right type/shape."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_rate_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         result = table(pd.Index([], dtype=int))
@@ -1438,7 +1437,7 @@ class TestIndexedInput:
         named, properly typed empty Series (exercises the squeeze+rename in
         ``LookupTable._call``)."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series([0.1, 0.2], index=self._sex_index(), name="rate")
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         result = table(pd.Index([], dtype=int))
@@ -1452,7 +1451,7 @@ class TestIndexedInput:
         """Column-MultiIndex return type: empty input must preserve the
         column ``MultiIndex`` tuples and level names on the empty result."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         cols = pd.MultiIndex.from_tuples(
             [("rate", "low"), ("rate", "high")], names=["measure", "level"]
         )
@@ -1473,7 +1472,7 @@ class TestIndexedInput:
         self, base_config: ConfigTree
     ) -> None:
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         cols = pd.MultiIndex.from_tuples(
             [("rate", "low"), ("rate", "high")], names=["measure", "level"]
         )

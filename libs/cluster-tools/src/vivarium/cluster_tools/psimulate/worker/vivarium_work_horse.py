@@ -16,7 +16,7 @@ from typing import Any, cast
 import dill
 import pandas as pd
 from loguru import logger
-from vivarium.engine.framework.engine import SimulationContext
+from vivarium.engine.framework.engine import Simulation
 from vivarium.engine.framework.utilities import collapse_nested_dict
 
 from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
@@ -26,10 +26,10 @@ from vivarium.cluster_tools.psimulate.worker import PERF_LOG_MARKER
 from vivarium.cluster_tools.vipin.perf_counters import CounterSnapshot
 
 
-class ParallelSimulationContext(SimulationContext):
+class ParallelSimulation(Simulation):
     """A parallel simulation context.
 
-    This is identical to ``SimulationContext`` except that it does not write out
+    This is identical to ``Simulation`` except that it does not write out
     the results to disk in order to allow them to be batch-written.
     """
 
@@ -72,7 +72,7 @@ def work_horse(
 
 def get_backup(
     job_parameters: JobParameters,
-) -> ParallelSimulationContext | None:
+) -> ParallelSimulation | None:
     backup_dir = Path(job_parameters.backup_configuration["backup_dir"])
     metadata_path = Path(job_parameters.backup_configuration["backup_metadata_path"])
     try:
@@ -105,7 +105,7 @@ def get_backup(
                 for stale_file in set(existing_pickles) - {last_pickle}:
                     os.remove(stale_file)
             with open(last_pickle, "rb") as backup_file:
-                sim = cast(ParallelSimulationContext, dill.load(backup_file))
+                sim = cast(ParallelSimulation, dill.load(backup_file))
             if job_parameters.backup_configuration["backup_freq"] is not None:
                 logger.info(
                     f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl"
@@ -130,8 +130,8 @@ def get_backup(
 
 
 def get_sim_from_backup(
-    event: dict[str, float], backup: ParallelSimulationContext
-) -> tuple[ParallelSimulationContext, dict[str, float]]:
+    event: dict[str, float], backup: ParallelSimulation
+) -> tuple[ParallelSimulation, dict[str, float]]:
     logger.info("Restarting simulation from saved backup")
     sim = backup
     event["simulation_start"] = time()
@@ -144,8 +144,8 @@ def get_sim_from_backup(
 
 def initialize_new_sim(
     event: dict[str, float], job_parameters: JobParameters
-) -> tuple[ParallelSimulationContext, dict[str, float]]:
-    sim = ParallelSimulationContext(
+) -> tuple[ParallelSimulation, dict[str, float]]:
+    sim = ParallelSimulation(
         job_parameters.model_specification,
         configuration=job_parameters.sim_config,
         logging_verbosity=job_parameters.extras["sim_verbosity"],
@@ -174,7 +174,7 @@ def initialize_new_sim(
 def run_simulation(
     job_parameters: JobParameters,
     event: dict[str, float],
-    sim: ParallelSimulationContext,
+    sim: ParallelSimulation,
     exec_time: dict[str, float],
 ) -> Path:
     num_steps = sim.get_number_of_steps_remaining()
@@ -202,7 +202,7 @@ def run_simulation(
 
 
 def get_sim_results(
-    sim: ParallelSimulationContext,
+    sim: ParallelSimulation,
     job_parameters: JobParameters,
     start_snapshot: CounterSnapshot,
     event: dict[str, float],

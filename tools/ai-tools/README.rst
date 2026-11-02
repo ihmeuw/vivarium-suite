@@ -45,15 +45,16 @@ It includes:
   doc. From that contract it runs a **sequential build** in
   data-dependency order (artifact, then component, then observer — skipping
   layers the change doesn't touch), while an **internal verification** is authored in
-  parallel and blind to the implementation — InteractiveContext checks and a
+  parallel and blind to the implementation — interactive-simulation checks and a
   notebook built from the plan alone. It then **runs the simulation** to verify
   (the repo's existing suite, the new checks, a local ``simulate`` run, and the
   notebook) and applies the same multi-lens review as
   ``/simsci:framework-development``. The verification is an internal loop for
   engineering confidence — not formal V&V — so its **traces** (notebook plots and
   tables) are posted to the PR, while the artifacts themselves stay out of the
-  repo unless you ask to keep them. Gates the artifact build and the PR on
-  explicit user approval.
+  repo unless you ask to keep them. The test summary puts the plan's changes
+  and quantitative expectations in a table on each changed file, each linked to
+  the test or verification check that covers it. Gates the artifact build and the PR on explicit user approval.
 
 **Skills**
 

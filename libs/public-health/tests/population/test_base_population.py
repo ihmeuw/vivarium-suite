@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import get_randomness
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
 import vivarium.public_health.population.base_population as bp
 import vivarium.public_health.population.data_transformations as dt
@@ -56,7 +56,7 @@ def test_BasePopulation(
         },
         layer="override",
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[base_pop], configuration=config, plugin_configuration=base_plugins
     )
     time_start = simulation._clock.time
@@ -112,7 +112,7 @@ def test_age_out_simulants(config, base_plugins):
         layer="override",
     )
     components = [bp.BasePopulation()]
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components, configuration=config, plugin_configuration=base_plugins
     )
     time_start = simulation._clock.time
@@ -153,7 +153,7 @@ def test_aged_out_simulant_untracking(
         layer="override",
     )
     components = [bp.BasePopulation()]
-    sim = InteractiveContext(
+    sim = Simulation(
         components=components, configuration=config, plugin_configuration=base_plugins
     )
     pop0 = sim.get_population(["age", "is_aged_out"])
@@ -397,7 +397,7 @@ def test_scaled_population(
     else:
         scaling_factor = scalar_data
     scaled_pop = bp.ScaledPopulation(scaling_factor)
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[scaled_pop], configuration=config, plugin_configuration=base_plugins
     )
     pop = sim.get_population(["age", "sex"])
@@ -557,7 +557,7 @@ def test_base_population_creates_disability_weight_pipeline(config, base_plugins
         },
         layer="override",
     )
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[bp.BasePopulation()],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -586,7 +586,7 @@ def test_disability_weight_pipeline_combination(
     """
     model_0, model_1 = disability_disease_models
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[bp.BasePopulation(), model_0, model_1],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -674,9 +674,9 @@ def _check_locations(simulants):
 
 
 def _make_data_sources_sim(base_config, base_plugins, config_overrides, components=None):
-    """Build an InteractiveContext with the given config overrides."""
+    """Build a Simulation with the given config overrides."""
     base_config.update(config_overrides, layer="override")
-    return InteractiveContext(
+    return Simulation(
         components=components or [bp.BasePopulation()],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -863,7 +863,7 @@ def test_fertility_before_aging(base_config, base_plugins):
         layer="override",
     )
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[bp.BasePopulation(), FertilityDeterministic()],
         configuration=base_config,
         plugin_configuration=base_plugins,

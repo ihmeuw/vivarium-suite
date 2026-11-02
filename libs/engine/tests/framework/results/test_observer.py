@@ -3,8 +3,8 @@ from typing import Any
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree.main import ConfigTree
+from vivarium.interactive import Simulation
 
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.components.manager import ComponentConfigError
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.results.observer import Observer
@@ -72,7 +72,7 @@ def test_observer_get_configuration(
 ) -> None:
 
     observer = TestObserverStratifications()
-    sim = InteractiveContext(
+    sim = Simulation(
         base_config,
         components=[observer],
     )
@@ -92,7 +92,7 @@ def test_duplicated_observer_error(base_config: ConfigTree) -> None:
         ComponentConfigError,
         match="is attempting to set the configuration value test, but it has already been set",
     ):
-        InteractiveContext(
+        Simulation(
             base_config,
             components=[observer1, observer2],
         )

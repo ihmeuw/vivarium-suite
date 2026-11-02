@@ -5,8 +5,9 @@ from typing import Any, TypedDict
 import numpy as np
 import pandas as pd
 import pytest
+from vivarium.interactive import Simulation
 
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event, EventManager
 from vivarium.engine.framework.lifecycle import LifeCycleError, lifecycle_states
@@ -192,4 +193,4 @@ class TestEventNamesMustBeLifecycleStates:
                 builder.event.register_listener("my_event", lambda event: None)
 
         with pytest.raises(LifeCycleError, match="'my_event' is not a life cycle state"):
-            InteractiveContext(components=[CustomEventListener()])
+            Simulation(components=[CustomEventListener()])

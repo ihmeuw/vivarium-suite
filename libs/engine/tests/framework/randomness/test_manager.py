@@ -4,9 +4,10 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.helpers import ColumnCreator
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.randomness.index_map import IndexMap
 from vivarium.engine.framework.randomness.manager import RandomnessError, RandomnessManager
@@ -154,7 +155,7 @@ def test_additional_seed(base_config: ConfigTree, additional_seed: str | None) -
     )
 
     component = ColumnCreator()
-    sim = InteractiveContext(components=[component], configuration=base_config)
+    sim = Simulation(components=[component], configuration=base_config)
     rm = sim._randomness
 
     if additional_seed is not None:

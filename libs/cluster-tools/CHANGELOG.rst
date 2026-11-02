@@ -1,3 +1,8 @@
+**4.8.0 - 10/28/26**
+
+- Rename ``ParallelSimulationContext`` to ``ParallelSimulation`` and require
+  ``vivarium-engine`` 6
+
 **4.7.2 - 10/12/26**
 
 - Tie the positional-argument deprecation test to the 5.0.0 release instead of a date

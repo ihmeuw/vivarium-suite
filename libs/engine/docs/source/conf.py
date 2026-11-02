@@ -87,6 +87,7 @@ intersphinx_mapping = {
     # Sibling monorepo libs whose docs engine references.
     "vivarium_artifact": ("https://vivarium-artifact.readthedocs.io/en/latest/", None),
     "vivarium_config_tree": ("https://vivarium-config-tree.readthedocs.io/en/latest/", None),
+    "vivarium_interactive": ("https://vivarium-interactive.readthedocs.io/en/latest/", None),
 }
 
 

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.population import BasePopulation
@@ -87,7 +87,7 @@ def risk_data() -> dict:
 def categorical_risk_observer_sim(base_config_factory, base_plugins, risk_data):
     """Return a shared, read-only sim with two independent categorical-risk observers
     (``test_risk`` and ``another_test_risk``); don't step or mutate it."""
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             ResultsStratifier(),
@@ -185,7 +185,7 @@ def test_observation_correctness(categorical_risk_observer_sim, risk_data):
 @pytest.mark.parametrize("exclusions", [[], ["cat1"], ["cat1", "cat4"]])
 def test_category_exclusions(base_config, base_plugins, risk, risk_data, exclusions):
     observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             ResultsStratifier(),
@@ -226,7 +226,7 @@ def test_observer_sources_categories_from_risk_component(
     config data source when the ``categories`` artifact key is withheld.
     """
     observer = CategoricalRiskObserver(f"{risk.causal_factor.name}")
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             ResultsStratifier(),

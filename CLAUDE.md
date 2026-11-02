@@ -91,7 +91,7 @@ releases never touch that workflow's PyPI trusted-publishing credential path (it
 - `simsci` also ships `.mcp.json` and `mcp-servers/jira/`. Its tools are
   `mcp__plugin_simsci_jira__*`, and `simsci-internal` uses them through its `simsci`
   dependency.
-- `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, and the `_review_*` agents
+- `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, `_test_summarizer`, and the `_review_*` agents
   are consumed by `simsci-internal`'s `model-development`. A change to their inputs, gates, or
   output keys needs a matching change and CHANGELOG entry in `tools/ai-tools`.
 - Each plugin's `README.rst` describes every skill and agent. Update it with the skill and add a

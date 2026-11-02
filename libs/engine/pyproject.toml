@@ -40,11 +40,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-interactive = ["vivarium-dependencies[interactive]"]
+interactive = ["vivarium-dependencies[interactive]", "vivarium-interactive"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
     "vivarium-fuzzy-checker",
+    "vivarium-interactive",
 ]
 docs = [
     "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
