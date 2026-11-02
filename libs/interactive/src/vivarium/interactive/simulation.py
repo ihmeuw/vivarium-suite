@@ -18,11 +18,13 @@ import inspect
 import re
 import warnings
 from dataclasses import dataclass, field
+from datetime import datetime
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
 
 import numpy as np
 import pandas as pd
+from vivarium.config_tree import DuplicatedConfigurationError
 from vivarium.engine.component import NUM_EVENT_PRIORITIES
 from vivarium.engine.framework.engine import BaseSimulation
 from vivarium.engine.framework.lifecycle import lifecycle_states
@@ -103,6 +105,20 @@ _HELP_SECTIONS = (
 )
 """Headings and the :class:`Simulation` members that :meth:`Simulation.help` lists under each."""
 
+_CONFIGURATION_KEYWORDS = {
+    "population_size": "population.population_size",
+    "seed": "randomness.random_seed",
+    "draw": "input_data.input_draw_number",
+    "artifact_path": "input_data.artifact_path",
+    "start_time": "time.start",
+    "end_time": "time.end",
+}
+"""The :class:`Simulation` keyword parameters and the configuration path each sets.
+
+Only framework-owned keys get a keyword, so the signature does not depend on the
+model. Every other key goes through the ``configuration`` parameter.
+"""
+
 
 _DEPENDENCY_DIRECTIONS = ("uses", "used-by")
 """Directions :meth:`Simulation.print_dependencies` can walk."""
@@ -146,6 +162,12 @@ class Simulation(BaseSimulation):
         sim_name: str | None = None,
         logging_verbosity: int = 0,
         *,
+        population_size: int | None = None,
+        seed: int | None = None,
+        draw: int | None = None,
+        artifact_path: str | Path | None = None,
+        start_time: ClockTime | str | dict[str, int] | None = None,
+        end_time: ClockTime | str | dict[str, int] | None = None,
         observe: bool = False,
         setup: bool = True,
     ) -> None:
@@ -178,6 +200,29 @@ class Simulation(BaseSimulation):
             logs INFO-level messages, and 2+ logs DEBUG-level messages.
             Note that only the first context built in a process configures logging
             and subsequent contexts will inherit that configuration.
+        population_size
+            The size of the initial population. Sets
+            ``population.population_size``. A value of None will use the
+            specification's value.
+        seed
+            The random seed. Sets ``randomness.random_seed``. A value of None
+            will use the specification's value.
+        draw
+            The input draw to run. Sets ``input_data.input_draw_number``. A value
+            of None will use the specification's value.
+        artifact_path
+            Path to the data artifact. Sets ``input_data.artifact_path``. A
+            relative path resolves against the current working directory. A value
+            of None will use the specification's value.
+        start_time
+            When the simulation starts. Sets ``time.start``. A timestamp or a date
+            string such as ``"2025-01-01"`` is stored as the year, month, and day
+            the clock's configuration takes, and must not have a time of day. Any
+            other value is stored unchanged. A value of None will use the
+            specification's value.
+        end_time
+            When the simulation ends. Sets ``time.end`` and takes the same values
+            as ``start_time``.
         observe
             Whether to gather the results of the observations the model's
             components register. A value of False (the default) prevents them
@@ -187,6 +232,12 @@ class Simulation(BaseSimulation):
             Whether to set the simulation up on construction. A value of True
             (the default) freezes the configuration; pass False to change
             configuration before setting up.
+
+        Raises
+        ------
+        ValueError
+            If a keyword sets a configuration key that ``configuration`` also
+            sets, or if ``start_time`` or ``end_time`` has a time of day.
         """
         super().__init__(
             model_specification=model_specification,
@@ -195,6 +246,16 @@ class Simulation(BaseSimulation):
             plugin_configuration=plugin_configuration,
             sim_name=sim_name,
             logging_verbosity=logging_verbosity,
+        )
+        self._apply_configuration_keywords(
+            {
+                "population_size": population_size,
+                "seed": seed,
+                "draw": draw,
+                "artifact_path": artifact_path,
+                "start_time": start_time,
+                "end_time": end_time,
+            }
         )
 
         self._results.set_to_observe(observe)
@@ -205,6 +266,32 @@ class Simulation(BaseSimulation):
 
     def __repr__(self) -> str:
         return "Simulation()"
+
+    def _apply_configuration_keywords(self, values: dict[str, Any]) -> None:
+        """Write each keyword value that is not None at the configuration override layer."""
+        for keyword, value in values.items():
+            if value is None:
+                continue
+            if keyword in ("start_time", "end_time"):
+                value = _to_clock_time_configuration(keyword, value)
+            elif keyword == "artifact_path":
+                value = str(value)
+
+            path = _CONFIGURATION_KEYWORDS[keyword]
+            update = value
+            for key in reversed(path.split(".")):
+                update = {key: update}
+            try:
+                # The same layer and source as the configuration argument, so the
+                # two routes give the same result and a key set by both collides.
+                self.configuration.update(
+                    update, layer="override", source="user_supplied_args"
+                )
+            except DuplicatedConfigurationError as error:
+                raise ValueError(
+                    f"{keyword}={value!r} conflicts with the value for {path} "
+                    "passed in configuration. Set it in only one place."
+                ) from error
 
     def help(self) -> None:
         """Print the methods available on this context, grouped by task."""
@@ -1082,6 +1169,21 @@ class Simulation(BaseSimulation):
         for name, observation in self._interactive_observations.items():
             results[name] = dict(observation.values)
         return results
+
+
+def _to_clock_time_configuration(
+    keyword: str, value: ClockTime | str | dict[str, int]
+) -> int | dict[str, int]:
+    """Convert a timestamp or date string to the year, month, and day the clock takes."""
+    if not isinstance(value, (str, datetime)):
+        return value
+    timestamp = pd.Timestamp(value)
+    if timestamp != timestamp.normalize():
+        raise ValueError(
+            f"{keyword}={value!r} has a time of day, but the clock configuration "
+            "only stores dates."
+        )
+    return {"year": timestamp.year, "month": timestamp.month, "day": timestamp.day}
 
 
 class _ResourceRow(NamedTuple):

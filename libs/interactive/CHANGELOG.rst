@@ -1,3 +1,7 @@
+**1.1.0 - 11/02/26**
+
+- Add ``population_size``, ``seed``, ``draw``, ``artifact_path``, ``start_time``, and ``end_time`` keyword parameters to ``Simulation``
+
 **1.0.1 - 10/28/26**
 
 - Subclass engine's renamed ``BaseSimulation`` and require ``vivarium-engine`` 6
