@@ -18,7 +18,7 @@ import inspect
 import re
 import warnings
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date
 from math import ceil
 from typing import TYPE_CHECKING, NamedTuple, overload
 
@@ -166,8 +166,8 @@ class Simulation(BaseSimulation):
         seed: int | None = None,
         draw: int | None = None,
         artifact_path: str | Path | None = None,
-        start_time: ClockTime | str | dict[str, int] | None = None,
-        end_time: ClockTime | str | dict[str, int] | None = None,
+        start_time: ClockTime | date | str | dict[str, int] | None = None,
+        end_time: ClockTime | date | str | dict[str, int] | None = None,
         observe: bool = False,
         setup: bool = True,
     ) -> None:
@@ -215,8 +215,8 @@ class Simulation(BaseSimulation):
             relative path resolves against the current working directory. A value
             of None will use the specification's value.
         start_time
-            When the simulation starts. Sets ``time.start``. A timestamp or a date
-            string such as ``"2025-01-01"`` is stored as the year, month, and day
+            When the simulation starts. Sets ``time.start``. A date, a timestamp, or a
+            date string such as ``"2025-01-01"`` is stored as the year, month, and day
             the clock's configuration takes, and must not have a time of day. Any
             other value is stored unchanged. A value of None will use the
             specification's value.
@@ -1173,10 +1173,10 @@ class Simulation(BaseSimulation):
 
 
 def _to_clock_time_configuration(
-    keyword: str, value: ClockTime | str | dict[str, int]
+    keyword: str, value: ClockTime | date | str | dict[str, int]
 ) -> int | dict[str, int]:
-    """Convert a timestamp or date string to the year, month, and day the clock takes."""
-    if not isinstance(value, (str, datetime)):
+    """Convert a date, timestamp, or date string to the year, month, and day the clock takes."""
+    if not isinstance(value, (str, date)):
         return value
     timestamp = pd.Timestamp(value)
     if timestamp != timestamp.normalize():

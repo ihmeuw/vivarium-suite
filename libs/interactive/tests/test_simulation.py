@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -1847,10 +1848,11 @@ class TestConfigurationKeywords:
         "value",
         [
             pd.Timestamp("2025-03-04"),
+            date(2025, 3, 4),
             "2025-03-04",
             {"year": 2025, "month": 3, "day": 4},
         ],
-        ids=["timestamp", "string", "dict"],
+        ids=["timestamp", "date", "string", "dict"],
     )
     def test_time_bound_is_stored_as_a_date(self, keyword: str, value: Any) -> None:
         sim = Simulation(**{keyword: value}, setup=False)
