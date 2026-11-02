@@ -310,16 +310,17 @@ except ValueError as error:
 print("good_step's product was written:", good_product.exists())
 
 # %% [markdown]
-# ## A8 — A Python step crosses to another process as data
+# ## A8 — A Python step can be sent to another process and rebuilt there
 #
-# A `python_step`'s `run` is a `PythonStepRun`: the target function and the product
-# suffix, nothing else. `target_reference` names the target as `package.module:qualname`
-# for another process to import, and refuses a function it cannot name that way. This
-# notebook's `double` lives in `__main__`, so it is refused.
+# B runs each step on a compute node, in a different process from the one that built
+# the pipeline. A function object cannot be sent there, so a step is sent as data: its
+# function's import path and its product suffix. A `python_step`'s `run` is a
+# `PythonStepRun` that holds only those two things, and `target_reference` gives the
+# import path (`package.module:function`).
 #
-# The test harness's two-step pipeline uses module functions. It is built here, then
-# each step is rebuilt from its JSON reference in a fresh `python -I` and run there,
-# and the two runs' products are compared.
+# This section rebuilds each step of a small pipeline in a fresh Python process and
+# checks that it writes the same products. It also shows the refusal you get for a
+# function defined here in the notebook, which another process cannot import.
 
 # %%
 print("run:", tasks[0].run)
@@ -351,7 +352,7 @@ for task in fixture.tasks:
     inputs = {name: str(node.path) for name, node in task.inputs.items()}
     jobs.append((target_reference(task.run.target), task.run.suffix, inputs, str(remote)))
     pairs.append((local, remote))
-    print(f"  {task.name} crosses as {jobs[-1][0]!r}")
+    print(f"  {task.name} is sent as {jobs[-1][0]!r}")
 subprocess.run([sys.executable, "-I", "-c", REBUILD, json.dumps(jobs)], check=True)
 for local, remote in pairs:
     same = pd.read_parquet(local).equals(pd.read_parquet(remote))
