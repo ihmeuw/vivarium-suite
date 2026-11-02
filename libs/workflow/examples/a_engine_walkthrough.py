@@ -208,7 +208,7 @@ print("grandchild's product was written:", grandchild.exists())
 #
 # Nothing changed on disk since A4, yet both steps would run again. The first step's
 # reason is its code node, `mid.parquet::code`, which every `python_step` gets as an
-# always-stale default until A-caching adds fingerprints (MIC-7520). The second runs
+# always-stale default until A-caching adds fingerprints (MIC-7760). The second runs
 # as a cascade.
 
 # %%
