@@ -173,7 +173,7 @@ def notebook_step(
         [registry.path_for(key) for key in product_keys.values()],
         values,
     )
-    # TODO(MIC-7520): let a step declare an opt-in code fingerprint so it can skip
+    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
     # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
