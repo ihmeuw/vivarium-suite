@@ -1,4 +1,4 @@
-**3.2.2 - 10/30/26**
+**3.2.2 - 11/02/26**
 
 - Re-enable the tests that were skipped for outdated API usage and update them to
   the current API and error messages
