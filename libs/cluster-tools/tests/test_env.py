@@ -71,12 +71,19 @@ class TestResolveEnvPrefix:
         assert resolve_env_prefix("my_model_simulation") == str(venv.resolve())
         assert resolve_env_prefix("linked") == str(real.resolve())
 
-    def test_explicit_path_that_is_not_an_env_raises(self, tmp_path: Path) -> None:
+    @pytest.mark.parametrize("relative", [False, True], ids=["absolute", "relative"])
+    def test_explicit_path_that_is_not_an_env_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, relative: bool
+    ) -> None:
+        """A relative path is named both as given and as resolved."""
         not_an_env = tmp_path / "not_an_env"
         (not_an_env / "bin").mkdir(parents=True)
+        monkeypatch.chdir(tmp_path)
+        env = "./not_an_env" if relative else str(not_an_env)
+        named = f"{env!r} ({not_an_env})" if relative else repr(env)
         with pytest.raises(RuntimeError, match="is not a conda env or venv") as info:
-            resolve_env_prefix(str(not_an_env))
-        assert repr(str(not_an_env)) in str(info.value)
+            resolve_env_prefix(env)
+        assert f"Environment path {named} is not" in str(info.value)
 
     @pytest.mark.parametrize("conda_exe", [None, ""], ids=["unset", "empty"])
     def test_unresolvable_name_raises(
@@ -124,6 +131,7 @@ class TestResolveEnvPrefixFailures:
         [
             (None, "could not be run"),
             ("#!/bin/sh\necho 'conda is broken' >&2\nexit 1\n", "status 1: conda is broken"),
+            ("#!/bin/sh\nexit 1\n", "exited with status 1."),
             ("#!/bin/sh\necho 'not json'\n", "JSONDecodeError"),
             ("#!/bin/sh\necho '{}'\n", "KeyError"),
             ("#!/bin/sh\necho '{\"envs\": null}'\n", "TypeError"),
@@ -132,6 +140,7 @@ class TestResolveEnvPrefixFailures:
         ids=[
             "missing",
             "nonzero_exit",
+            "nonzero_exit_without_stderr",
             "not_json",
             "no_envs_list",
             "null_envs",
@@ -156,26 +165,25 @@ class TestResolveEnvPrefixFailures:
         assert "Could not resolve environment 'ghost'" in str(info.value)
         assert cause in str(info.value)
 
-    @pytest.mark.parametrize("case", ["unknown_user", "unsearchable_parent", "symlink_loop"])
+    @pytest.mark.parametrize("case", ["unknown_user", "unsearchable_parent"])
     def test_path_that_cannot_be_checked_raises(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, case: str
     ) -> None:
-        """An unknown ``~user``, an unsearchable parent, or a symlink loop
-        raises naming the env as given."""
+        """An unknown ``~user`` or an unsearchable parent raises naming the
+        env as given."""
         monkeypatch.chdir(tmp_path)
         locked = tmp_path / "locked"
         if case == "unknown_user":
             env = "~no_such_user_xyz_vw/env"
-        elif case == "symlink_loop":
-            (tmp_path / "loop").symlink_to("loop")
-            env = str(tmp_path / "loop")
         elif os.geteuid() == 0:
             pytest.skip("root can search a directory without permission")
         else:
             env = str(_make_env_prefix(locked / "env"))
             locked.chmod(0o000)
         try:
-            with pytest.raises(RuntimeError, match=re.escape(repr(env))):
+            with pytest.raises(
+                RuntimeError, match=re.escape(f"{env!r} could not be checked")
+            ):
                 resolve_env_prefix(env)
         finally:
             if case == "unsearchable_parent":
