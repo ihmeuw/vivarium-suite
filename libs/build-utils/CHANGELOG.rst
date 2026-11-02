@@ -1,8 +1,3 @@
-**4.11.3 - 11/02/26**
-
-- Load the vivarium-build-utils version that a standalone repo's ``uv.lock`` pins, as a
-  release or a git commit, instead of resolving the newest one ``pyproject.toml`` allows
-
 **4.11.2 - 10/29/26**
 
 - Fetch the git tags in the Jenkins checkout itself, with the job's credentials, instead of
