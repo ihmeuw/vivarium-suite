@@ -12,7 +12,7 @@ import subprocess
 import warnings
 from pathlib import Path
 
-# TODO(MIC-7713): keep one copy of environment resolution; dagger and psimulate still use
+# TODO(MIC-7767): keep one copy of environment resolution; dagger and psimulate still use
 # vivarium.cluster_tools.core.jobmon.env.
 
 VENV_DIR_NAME = ".venv"
