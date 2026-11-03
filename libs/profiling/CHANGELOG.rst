@@ -1,4 +1,4 @@
-**0.7.2 - 10/29/26**
+**0.7.2 - 11/03/26**
 
 - Fix ``make_artifacts -l all``: build the locations in parallel as a Jobmon
   workflow in place of the removed DRMAA helper, and pass ``--years`` to every
