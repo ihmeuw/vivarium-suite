@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-from vivarium.cluster_tools.psimulate.environment import ENV_VARIABLES
+from vivarium.cluster_tools.utilities import get_cluster_name
 
 VALID_PROJECTS = frozenset(
     {
@@ -126,9 +126,10 @@ def validate_hardware(hardware: list[str]) -> list[str]:
 
 
 def validate_cluster_environment() -> None:
-    if "slurm" not in ENV_VARIABLES.HOSTNAME.value:
+    hostname = get_cluster_name()
+    if "slurm" not in hostname:
         raise RuntimeError("This tool must be run from the IHME cluster.")
 
     submit_host_marker = "slogin"
-    if submit_host_marker in ENV_VARIABLES.HOSTNAME.value:
+    if submit_host_marker in hostname:
         raise RuntimeError("This tool must not be run from a submit host.")
