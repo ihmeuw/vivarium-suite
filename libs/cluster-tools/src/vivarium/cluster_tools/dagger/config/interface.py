@@ -33,12 +33,11 @@ from vivarium.cluster_tools.dagger.config.validation import (
     validate_python_step,
     validate_simulation_step,
 )
-from vivarium.cluster_tools.psimulate import COMMANDS, paths, simulation_tasks
-from vivarium.cluster_tools.psimulate.paths import InputPaths
 
 if TYPE_CHECKING:
     from jobmon.client.api import Tool
     from jobmon.client.task import Task
+    from vivarium.psimulate.paths import InputPaths
 
 _NOTEBOOK_DEFAULT_KERNEL = "python3"
 """Jupyter kernel used for notebook execution. Not user-configurable."""
@@ -202,6 +201,10 @@ def get_simulation_step_tasks(
     -------
         The Jobmon tasks produced by the step.
     """
+    # Imported here so that cluster-tools does not depend on vivarium-psimulate.
+    # TODO(MIC-7726): this moves with Dagger behind vivarium-workflow[simulation].
+    from vivarium.psimulate import COMMANDS, paths, simulation_tasks
+
     validate_simulation_step(
         name=name,
         resources=resources,
@@ -263,6 +266,10 @@ def _simulation_step_input_paths(
     is_resume: bool,
 ) -> InputPaths:
     """Resolve a simulation step's inputs for a fresh build or a resume."""
+    # TODO(MIC-7726): see get_simulation_step_tasks.
+    from vivarium.psimulate import COMMANDS, paths
+    from vivarium.psimulate.paths import InputPaths
+
     if not is_resume:
         return InputPaths.from_entry_point_args(
             result_directory=output_directory,

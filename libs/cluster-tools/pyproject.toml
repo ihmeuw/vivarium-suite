@@ -60,9 +60,7 @@ ci_github = ["vivarium-cluster-tools[test,docs,lint]"]
 ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
 
 [project.scripts]
-psimulate = "vivarium.cluster_tools.psimulate.cli:psimulate"
 dagger = "vivarium.cluster_tools.dagger.cli:dagger"
-vipin = "vivarium.cluster_tools.vipin.cli:vipin"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"

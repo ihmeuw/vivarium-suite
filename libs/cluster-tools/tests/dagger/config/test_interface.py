@@ -46,7 +46,6 @@ def _resources() -> ResourceConfig:
 _TOOL: Any = "tool-sentinel"
 _BUILD_TIMESTAMP = "2026_05_18_10_00_00"
 _TASKS = ["task-sentinel"]
-_INTERFACE = "vivarium.cluster_tools.dagger.config.interface"
 
 
 @pytest.fixture()
@@ -78,15 +77,15 @@ def patch_simulation_internals(mocker: MockerFixture) -> dict[str, MagicMock]:
         "output_paths": output_paths,
         "run": simulation_run,
         "resolve_output_paths": mocker.patch(
-            f"{_INTERFACE}.paths.resolve_output_paths",
+            "vivarium.psimulate.paths.resolve_output_paths",
             return_value=output_paths,
         ),
         "resolve_simulation_run": mocker.patch(
-            f"{_INTERFACE}.simulation_tasks.resolve_simulation_run",
+            "vivarium.psimulate.simulation_tasks.resolve_simulation_run",
             return_value=simulation_run,
         ),
         "build_simulation_tasks": mocker.patch(
-            f"{_INTERFACE}.simulation_tasks.build_simulation_tasks",
+            "vivarium.psimulate.simulation_tasks.build_simulation_tasks",
             return_value=MagicMock(tasks=_TASKS),
         ),
     }

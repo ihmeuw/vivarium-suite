@@ -42,6 +42,10 @@ profiling:
   - changed-files:
     - any-glob-to-any-file: 'libs/profiling/**'
 
+psimulate:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/psimulate/**'
+
 public-health:
   - changed-files:
     - any-glob-to-any-file: 'libs/public-health/**'

@@ -14,7 +14,7 @@ workflow from where it left off.
 Use ``dagger`` when you have a pipeline (for example: run simulations, then
 post-process the results, then render a report) that you want to launch and
 resume as a single unit. For a single parallel simulation with no surrounding
-steps, use ``psimulate`` directly (see :doc:`distributed_runner`).
+steps, use ``psimulate`` from the ``vivarium-psimulate`` package directly.
 
 .. contents::
    :local:

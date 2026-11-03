@@ -13,10 +13,5 @@ simulations at scale on a Slurm cluster easy.
    :maxdepth: 2
 
    installation
-   distributed_runner
-   yaml_basics
-   branch
    dagger
-   logging
    api_reference/index
-   glossary

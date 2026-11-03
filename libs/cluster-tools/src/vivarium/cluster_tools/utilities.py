@@ -17,8 +17,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import ParamSpec, TypeVar
 
-NUM_ROWS_PER_CENTRAL_LOG_FILE = 100_000
-
 P = ParamSpec("P")
 T = TypeVar("T")
 

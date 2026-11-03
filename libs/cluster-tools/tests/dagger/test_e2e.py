@@ -25,21 +25,72 @@ import time
 from pathlib import Path
 from typing import Iterator
 
+import pandas as pd
 import pytest
 import yaml
+from vivarium.psimulate.results.writing import collect_metadata
 
-from tests.psimulate.test_e2e import (
-    _BRANCHES,
-    _EXPECTED_TOTAL_JOBS,
-    _MODEL_SPEC,
-    _MODEL_SPEC_FAIL_ONCE,
-    _assert_result_task_counts,
-    _read_metadata,
-)
+_DATA_DIR = Path(__file__).parent / "data"
+_MODEL_SPEC = _DATA_DIR / "e2e_model_spec.yaml"
+_MODEL_SPEC_FAIL_ONCE = _DATA_DIR / "e2e_model_spec_fail_once.yaml"
+_BRANCHES = _DATA_DIR / "e2e_branches.yaml"
+
+# Total jobs produced by the branch config (2 draws x 2 seeds x 1 branch)
+_EXPECTED_TOTAL_JOBS = 4
 
 RESULTS_DIR = "/mnt/team/simulation_science/priv/engineering/tests/output/"
 
 pytestmark = [pytest.mark.cluster, pytest.mark.slow, pytest.mark.weekly]
+
+
+def _read_metadata(output_dir: Path) -> pd.DataFrame:
+    """Collect metadata for completed tasks from per-task JSON + result parquet files."""
+    metadata_dir = output_dir / "metadata"
+    results_dir = output_dir / "results"
+    assert metadata_dir.exists(), f"Metadata directory not found at {metadata_dir}"
+    assert results_dir.exists(), f"Results directory not found at {results_dir}"
+    metadata = collect_metadata(metadata_dir, results_dir)
+    assert (
+        not metadata.empty
+    ), f"No completed task metadata found in {metadata_dir} / {results_dir}"
+    return metadata
+
+
+def _get_result_task_ids(results_dir: Path) -> dict[str, set[str]]:
+    """Return ``{metric_name: {task_id, ...}}`` from parquet files under *results_dir*.
+
+    Each metric subdirectory (e.g. ``results/dead/``) contains chunked parquet
+    files whose stems encode the output file number (``0000``, ``0001``, …).
+    Within each file, individual task contributions are identified by their
+    unique ``(input_draw, random_seed)`` pair.  We read those two columns
+    and return the set of composite task-id strings per metric so callers can
+    compare counts before and after an operation.
+    """
+    result: dict[str, set[str]] = {}
+    for metric_dir in sorted(results_dir.iterdir()):
+        if not metric_dir.is_dir():
+            continue
+        df = pd.read_parquet(metric_dir, columns=["input_draw", "random_seed"])
+        ids = {
+            f"{row.input_draw}_{row.random_seed}"
+            for row in df[["input_draw", "random_seed"]].drop_duplicates().itertuples()
+        }
+        result[metric_dir.name] = ids
+    return result
+
+
+def _assert_result_task_counts(results_dir: Path, expected: int) -> dict[str, set[str]]:
+    """Assert every metric subdir in *results_dir* has exactly *expected* task IDs.
+
+    Returns the ``{metric: {task_id, ...}}`` dict for further inspection.
+    """
+    task_ids = _get_result_task_ids(results_dir)
+    assert task_ids, f"No metric subdirectories found under {results_dir}"
+    for metric, ids in task_ids.items():
+        assert (
+            len(ids) == expected
+        ), f"Metric '{metric}': expected {expected} task results, got {len(ids)}"
+    return task_ids
 
 
 def _make_shared_tmp_dir() -> Path:

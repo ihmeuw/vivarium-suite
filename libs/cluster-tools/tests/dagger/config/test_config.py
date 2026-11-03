@@ -11,6 +11,8 @@ import pytest
 
 pytest.importorskip("jobmon")
 
+from vivarium.psimulate.simulation_tasks import SimulationRun
+
 from tests.dagger.config.utilities import (
     make_notebook_step_dict,
     make_pytest_step_dict,
@@ -52,7 +54,6 @@ from vivarium.cluster_tools.dagger.config.validation import (
     validate_pytest_step,
     validate_python_step,
 )
-from vivarium.cluster_tools.psimulate.simulation_tasks import SimulationRun
 
 
 class TestWorkflowConfigFromYaml:
@@ -677,9 +678,9 @@ class TestSimulationStep:
         Jobmon TaskTemplates so their ``create_tasks`` calls don't collide."""
         _utilities = "vivarium.cluster_tools.dagger.config.utilities"
         _interface = "vivarium.cluster_tools.dagger.config.interface"
-        _paths = "vivarium.cluster_tools.psimulate.paths"
-        _tasks = "vivarium.cluster_tools.psimulate.simulation_tasks"
-        _wf = "vivarium.cluster_tools.psimulate.jobmon_workflow"
+        _paths = "vivarium.psimulate.paths"
+        _tasks = "vivarium.psimulate.simulation_tasks"
+        _wf = "vivarium.psimulate.jobmon_workflow"
         with (
             patch(f"{_utilities}.resolve_env_prefix", return_value="/envs/test_env"),
             patch(f"{_interface}.get_or_create_build_timestamp", return_value="ts"),
