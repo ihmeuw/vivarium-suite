@@ -29,8 +29,10 @@ def resolve_env_prefix(env: str) -> str:
     """Resolve an environment name or path to its absolute filesystem prefix.
 
     *env* may name a conda env or a venv, or be a path to either's prefix
-    directory. A name is matched to a venv first (under ``.venv/<env>`` in
-    current working directory), and then a conda env via ``conda env list --json``.
+    directory. The name ``.venv`` means the project venv in the current working
+    directory, such as the one ``uv sync`` builds. Any other name is matched to a
+    venv first (under ``.venv/<env>`` in the current working directory), and then
+    a conda env via ``conda env list --json``.
 
     When the name matches more than one distinct environment, the
     highest-precedence match wins and a warning names every match.
@@ -90,6 +92,9 @@ def resolve_env_bin_path(env_prefix: str) -> str:
 def _find_env_candidates(env: str) -> list[tuple[str, str]]:
     """Gather resolved prefixes matching *env* by name, as (source, prefix) pairs in precedence order."""
     candidates: list[tuple[str, str]] = []
+    project_venv = Path.cwd() / VENV_DIR_NAME
+    if env == VENV_DIR_NAME and _is_env_prefix(project_venv):
+        candidates.append(("project venv", str(project_venv.resolve())))
     local_venv = Path.cwd() / VENV_DIR_NAME / env
     if _is_env_prefix(local_venv):
         candidates.append(("local venv", str(local_venv.resolve())))

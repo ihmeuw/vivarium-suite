@@ -67,6 +67,14 @@ class TestResolveEnvPrefix:
         monkeypatch.chdir(tmp_path)
         assert resolve_env_prefix("my_model_simulation") == str(venv.resolve())
 
+    def test_project_venv_lookup(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The bare name ``.venv`` resolves to the project venv that uv builds."""
+        venv = _make_env_prefix(tmp_path / ".venv")
+        monkeypatch.chdir(tmp_path)
+        assert resolve_env_prefix(".venv") == str(venv.resolve())
+
     def test_explicit_path_that_is_not_an_env_raises(self, tmp_path: Path) -> None:
         with pytest.raises(RuntimeError, match="is not a conda env or venv"):
             resolve_env_prefix(str(tmp_path / "not_an_env"))
