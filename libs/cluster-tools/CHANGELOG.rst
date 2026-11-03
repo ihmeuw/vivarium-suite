@@ -6,11 +6,10 @@
 - Stop adding an empty ``PATH`` entry, which means the current directory, for a venv
   whose ``pyvenv.cfg`` has an empty ``home``.
 
-**4.9.0 - 10/29/26**
+**4.9.0 - 11/03/26**
 
-- Prep for splitting of psimulate:
-- Make ``core``, ``utilities``, and the package ``__init__`` import nothing from
-  ``psimulate``, ``dagger``, ``vipin``, or ``vivarium-engine``. ``psimulate`` and
+- Prep for splitting of psimulate: make ``core``, ``utilities``, and the package
+  ``__init__`` import nothing from ``psimulate``, ``dagger``, ``vipin``, or ``vivarium-engine``.
 
 **4.8.0 - 10/28/26**
 
