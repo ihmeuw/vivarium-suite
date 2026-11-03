@@ -113,7 +113,9 @@ class TestCheckReleaseTag:
         assert result.returncode == 0, result.stderr
 
     def test_jenkins_deploy_checks_before_tagging(self) -> None:
-        """``deployPackage`` runs ``check-release-tag`` before ``tag-version``."""
+        """``deployPackage`` runs ``validate-tag`` and ``check-release-tag`` before ``tag-version``."""
         source = BUILD_STAGES.read_text()
+        assert "make validate-tag" in source
         assert "make check-release-tag" in source
+        assert source.index("make validate-tag") < source.index("make tag-version")
         assert source.index("make check-release-tag") < source.index("make tag-version")
