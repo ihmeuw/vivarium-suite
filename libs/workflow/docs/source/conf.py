@@ -47,6 +47,11 @@ extensions = [
     "sphinx_click.ext",
 ]
 
+# Jobmon is in the [cluster] extra, which the docs build does not install.
+autodoc_mock_imports = [
+    "jobmon",
+]
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -178,6 +183,7 @@ texinfo_documents = [
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
+    "vivarium_cluster_tools": ("https://vivarium-cluster-tools.readthedocs.io/en/latest/", None),
 }
 
 

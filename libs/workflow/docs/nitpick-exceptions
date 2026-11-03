@@ -1,0 +1,6 @@
+# pathlib
+py:class pathlib._local.Path
+# jobmon
+py:class jobmon.client.api.Tool
+py:class jobmon.client.task.Task
+py:class jobmon.client.workflow.Workflow

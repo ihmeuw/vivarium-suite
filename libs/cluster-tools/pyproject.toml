@@ -59,9 +59,6 @@ dev = ["vivarium-cluster-tools[test,docs,interactive,lint,cluster]"]
 ci_github = ["vivarium-cluster-tools[test,docs,lint]"]
 ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
 
-[project.scripts]
-dagger = "vivarium.cluster_tools.dagger.cli:dagger"
-
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
 Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/cluster-tools"

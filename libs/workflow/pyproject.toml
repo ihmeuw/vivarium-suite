@@ -28,11 +28,21 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    "vivarium-dependencies[click,loguru,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
+    "vivarium-cluster-tools>=5.0.0",
 ]
 
 [project.optional-dependencies]
-cluster = []
+# jobmon_installer_ihme (which in turn installs jobmon) is gated behind `[cluster]`
+# because jobmon 3.2.4 (latest) imports `pkg_resources` which was removed in setuptools
+# 80+ and is absent from Python 3.13's default install. Forcing jobmon onto every
+# install breaks local dev on 3.13, but on the cluster the installer pins a tested
+# jobmon and sidesteps the issue.
+cluster = ["jobmon_installer_ihme"]
+# Dagger's `simulation` step runs psimulate, which brings in vivarium-engine. The step
+# imports it only when a workflow uses it, so other workflows don't need the engine.
+simulation = ["vivarium-psimulate>=1.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
@@ -40,9 +50,14 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-dev = ["vivarium-workflow[test,docs,interactive,lint]"]
+dev = ["vivarium-workflow[test,docs,interactive,lint,cluster,simulation]"]
+# `simulation` stays out of ci_github: the release job installs ci_github before
+# vivarium-psimulate, which releases alongside this package, is on PyPI.
 ci_github = ["vivarium-workflow[test,docs,lint]"]
-ci_jenkins = ["vivarium-workflow[ci_github,cluster]"]
+ci_jenkins = ["vivarium-workflow[ci_github,cluster,simulation]"]
+
+[project.scripts]
+dagger = "vivarium.workflow.dagger.cli:dagger"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
@@ -98,6 +113,13 @@ exclude = [
 ]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# jobmon is in [cluster], which [ci_github] doesn't install — see the
+# rationale on the `cluster` extra above. Mute "Cannot find implementation"
+# so mypy can still check the rest of the source on non-cluster envs.
+module = ["jobmon.*", "jobmon_installer_ihme.*"]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["vivarium.workflow"]

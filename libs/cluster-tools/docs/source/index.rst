@@ -13,5 +13,4 @@ simulations at scale on a Slurm cluster easy.
    :maxdepth: 2
 
    installation
-   dagger
    api_reference/index
