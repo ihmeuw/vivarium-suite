@@ -21,6 +21,9 @@ def call(Map config = [:]){
   uv_lock: Build the environment from the repo's committed uv.lock with `uv sync`,
             instead of a conda environment and `make install`. Standalone repos only,
             and not with deployable.
+  uv_git_credentials_id: With uv_lock, the Jenkins credential that uv uses to clone
+            git sources in uv.lock from private repos. Empty/omitted clones without
+            credentials, which works only for public repos.
   github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
             the release tag (only consulted when `deployable: true`). Empty/omitted falls
             back to the credential configured on the Multibranch Pipeline's branch source.
@@ -37,6 +40,7 @@ def call(Map config = [:]){
     'run_mypy',
     'env_reqs',
     'uv_lock',
+    'uv_git_credentials_id',
     'github_credentials_id'
   ]
 
@@ -57,6 +61,7 @@ def call(Map config = [:]){
   def env_reqs = config.env_reqs ?: ""
   // Opt-in, so a repo that commits a uv.lock for local use does not switch by accident.
   def use_uv_lock = (config?.uv_lock == true)
+  def uv_git_credentials_id = config.uv_git_credentials_id ?: ""
   // Optional override for the GitHub credential used for git push during deploy.
   // When empty, deployPackage() falls back to the credential from scm (branch source).
   def github_credentials_id = config.github_credentials_id ?: ""
@@ -186,6 +191,9 @@ def call(Map config = [:]){
             if (use_uv_lock && is_deployable) {
               error("uv_lock cannot be combined with deployable: Jenkins does not deploy from a uv repo.")
             }
+            if (uv_git_credentials_id && !use_uv_lock) {
+              error("uv_git_credentials_id only applies with uv_lock: true.")
+            }
           }
         }
       }
@@ -311,7 +319,7 @@ def call(Map config = [:]){
                         echo "This is a doc-only change since last build and previous build passed. Skipping everything except doc build and doc tests."
                         buildStages.runDebugInfo(skipEval)
                         if (use_uv_lock) {
-                          buildStages.syncEnvironment(env_reqs, useCache)
+                          buildStages.syncEnvironment(env_reqs, useCache, uv_git_credentials_id)
                         } else {
                           buildStages.buildEnvironment()
                           buildStages.installPackage("docs", useCache)
@@ -321,7 +329,7 @@ def call(Map config = [:]){
                       } else {
                         buildStages.runDebugInfo(skipEval)
                         if (use_uv_lock) {
-                          buildStages.syncEnvironment(env_reqs, useCache)
+                          buildStages.syncEnvironment(env_reqs, useCache, uv_git_credentials_id)
                         } else {
                           buildStages.buildEnvironment()
                           buildStages.installPackage(env_reqs, useCache)

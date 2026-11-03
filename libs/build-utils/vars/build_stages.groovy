@@ -131,7 +131,7 @@ def installPackage(String env_reqs = "", boolean useCache = false) {
 
 // Build the environment from the repo's uv.lock, in place of buildEnvironment and
 // installPackage. The venv goes at CONDA_ENV_PATH, so ACTIVATE and cleanup find it there.
-def syncEnvironment(String env_reqs = "", boolean useCache = false) {
+def syncEnvironment(String env_reqs = "", boolean useCache = false, String gitCredentialsId = "") {
     // Unlike installPackage, an empty env_reqs means no extras. A dev dependency
     // group is still installed, because uv sync includes it by default.
     String extras = env_reqs.split(',').collect { it.trim() }.findAll { it }.collect { "--extra ${it}" }.join(' ')
@@ -158,7 +158,16 @@ def syncEnvironment(String env_reqs = "", boolean useCache = false) {
                 // --locked fails the build if uv.lock does not match pyproject.toml.
                 // --no-editable keeps a regular install, so Slurm workers do not read
                 // the build node's workspace.
-                sh "${uv} sync --locked --no-editable --python ${PYTHON_VERSION} ${extras} ${noCache}"
+                String sync = "${uv} sync --locked --no-editable --python ${PYTHON_VERSION} ${extras} ${noCache}"
+                if (gitCredentialsId) {
+                    // uv clones git sources with the git CLI, which reads the
+                    // credential through the GIT_ASKPASS that this binding sets.
+                    withCredentials([gitUsernamePassword(credentialsId: gitCredentialsId)]) {
+                        sh sync
+                    }
+                } else {
+                    sh sync
+                }
             }
             // open permissions for test users to create file in workspace
             sh "chmod 777 ${WORKSPACE}"

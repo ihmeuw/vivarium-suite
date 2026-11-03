@@ -100,6 +100,9 @@ before.
 - The project is installed as a regular package, not an editable one.
 - Jenkins installs uv at a pinned version and a uv-managed Python. The Python goes
   in a persistent directory, on the shared filesystem for Slurm builds.
+- If ``uv.lock`` has git sources from private repos, pass
+  ``uv_git_credentials_id: '<jenkins-credential-id>'`` with a credential that can
+  read them. ``uv sync`` then runs with that credential.
 - ``uv_lock`` cannot be combined with ``deployable``, and monorepo libs cannot use it.
 
 In a standalone repo with a ``uv.lock``, ``make install`` outside Jenkins refuses
