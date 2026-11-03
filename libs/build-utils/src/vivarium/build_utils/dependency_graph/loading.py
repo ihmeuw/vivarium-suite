@@ -18,6 +18,7 @@ if sys.version_info >= (3, 11):
 else:  # Python < 3.11
     import tomli as tomllib
 
+from ..release_version import RELEASE_VERSION_PATTERN
 from ..versions import read_python_versions
 from .models import DEFAULT_EXTRAS, Lib
 
@@ -137,7 +138,7 @@ def _get_pending_version(changelog: Path) -> str:
         raise FileNotFoundError(f"changelog not found: {changelog}")
     lines = changelog.read_text().splitlines()
     first_line = lines[0] if lines else ""
-    match = re.search(r"\d+\.\d+\.\d+", first_line)
+    match = re.search(RELEASE_VERSION_PATTERN, first_line)
     if match is None:
         raise ValueError(f"no parseable version in first line of {changelog}")
     return match.group(0)
