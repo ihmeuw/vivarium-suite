@@ -11,9 +11,7 @@ Vivarium Workflow
 
 This library builds and runs multi-step data pipelines. It provides ``dagger``,
 a command that runs a pipeline described in a YAML file as one Jobmon workflow
-on a Slurm cluster. ``dagger`` used to be part of ``vivarium-cluster-tools``,
-which keeps the shared cluster, Jobmon, logging and notification code that it
-uses.
+on a Slurm cluster.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 

@@ -11,9 +11,7 @@ Vivarium psimulate
 
 This library provides ``psimulate``, a command that runs many ``vivarium``
 simulations in parallel on a Slurm cluster, and ``vipin``, a command that
-summarizes the performance logs of a ``psimulate`` run. Both used to be part of
-``vivarium-cluster-tools``, which keeps the shared cluster, Jobmon, logging and
-notification code that they use.
+summarizes the performance logs of a ``psimulate`` run.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 

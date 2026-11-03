@@ -411,10 +411,7 @@ def test_restart_overrides_reach_steps_saved_with_the_workflow_values(
     mock_timeout: Any,
     tmp_path: Path,
 ) -> None:
-    """``restart -P/-q`` reach a step whose saved project and queue repeat the workflow's.
-
-    vivarium-cluster-tools 4.x saved every step's project and queue this way.
-    """
+    """``restart -P/-q`` reach a step whose saved project and queue repeat the workflow's."""
     mock_bind_and_run.return_value = ("D", "url")
     output_dir = _run_and_save_configuration(
         tmp_path, [{"name": "first", "command": "echo 1", "resources": {"memory_gb": 4}}]

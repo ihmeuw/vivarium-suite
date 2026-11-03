@@ -20,10 +20,6 @@ This library holds the shared code that Vivarium's cluster tools use:
 - Slack notifications when a workflow finishes;
 - shared Click options and logging configuration.
 
-``psimulate`` and ``vipin`` are in the ``vivarium-psimulate`` package, and
-``dagger`` is in the ``vivarium-workflow`` package. They were part of this
-package before 5.0.0.
-
 **Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-cluster-tools`` from PyPI with pip:

@@ -421,11 +421,7 @@ def parse_step_from_yaml(
 def _drop_inherited_resources(
     raw: dict[str, Any], project: str | None, queue: str | None
 ) -> dict[str, Any]:
-    """Drop a step's project or queue that repeats the workflow's, so an override reaches it.
-
-    Configurations saved by vivarium-cluster-tools 4.x record the workflow's
-    project and queue on every step.
-    """
+    """Drop a step's project or queue that repeats the workflow's, so an override reaches it."""
     resources = raw.get("resources")
     if not isinstance(resources, dict):
         return raw
