@@ -267,7 +267,7 @@ def python_step(
         )
     dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
     product = registry.register_output(produces)
-    # TODO(MIC-7520): let a step declare an opt-in code fingerprint so it can skip
+    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
     # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
