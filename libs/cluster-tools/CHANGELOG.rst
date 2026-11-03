@@ -1,4 +1,4 @@
-**4.9.0 - 10/29/26**
+**4.9.0 - 11/03/26**
 
 - Prep for splitting of psimulate: make ``core``, ``utilities``, and the package
   ``__init__`` import nothing from ``psimulate``, ``dagger``, ``vipin``, or ``vivarium-engine``.
