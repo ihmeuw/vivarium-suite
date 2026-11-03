@@ -9,8 +9,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytest.importorskip("jobmon")
-
 from vivarium.cluster_tools.core.jobmon import env as env_module
 from vivarium.cluster_tools.core.jobmon.env import resolve_env_bin_path, resolve_env_prefix
 

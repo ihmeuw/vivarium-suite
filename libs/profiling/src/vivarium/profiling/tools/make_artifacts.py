@@ -6,7 +6,6 @@
    Use your best judgement.
 
 """
-import shutil
 import sys
 import time
 from pathlib import Path
@@ -15,7 +14,7 @@ import click
 from loguru import logger
 
 from vivarium.profiling.constants import data_keys, metadata
-from vivarium.profiling.tools.app_logging import add_logging_sink, decode_status
+from vivarium.profiling.tools.app_logging import add_logging_sink
 from vivarium.profiling.utilities import sanitize_location
 
 
@@ -84,6 +83,9 @@ def build_artifacts(
         locations specified in the project globals or the string 'all'.
         If the latter, this application will build all artifacts in
         parallel.
+    years
+        Years for which to make an artifact. Can be a single year or 'all'.
+        If not specified, make for most recent year.
     output_dir
         The path where the artifact files will be built. The directory
         will be created if it doesn't exist
@@ -108,11 +110,11 @@ def build_artifacts(
     elif location == "all":
         if running_from_cluster():
             # parallel build when on cluster
-            build_all_artifacts(output_dir, verbose)
+            build_all_artifacts(output_dir, years, verbose)
         else:
             # serial build when not on cluster
             for loc in metadata.LOCATIONS:
-                build_single(loc, output_dir, replace_keys)
+                build_single(loc, years, output_dir, replace_keys)
     else:
         raise ValueError(
             f'Location must be one of {metadata.LOCATIONS} or the string "all". '
@@ -120,74 +122,71 @@ def build_artifacts(
         )
 
 
-def build_all_artifacts(output_dir: Path, verbose: int) -> None:
-    """Builds artifacts for all locations in parallel.
+def build_all_artifacts(output_dir: Path, years: str | None, verbose: int) -> None:
+    """Build artifacts for all locations in parallel via a Jobmon workflow.
+
+    Fan one independent task out per location into a single Jobmon workflow so
+    the locations build concurrently on SLURM. Each task re-invokes this
+    module's ``__main__`` entry point to build one location's artifact.
+
     Parameters
     ----------
     output_dir
         The directory where the artifacts will be built.
+    years
+        Years for which to make an artifact. Can be a single year or 'all'.
+        If not specified, make for most recent year.
     verbose
         How noisy the logger should be.
+
     Note
     ----
         This function should not be called directly.  It is intended to be
         called by the :func:`build_artifacts` function located in the same
         module.
     """
-    from vivarium.cluster_tools.utilities import get_drmaa
+    from vivarium.cluster_tools.core.cluster.interface import NativeSpecification
+    from vivarium.cluster_tools.core.jobmon.artifact import build_artifacts_in_parallel
 
-    drmaa = get_drmaa()
+    worker_logging_root = output_dir / "logs"
+    worker_logging_root.mkdir(parents=True, exist_ok=True)
 
-    jobs = {}
-    with drmaa.Session() as session:
-        for location in metadata.LOCATIONS:
-            location_cleaned = sanitize_location(location)
-            path = output_dir / f"{location_cleaned}.hdf"
+    workflow_name = f"make_artifacts_{int(time.time())}"
 
-            job_template = session.createJobTemplate()
-            job_template.remoteCommand = shutil.which("python")
-            job_template.args = [__file__, str(path), f'"{location}"']
-            job_template.jobEnvironment = {
-                "LC_ALL": "en_US.UTF-8",
-                "LANG": "en_US.UTF-8",
-            }
-            job_template.nativeSpecification = (
-                f"-A {metadata.CLUSTER_PROJECT} "
-                f"-p {metadata.CLUSTER_QUEUE} "
-                f"--mem={metadata.MAKE_ARTIFACT_MEM*1024} "
-                f"-c {metadata.MAKE_ARTIFACT_CPU} "
-                f"-t {metadata.MAKE_ARTIFACT_RUNTIME} "
-                f"-C archive "  # Need J-drive access for data
-                f"-J {location_cleaned}_artifact"  # Name of the job
-            )
-            jobs[location] = (session.runJob(job_template), drmaa.JobState.UNDETERMINED)
-            logger.info(
-                f"Submitted job {jobs[location][0]} to build artifact for {location}."
-            )
-            session.deleteJobTemplate(job_template)
+    python = sys.executable
+    this_file = Path(__file__).resolve()
+    build_commands: dict[str, str] = {}
+    for location in metadata.LOCATIONS:
+        location_cleaned = sanitize_location(location)
+        artifact_path = output_dir / f"{location_cleaned}.hdf"
+        build_commands[
+            f"{location_cleaned}_artifact"
+        ] = f'{python} {this_file} "{artifact_path}" "{location}" {years}'
 
-        if verbose:
-            logger.info("Entering monitoring loop.")
-            logger.info("-------------------------")
-            logger.info("")
+    native_specification = NativeSpecification(
+        job_name="make_artifacts",
+        project=metadata.CLUSTER_PROJECT,
+        queue=metadata.CLUSTER_QUEUE,
+        peak_memory=metadata.MAKE_ARTIFACT_MEM,
+        max_runtime=metadata.MAKE_ARTIFACT_RUNTIME,
+        hardware=[],
+        cores=metadata.MAKE_ARTIFACT_CPU,
+        requires_archive_node=True,  # need archive-node (J-drive) access for input data
+    )
 
-            while any(
-                [
-                    job[1] not in [drmaa.JobState.DONE, drmaa.JobState.FAILED]
-                    for job in jobs.values()
-                ]
-            ):
-                for location, (job_id, status) in jobs.items():
-                    jobs[location] = (job_id, session.jobStatus(job_id))
-                    logger.info(
-                        f"{location:<35}: {decode_status(drmaa, jobs[location][1]):>15}"
-                    )
-                logger.info("")
-                time.sleep(metadata.MAKE_ARTIFACT_SLEEP)
-                logger.info("Checking status again")
-                logger.info("---------------------")
-                logger.info("")
+    _, monitoring_url = build_artifacts_in_parallel(
+        workflow_name=workflow_name,
+        build_commands=build_commands,
+        native_specification=native_specification,
+        worker_logging_root=worker_logging_root,
+        env_prefix=sys.prefix,
+        resume=False,
+        max_concurrently_running=len(build_commands),
+    )
 
+    logger.info(f"Built artifacts for {len(build_commands)} locations.")
+    if monitoring_url:
+        logger.info(f"Monitor progress in the Jobmon GUI at: {monitoring_url}")
     logger.info("**Done**")
 
 
@@ -206,6 +205,9 @@ def build_single_location_artifact(
     location
         The location to build the artifact for.  Must be one of the locations
         specified in the project globals.
+    years
+        Years for which to make an artifact. Can be a single year or 'all'.
+        If not specified, make for most recent year.
     log_to_file
         Whether we should write the application logs to a file.
     Note
@@ -237,7 +239,16 @@ def build_single_location_artifact(
     logger.info(f"**Done building -- {location}**")
 
 
+def _main(argv: list[str]) -> None:
+    """Build one location's artifact from a parallel build task's command-line arguments."""
+    artifact_path = argv[1]
+    artifact_location = argv[2]
+    artifact_years = None if argv[3] == "None" else argv[3]
+
+    build_single_location_artifact(
+        path=artifact_path, location=artifact_location, years=artifact_years, log_to_file=True
+    )
+
+
 if __name__ == "__main__":
-    artifact_path = sys.argv[1]
-    artifact_location = sys.argv[2]
-    build_single_location_artifact(artifact_path, artifact_location, log_to_file=True)
+    _main(sys.argv)
