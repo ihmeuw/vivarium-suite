@@ -93,6 +93,28 @@ def test_BasePopulation(
     )  # Within a half of a day.
 
 
+@pytest.mark.parametrize(
+    "deprecated_key, new_key",
+    [
+        ("age_start", "initialization_age_min"),
+        ("age_end", "initialization_age_max"),
+        ("exit_age", "untracking_age"),
+    ],
+)
+def test_deprecated_config_key_warns(
+    config, base_plugins, deprecated_key: str, new_key: str
+) -> None:
+    value = config.population.get(new_key, default_value=100)
+    config.update({"population": {deprecated_key: value}}, layer="override")
+    with pytest.warns(FutureWarning, match=f"'{deprecated_key}'.*'{new_key}'"):
+        Simulation(
+            components=[bp.BasePopulation()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+            setup=False,
+        ).setup()
+
+
 def test_age_out_simulants(config, base_plugins):
     start_population_size = 1000
     num_days = 600

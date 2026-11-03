@@ -386,7 +386,7 @@ class TestLookupTableResource:
         self, lookup_manager: LookupTableManager
     ) -> None:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(),
                 pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6], "baz": [7, 8, 9]}),
@@ -415,7 +415,7 @@ class TestLookupTableResource:
             }
         )
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test_table", value_columns="baz"
             )
@@ -462,7 +462,7 @@ class TestValidateBuildTableParameters:
         # value_columns + indexed guard (an empty Series qualifies as indexed).
         with pytest.raises(ValueError, match="supply some data"):
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
+                warnings.simplefilter("ignore", FutureWarning)
                 lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
 
     def test_validate_flat_series_rejected(self, lookup_manager: LookupTableManager) -> None:
@@ -1181,7 +1181,7 @@ class TestIndexedInput:
         data = self._make_sex_rate_dataframe()
         # Should NOT emit the flat-data deprecation warning.
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.simplefilter("error", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test", value_columns=None
             )
@@ -1200,7 +1200,7 @@ class TestIndexedInput:
         self, lookup_manager: LookupTableManager
     ) -> None:
         """Passing a flat DataFrame through the public ``LookupTableInterface``
-        entry point emits exactly one ``DeprecationWarning`` pointing at the
+        entry point emits exactly one ``FutureWarning`` pointing at the
         user's call site."""
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
@@ -1208,7 +1208,7 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             interface.build_table(flat, "test", value_columns="value")
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [r for r in records if issubclass(r.category, FutureWarning)]
         assert len(deprecations) == 1
         assert "flat DataFrame" in str(deprecations[0].message)
         # The warning must point at the user's call site (this test file),
@@ -1235,7 +1235,7 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.simplefilter("error", FutureWarning)
             interface.build_table(5, "test_scalar_vc", value_columns="value")
 
     def test_value_columns_none_for_scalar_uses_default(
@@ -1246,7 +1246,7 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.simplefilter("error", FutureWarning)
             table = interface.build_table(5, "test_scalar_default", value_columns=None)
         assert list(table.value_columns) == ["value"]
 
@@ -1257,7 +1257,7 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.simplefilter("error", FutureWarning)
             interface.build_table([1, 2], "test_list_vc", value_columns=["a", "b"])
 
     def test_mapping_input_emits_deprecation_warning(
@@ -1275,7 +1275,7 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             interface.build_table(data, "test", value_columns="value")
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [r for r in records if issubclass(r.category, FutureWarning)]
         assert len(deprecations) == 1
         assert "Mapping" in str(deprecations[0].message)
         assert deprecations[0].filename == __file__
@@ -1296,7 +1296,7 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             table.set_data(flat)
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [r for r in records if issubclass(r.category, FutureWarning)]
         assert len(deprecations) == 1
         assert "flat DataFrame" in str(deprecations[0].message)
         # Verify stacklevel: the warning should point at this test file
@@ -1601,7 +1601,7 @@ class TestIndexedInput:
             }
         )
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(), flat, "t", value_columns="value"
             )

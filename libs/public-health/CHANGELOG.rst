@@ -1,3 +1,9 @@
+**6.8.1 - 11/03/26**
+
+- Raise a ``FutureWarning`` for the deprecated ``population`` configuration keys
+  ``age_start``, ``age_end``, and ``exit_age`` instead of logging a message
+- Fix a ``MissingLayerError`` crash when one of those keys is set without its replacement
+
 **6.8.0 - 10/21/26**
 
 Breaking changes:
