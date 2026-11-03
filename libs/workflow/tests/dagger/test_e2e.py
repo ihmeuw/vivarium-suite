@@ -28,9 +28,6 @@ from typing import Iterator
 import pandas as pd
 import pytest
 import yaml
-
-pytest.importorskip("vivarium.psimulate")
-
 from vivarium.psimulate.results.writing import collect_metadata
 
 _DATA_DIR = Path(__file__).parent / "data"

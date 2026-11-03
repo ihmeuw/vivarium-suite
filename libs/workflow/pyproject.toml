@@ -51,10 +51,8 @@ docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
 dev = ["vivarium-workflow[test,docs,interactive,lint,cluster,simulation]"]
-# `simulation` stays out of ci_github: the release job installs ci_github before
-# vivarium-psimulate, which releases alongside this package, is on PyPI.
-ci_github = ["vivarium-workflow[test,docs,lint]"]
-ci_jenkins = ["vivarium-workflow[ci_github,cluster,simulation]"]
+ci_github = ["vivarium-workflow[test,docs,lint,simulation]"]
+ci_jenkins = ["vivarium-workflow[ci_github,cluster]"]
 
 [project.scripts]
 dagger = "vivarium.workflow.dagger.cli:dagger"
