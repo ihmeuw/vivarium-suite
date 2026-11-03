@@ -173,6 +173,15 @@ install: ENV_REQS?=dev
 install: UV_FLAGS?=
 install: CHANGED_LIBS?=
 install: # Install package and dependencies
+# A repo with uv.lock builds its environment from the lock. `install` would resolve
+# outside the lock and use whatever pip is on PATH, since uv venvs have none. Jenkins
+# and monorepo libs are exempt, so a repo that has not opted in to the uv pipeline,
+# or a stray lock in libs/<pkg>, still builds.
+	@if [ -f uv.lock ] && [ -z "$${JENKINS_URL}" ] && [ -z "$(findstring /libs/$(PACKAGE_DIR),$(CURDIR))" ]; then \
+		echo "ERROR: this repo builds its environment from uv.lock, so 'make install' is disabled."; \
+		echo "Run 'source environment.sh' (or 'uv sync') instead."; \
+		exit 1; \
+	fi
 	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
 	@if [ -z "$(strip $(CHANGED_LIBS))" ]; then \

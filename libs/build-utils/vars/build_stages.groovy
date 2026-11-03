@@ -1,3 +1,9 @@
+import groovy.transform.Field
+
+// The uv that builds environments from uv.lock. Pinned so a uv release cannot change
+// how CI resolves or installs.
+@Field final String UV_VERSION = "0.13.6"
+
 def call() {
     // Return a map of functions that can be accessed
     return [
@@ -5,6 +11,7 @@ def call() {
         loadSharedFiles: this.&loadSharedFiles,
         buildEnvironment: this.&buildEnvironment,
         installPackage: this.&installPackage,
+        syncEnvironment: this.&syncEnvironment,
         checkFormatting: this.&checkFormatting,
         runTests: this.&runTests,
         buildDocs: this.&buildDocs,
@@ -118,6 +125,52 @@ def installPackage(String env_reqs = "", boolean useCache = false) {
     stage("Install Package - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
             sh "${ACTIVATE} && make install ${env_reqs} ${uvFlags} && uv pip install . ${extraIndex} ${noCache}"
+        }
+    }
+}
+
+// Build the environment from the repo's uv.lock, in place of buildEnvironment and
+// installPackage. The venv goes at CONDA_ENV_PATH, so ACTIVATE and cleanup find it there.
+def syncEnvironment(String env_reqs = "", boolean useCache = false, String gitCredentialsId = "") {
+    // Unlike installPackage, an empty env_reqs means no extras. A dev dependency
+    // group is still installed, because uv sync includes it by default.
+    String extras = env_reqs.split(',').collect { it.trim() }.findAll { it }.collect { "--extra ${it}" }.join(' ')
+    String noCache = useCache ? "" : "--no-cache"
+    String uvDir = "${WORKSPACE}@tmp/uv-${PYTHON_VERSION}"
+    String uv = "${uvDir}/bin/uv"
+    stage("Sync Environment - Python ${PYTHON_VERSION}") {
+        withWorkingDirectory {
+            if (!fileExists('uv.lock')) {
+                error("uv_lock is set, but there is no uv.lock in ${pwd()}.")
+            }
+            sh "rm -rf ${CONDA_ENV_PATH} ${uvDir}"
+            sh "/svc-simsci/miniconda3/bin/python -m pip install --quiet --target ${uvDir} uv==${UV_VERSION}"
+            withEnv([
+                "UV_PROJECT_ENVIRONMENT=${CONDA_ENV_PATH}",
+                // The cache and the venv can be on different filesystems.
+                "UV_LINK_MODE=copy",
+                "UV_PYTHON_PREFERENCE=only-managed",
+                // Without this, installing a Python also writes a python3.X link into
+                // the service account's ~/.local/bin.
+                "UV_PYTHON_INSTALL_BIN=0",
+            ]) {
+                sh "${uv} python install ${PYTHON_VERSION}"
+                // --locked fails the build if uv.lock does not match pyproject.toml.
+                // --no-editable keeps a regular install, so Slurm workers do not read
+                // the build node's workspace.
+                String sync = "${uv} sync --locked --no-editable --python ${PYTHON_VERSION} ${extras} ${noCache}"
+                if (gitCredentialsId) {
+                    // uv clones git sources with the git CLI, which reads the
+                    // credential through the GIT_ASKPASS that this binding sets.
+                    withCredentials([gitUsernamePassword(credentialsId: gitCredentialsId)]) {
+                        sh sync
+                    }
+                } else {
+                    sh sync
+                }
+            }
+            // open permissions for test users to create file in workspace
+            sh "chmod 777 ${WORKSPACE}"
         }
     }
 }
@@ -242,7 +295,11 @@ def cleanup() {
     // Remove the conda environment immediately to conserve local disk space.
     // Envs are built on local node storage, not shared NFS, so they must be
     // cleaned up by the build that created them.
-    sh "${env.ACTIVATE_BASE} && conda env remove -p ${CONDA_ENV_PATH} --yes || rm -rf ${CONDA_ENV_PATH}"
+    if (env.USE_UV_LOCK == 'true') {
+        sh "rm -rf ${CONDA_ENV_PATH}"
+    } else {
+        sh "${env.ACTIVATE_BASE} && conda env remove -p ${CONDA_ENV_PATH} --yes || rm -rf ${CONDA_ENV_PATH}"
+    }
     // cleanWs must run outside withWorkingDirectory: deleting the workspace while dir() is
     // still inside it causes a FileNotFoundException when dir() tries to restore its context.
     // deleteDirs: true ensures both WORKSPACE and WORKSPACE@tmp are cleaned.

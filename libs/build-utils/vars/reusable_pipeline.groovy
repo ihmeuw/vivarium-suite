@@ -16,6 +16,14 @@ def call(Map config = [:]){
             and GH Actions).
   env_reqs: The pyproject.toml extras to install with `make install` (e.g. "ci_jenkins").
             Empty/omitted leaves base.mk's default ("dev"), which is correct for standalone repos.
+            With uv_lock, these are the extras to sync, separated by commas, and
+            empty/omitted means no extras.
+  uv_lock: Build the environment from the repo's committed uv.lock with `uv sync`,
+            instead of a conda environment and `make install`. Standalone repos only,
+            and not with deployable.
+  uv_git_credentials_id: With uv_lock, the Jenkins credential that uv uses to clone
+            git sources in uv.lock from private repos. Empty/omitted clones without
+            credentials, which works only for public repos.
   github_credentials_id: Jenkins credential ID to use during the deploy stage when pushing
             the release tag (only consulted when `deployable: true`). Empty/omitted falls
             back to the credential configured on the Multibranch Pipeline's branch source.
@@ -31,6 +39,8 @@ def call(Map config = [:]){
     'skip_doc_build',
     'run_mypy',
     'env_reqs',
+    'uv_lock',
+    'uv_git_credentials_id',
     'github_credentials_id'
   ]
 
@@ -49,6 +59,9 @@ def call(Map config = [:]){
   // Empty string leaves base.mk's default ("dev") in effect. installPackage in
   // build_stages.groovy only sets ENV_REQS=... when this is non-empty.
   def env_reqs = config.env_reqs ?: ""
+  // Opt-in, so a repo that commits a uv.lock for local use does not switch by accident.
+  def use_uv_lock = (config?.uv_lock == true)
+  def uv_git_credentials_id = config.uv_git_credentials_id ?: ""
   // Optional override for the GitHub credential used for git push during deploy.
   // When empty, deployPackage() falls back to the credential from scm (branch source).
   def github_credentials_id = config.github_credentials_id ?: ""
@@ -57,6 +70,7 @@ def call(Map config = [:]){
   // stage after user parameters are available (needed for RUN_WEEKLY override).
   def task_node
   def conda_env_dir
+  def uv_python_dir
   def run_weekly
   conda_env_name_base = "${env.JOB_NAME}-${BUILD_NUMBER}"
 
@@ -68,6 +82,7 @@ def call(Map config = [:]){
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
   echo "  env_reqs: ${env_reqs}"
+  echo "  uv_lock: ${use_uv_lock}"
 
   if (stagger_scheduled_builds && scheduled_branches.size() > 1) {
     startHour = 20
@@ -173,6 +188,12 @@ def call(Map config = [:]){
             if (!test_types.every { ['all', 'e2e', 'unit', 'integration'].contains(it) }) {
               error("test_types must be a subset of ['all', 'e2e', 'unit', 'integration']")
             }
+            if (use_uv_lock && is_deployable) {
+              error("uv_lock cannot be combined with deployable: Jenkins does not deploy from a uv repo.")
+            }
+            if (uv_git_credentials_id && !use_uv_lock) {
+              error("uv_git_credentials_id only applies with uv_lock: true.")
+            }
           }
         }
       }
@@ -182,6 +203,9 @@ def call(Map config = [:]){
             // Use the name of the branch in the build name
             currentBuild.displayName = "#${BUILD_NUMBER} ${GIT_BRANCH}"
             env.PACKAGE_SUBDIR = get_package_subdir()
+            if (use_uv_lock && env.PACKAGE_SUBDIR) {
+              error("uv_lock is for standalone repos only, not monorepo libs (${env.PACKAGE_SUBDIR}).")
+            }
             python_versions = get_python_versions(WORKSPACE, GIT_URL, env.PACKAGE_SUBDIR)
             // Derive the deploy/docs version as the last entry in the list
             PYTHON_DEPLOY_VERSION = python_versions[-1]
@@ -205,6 +229,10 @@ def call(Map config = [:]){
             }
             task_node = use_slurm ? 'slurm' : 'matrix-tasks'
             conda_env_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/svc-simsci/envs"
+            // A uv venv links to its Python, so Slurm builds need the Python on the shared
+            // filesystem too. Both directories are outside Jenkinsfile.cleanup's sweep, so
+            // each Python is installed once, not once per build.
+            uv_python_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/uv-python" : "/svc-simsci/uv-python"
             echo "Resolved task_node: ${task_node}, conda_env_dir: ${conda_env_dir}"
           }
         }
@@ -220,11 +248,18 @@ def call(Map config = [:]){
             python_versions.each { pythonVersion ->
               parallelPythonVersions["Python ${pythonVersion}"] = {
                 node(task_node) {
+                  // On the uv path the venv takes the conda environment's place, so the
+                  // CONDA_ENV_* names still hold its path.
+                  def env_path = "${conda_env_dir}/${conda_env_name_base}-${pythonVersion}"
                   def envVars = [
                     CONDA_ENV_NAME: "${conda_env_name_base}-${pythonVersion}",
-                    CONDA_ENV_PATH: "${conda_env_dir}/${conda_env_name_base}-${pythonVersion}",
+                    CONDA_ENV_PATH: env_path,
                     PYTHON_VERSION: pythonVersion,
-                    ACTIVATE: "source /svc-simsci/miniconda3/bin/activate ${conda_env_dir}/${conda_env_name_base}-${pythonVersion} &> /dev/null",
+                    USE_UV_LOCK: use_uv_lock.toString(),
+                    UV_PYTHON_INSTALL_DIR: uv_python_dir,
+                    ACTIVATE: use_uv_lock ?
+                      "source ${env_path}/bin/activate &> /dev/null" :
+                      "source /svc-simsci/miniconda3/bin/activate ${env_path} &> /dev/null",
                   ]
                   
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
@@ -283,14 +318,22 @@ def call(Map config = [:]){
                       } else if (skipForDocOnly) {
                         echo "This is a doc-only change since last build and previous build passed. Skipping everything except doc build and doc tests."
                         buildStages.runDebugInfo(skipEval)
-                        buildStages.buildEnvironment()
-                        buildStages.installPackage("docs", useCache)
+                        if (use_uv_lock) {
+                          buildStages.syncEnvironment(env_reqs, useCache, uv_git_credentials_id)
+                        } else {
+                          buildStages.buildEnvironment()
+                          buildStages.installPackage("docs", useCache)
+                        }
                         buildStages.buildDocs()
                         buildStages.testDocs()
                       } else {
                         buildStages.runDebugInfo(skipEval)
-                        buildStages.buildEnvironment()
-                        buildStages.installPackage(env_reqs, useCache)
+                        if (use_uv_lock) {
+                          buildStages.syncEnvironment(env_reqs, useCache, uv_git_credentials_id)
+                        } else {
+                          buildStages.buildEnvironment()
+                          buildStages.installPackage(env_reqs, useCache)
+                        }
                         buildStages.checkFormatting()
                         // Transform test type inputs to actual make test target names
                         tests = test_types.collect { "test-${it}" }
