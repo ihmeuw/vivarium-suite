@@ -1,3 +1,22 @@
+**5.0.0 - 11/03/26**
+
+- **Breaking change.** Move ``psimulate`` and ``vipin`` to the new ``vivarium-psimulate``
+  package, importable as ``vivarium.psimulate``, along with the ``testing`` components.
+  The new ``psimulate`` extra installs ``vivarium-psimulate[cluster]``
+- **Breaking change.** Move ``with_sim_verbosity``, ``resolve_sim_verbosity``,
+  ``MinutesOrNone``, ``MINUTES_OR_NONE``, ``load_run_config``, ``with_run_config`` and
+  ``resolve_deprecated_positional`` from ``core.cli_tools`` to
+  ``vivarium.psimulate.cli_options``, and ``NUM_ROWS_PER_CENTRAL_LOG_FILE`` from
+  ``utilities`` to ``vivarium.psimulate.performance_logger``
+- **Breaking change.** Move Dagger to ``vivarium-workflow``, importable as
+  ``vivarium.workflow.dagger``. Remove ``with_workflow_config`` from ``core.cli_tools``,
+  since only Dagger used it
+- **Breaking change.** Remove the ``build_artifacts_in_parallel`` re-export from
+  ``core.jobmon``. Import it from ``core.jobmon.artifact``
+- Drop the dependencies that only psimulate, vipin and Dagger needed:
+  ``vivarium-engine``, ``vivarium-config-tree``, ``dill``, ``psutil``, ``numpy``,
+  ``pandas``, ``pyyaml``, ``tables`` and ``pyarrow``
+
 **4.10.0 - 11/03/26**
 
 - Name the environment in every environment-resolution error, including a failing
