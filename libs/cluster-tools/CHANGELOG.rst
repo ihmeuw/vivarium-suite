@@ -1,4 +1,4 @@
-**4.10.0 - 10/29/26**
+**4.10.0 - 11/03/26**
 
 - Name the environment in every environment-resolution error, including a failing
   conda lookup, output that is not JSON, and a path that cannot be checked. These
