@@ -7,7 +7,7 @@ def call(Map config = [:]){
   scheduled_branches: The branch names for which to run scheduled nightly builds.
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
-  weekly_tests: Whether the package has tests marked `weekly`. Weekly cron builds and builds
+  weekly_tests: Whether the package has tests marked `weekly`. Sunday cron builds and builds
             with RUN_WEEKLY set pass RUNWEEKLY=1 and get a "[weekly]" label in the build name.
   requires_slurm: Whether the child tasks require the slurm scheduler. Can also be set to "weekly" to
             use slurm only for builds that run weekly tests. Setting to "weekly" also sets weekly_tests.
@@ -135,7 +135,7 @@ def call(Map config = [:]){
       booleanParam(
         name: "RUN_WEEKLY",
         defaultValue: false,
-        description: "Whether to run weekly tests (overrides slow test day check)."
+        description: "Whether to run weekly tests and label the build [weekly]. Has no effect unless the Jenkinsfile sets weekly_tests (or requires_slurm: \"weekly\")."
       )
       booleanParam(
         name: "FORCE_FULL_BUILD",
@@ -196,7 +196,7 @@ def call(Map config = [:]){
             PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"
 
-            // Weekly tests run on cron builds, or when the user sets RUN_WEEKLY.
+            // Weekly tests run on Sunday cron builds, or when the user sets RUN_WEEKLY.
             // Only packages that declare weekly_tests get RUNWEEKLY=1 and the "[weekly]" label.
             run_weekly = false
             def weekly_reason = ""
@@ -271,7 +271,7 @@ def call(Map config = [:]){
                       echo "Skip evaluation: previousBuildPassed=${previousBuildPassed}, isDocOnlyChange=${isDocOnlyChange}, isChangelogOnlyChange=${isChangelogOnlyChange}, isCron=${isCron}, forceFullBuild=${forceFullBuild}"
                       
                       // Determine if we should skip the full build
-                      def canSkipFullBuild = previousBuildPassed && !isCron && !forceFullBuild
+                      def canSkipFullBuild = previousBuildPassed && !isCron && !forceFullBuild && !run_weekly
                       def skipForChangelogOnly = canSkipFullBuild && isChangelogOnlyChange
                       def skipForDocOnly = canSkipFullBuild && isDocOnlyChange
                       

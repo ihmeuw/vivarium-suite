@@ -2,7 +2,7 @@
 
 - Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on
   Sunday cron builds and ``RUN_WEEKLY`` builds, and label those builds ``[weekly]`` in
-  the Jenkins build name
+  the Jenkins build name. ``requires_slurm: "weekly"`` implies ``weekly_tests``
 
 **4.12.0 - 11/03/26**
 
