@@ -31,7 +31,7 @@ from vivarium.workflow.backend.task import Task
 from vivarium.workflow.backend.wiring import ArtifactRegistry
 from vivarium.workflow.frontend.python_step import python_step
 
-# TODO(MIC-7520): add selective-staleness scenario helpers once a step can declare a
+# TODO(MIC-7760): add selective-staleness scenario helpers once a step can declare a
 # code fingerprint; the synchronous fake-Jobmon adapter lands with the bridge.
 
 
