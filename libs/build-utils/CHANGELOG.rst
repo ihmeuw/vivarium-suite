@@ -1,4 +1,4 @@
-**4.12.0 - 11/02/26**
+**4.12.0 - 11/03/26**
 
 - Support beta releases (``X.Y.ZbN``) in ``PACKAGE_VERSION``, the Jenkins changelog
   check, and ``make validate-tag``
