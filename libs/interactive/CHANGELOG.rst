@@ -1,4 +1,4 @@
-**1.1.0 - 11/02/26**
+**1.1.0 - 11/03/26**
 
 - Add ``population_size``, ``seed``, ``draw``, ``artifact_path``, ``start_time``, and ``end_time`` keyword parameters to ``Simulation``
 
