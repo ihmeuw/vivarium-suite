@@ -1,0 +1,1 @@
+.. automodule:: vivarium.psimulate.pip_env
