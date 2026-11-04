@@ -22,23 +22,27 @@ dependencies = []
 # defined below.
 
 # core scientific stack
-numpy = ["numpy"]
-numpy_lt_2 = ["numpy<2.0.0"]
+numpy = ["numpy>=2.1.0"]
 pandas = [
-    "pandas",
+    "pandas>=3.0.0",
+    # Cap until MIC-7774 moves the suite to the pandas 3 stubs.
     "pandas-stubs<=2.2.3.250308",
+]
+pandera = [
+    "vivarium-dependencies[pandas]",
+    "pandera[pandas]>=0.31.0",
 ]
 pyyaml = [
     "pyyaml>=5.1",
     "types-PyYAML",
 ]
-scipy = ["scipy<1.17.0"]  # Temporary pin until FuzzyChecker is updated
-click = ["click"]
-tables = ["tables"]
-loguru = ["loguru"]
-pyarrow = ["pyarrow"]
+scipy = ["scipy>=1.14.1,<1.17.0"]  # Temporary upper pin until FuzzyChecker is updated
+click = ["click>=8.4.0"]
+tables = ["tables>=3.10.1"]
+loguru = ["loguru>=0.7.2"]
+pyarrow = ["pyarrow>=18.0.0"]
 networkx = [
-    "networkx",
+    "networkx>=3.0",
     "types-networkx",
 ]
 requests = [
@@ -55,7 +59,7 @@ jupyter = [
     "jupyter",
     "ipywidgets",
 ]
-matplotlib = ["matplotlib"]
+matplotlib = ["matplotlib>=3.9.2"]
 
 # testing
 pytest = ["pytest", "pytest-cov", "pytest-mock", "pytest-xdist"]

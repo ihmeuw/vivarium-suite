@@ -1,7 +1,7 @@
 import pandas as pd
-import pandera as pa
+import pandera.pandas as pa
 import pytest
-from pandera.errors import SchemaError
+from pandera.errors import SchemaError, SchemaErrors
 
 from vivarium.validation.data_transformation.data_schema import (
     DrawData,
@@ -15,7 +15,7 @@ def check_schema_error_batch(
 ) -> None:
     """Helper function to check if a schema raises an error for invalid data."""
     for df in invalid_dataframes:
-        with pytest.raises(SchemaError):
+        with pytest.raises((SchemaError, SchemaErrors)):
             schema.validate(df)
 
 

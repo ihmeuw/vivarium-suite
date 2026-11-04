@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, TypeVar
 
 import pandas as pd
-import pandera as pa
+import pandera.pandas as pa
 
 from vivarium.validation.constants import INPUT_DATA_INDEX_NAMES
 

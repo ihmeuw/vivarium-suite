@@ -5,11 +5,13 @@ import pytest
 pytest.importorskip("vivarium_inputs")
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Generator
 from unittest import mock
 
 import pandas as pd
 import yaml
+from _pytest.logging import LogCaptureFixture
+from loguru import logger
 from pytest import TempPathFactory
 from vivarium.artifact import Artifact
 
@@ -25,6 +27,19 @@ from vivarium.validation.data_transformation import calculations, utils
 from vivarium.validation.data_transformation.age_groups import AgeSchema, AgeTuple
 from vivarium.validation.data_transformation.data_schema import DrawData, SingleNumericColumn
 from vivarium.validation.data_transformation.measures import RatioMeasure
+
+
+@pytest.fixture
+def caplog(caplog: LogCaptureFixture) -> Generator[LogCaptureFixture, None, None]:
+    handler_id = logger.add(
+        caplog.handler,
+        format="{message}",
+        level=0,
+        filter=lambda record: record["level"].no >= caplog.handler.level,
+        enqueue=False,  # Set to 'True' if your test is spawning child processes.
+    )
+    yield caplog
+    logger.remove(handler_id)
 
 
 @utils.check_io(out=SingleNumericColumn)
