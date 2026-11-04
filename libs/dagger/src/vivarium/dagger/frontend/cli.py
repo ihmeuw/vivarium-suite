@@ -1,23 +1,20 @@
 """
-=======
-vwf CLI
-=======
+====================
+Pipeline definitions
+====================
 
-Run, preview, or force the steps of a pipeline definition from the command line.
+Run, preview, or force the steps of a Python pipeline definition for the ``dagger``
+command, which calls these functions when ``-c`` names a definition.
 
-Each subcommand loads a definition with
+Each function loads a definition with
 :func:`~vivarium.dagger.frontend.definition.load_pipeline`, checks that no artifact
 has more than one producing step and that the pipeline's root can be used, and calls
-one verb of
-:mod:`~vivarium.dagger.frontend.pipeline`. :doc:`/vwf` shows an example of each
-subcommand and describes the exit status and how each error is reported. The preview
-plan goes to standard output, as do pytask's progress table and failure reports.
-``vwf``'s own messages and tracebacks go to standard error, and so does pytask's output
-when pytask stops a preview's plan for a reason other than a definition error.
-
-.. click:: vivarium.dagger.frontend.cli:vwf
-   :prog: vwf
-   :nested: full
+one verb of :mod:`~vivarium.dagger.frontend.pipeline`. :doc:`/python_pipelines` shows
+an example of each command and describes the exit status and how each error is
+reported. The preview plan goes to standard output, as do pytask's progress table and
+failure reports. The command's own messages and tracebacks go to standard error, and so
+does pytask's output when pytask stops a preview's plan for a reason other than a
+definition error.
 
 """
 
@@ -61,7 +58,7 @@ _SKIP_REASONS = {
     pytask.TaskOutcome.SKIP_UNCHANGED: "unchanged",
     pytask.TaskOutcome.SKIP: "not selected",
 }
-"""How ``vwf preview`` words the outcomes of steps that would not run."""
+"""How ``dagger preview`` words the outcomes of steps that would not run."""
 
 _EXIT_INTERRUPTED = 130
 """Exit status after an interrupt, as a shell reports a process stopped by SIGINT."""
@@ -76,30 +73,8 @@ class _DefinitionProblem(click.ClickException):
     exit_code = 2
 
 
-@click.group()
-def vwf() -> None:
-    """Run, preview, or force the steps of a pipeline definition.
-
-    DEFINITION is a Python file or module with a function that returns a Pipeline:
-    path/to/file.py or package.module, optionally followed by :function (the default
-    function is pipeline). A module must be installed or on PYTHONPATH.
-
-    Exit status is 0 on success; 1 if a step failed or exited, or the build stopped for
-    another reason, possibly before any step ran; 2 if the definition or the command is
-    wrong and nothing ran; and 130 if the command was interrupted.
-    """
-
-
-@vwf.command()
-@click.argument("definition")
-@click.option(
-    "--until",
-    multiple=True,
-    metavar="STEP",
-    help="Run only STEP and the steps it depends on. Repeat to name more steps.",
-)
-def run(definition: str, until: tuple[str, ...]) -> None:
-    """Run every stale step of DEFINITION."""
+def run_definition(definition: str, until: tuple[str, ...]) -> None:
+    """Run every stale step of ``definition``, or only ``until`` and the steps they need."""
     try:
         pipeline = _load(definition)
         with _verb_errors(pipeline, until, "'--until'"):
@@ -108,19 +83,8 @@ def run(definition: str, until: tuple[str, ...]) -> None:
         _interrupted(resumable=True)
 
 
-@vwf.command()
-@click.argument("definition")
-@click.option(
-    "--until",
-    multiple=True,
-    metavar="STEP",
-    help="Plan only STEP and the steps it depends on. Repeat to name more steps.",
-)
-def preview(definition: str, until: tuple[str, ...]) -> None:
-    """Show which steps of DEFINITION would run, and why.
-
-    Nothing runs and no product is written.
-    """
+def preview_definition(definition: str, until: tuple[str, ...]) -> None:
+    """Print which steps of ``definition`` would run, and why, without running any."""
     try:
         pipeline = _load(definition)
         with _verb_errors(pipeline, until, "'--until'"):
@@ -130,14 +94,8 @@ def preview(definition: str, until: tuple[str, ...]) -> None:
         _interrupted(resumable=False)
 
 
-@vwf.command()
-@click.argument("definition")
-@click.argument("steps", nargs=-1, required=True, metavar="STEP...")
-def force(definition: str, steps: tuple[str, ...]) -> None:
-    """Run each STEP even if it is current.
-
-    Every other stale step of DEFINITION runs too.
-    """
+def force_definition(definition: str, steps: tuple[str, ...]) -> None:
+    """Run each of ``steps`` even if it is current, with every other stale step."""
     try:
         pipeline = _load(definition)
         with _verb_errors(pipeline, steps, "'STEP...'"):
@@ -229,7 +187,7 @@ def _check_root(root: Path) -> None:
 def _verb_errors(
     pipeline: Pipeline, requested: tuple[str, ...], param_hint: str
 ) -> Iterator[None]:
-    """Report an error raised by a verb as a click error with vwf's exit status."""
+    """Report an error raised by a verb as a click error with the command's exit status."""
     try:
         yield
     except StepFailed as error:
@@ -316,7 +274,7 @@ def _print_plan(plan: list[StepPreview]) -> None:
 
 
 def _plan_line(step: StepPreview) -> str:
-    """Return the line ``vwf preview`` prints for ``step``."""
+    """Return the line ``dagger preview`` prints for ``step``."""
     if step.would_run:
         reasons = "; ".join(str(reason) for reason in step.reasons)
         return f"run  {step.name}: {reasons}" if reasons else f"run  {step.name}"

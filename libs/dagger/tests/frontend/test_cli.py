@@ -1,4 +1,4 @@
-"""Tests for the ``vwf`` command (``frontend.cli``)."""
+"""Tests for the ``dagger`` command (``frontend.cli``)."""
 
 import importlib.metadata
 import os
@@ -16,7 +16,7 @@ import pytest
 from click.testing import CliRunner, Result
 
 from vivarium.dagger.backend.nodes import file_node
-from vivarium.dagger.frontend.cli import vwf
+from vivarium.dagger.cli import dagger
 
 _HEADER = """\
 import dataclasses
@@ -295,7 +295,7 @@ def pipeline():
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
 
 _CLAIMED = "Artifact 'shared.parquet' is produced by more than one step"
-"""The start of vwf's message for the artifact that both _DOUBLE_CLAIM steps produce."""
+"""The start of dagger's message for the artifact that both _DOUBLE_CLAIM steps produce."""
 
 _HANDOFF_NOT_READY = (
     _HEADER
@@ -416,14 +416,14 @@ def pipeline():
 )
 """A definition of one step that raises."""
 
-_THEN_NEXT = '"$1" run "$2" && touch "$3"'
-"""A shell list that runs ``vwf run`` and, only if it succeeds, a next command."""
+_THEN_NEXT = '"$1" run -c "$2" --local && touch "$3"'
+"""A shell list that runs ``dagger run`` and, only if it succeeds, a next command."""
 
 _RUN_LINE = re.compile(r"run  ([^:\s]+)(: .+)?")
 """A preview line for a step that would run."""
 
 _PLAN_LINE = re.compile(r"run  \S+(: .+)?|skip \S+: .+|\d+ of \d+ steps? would run\.")
-"""Any line ``vwf preview`` prints for a successful plan."""
+"""Any line ``dagger preview`` prints for a successful plan."""
 
 _INTERRUPTED_WHILE_LOADING = "raise KeyboardInterrupt\n"
 """A definition that raises KeyboardInterrupt at import, as Ctrl-C while loading does."""
@@ -583,9 +583,15 @@ def _rooted_at(*parts: str) -> str:
     return f"{_HEADER}\nROOT = {parts!r}\n{_ROOTED_STEP}"
 
 
-def _invoke(*args: str) -> Result:
-    """Run ``vwf`` with ``args`` in this process."""
-    return CliRunner().invoke(vwf, list(args))
+def _dagger(*args: str) -> Result:
+    """Run ``dagger`` with ``args`` in this process."""
+    return CliRunner().invoke(dagger, list(args))
+
+
+def _invoke(verb: str, definition: str, *args: str) -> Result:
+    """Run ``dagger <verb> -c <definition>`` with ``args``, adding ``--local`` where needed."""
+    local = ["--local"] if verb in ("run", "force") else []
+    return _dagger(verb, "-c", definition, *local, *args)
 
 
 def _describe(result: Result) -> str:
@@ -608,18 +614,18 @@ def _product(directory: Path, step: str) -> Path:
 
 
 def _plan(result: Result) -> list[str]:
-    """Return the non-blank lines ``vwf preview`` wrote to standard output."""
+    """Return the non-blank lines ``dagger preview`` wrote to standard output."""
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
 def _would_run(result: Result) -> list[str]:
-    """Return the steps ``vwf preview`` printed as would-run, in its order."""
+    """Return the steps ``dagger preview`` printed as would-run, in its order."""
     matches = (_RUN_LINE.fullmatch(line) for line in _plan(result))
     return [match.group(1) for match in matches if match]
 
 
 def _stopped(code: str) -> str:
-    """Return vwf's line for a build that pytask stopped with the exit code named ``code``."""
+    """Return dagger's line for a build that pytask stopped with the exit code named ``code``."""
     return f"pytask stopped the build with exit code {code}; its output above shows why."
 
 
@@ -656,28 +662,31 @@ def _forget_loaded_definitions(tmp_path: Path) -> Iterator[None]:
 # The command and its entry point
 
 
-def test_vwf_help_lists_run_preview_and_force() -> None:
-    """'vwf --help' exits 0 and lists the subcommands run, preview and force, and no others."""
-    result = _invoke("--help")
+def test_dagger_help_lists_run_preview_force_and_restart() -> None:
+    """'dagger --help' exits 0 and lists the subcommands run, preview, force and restart, and no others."""
+    result = _dagger("--help")
 
     assert result.exit_code == 0, _describe(result)
     _, _, commands = result.output.partition("Commands:")
     listed = set(re.findall(r"^  (\S+)", commands, flags=re.MULTILINE))
-    assert listed == {"run", "preview", "force"}
+    assert listed == {"run", "preview", "force", "restart"}
 
 
-def test_the_vwf_console_script_resolves_to_the_click_group() -> None:
-    """The console_scripts entry point named 'vwf' is declared and loads vivarium.dagger.frontend.cli.vwf."""
-    [entry_point] = importlib.metadata.entry_points(group="console_scripts", name="vwf")
+def test_the_dagger_console_script_resolves_to_the_click_group() -> None:
+    """The console_scripts entry point named 'dagger' loads vivarium.dagger.cli.dagger, and no 'dagger' entry point is declared."""
+    [entry_point] = importlib.metadata.entry_points(group="console_scripts", name="dagger")
 
-    assert entry_point.value == "vivarium.dagger.frontend.cli:vwf"
-    assert entry_point.load() is vwf
+    assert entry_point.value == "vivarium.dagger.cli:dagger"
+    assert not importlib.metadata.entry_points(group="console_scripts", name="vwf")
+    assert entry_point.load() is dagger
 
 
-def test_the_installed_vwf_script_exit_status_can_gate_a_shell_chain(tmp_path: Path) -> None:
-    """The installed vwf script, run in a subprocess, exits 0 for a definition that succeeds and 1 for one whose step fails, so 'vwf run def.py && next' runs next only on success."""
-    script = Path(sys.executable).parent / "vwf"
-    assert script.is_file(), f"No vwf console script next to {sys.executable}."
+def test_the_installed_dagger_script_exit_status_can_gate_a_shell_chain(
+    tmp_path: Path,
+) -> None:
+    """The installed dagger script, run in a subprocess, exits 0 for a definition that succeeds and 1 for one whose step fails, so 'dagger run -c def.py --local && next' runs next only on success."""
+    script = Path(sys.executable).parent / "dagger"
+    assert script.is_file(), f"No dagger console script next to {sys.executable}."
 
     for name, source, status in [("passes", _PASSES, 0), ("fails", _FAILS, 1)]:
         definition = _write_definition(tmp_path / name, source)
@@ -694,11 +703,11 @@ def test_the_installed_vwf_script_exit_status_can_gate_a_shell_chain(tmp_path: P
         assert marker.exists() == (status == 0)
 
 
-# vwf run
+# dagger run
 
 
 def test_run_exits_zero_and_writes_every_product(tmp_path: Path) -> None:
-    """'vwf run def.py' on a three-step chain exits 0 and every step's product exists."""
+    """'dagger run -c def.py' on a three-step chain exits 0 and every step's product exists."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("run", str(path))
@@ -708,7 +717,7 @@ def test_run_exits_zero_and_writes_every_product(tmp_path: Path) -> None:
 
 
 def test_run_until_runs_the_named_step_and_its_ancestors_only(tmp_path: Path) -> None:
-    """'vwf run def.py --until b' on the chain a -> b -> c exits 0, runs a and b, and leaves c's product unwritten."""
+    """'dagger run -c def.py --until b' on the chain a -> b -> c exits 0, runs a and b, and leaves c's product unwritten."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("run", str(path), "--until", "b")
@@ -720,7 +729,7 @@ def test_run_until_runs_the_named_step_and_its_ancestors_only(tmp_path: Path) ->
 
 
 def test_run_after_run_until_continues_with_the_remaining_steps(tmp_path: Path) -> None:
-    """With stable code identities, 'vwf run --until b' then 'vwf run' executes only c the second time; a and b are reported unchanged and their bodies are not called again."""
+    """With stable code identities, 'dagger run --until b' then 'dagger run' executes only c the second time; a and b are reported unchanged and their bodies are not called again."""
     path = _write_definition(tmp_path, _CHAIN)
     until = _invoke("run", str(path), "--until", "b")
     assert until.exit_code == 0, _describe(until)
@@ -748,7 +757,7 @@ def test_run_until_given_twice_runs_the_union_of_both_ancestor_sets(tmp_path: Pa
 def test_a_failing_python_step_exits_one_and_shows_the_user_traceback_once(
     tmp_path: Path,
 ) -> None:
-    """A python_step whose function raises ValueError makes 'vwf run' exit 1; the output contains the user's frame and 'ValueError: <message>' exactly once, and no build.py or python_step.py frame."""
+    """A python_step whose function raises ValueError makes 'dagger run' exit 1; the output contains the user's frame and 'ValueError: <message>' exactly once, and no build.py or python_step.py frame."""
     path = _write_definition(tmp_path, _FAILING)
 
     result = _invoke("run", str(path))
@@ -756,7 +765,7 @@ def test_a_failing_python_step_exits_one_and_shows_the_user_traceback_once(
     assert result.exit_code == 1, _describe(result)
     assert "explode_in_user_code" in result.output
     assert "ValueError: the step broke" in result.output
-    # vwf's summary repeats the error line by design, so the raise statement, which only a
+    # dagger's summary repeats the error line by design, so the raise statement, which only a
     # traceback shows, is what proves that the traceback appears once.
     assert result.output.count('raise ValueError("the step broke")') == 1, result.output
     assert "build.py" not in result.output
@@ -766,7 +775,7 @@ def test_a_failing_python_step_exits_one_and_shows_the_user_traceback_once(
 def test_the_failure_summary_names_the_failed_step_and_the_steps_not_run(
     tmp_path: Path,
 ) -> None:
-    """After a step fails, vwf's own output names the failed step with its error type and message, and names its downstream steps as not run because an upstream step failed; an independent step still runs."""
+    """After a step fails, dagger's own output names the failed step with its error type and message, and names its downstream steps as not run because an upstream step failed; an independent step still runs."""
     path = _write_definition(tmp_path, _FAILING)
 
     result = _invoke("run", str(path))
@@ -781,7 +790,7 @@ def test_the_failure_summary_names_the_failed_step_and_the_steps_not_run(
 def test_a_failing_command_step_exits_one_and_names_the_called_process_error(
     tmp_path: Path,
 ) -> None:
-    """A command step that exits non-zero makes 'vwf run' exit 1 and vwf's summary names the step and CalledProcessError."""
+    """A command step that exits non-zero makes 'dagger run' exit 1 and dagger's summary names the step and CalledProcessError."""
     path = _write_definition(tmp_path, _COMMAND_FAILS)
 
     result = _invoke("run", str(path))
@@ -793,7 +802,7 @@ def test_a_failing_command_step_exits_one_and_names_the_called_process_error(
 
 
 def test_an_interrupted_run_exits_130_and_says_rerunning_continues(tmp_path: Path) -> None:
-    """A step that raises KeyboardInterrupt makes 'vwf run' exit 130 and print that the run was interrupted and that running the same command again continues it."""
+    """A step that raises KeyboardInterrupt makes 'dagger run' exit 130 and print that the run was interrupted and that running the same command again continues it."""
     path = _write_definition(tmp_path, _INTERRUPTED)
 
     result = _invoke("run", str(path))
@@ -803,8 +812,8 @@ def test_an_interrupted_run_exits_130_and_says_rerunning_continues(tmp_path: Pat
     assert "run the same command again to continue" in result.stderr.lower()
 
 
-def test_a_step_that_raises_system_exit_makes_vwf_exit_nonzero(tmp_path: Path) -> None:
-    """A step that calls sys.exit(0) stops the build, and 'vwf run' exits 1 with a message saying a step exited, not 0."""
+def test_a_step_that_raises_system_exit_makes_dagger_exit_nonzero(tmp_path: Path) -> None:
+    """A step that calls sys.exit(0) stops the build, and 'dagger run' exits 1 with a message saying a step exited, not 0."""
     path = _write_definition(tmp_path, _EXITS)
 
     result = _invoke("run", str(path))
@@ -817,7 +826,7 @@ def test_a_step_that_raises_system_exit_makes_vwf_exit_nonzero(tmp_path: Path) -
 def test_pytask_stopping_without_a_recorded_error_exits_one_with_a_readable_message(
     tmp_path: Path,
 ) -> None:
-    """When pytask stops before any step runs and records no error (a malformed pytask.toml under the root), 'vwf run' exits 1 with a message that names pytask's exit code and is more than the bare code name."""
+    """When pytask stops before any step runs and records no error (a malformed pytask.toml under the root), 'dagger run' exits 1 with a message that names pytask's exit code and is more than the bare code name."""
     path = _write_definition(tmp_path, _CHAIN)
     (tmp_path / "state").mkdir()
     (tmp_path / "state" / "pytask.toml").write_text("[[[ not toml\n")
@@ -829,11 +838,11 @@ def test_pytask_stopping_without_a_recorded_error_exits_one_with_a_readable_mess
     assert _calls(tmp_path) == []
 
 
-# vwf preview
+# dagger preview
 
 
 def test_preview_prints_one_line_per_step_in_artifact_key_terms(tmp_path: Path) -> None:
-    """'vwf preview def.py' exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
+    """'dagger preview -c def.py' exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("preview", str(path))
@@ -851,7 +860,7 @@ def test_preview_prints_one_line_per_step_in_artifact_key_terms(tmp_path: Path) 
 
 
 def test_preview_writes_no_product_and_prints_no_pytask_output(tmp_path: Path) -> None:
-    """After 'vwf preview', no product exists and the output contains none of pytask's own output, such as its 'Start pytask session' banner or its table."""
+    """After 'dagger preview', no product exists and the output contains none of pytask's own output, such as its 'Start pytask session' banner or its table."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("preview", str(path))
@@ -865,7 +874,7 @@ def test_preview_writes_no_product_and_prints_no_pytask_output(tmp_path: Path) -
 
 
 def test_preview_until_reports_the_other_steps_as_not_selected(tmp_path: Path) -> None:
-    """'vwf preview def.py --until a' prints 'skip <step>: not selected' for each step outside a's ancestors."""
+    """'dagger preview -c def.py --until a' prints 'skip <step>: not selected' for each step outside a's ancestors."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("preview", str(path), "--until", "a")
@@ -880,7 +889,7 @@ def test_preview_until_reports_the_other_steps_as_not_selected(tmp_path: Path) -
 
 
 def test_preview_reports_a_current_step_as_unchanged(tmp_path: Path) -> None:
-    """With stable code identities and after a full run, 'vwf preview' prints 'skip <step>: unchanged' for every step and '0 of <m> steps would run.'."""
+    """With stable code identities and after a full run, 'dagger preview' prints 'skip <step>: unchanged' for every step and '0 of <m> steps would run.'."""
     path = _write_definition(tmp_path, _CHAIN)
     ran = _invoke("run", str(path))
     assert ran.exit_code == 0, _describe(ran)
@@ -915,11 +924,11 @@ def test_preview_of_a_step_without_registry_keys_prints_the_raw_node_name(
     assert lines[1] == "1 of 1 step would run."
 
 
-# vwf force
+# dagger force
 
 
 def test_force_reruns_a_current_step(tmp_path: Path) -> None:
-    """With stable code identities, 'vwf force def.py b' after a full run executes b again and exits 0."""
+    """With stable code identities, 'dagger force -c def.py b' after a full run executes b again and exits 0."""
     path = _write_definition(tmp_path, _CHAIN)
     ran = _invoke("run", str(path))
     assert ran.exit_code == 0, _describe(ran)
@@ -934,7 +943,7 @@ def test_force_reruns_a_current_step(tmp_path: Path) -> None:
 
 
 def test_force_on_a_step_that_never_ran_runs_it(tmp_path: Path) -> None:
-    """'vwf force def.py a' on a fresh root runs a (and every other stale step) and exits 0."""
+    """'dagger force -c def.py a' on a fresh root runs a (and every other stale step) and exits 0."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("force", str(path), "a")
@@ -945,7 +954,7 @@ def test_force_on_a_step_that_never_ran_runs_it(tmp_path: Path) -> None:
 
 
 def test_force_without_a_step_is_a_usage_error(tmp_path: Path) -> None:
-    """'vwf force def.py' with no STEP exits 2 with click's usage message."""
+    """'dagger force -c def.py' with no STEP exits 2 with click's usage message."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("force", str(path))
@@ -978,7 +987,7 @@ def test_an_unknown_step_exits_two_and_lists_the_valid_step_names(
     result = _invoke(verb, str(path), *option, "bb")
 
     assert result.exit_code == 2, _describe(result)
-    assert result.stderr.startswith(f"Usage: vwf {verb} "), result.stderr
+    assert result.stderr.startswith(f"Usage: dagger {verb} "), result.stderr
     assert f"Error: Invalid value for {hint}: No step named 'bb'." in result.stderr
     assert "'bb'" in result.output
     assert "Valid steps: 'a', 'b', 'c'." in result.output
@@ -1080,7 +1089,7 @@ def test_definition_code_that_raises_exits_two_with_a_traceback_starting_in_the_
 
 
 def test_an_error_with_no_user_frame_prints_the_full_traceback(tmp_path: Path) -> None:
-    """A spec naming a library function that needs an argument (vivarium.dagger.harness:build_fixture) fails with a TypeError raised only in framework frames; vwf exits 2 and prints the traceback with those frames instead of an empty one."""
+    """A spec naming a library function that needs an argument (vivarium.dagger.harness:build_fixture) fails with a TypeError raised only in framework frames; dagger exits 2 and prints the traceback with those frames instead of an empty one."""
     result = _invoke("run", "vivarium.dagger.harness:build_fixture")
 
     assert result.exit_code == 2, _describe(result)
@@ -1149,7 +1158,7 @@ def test_an_operator_previews_runs_until_a_step_then_completes_and_forces(
 
 
 def test_an_operator_fixes_a_failed_step_and_reruns(tmp_path: Path) -> None:
-    """'vwf run' exits 1 for a raising step; after the definition file is edited to fix it, 'vwf run' in the same process exits 0 and the failed step and its descendants run."""
+    """'dagger run' exits 1 for a raising step; after the definition file is edited to fix it, 'dagger run' in the same process exits 0 and the failed step and its descendants run."""
     path = _write_definition(tmp_path, _FIXABLE)
     failed = _invoke("run", str(path))
     assert failed.exit_code == 1, _describe(failed)
@@ -1167,21 +1176,21 @@ def test_an_operator_fixes_a_failed_step_and_reruns(tmp_path: Path) -> None:
 
 
 def test_every_command_in_the_docs_page_exits_zero(tmp_path: Path) -> None:
-    """Each '$ vwf ...' line in docs/source/vwf.rst, run in order on a copy of tests/frontend/vwf_example/pipeline.py in tmp_path, exits 0, and the page shows at least one example of run, preview and force."""
-    page = Path(__file__).parents[2] / "docs" / "source" / "vwf.rst"
-    prompt = "$ vwf "
+    """Each '$ dagger ...' line in docs/source/python_pipelines.rst, run in order on a copy of tests/frontend/pipeline_example/pipeline.py in tmp_path, exits 0, and the page shows at least one example of run, preview and force."""
+    page = Path(__file__).parents[2] / "docs" / "source" / "python_pipelines.rst"
+    prompt = "$ dagger "
     commands = [
         line.strip().removeprefix(prompt)
         for line in page.read_text().splitlines()
         if line.strip().startswith(prompt)
     ]
-    shutil.copy(Path(__file__).parent / "vwf_example" / "pipeline.py", tmp_path)
+    shutil.copy(Path(__file__).parent / "pipeline_example" / "pipeline.py", tmp_path)
 
     with pytest.MonkeyPatch.context() as patch:
         patch.chdir(tmp_path)
         for command in commands:
-            result = _invoke(*shlex.split(command))
-            assert result.exit_code == 0, f"$ vwf {command}\n{_describe(result)}"
+            result = _dagger(*shlex.split(command))
+            assert result.exit_code == 0, f"$ dagger {command}\n{_describe(result)}"
 
     assert {"run", "preview", "force"} <= {shlex.split(command)[0] for command in commands}
 
@@ -1228,7 +1237,7 @@ def test_a_chained_definition_error_prints_each_exception_trimmed(tmp_path: Path
 
 
 def test_a_definition_that_calls_sys_exit_while_loading_exits_two(tmp_path: Path) -> None:
-    """A pipeline() that calls sys.exit(0) makes 'vwf run' exit 2, not 0, with a trimmed traceback ending in 'SystemExit: 0' and nothing run."""
+    """A pipeline() that calls sys.exit(0) makes 'dagger run' exit 2, not 0, with a trimmed traceback ending in 'SystemExit: 0' and nothing run."""
     path = _write_definition(tmp_path, _EXITS_WHILE_LOADING)
 
     result = _invoke("run", str(path))
@@ -1241,7 +1250,7 @@ def test_a_definition_that_calls_sys_exit_while_loading_exits_two(tmp_path: Path
 
 
 def test_a_root_that_cannot_be_created_exits_two_naming_the_root(tmp_path: Path) -> None:
-    """A pipeline whose root is an existing file makes 'vwf run' exit 2 with 'Error: Cannot use the pipeline root <root>: ...' on stderr and no traceback."""
+    """A pipeline whose root is an existing file makes 'dagger run' exit 2 with 'Error: Cannot use the pipeline root <root>: ...' on stderr and no traceback."""
     path = _write_definition(tmp_path, _CHAIN)
     root = tmp_path.resolve() / "state"
     root.write_text("a file where the root directory should be\n")
@@ -1255,7 +1264,7 @@ def test_a_root_that_cannot_be_created_exits_two_naming_the_root(tmp_path: Path)
 
 
 def test_preview_shows_pytasks_output_when_pytask_stops_the_plan(tmp_path: Path) -> None:
-    """With a malformed pytask.toml under the root, 'vwf preview' exits 1, prints no plan on stdout, and writes pytask's TOMLDecodeError output to stderr before vwf's line naming CONFIGURATION_FAILED."""
+    """With a malformed pytask.toml under the root, 'dagger preview' exits 1, prints no plan on stdout, and writes pytask's TOMLDecodeError output to stderr before dagger's line naming CONFIGURATION_FAILED."""
     path = _write_definition(tmp_path, _CHAIN)
     (tmp_path / "state").mkdir()
     (tmp_path / "state" / "pytask.toml").write_text("[[[ not toml\n")
@@ -1272,7 +1281,7 @@ def test_preview_shows_pytasks_output_when_pytask_stops_the_plan(tmp_path: Path)
 def test_preview_of_a_step_whose_input_file_is_missing_exits_one_with_pytasks_report(
     tmp_path: Path,
 ) -> None:
-    """A hand-built command step whose input file does not exist makes 'vwf preview' exit 1, with pytask's report naming the missing file on stderr before vwf's line naming FAILED."""
+    """A hand-built command step whose input file does not exist makes 'dagger preview' exit 1, with pytask's report naming the missing file on stderr before dagger's line naming FAILED."""
     path = _write_definition(tmp_path, _MISSING_INPUT)
 
     result = _invoke("preview", str(path))
@@ -1301,7 +1310,7 @@ def test_unnamed_path_nodes_on_different_files_are_not_a_double_claim(tmp_path: 
 def test_two_nodes_on_one_file_with_different_names_are_a_double_claim(
     tmp_path: Path,
 ) -> None:
-    """Two hand-built command steps whose outputs are a file_node and a PathNode named 'custom' on the same file exit 2 with vwf's double-claim message naming both steps."""
+    """Two hand-built command steps whose outputs are a file_node and a PathNode named 'custom' on the same file exit 2 with dagger's double-claim message naming both steps."""
     definition = _touches(
         ("one", 'file_node(HERE / "same.txt")'),
         ("two", 'pytask.PathNode(name="custom", path=HERE / "same.txt")'),
@@ -1358,7 +1367,7 @@ def test_a_dependency_cycle_exits_two_with_pytasks_message(
 
 
 def test_a_root_under_a_file_exits_two_naming_the_root(tmp_path: Path) -> None:
-    """A pipeline whose root is <tmp>/blocker/state, where blocker is an existing file, makes 'vwf run' exit 2 with 'Error: Cannot use the pipeline root <root>: ' on stderr, no traceback, and nothing created."""
+    """A pipeline whose root is <tmp>/blocker/state, where blocker is an existing file, makes 'dagger run' exit 2 with 'Error: Cannot use the pipeline root <root>: ' on stderr, no traceback, and nothing created."""
     path = _write_definition(tmp_path, _ROOT_UNDER_A_FILE)
     blocker = tmp_path / "blocker"
     content = "a file where a directory above the root should be\n"
@@ -1379,7 +1388,7 @@ def test_a_root_under_a_file_exits_two_naming_the_root(tmp_path: Path) -> None:
 def test_an_error_writing_pytasks_state_after_the_build_exits_one_naming_the_root(
     tmp_path: Path,
 ) -> None:
-    """When pytask cannot write its lockfile at the end of a build (a directory already sits at <root>/pytask.lock.tmp), 'vwf run' exits 1, not 2, the step's product exists, and stderr has 'Could not read or write the pipeline's state under <root>: ' with no traceback."""
+    """When pytask cannot write its lockfile at the end of a build (a directory already sits at <root>/pytask.lock.tmp), 'dagger run' exits 1, not 2, the step's product exists, and stderr has 'Could not read or write the pipeline's state under <root>: ' with no traceback."""
     path = _write_definition(tmp_path, _CHAIN)
     root = tmp_path.resolve() / "state"
     # pytask writes the lockfile to pytask.lock.tmp and then renames it, so a directory at
@@ -1389,7 +1398,7 @@ def test_an_error_writing_pytasks_state_after_the_build_exits_one_naming_the_roo
     result = _invoke("run", str(path))
 
     assert result.exit_code == 1, _describe(result)
-    # CliRunner also reports an exception that vwf did not handle as exit code 1.
+    # CliRunner also reports an exception that dagger did not handle as exit code 1.
     assert isinstance(result.exception, SystemExit), _describe(result)
     assert _calls(tmp_path) == list(_CHAIN_STEPS)
     assert all(_product(tmp_path, step).exists() for step in _CHAIN_STEPS)
@@ -1416,7 +1425,7 @@ def test_a_kept_frame_prints_as_python_prints_it(tmp_path: Path) -> None:
 
 
 def test_a_double_claim_through_two_spellings_of_one_path_is_caught(tmp_path: Path) -> None:
-    """Two hand-built command steps whose outputs are unnamed PathNodes on HERE / 'sub' / '..' / 'x.txt' and HERE / 'x.txt' (with HERE / 'sub' existing) exit 2 with vwf's double-claim message naming both steps."""
+    """Two hand-built command steps whose outputs are unnamed PathNodes on HERE / 'sub' / '..' / 'x.txt' and HERE / 'x.txt' (with HERE / 'sub' existing) exit 2 with dagger's double-claim message naming both steps."""
     (tmp_path / "sub").mkdir()
     definition = _touches(
         ("one", 'pytask.PathNode(path=HERE / "sub" / ".." / "x.txt")'),
@@ -1437,7 +1446,7 @@ def test_a_double_claim_through_two_spellings_of_one_path_is_caught(tmp_path: Pa
 def test_a_root_whose_parent_is_not_writable_exits_two_naming_the_parent(
     tmp_path: Path,
 ) -> None:
-    """A root under a read-only directory makes 'vwf run' exit 2 with a message naming that directory as not writable, and nothing is created."""
+    """A root under a read-only directory makes 'dagger run' exit 2 with a message naming that directory as not writable, and nothing is created."""
     path = _write_definition(tmp_path, _rooted_at("locked", "state"))
     locked = tmp_path.resolve() / "locked"
     locked.mkdir()
@@ -1457,7 +1466,7 @@ def test_a_root_whose_parent_is_not_writable_exits_two_naming_the_parent(
 
 
 def test_a_fresh_root_under_missing_directories_is_accepted(tmp_path: Path) -> None:
-    """A root whose parent directories do not exist yet passes the root check, and 'vwf run' creates it and exits 0."""
+    """A root whose parent directories do not exist yet passes the root check, and 'dagger run' creates it and exits 0."""
     path = _write_definition(tmp_path, _rooted_at("a", "b", "state"))
 
     result = _invoke("run", str(path))
@@ -1478,3 +1487,89 @@ def test_a_root_through_a_symlink_to_a_directory_is_accepted(tmp_path: Path) -> 
     assert result.exit_code == 0, _describe(result)
     assert (tmp_path / "real" / "state").is_dir()
     assert _calls(tmp_path) == ["a"]
+
+
+# One dagger command for YAML workflows and pipeline definitions
+
+_WORKFLOW_YAML = "workflow:\n  name: w\n  steps: []\n"
+"""A workflow YAML file's text; the tests that use it stop before it is read."""
+
+
+@pytest.mark.parametrize("verb, steps", [("run", []), ("force", ["a"])])
+def test_a_definition_without_local_exits_two_and_runs_nothing(
+    tmp_path: Path, verb: str, steps: list[str]
+) -> None:
+    """'dagger run' and 'dagger force' on a pipeline definition without --local exit 2 with a usage error saying Jobmon runs are not available yet, and run no step."""
+    path = _write_definition(tmp_path, _CHAIN)
+
+    result = _dagger(verb, "-c", str(path), *steps)
+
+    assert result.exit_code == 2, _describe(result)
+    assert "through Jobmon is not available yet" in result.stderr
+    assert "--local" in result.stderr
+    assert _calls(tmp_path) == []
+
+
+@pytest.mark.parametrize("suffix", [".yaml", ".yml"])
+@pytest.mark.parametrize("verb, args", [("preview", []), ("force", ["a", "--local"])])
+def test_preview_and_force_refuse_a_workflow_yaml_file(
+    tmp_path: Path, suffix: str, verb: str, args: list[str]
+) -> None:
+    """'dagger preview' and 'dagger force' with a .yaml or .yml file exit 2 saying they take a Python pipeline definition."""
+    path = tmp_path / f"workflow{suffix}"
+    path.write_text(_WORKFLOW_YAML)
+
+    result = _dagger(verb, "-c", str(path), *args)
+
+    assert result.exit_code == 2, _describe(result)
+    assert "takes a Python pipeline definition" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "option", [["-P", "proj_x"], ["--queue", "all.q"], ["-o", "out"], ["-v"], ["--pdb"]]
+)
+def test_run_refuses_yaml_only_options_for_a_definition(
+    tmp_path: Path, option: list[str]
+) -> None:
+    """'dagger run -c def.py --local' with an option that overrides a YAML file's settings exits 2 naming the option, and runs no step."""
+    path = _write_definition(tmp_path, _CHAIN)
+
+    result = _dagger("run", "-c", str(path), "--local", *option)
+
+    assert result.exit_code == 2, _describe(result)
+    assert "applies only to a workflow YAML file" in result.stderr
+    assert _calls(tmp_path) == []
+
+
+@pytest.mark.parametrize("option", [["--until", "a"], ["--local"]])
+def test_run_refuses_definition_options_for_a_yaml_file(
+    tmp_path: Path, option: list[str]
+) -> None:
+    """'dagger run -c workflow.yaml' with --until or --local exits 2 saying the option applies only to a Python pipeline definition."""
+    path = tmp_path / "workflow.yaml"
+    path.write_text(_WORKFLOW_YAML)
+
+    result = _dagger("run", "-c", str(path), *option)
+
+    assert result.exit_code == 2, _describe(result)
+    assert "applies only to a Python pipeline definition" in result.stderr
+
+
+def test_a_missing_yaml_file_is_a_usage_error(tmp_path: Path) -> None:
+    """'dagger run -c missing.yaml' exits 2 with click's message that the file does not exist."""
+    result = _dagger("run", "-c", str(tmp_path / "missing.yaml"))
+
+    assert result.exit_code == 2, _describe(result)
+    assert "does not exist" in result.stderr
+
+
+def test_importing_the_cli_does_not_import_jobmon() -> None:
+    """Importing vivarium.dagger.cli in a fresh interpreter leaves jobmon out of sys.modules, so a pipeline definition runs with --local without the cluster extra."""
+    code = "import sys, vivarium.dagger.cli; print('jobmon' in sys.modules)"
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "False"

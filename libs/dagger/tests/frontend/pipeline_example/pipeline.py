@@ -1,4 +1,4 @@
-"""An example pipeline definition for the ``vwf`` command: three steps in a chain."""
+"""An example pipeline definition for the ``dagger`` command: three steps in a chain."""
 
 from pathlib import Path
 

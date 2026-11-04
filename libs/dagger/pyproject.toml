@@ -59,7 +59,6 @@ ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
 
 [project.scripts]
 dagger = "vivarium.dagger.cli:dagger"
-vwf = "vivarium.dagger.frontend.cli:vwf"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"

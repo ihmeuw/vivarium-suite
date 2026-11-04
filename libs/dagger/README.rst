@@ -20,8 +20,8 @@ backend (the task model, the build, and the run preview), the frontend
 (``python_step`` for writing a step as a plain function, ``notebook_step`` for
 running a notebook as a step, a check of each location's delivered primary data,
 and verbs that run or preview a whole pipeline by step name), and a test harness
-for staleness scenarios. The ``vwf`` command runs, previews, or forces the steps of
-a pipeline definition.
+for staleness scenarios. ``dagger`` also runs, previews, or forces the steps of a
+pipeline definition.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 

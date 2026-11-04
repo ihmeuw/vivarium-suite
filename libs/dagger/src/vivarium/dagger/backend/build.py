@@ -22,7 +22,7 @@ COMMAND_KEY = "__command__"
 TASK_KEY = "task"
 """Key under which a pytask task's attributes hold its shared-representation task."""
 
-SELECTED_MARKER = "vwf_selected"
+SELECTED_MARKER = "dagger_selected"
 """Marker :func:`build` attaches to each task named in its ``selected`` argument."""
 
 
