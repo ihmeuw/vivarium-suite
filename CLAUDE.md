@@ -44,7 +44,7 @@ To run a single test, activate the env and use pytest directly: `pytest tests/pa
 
 ## Verifying working state
 
-Before any externally-facing action (pushing, opening a PR, tagging a release), run `make check` from inside `libs/<pkg>`. It is the canonical pre-flight: it runs `lint`, `mypy` (when the package has a `py.typed` marker), the fast test suite, and the docs build + doctests - so it also validates that docstring/doc cross-references still resolve under Sphinx's warnings-as-errors mode. It no-ops the docs steps for packages without a `docs/` directory, so the same command is safe in every package. Because it is comprehensive it is slow; iterate with targeted `pytest`/`make lint` and use `make check` as the final gate. This is a multi-step operation that streams significant output and takes tens of seconds, so run this check in the background.
+Before any externally-facing action (pushing, opening a PR, tagging a release), run `make check` from inside `libs/<pkg>`. It is the canonical pre-flight: it runs `lint`, `mypy` (when the package has a `py.typed` marker), the fast test suite, and the docs build + doctests - so it also validates that docstring/doc cross-references still resolve under Sphinx's warnings-as-errors mode. It no-ops the docs steps for packages without a `docs/` directory, so the same command is safe in every package. It runs every step even when an earlier one fails and ends with a summary of the failed steps, so read the summary to see everything that needs fixing. Because it is comprehensive it is slow; iterate with targeted `pytest`/`make lint` and use `make check` as the final gate. This is a multi-step operation that streams significant output and takes tens of seconds, so run this check in the background.
 
 ## Per-package conventions
 
@@ -57,10 +57,10 @@ Before any externally-facing action (pushing, opening a PR, tagging a release), 
 
 Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main`. The workflow:
 
-1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**` (2-digit year, Pacific date matching the push day).
-2. Creates and pushes a `<dist>-v<X.Y.Z>` tag, where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
-3. Runs `make validate-tag` with `TAG_PREFIX=<dist>-` so the validator strips the per-lib prefix before semver parsing and scopes its "previous tag" lookup to that lib only.
-4. Builds and publishes to PyPI, then creates a GitHub Release.
+1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**`, or `**X.Y.ZbN - MM/DD/YY**` for a beta (2-digit year, Pacific date matching the push day). Beta is the only supported pre-release.
+2. Creates and pushes a `<dist>-v<X.Y.Z>` tag (`<dist>-v<X.Y.ZbN>` for a beta), where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
+3. Runs `make validate-tag` (`vivarium.build_utils.release_version`) with `TAG_PREFIX=<dist>-` so the validator strips the per-lib prefix before parsing and scopes its "previous tag" lookup to that lib only.
+4. Builds and publishes to PyPI, then creates a GitHub Release. A beta's release is marked Pre-release and not Latest.
 
 `workflow_dispatch` and `release: published` paths exist for manual/recovery releases of a specific lib.
 
@@ -81,11 +81,17 @@ releases never touch that workflow's PyPI trusted-publishing credential path (it
   `simsci-internal`. Each has `.claude-plugin/plugin.json`, `skills/<name>/SKILL.md`,
   `agents/<name>.md`, `README.rst`, and `CHANGELOG.rst`. The marketplace catalog is
   `.claude-plugin/marketplace.json` at the repo root.
-- `simsci` must stay generic. Never name a `simsci-internal` skill, an IHME service (Jira,
-  Jenkins, the hub, MIC tickets), or vivarium in it. Where a team process could apply, write
-  "if an installed skill covers X, invoke it; otherwise <generic fallback>". The official
-  `github` plugin's MCP is the one permitted external dependency.
-- `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, and the `_review_*` agents
+- `simsci` must stay generic across IHME teams. Never name a `simsci-internal` skill, a
+  SimSci-specific service or convention (Jenkins, the hub space, MIC tickets, a team's
+  project or board), or vivarium in it. The one IHME service it may name is IHME's Jira,
+  through its own `jira` MCP server, which must not default to any team's project or board.
+  Where a team process could apply, write "if an installed skill covers X, invoke it;
+  otherwise <generic fallback>". The official `github` plugin's MCP is the one permitted
+  external dependency.
+- `simsci` also ships `.mcp.json` and `mcp-servers/jira/`. Its tools are
+  `mcp__plugin_simsci_jira__*`, and `simsci-internal` uses them through its `simsci`
+  dependency.
+- `_review-core`, `_finalize-core`, `_validator`, `_split_proposer`, `_test_summarizer`, and the `_review_*` agents
   are consumed by `simsci-internal`'s `model-development`. A change to their inputs, gates, or
   output keys needs a matching change and CHANGELOG entry in `tools/ai-tools`.
 - Each plugin's `README.rst` describes every skill and agent. Update it with the skill and add a

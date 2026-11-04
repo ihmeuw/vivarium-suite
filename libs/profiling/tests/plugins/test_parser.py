@@ -1,13 +1,13 @@
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine.interface.interactive import InteractiveContext
+from vivarium.interactive import Simulation
 from vivarium.public_health.disease import DiseaseModel
 from vivarium.public_health.results import DiseaseObserver
 from vivarium.public_health.results.causal_factor import CategoricalRiskObserver
 from vivarium.public_health.risks.base_risk import Risk
 from vivarium.public_health.risks.effect import NonLogLinearRiskEffect, RiskEffect
 
-from tests.conftest import IS_ON_SLURM, TEST_ARTIFACT_PATH
+from tests.conftest import TEST_ARTIFACT_PATH
 from vivarium.profiling.plugins.parser import (
     MultiComponentParser,
     MultiComponentParsingErrors,
@@ -296,9 +296,9 @@ def test_error_when_cause_defined_in_both_multi_config_and_standard():
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not IS_ON_SLURM, reason="Integration test requires SLURM environment")
+@pytest.mark.cluster
 def test_multi_component_parser_simulation():
-    """Integration test that instantiates a SimulationContext and runs a few timesteps."""
+    """Integration test that instantiates a Simulation and runs a few timesteps."""
 
     plugin_configuration = {
         "required": {
@@ -361,7 +361,7 @@ def test_multi_component_parser_simulation():
     }
 
     # Instantiate and setup the simulation
-    sim = InteractiveContext(
+    sim = Simulation(
         components=component_configuration,
         configuration=configuration,
         plugin_configuration=plugin_configuration,

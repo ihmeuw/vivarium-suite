@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from vivarium.config_tree import ConfigTree
-from vivarium.engine import InteractiveContext
+from vivarium.interactive import Simulation
 
 from tests.test_utilities import build_table_with_age
 from vivarium.public_health.disease import DiseaseModel, DiseaseState, RiskAttributableDisease
@@ -99,7 +99,7 @@ def test_disability_accumulation(
     model_0, model_1 = disability_disease_models
 
     # Add the results dir since we didn't go through cli.py
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             model_0,
@@ -275,7 +275,7 @@ def test_category_exclusions(
             }
         }
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[
             BasePopulation(),
             model_0,

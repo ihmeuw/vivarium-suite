@@ -72,15 +72,21 @@ In more detail:
   every finding is then independently scored for confidence (0-100) by a
   per-finding ``_review_scorer`` Haiku sub-agent, and findings below 50 are
   dropped — so only verified issues reach the report, each shown with its score.
+  The review agents and ``_split_proposer`` carry a one-line rule to write their
+  prose in plain technical English, based on ASD-STE100 Simplified Technical
+  English. The rule does not name the standard. In evals, naming it in the text
+  that agents see made their output less clear and less complete.
 
   It then proposes a **disposition per finding** (fix now / ticket / drop, each
   with a one-line why), bucketing by scope and using the confidence score only to
   break ties. The table is a reported plan, not a gate — you can re-bucket any row.
   It applies the fix-now set as **one commit per finding** and re-validates with
   the ``_validator`` sub-agent. A fix that cannot be made green is reverted and
-  becomes a ticket rather than a red PR. The finish — leftover triage, the PR gate,
-  the commit history, the PR, and a comment recording what went unaddressed —
-  belongs to the internal ``_finalize-core`` skill.
+  becomes a ticket rather than a red PR. The finish — leftover triage, the test
+  summary, the PR gate, the commit history, the PR, and a comment
+  recording what went unaddressed — belongs to the internal ``_finalize-core``
+  skill. Without a testing strategy, the test summary lists the cases the diff's
+  tests cover.
 
   It requires a clean working tree, so each fix is its own revertible commit
   (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
@@ -121,10 +127,12 @@ In more detail:
 - ``/simsci:framework-development <ticket or feature description>`` — an
   end-to-end design → implement → verify → PR loop on a single well-scoped
   feature. The main session owns the design and the interface stubs, then runs
-  a **black-box TDD** build. It owns the contract: it writes
-  **source stubs** (the API) plus **body-less test stubs** that enumerate the
-  acceptance criteria, commits them, and creates two git worktrees from that
-  baseline. It then fans out ``_feature_implementer`` and ``_test_writer`` in
+  a **black-box TDD** build. The design includes a short
+  testing strategy: the feature requirements, and the use cases and edge
+  cases that test them. It owns the contract: it writes **source stubs** (the API) plus
+  **body-less test stubs** that enumerate the acceptance criteria, commits them, and
+  creates two git worktrees from that baseline. It then fans out
+  ``_feature_implementer`` and ``_test_writer`` in
   parallel — the tester fleshes out the test stubs, the implementer fills the
   source bodies treating those stubs as read-only criteria — each confined to its
   own worktree, whose lineages never merge, so neither ever sees the other's
@@ -133,7 +141,9 @@ In more detail:
   test/lint/type suite and runs the shared ``_review-core`` skill for review,
   iterating while preserving the black box. It always creates the feature branch
   up front, and hands the finish to the shared ``_finalize-core`` skill, which
-  gates PR creation on explicit user approval.
+  gates PR creation on explicit user approval. The test summary puts each item of
+  the testing strategy in the table of the file it exercises, links it to the test
+  that covers it, and marks the items that no test covers.
 
 **Auto-triggering skills**
 
@@ -151,6 +161,12 @@ In more detail:
 
 These are slash commands too; Claude Code also loads them on its own when the
 conversation matches the skill's description.
+
+**Jira MCP server**
+
+- ``jira`` — a local MCP server that reads, creates, and updates issues on
+  IHME's Jira (tools named ``mcp__plugin_simsci_jira__*``). It needs ``uv`` and
+  a Jira personal access token; see `Jira access`_.
 
 Working alongside a team plugin
 ===============================
@@ -188,7 +204,10 @@ under ``tools/ai-tools-public/``:
   this plugin (``"source": "./tools/ai-tools-public"``) and the team's ``simsci-internal``
   plugin. Claude Code requires the marketplace catalog at the repo root for
   ``/plugin marketplace add ihmeuw/vivarium-suite`` to find it.
-- ``tools/ai-tools-public/.claude-plugin/plugin.json``: plugin manifest.
+- ``tools/ai-tools-public/.claude-plugin/plugin.json``: plugin manifest,
+  including the ``userConfig`` options for the Jira MCP server.
+- ``tools/ai-tools-public/.mcp.json`` and ``tools/ai-tools-public/mcp-servers/jira/``:
+  the ``jira`` MCP server, a single ``uv`` script with its unit tests next to it.
 - ``tools/ai-tools-public/agents/``: specialist sub-agents spawned by the
   workflow skills.
 - ``tools/ai-tools-public/skills/``: Claude Code skills — both the
@@ -264,12 +283,45 @@ under the sandbox configuration recommended below ``gh`` cannot read its
 credentials, so there the MCP is the only path. ``/simsci:git-rescue`` and
 ``/simsci:regression-debugger`` need only ``git``.
 
+Jira access
+-----------
+
+Only the ``jira`` MCP server needs this. The workflows above do not use it.
+
+1. Install `uv <https://docs.astral.sh/uv/>`_ and check that ``uv --version``
+   works. Claude Code starts the server with ``uv run --script``, which
+   installs the server's Python dependencies on first use.
+2. Create a Jira personal access token: in Jira, click your avatar, then
+   **Profile** > **Personal Access Tokens** > **Create token**. Jira shows it
+   only once. It has your Jira account's permissions, so treat it like a
+   password.
+3. Enter the token in the plugin's options. Claude Code asks for them when the
+   plugin is enabled. To set or change them later, run ``/plugin``, open
+   **Installed** > **Simulation Science Dev AI Tools** (the ``simsci``
+   plugin's display name), and choose **Configure options**. The token
+   field is masked, and Claude Code keeps the value in its credential store,
+   not in ``settings.json``. On Linux, that store is
+   ``~/.claude/.credentials.json``, which only you can read. The optional **Default Jira
+   project** is the project that ``create_issue`` uses when no project is
+   given.
+4. Restart Claude Code and confirm in ``/mcp`` that ``plugin:simsci:jira`` is
+   connected. If it shows ``Executable not found in $PATH: "uv"``, install
+   ``uv`` in a place on the ``PATH`` of the shell that starts ``claude``, then
+   restart. Until the server connects, Claude has no Jira tools. Claude Code
+   remembers a failed connection for up to 15 minutes, also across restarts.
+   If ``/mcp`` then says that a recent failure is cached, wait until the 15
+   minutes have passed and restart again.
+5. If you have the ``mcp-jira`` plugin from ``ihme-claude-marketplace``
+   installed, disable it, so that Claude uses this server's tools:
+   ``/plugin disable mcp-jira@ihme-claude-marketplace``.
+
 Before your first run
 ---------------------
 
-- **Claude Code**: a current release (``claude --version``). The plugin needs
-  no conda, Node, or IHME-specific tooling.
+- **Claude Code**: a current release (``claude --version``). The workflows
+  need no conda, Node, or IHME-specific tooling.
 - **GitHub access**: see above. Needed only by the PR-opening steps.
+- **Jira access**: see above. Needed only by the ``jira`` MCP server.
 - **Agent teams** (only for ``/simsci:type-hinter``): set
   ``CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`` under ``env`` in
   ``~/.claude/settings.json`` or export it in the shell that launches
@@ -329,8 +381,19 @@ plugin's model-development loop) without duplicating the fan-out.
 
 The finish is defined once the same way, in the internal ``_finalize-core`` skill
 (also ``user-invocable: false``, also invoked inline): leftover-finding triage, the
-PR approval gate, a reviewable commit history, the draft PR, and the comment
-recording what was *not* addressed. Three paths share it — ``/simsci:pr-prep``,
+test summary, the PR approval gate, a reviewable commit history, the draft
+PR, and the comment recording what was *not* addressed. The test summary comes
+from the ``_test_summarizer`` sub-agent. Each changed source file gets one table,
+posted as a file-level review comment on that file, so a reviewer reads it next to
+the code. Each row is one case, with the columns Case, Error / success, Expected,
+and Test, and each comment's first line gives the file's case count and how many
+cases have no test. The PR body is unchanged. When the caller
+passes the testing strategy agreed in the design, every strategy item gets a row,
+and an item with no test or check says ``Not tested``. Without a strategy, the
+rows come from the diff's tests alone. With the GitHub MCP, the file comments go
+in one review, so reviewers get one notification. Each test link is a GitHub
+permalink at the pushed head commit, so a later rebase leaves the links pointing
+at the older commit. Three paths share it — ``/simsci:pr-prep``,
 ``/simsci:framework-development``'s Phase 5, and the ``simsci-internal`` plugin's
 model-development loop — so the steps that are easy to drop when improvising, like
 the backlog dedup and the not-addressed comment, are structural rather than
@@ -368,11 +431,12 @@ Code:
   per-finding ``_review_scorer`` — have **no Bash access at all**. They
   are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
+- ``_test_summarizer`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
+  only. ``_finalize-core`` spawns it to write the test summary.
 - ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
   only. It is the one agent that deliberately reads *outside* the working
   tree: Claude Code session transcripts under ``~/.claude/projects/`` (which
-  can contain anything). It returns compact digests, not transcript content,
-  and is spawned only by the ``workflow-assessment`` skill.
+  can contain anything). It returns compact digests, not transcript content.
 - ``_diff_analyzer``, ``_hypothesis_tester``, and ``_split_proposer``
   declare ``Bash`` to run ``git`` commands. In practice, every
   operation they perform is a read-only git command (``git diff``,

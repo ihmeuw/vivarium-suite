@@ -977,7 +977,7 @@ class DiseaseState(BaseDiseaseState, ExcessMortalityState):
             The modified DataFrame of mortality rates.
         """
         rate = self.population_view.get(
-            index, self.excess_mortality_rate_pipeline, skip_post_processor=True
+            index, self.excess_mortality_rate_pipeline, mode="no-post-processors"
         )
         rates_df[self.state_id] = rate
         return rates_df

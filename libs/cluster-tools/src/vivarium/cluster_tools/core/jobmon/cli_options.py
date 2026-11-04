@@ -3,7 +3,7 @@
 Jobmon CLI Options
 ========================
 
-Command line options for Jobmon-based job scheduling in psimulate runs.
+Command line options for Jobmon-based job scheduling.
 
 """
 

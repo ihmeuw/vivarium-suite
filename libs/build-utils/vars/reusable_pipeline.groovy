@@ -7,7 +7,10 @@ def call(Map config = [:]){
   scheduled_branches: The branch names for which to run scheduled nightly builds.
   stagger_scheduled_builds: Whether to stagger the scheduled builds.
   test_types: The tests to run. Must be subset (inclusive) of ['unit', 'integration', 'e2e', 'all']
-  requires_slurm: Whether the child tasks require the slurm scheduler.
+  weekly_tests: Whether the package has tests marked `weekly`. Sunday cron builds and builds
+            with RUN_WEEKLY set pass RUNWEEKLY=1 and get a "[weekly]" label in the build name.
+  requires_slurm: Whether the child tasks require the slurm scheduler. Can also be set to "weekly" to
+            use slurm only for builds that run weekly tests. Setting to "weekly" also sets weekly_tests.
   deployable: Whether the package can be deployed by Jenkins. Only builds Jenkins
             starts for a new commit deploy; anything else needs FORCE_DEPLOY.
   skip_doc_build: Only skips the doc build.
@@ -27,6 +30,7 @@ def call(Map config = [:]){
     'stagger_scheduled_builds',
     'test_types',
     'requires_slurm',
+    'weekly_tests',
     'deployable',
     'skip_doc_build',
     'run_mypy',
@@ -38,6 +42,7 @@ def call(Map config = [:]){
   def stagger_scheduled_builds = config.stagger_scheduled_builds ?: false
   def test_types = config.test_types ?: ['all']
   def requires_slurm = config.requires_slurm ?: false
+  def weekly_tests = (config?.weekly_tests == true) || (requires_slurm == "weekly")
   def is_deployable = (config?.deployable == true)
   def skip_doc_build = (config?.skip_doc_build == true)
   // DEPRECATED: run_mypy no longer controls anything. mypy runs in checkFormatting
@@ -65,6 +70,7 @@ def call(Map config = [:]){
   echo "  stagger_scheduled_builds: ${stagger_scheduled_builds}"
   echo "  test_types: ${test_types}"
   echo "  requires_slurm: ${requires_slurm}"
+  echo "  weekly_tests: ${weekly_tests}"
   echo "  is_deployable: ${is_deployable}"
   echo "  skip_doc_build: ${skip_doc_build}"
   echo "  env_reqs: ${env_reqs}"
@@ -113,9 +119,6 @@ def call(Map config = [:]){
     options {
       // Keep 100 old builds.
       buildDiscarder logRotator(numToKeepStr: "100")
-
-      // Fail immediately if any part of a parallel stage fails
-      parallelsAlwaysFailFast()
     }
 
     parameters {
@@ -132,12 +135,17 @@ def call(Map config = [:]){
       booleanParam(
         name: "RUN_WEEKLY",
         defaultValue: false,
-        description: "Whether to run weekly tests (overrides slow test day check)."
+        description: "Whether to run weekly tests and label the build [weekly]. Has no effect unless the Jenkinsfile sets weekly_tests (or requires_slurm: \"weekly\")."
       )
       booleanParam(
         name: "FORCE_FULL_BUILD",
         defaultValue: false,
         description: "Force a complete build regardless of change type (overrides doc-only and changelog-only skip logic)."
+      )
+      booleanParam(
+        name: "FAIL_FAST",
+        defaultValue: false,
+        description: "Stop at the first failing check and abort the other Python versions. By default every check runs on every Python version so the build reports all failures."
       )
       string(
         name: "SLACK_TO",
@@ -171,6 +179,9 @@ def call(Map config = [:]){
             if (!test_types.every { ['all', 'e2e', 'unit', 'integration'].contains(it) }) {
               error("test_types must be a subset of ['all', 'e2e', 'unit', 'integration']")
             }
+            if (requires_slurm == "weekly" && config.containsKey('weekly_tests') && config.weekly_tests != true) {
+              error("requires_slurm: \"weekly\" needs weekly tests, so weekly_tests cannot be false.")
+            }
           }
         }
       }
@@ -185,22 +196,25 @@ def call(Map config = [:]){
             PYTHON_DEPLOY_VERSION = python_versions[-1]
             echo "Python deploy version (inferred): ${PYTHON_DEPLOY_VERSION}"
 
-            // Determine whether to run weekly tests. Weekly tests only apply
-            // when requires_slurm is "weekly" — triggered on Sundays (for cron)
-            // or when the user explicitly sets the RUN_WEEKLY parameter.
+            // Weekly tests run on Sunday cron builds, or when the user sets RUN_WEEKLY.
+            // Only packages that declare weekly_tests get RUNWEEKLY=1 and the "[weekly]" label.
             run_weekly = false
-            def use_slurm
-            // HACK MIC-7083: We are conflating "run weekly tests" with "use slurm weekly" here,
-            // even though you could conceivably have weekly tests that do not require slurm.
-            // This is to avoid having to propagate the runweekly flag to several repositories that
-            // do not currently inherit it from the VTU pytest plugin.
-            if (requires_slurm == "weekly") {
+            def weekly_reason = ""
+            if (weekly_tests) {
               def dayOfWeek = new Date().format('EEEE')
-              run_weekly = params.RUN_WEEKLY || (env.IS_CRON.toBoolean() && dayOfWeek == 'Sunday')
-              use_slurm = run_weekly
-            } else {
-              use_slurm = requires_slurm ? true : false
+              if (params.RUN_WEEKLY) {
+                run_weekly = true
+                weekly_reason = "RUN_WEEKLY parameter"
+              } else if (env.IS_CRON.toBoolean() && dayOfWeek == 'Sunday') {
+                run_weekly = true
+                weekly_reason = "Sunday cron"
+              }
             }
+            if (run_weekly) {
+              currentBuild.displayName += " [weekly]"
+              currentBuild.description = "Weekly tests requested (${weekly_reason})"
+            }
+            def use_slurm = (requires_slurm == "weekly") ? run_weekly : (requires_slurm ? true : false)
             task_node = use_slurm ? 'slurm' : 'matrix-tasks'
             conda_env_dir = use_slurm ? "/mnt/team/simulation_science/priv/engineering/jenkins/envs" : "/svc-simsci/envs"
             echo "Resolved task_node: ${task_node}, conda_env_dir: ${conda_env_dir}"
@@ -227,7 +241,24 @@ def call(Map config = [:]){
                   
                   withEnv(envVars.collect { k, v -> "${k}=${v}" }) {
                     try {
-                      checkout scm
+                      // The branch source fetches branches but not tags. setuptools_scm needs the
+                      // <dist>-v<X.Y.Z> tags to compute the version of the lib under test, and without
+                      // them it falls back to 0.0.1.dev, which fails any install that requires a
+                      // minimum version of that lib (e.g. engine's test extra, via vivarium-interactive).
+                      // Check out with the job's own remotes, credentials and extensions, so the tags
+                      // come from the authenticated fetch and private repos work too. The branch source
+                      // adds GitSCMSourceDefaults, which clones without tags, and a clone option cannot
+                      // turn tags back on for a fresh clone, so drop it and honor the refspec here instead.
+                      // The extension list is built inline because a local variable holding it cannot be
+                      // serialized when the pipeline saves its state.
+                      checkout([
+                        $class: 'GitSCM',
+                        branches: scm.branches,
+                        userRemoteConfigs: scm.userRemoteConfigs,
+                        extensions: scm.extensions.findAll {
+                          it.class.name != 'jenkins.plugins.git.GitSCMSourceDefaults'
+                        } + [[$class: 'CloneOption', noTags: false, shallow: false, reference: '', honorRefspec: true]],
+                      ])
                       buildStages.loadSharedFiles()
                       
                       // Evaluate skip conditions after checkout (GIT_PREVIOUS_COMMIT is now available)
@@ -240,7 +271,7 @@ def call(Map config = [:]){
                       echo "Skip evaluation: previousBuildPassed=${previousBuildPassed}, isDocOnlyChange=${isDocOnlyChange}, isChangelogOnlyChange=${isChangelogOnlyChange}, isCron=${isCron}, forceFullBuild=${forceFullBuild}"
                       
                       // Determine if we should skip the full build
-                      def canSkipFullBuild = previousBuildPassed && !isCron && !forceFullBuild
+                      def canSkipFullBuild = previousBuildPassed && !isCron && !forceFullBuild && !run_weekly
                       def skipForChangelogOnly = canSkipFullBuild && isChangelogOnlyChange
                       def skipForDocOnly = canSkipFullBuild && isDocOnlyChange
                       
@@ -291,6 +322,11 @@ def call(Map config = [:]){
                               if (!canDeploy) {
                                 echo "Skipping deploy: Jenkins did not start this build for a " +
                                      "new commit. Set FORCE_DEPLOY to release from it."
+                              } else if (currentBuild.currentResult != 'SUCCESS') {
+                                // Checks no longer stop the build when they fail, so the
+                                // build can reach this point after a failed check.
+                                echo "Skipping deploy: a check failed earlier in this build " +
+                                     "(build result: ${currentBuild.currentResult})."
                               } else {
                                 if (!has_changelog_update()) {
                                   error "Deploy failed: Changelog does not contain a proper version update."
@@ -322,6 +358,7 @@ def call(Map config = [:]){
               }
             }
 
+            parallelPythonVersions.failFast = (params.FAIL_FAST == true)
             parallel parallelPythonVersions
           }
         }

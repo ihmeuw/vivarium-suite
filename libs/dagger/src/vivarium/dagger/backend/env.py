@@ -3,7 +3,7 @@
 A command step that declares an environment runs with that environment's ``bin``
 directories first on ``PATH``. Environments may be conda envs or venvs, including
 venv overlays on a shared conda env. Adapted from vivarium-cluster-tools' Jobmon
-environment resolution, so this library needs neither cluster-tools nor Jobmon.
+environment resolution, so the backend imports neither cluster-tools nor Jobmon.
 """
 
 import json

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture, MockFixture
+from vivarium.interactive import Simulation
 
 import vivarium.engine.framework.values.pipeline as pipeline_module
 from tests.helpers import ColumnCreator
@@ -42,7 +43,6 @@ from vivarium.engine.framework.values.pipeline import (
     ValueModifier,
     ValueSource,
 )
-from vivarium.engine.interface import InteractiveContext
 from vivarium.engine.types import NumberLike
 
 if TYPE_CHECKING:
@@ -953,6 +953,124 @@ def test_attribute_pipeline_access_mode(
     assert all(result["value"] == expected_value)
 
 
+class TestModifierSelection:
+    """Calling a pipeline with only some of its modifiers applied."""
+
+    @pytest.fixture
+    def value_pipeline(self, manager: ValuesManager) -> Pipeline:
+        """Return a value pipeline whose modifiers do not commute.
+
+        Source is 1, the modifiers apply ``* 2``, ``+ 3``, and ``* 10`` in that
+        order, and the post-processor adds 1000.
+        """
+        pipeline = manager.register_value_producer(
+            "test",
+            source=lambda: 1,
+            preferred_post_processor=lambda value, manager: value + 1000,
+        )
+        manager.register_value_modifier("test", modifier=lambda value: value * 2)
+        manager.register_value_modifier("test", modifier=lambda value: value + 3)
+        manager.register_value_modifier("test", modifier=lambda value: value * 10)
+        return pipeline
+
+    def test_none_applies_every_modifier(self, value_pipeline: Pipeline) -> None:
+        assert value_pipeline(modifiers=None) == value_pipeline() == 1050
+
+    def test_select_by_object(self, value_pipeline: Pipeline) -> None:
+        first, _, third = value_pipeline.modifiers
+        assert value_pipeline(modifiers=[first, third]) == 1020
+
+    def test_select_by_name(self, value_pipeline: Pipeline) -> None:
+        first, second, _ = value_pipeline.modifiers
+        assert value_pipeline(modifiers=[first.name, second.name]) == 1005
+
+    def test_select_by_mixed_object_and_name(self, value_pipeline: Pipeline) -> None:
+        _, second, third = value_pipeline.modifiers
+        assert value_pipeline(modifiers=[second, third.name]) == 1040
+
+    @pytest.mark.parametrize("by_name", [False, True])
+    def test_select_single_modifier_without_list(
+        self, value_pipeline: Pipeline, by_name: bool
+    ) -> None:
+        second = value_pipeline.modifiers[1]
+        assert value_pipeline(modifiers=second.name if by_name else second) == 1004
+
+    def test_selection_applies_in_pipeline_order(self, value_pipeline: Pipeline) -> None:
+        first, second, _ = value_pipeline.modifiers
+        # (1 * 2) + 3, not (1 + 3) * 2.
+        assert value_pipeline(modifiers=[second, first]) == 1005
+
+    @pytest.mark.parametrize("second_form", ["object", "name"])
+    def test_duplicate_selection_raises(
+        self, value_pipeline: Pipeline, second_form: str
+    ) -> None:
+        first = value_pipeline.modifiers[0]
+        duplicate = first if second_form == "object" else first.name
+        with pytest.raises(ValueError) as error:
+            value_pipeline(modifiers=[first, value_pipeline.modifiers[1], duplicate])
+        assert str(error.value) == (
+            f"Modifier(s) {[first.name]} were requested more than once for pipeline "
+            "test. Each modifier is applied at most once; check whether you meant "
+            "to request a different modifier."
+        )
+
+    def test_empty_selection_applies_no_modifiers(self, value_pipeline: Pipeline) -> None:
+        assert value_pipeline(modifiers=[]) == 1001
+
+    def test_composes_with_no_post_processors(self, value_pipeline: Pipeline) -> None:
+        third = value_pipeline.modifiers[2]
+        assert value_pipeline(mode="no-post-processors", modifiers=[third]) == 10
+
+    def test_source_mode_with_selection_raises(self, value_pipeline: Pipeline) -> None:
+        with pytest.raises(ValueError, match="Cannot select modifiers with mode='source'"):
+            value_pipeline(mode="source", modifiers=[])
+
+    def test_unknown_name_raises(self, value_pipeline: Pipeline) -> None:
+        available = [modifier.name for modifier in value_pipeline.modifiers]
+        with pytest.raises(ValueError) as error:
+            value_pipeline(modifiers=[value_pipeline.modifiers[0], "not_a_modifier"])
+        message = str(error.value)
+        assert "Pipeline test has no modifier(s) ['not_a_modifier']" in message
+        assert str(available) in message
+
+    @pytest.mark.parametrize("bad_entry", [1, None, lambda value: value])
+    def test_entry_of_wrong_type_raises(
+        self, value_pipeline: Pipeline, bad_entry: object
+    ) -> None:
+        with pytest.raises(TypeError, match="ValueModifier objects or their names"):
+            value_pipeline(modifiers=[value_pipeline.modifiers[0], bad_entry])  # type: ignore[list-item]
+
+    def test_modifier_from_another_pipeline_raises(
+        self, value_pipeline: Pipeline, manager: ValuesManager
+    ) -> None:
+        other = manager.register_value_producer("other", source=lambda: 1)
+        manager.register_value_modifier("other", modifier=lambda value: value)
+        with pytest.raises(ValueError, match="Pipeline test has no modifier"):
+            value_pipeline(modifiers=[other.modifiers[0]])
+
+    def test_attribute_pipeline_selection(self, manager: ValuesManager) -> None:
+        """Test that selecting modifiers works for AttributePipeline as well."""
+        manager.register_attribute_producer(
+            "test_attribute",
+            source=lambda index: pd.Series(1.0, index=index),
+            preferred_post_processor=lambda index, value, manager: value + 1000,
+        )
+        manager.register_attribute_modifier(
+            "test_attribute", modifier=lambda index, value: value * 2
+        )
+        manager.register_attribute_modifier(
+            "test_attribute", modifier=lambda index, value: value + 3
+        )
+        pipeline = manager.get_attribute_pipelines()["test_attribute"]
+        second = pipeline.modifiers[1]
+
+        assert (pipeline(INDEX) == 1005).all()
+        assert (pipeline(INDEX, modifiers=[second.name]) == 1004).all()
+        assert (pipeline(INDEX, mode="no-post-processors", modifiers=[second]) == 4).all()
+        with pytest.raises(ValueError, match="Cannot select modifiers with mode='source'"):
+            pipeline(INDEX, mode="source", modifiers=[second])
+
+
 def test_get_attribute(manager: ValuesManager) -> None:
     """Test that ValuesManager.get_attribute returns AttributePipeline."""
 
@@ -1069,7 +1187,7 @@ def test_source_callable(
             update = pd.DataFrame({"attr1": [10.0], "attr2": [20.0]}, index=pop_data.index)
             self.population_view.initialize(update)
 
-    sim = InteractiveContext(components=[SomeComponent()])
+    sim = Simulation(components=[SomeComponent()])
     attribute = sim.get_population("some-attribute")
     assert type(attribute) == type(expected_return)
     if isinstance(expected_return, pd.DataFrame) and isinstance(attribute, pd.DataFrame):
@@ -1218,6 +1336,11 @@ class UnusablePopulationView:
         )
 
 
+def _noop_modifier(index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
+    """A modifier that exists only to give a ``ValueModifier`` a readable name."""
+    return value
+
+
 class TestStringRepresentations:
     """Tests for the pipeline description and the short reprs around it.
 
@@ -1255,7 +1378,7 @@ class TestStringRepresentations:
             def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
                 return value + 1
 
-        sim = InteractiveContext(components=[Producer(), Modifier()])
+        sim = Simulation(components=[Producer(), Modifier()])
         text = str(sim.get_value("some-value"))
 
         assert "some-value  [value pipeline]" in text
@@ -1351,7 +1474,7 @@ class TestStringRepresentations:
                     pd.DataFrame({"owned_column": 1.0}, index=pop_data.index)
                 )
 
-        sim = InteractiveContext(components=[ColumnCreator(), SourceProducer()])
+        sim = Simulation(components=[ColumnCreator(), SourceProducer()])
         attribute = "owned_column" if kind == "private_column" else "some-attribute"
 
         assert expected in str(sim.get_attribute(attribute))
@@ -1389,7 +1512,7 @@ class TestStringRepresentations:
             def bump(self, index: pd.Index[int], value: pd.Series[float]) -> pd.Series[float]:
                 return value + 1
 
-        sim = InteractiveContext(components=[Producer(), Modifier()])
+        sim = Simulation(components=[Producer(), Modifier()])
         (modifier,) = sim.get_value("some-value").modifiers
 
         # The qualname of a class defined inside a test carries a <locals> chain;
@@ -1416,7 +1539,7 @@ class TestStringRepresentations:
             def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
 
-        sim = InteractiveContext(components=[Producer()])
+        sim = Simulation(components=[Producer()])
 
         assert repr(sim.get_value("some-value")) == "Pipeline('some-value')"
         assert repr(AttributePipeline("nascent")) == "AttributePipeline('nascent')"
@@ -1445,7 +1568,7 @@ class TestStringRepresentations:
             def some_source(self, index: pd.Index[int]) -> pd.Series[float]:
                 return pd.Series(1.0, index=index)
 
-        sim = InteractiveContext(components=[Producer()])
+        sim = Simulation(components=[Producer()])
         pipeline = sim.get_attribute("some-attribute")
 
         # A class defined inside a test carries a <locals> qualname; one defined at
@@ -1556,6 +1679,7 @@ class TestStringRepresentations:
             lambda: AttributePipeline("nascent"),
             lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
             lambda: MissingValueSource(Pipeline("host")),
+            lambda: ValueModifier(Pipeline("host"), _noop_modifier, ColumnCreator()),
             lambda: NamedCombiner(replace_combiner),
             lambda: NamedPostProcessor(rescale_post_processor),
         ],
@@ -1564,6 +1688,7 @@ class TestStringRepresentations:
             "attribute_pipeline",
             "value_source",
             "missing_source",
+            "value_modifier",
             "combiner",
             "post_processor",
         ],
@@ -1576,6 +1701,62 @@ class TestStringRepresentations:
         obj = build()
 
         assert PlainTextFormatter()(obj) == str(obj)
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: Pipeline("nascent"),
+            lambda: AttributePipeline("nascent"),
+            lambda: ValueSource(Pipeline("host"), Pipeline("upstream")),
+            lambda: MissingValueSource(Pipeline("host")),
+            lambda: ValueModifier(Pipeline("host"), _noop_modifier, ColumnCreator()),
+            lambda: NamedCombiner(replace_combiner),
+            lambda: NamedPostProcessor(rescale_post_processor),
+        ],
+        ids=[
+            "pipeline",
+            "attribute_pipeline",
+            "value_source",
+            "missing_source",
+            "value_modifier",
+            "combiner",
+            "post_processor",
+        ],
+    )
+    def test_ipython_display_inside_a_container_is_the_repr(
+        self, build: Callable[[], object]
+    ) -> None:
+        """IPython calls the hook on every object it walks into, not only on the
+        one echoed in the cell, so the description has to give way to the repr."""
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        obj = build()
+
+        assert PlainTextFormatter()([obj]) == f"[{obj!r}]"
+
+    def test_a_container_does_not_run_descriptions_together(self) -> None:
+        """The symptom the container rule exists for, on real descriptions.
+
+        Each one spans several lines, so showing them in a list would leave
+        nothing to mark where one ends and the next begins.
+        """
+        pytest.importorskip("IPython")
+        from IPython.core.formatters import PlainTextFormatter
+
+        class Producer(Component):
+            def setup(self, builder: Builder) -> None:
+                builder.value.register_value_producer("first", source=self.source)
+                builder.value.register_value_producer("second", source=self.source)
+
+            def source(self, index: pd.Index[int]) -> pd.Series[float]:
+                return pd.Series(1.0, index=index)
+
+        sim = Simulation(components=[Producer()])
+        pipelines = [sim.get_value("first"), sim.get_value("second")]
+
+        assert "\n" in str(pipelines[0])
+        assert PlainTextFormatter()(pipelines) == "[Pipeline('first'), Pipeline('second')]"
 
     def test_str_numbers_several_post_processors_and_bullets_several_modifiers(
         self,
@@ -1627,7 +1808,7 @@ class TestStringRepresentations:
             ) -> pd.Series[float]:
                 return value / 2
 
-        sim = InteractiveContext(components=[Producer(), FirstModifier(), SecondModifier()])
+        sim = Simulation(components=[Producer(), FirstModifier(), SecondModifier()])
         lines = str(sim.get_attribute("some-attribute")).splitlines()
 
         assert "modifiers       2 (order not guaranteed)" in lines
@@ -1721,8 +1902,8 @@ class TestRegistrationDescriptions:
     """Tests for the optional description accepted when registering a value."""
 
     @staticmethod
-    def _simulation() -> InteractiveContext:
-        return InteractiveContext(components=[DescribedProducer(), DescribedModifier()])
+    def _simulation() -> Simulation:
+        return Simulation(components=[DescribedProducer(), DescribedModifier()])
 
     def test_every_registration_entry_point_stores_its_description(self) -> None:
         """All five registration functions accept a description and keep it."""

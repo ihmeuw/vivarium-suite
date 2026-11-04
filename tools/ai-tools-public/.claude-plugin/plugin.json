@@ -1,12 +1,25 @@
 {
     "name": "simsci",
     "displayName": "Simulation Science Dev AI Tools",
-    "description": "Generic AI-assisted developer workflows for any IHME team: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, cross-repo regression debugging, change propagation, workflow assessment, and a guided TDD development loop.",
+    "description": "Generic AI-assisted developer workflows for any IHME team: review-to-PR prep (a multi-agent code review that carries the fixes through to a draft PR), git rescue, commit splitting, type hinting, cross-repo regression debugging, change propagation, workflow assessment, a guided TDD development loop, and an MCP server for IHME's Jira.",
     "author": { "name": "IHME Simulation Science" },
     "homepage": "https://github.com/ihmeuw/vivarium-suite/blob/main/tools/ai-tools-public/README.rst",
     "repository": "https://github.com/ihmeuw/vivarium-suite",
     "license": "BSD-3-Clause",
     "dependencies": [
         { "name": "github", "marketplace": "claude-plugins-official" }
-    ]
+    ],
+    "userConfig": {
+        "jira_api_token": {
+            "type": "string",
+            "title": "Jira personal access token",
+            "description": "Used by the jira MCP server. Create one in Jira under Profile > Personal Access Tokens.",
+            "sensitive": true
+        },
+        "jira_project": {
+            "type": "string",
+            "title": "Default Jira project",
+            "description": "Optional. Project key, such as ABC, that the jira MCP server creates issues in when no project is given."
+        }
+    }
 }

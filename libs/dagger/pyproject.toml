@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vivarium-dagger"
-description = "Build data pipelines as tasks with declared inputs and outputs, and re-run only what is stale."
+description = "Build and run multi-step data pipelines."
 readme = "README.rst"
 requires-python = ">=3.11"
 license = {text = "BSD-3-Clause"}
@@ -28,14 +28,19 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,pyarrow]",
+    "vivarium-dependencies[click,loguru,pandas,pyarrow,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
+    "vivarium-cluster-tools>=5.0.0",
     "pytask>=0.6.0,<0.7.0",
 ]
 
 [project.optional-dependencies]
-# The installer pins the Jobmon set the bridge is tested against and supplies IHME's server config.
+# Jobmon stays out of the base install. The installer pins the Jobmon set that the bridge
+# and the `dagger` runner are tested against, and supplies IHME's server config.
 cluster = ["jobmon_installer_ihme==10.12.2"]
+# Dagger's `simulation` step runs psimulate, which brings in vivarium-engine. The step
+# imports it only when a workflow uses it, so other workflows don't need the engine.
+simulation = ["vivarium-psimulate>=1.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
@@ -43,9 +48,12 @@ test = [
 docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
-dev = ["vivarium-dagger[test,docs,interactive,lint]"]
-ci_github = ["vivarium-dagger[test,docs,lint]"]
+dev = ["vivarium-dagger[test,docs,interactive,lint,cluster,simulation]"]
+ci_github = ["vivarium-dagger[test,docs,lint,simulation]"]
 ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
+
+[project.scripts]
+dagger = "vivarium.dagger.cli:dagger"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
@@ -101,6 +109,12 @@ exclude = [
 ]
 mypy_path = "src"
 explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# jobmon is in [cluster], which [ci_github] doesn't install. Mute "Cannot find
+# implementation" so mypy can still check the rest of the source on non-cluster envs.
+module = ["jobmon.*", "jobmon_installer_ihme.*"]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["vivarium.dagger"]

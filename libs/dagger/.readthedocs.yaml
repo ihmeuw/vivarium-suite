@@ -25,6 +25,11 @@ build:
           echo "Skipping docs build: this PR changes nothing under libs/dagger/."
           exit 183
         fi
+    pre_install:
+      # RTD installs dependencies from PyPI. Install cluster-tools from the tree first, at
+      # the version its CHANGELOG is about to release, so the docs build before that
+      # release reaches PyPI (setuptools_scm alone would give it the previous tag's version).
+      - SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VIVARIUM_CLUSTER_TOOLS=$(grep -m1 -oE '[0-9]+\.[0-9]+\.[0-9]+' libs/cluster-tools/CHANGELOG.rst) "$READTHEDOCS_VIRTUALENV_PATH/bin/python" -m pip install ./libs/cluster-tools
 
 python:
   install:

@@ -1,3 +1,115 @@
+**6.0.2 - 11/04/26**
+
+- Raise ``FutureWarning`` instead of ``DeprecationWarning`` so they show in model repos by default
+
+**6.0.1 - 10/28/26**
+
+- Remove the ``BaseSimulationContext`` alias. Use ``BaseSimulation``
+
+**6.0.0 - 10/28/26**
+
+- **Breaking change.** Rename ``SimulationContext`` to ``Simulation``
+- Rename ``BaseSimulationContext`` to ``BaseSimulation``. The old name remains as an alias
+  for now, since ``vivarium-interactive`` 1.0.0 subclasses it
+- **Breaking change.** Move ``InteractiveContext`` to the new ``vivarium-interactive``
+  package as ``vivarium.interactive.Simulation``. Engine's ``interactive`` and ``test``
+  extras install it
+- **Breaking change.** Move ``log_progress`` and ``run_from_ipython`` from
+  ``vivarium.engine.interface.utilities``, and ``ObservationError`` from
+  ``vivarium.engine.exceptions``, to ``vivarium-interactive``
+- **Breaking change.** Remove ``InteractiveError`` and ``raise_if_not_setup``
+- **Breaking change.** Remove ``get_disease_model_simulation`` from the disease model
+  example. Use ``vivarium.interactive.Simulation(get_model_specification_path())``
+- Move the interactive and exploration tutorials to the ``vivarium-interactive`` docs
+
+**5.19.1 - 10/26/26**
+
+- Add ``InteractiveContext.help()``, which prints the context's methods grouped by task
+
+**5.19.0 - 10/26/26**
+
+- **Breaking change.** Remove ``InteractiveContext.list_events()`` and
+  ``InteractiveContext.get_listeners()``. Use ``get_schedule()`` instead
+- **Breaking change.** Remove ``builder.lifecycle.add_handlers()``, which only fed
+  the handler listing that ``print_lifecycle_order()`` no longer shows
+- Rename ``InteractiveContext.get_attribute_names()`` to ``list_attributes()``. The old
+  name still works but raises a ``FutureWarning`` and will be removed
+- Stop listing event handlers in ``InteractiveContext.print_lifecycle_order()``, which
+  now prints only the lifecycle phases and their states
+
+**5.18.1 - 10/23/26**
+
+- Raise when a listener or emitter is registered for an event name that is not a lifecycle state
+- Define the lifecycle phases once in ``lifecycle_states.PHASES`` and build the lifecycle from them
+
+**5.18.0 - 10/23/26**
+
+- Add ``InteractiveContext.get_schedule()`` to get what runs in each lifecycle
+  state, in order, including the model's observations
+  
+**5.17.1 - 10/22/26**
+
+- Make ``InteractiveContext.find_resources()``'s ``pattern`` optional, so calling it
+  with no arguments lists every resource
+
+**5.17.0 - 10/22/26**
+
+- Add a ``modifiers`` argument to pipeline calls that applies only the given modifiers
+
+**5.16.0 - 10/21/26**
+
+- Add ``InteractiveContext.print_dependencies()`` to print what a resource uses,
+  or what uses it, as a depth-limited tree
+- Add ``InteractiveContext.get_dependencies()`` to return direct dependency objects
+- Show the short repr rather than the full description when a pipeline, value
+  source, modifier, combiner, or post-processor is displayed inside a container
+  in a notebook
+- Name the table in ``LookupTable``'s repr so a list of tables can be told apart
+
+**5.15.0 - 10/21/26**
+
+- **Breaking change.** Make ``InteractiveContext`` inherit from a new ``BaseSimulationContext``
+  instead of ``SimulationContext``, so it no longer has ``run_simulation``, ``report``,
+  ``write_backup``, ``load_from_backup``, ``get_performance_metrics``, or
+  ``get_number_of_steps_remaining``
+- **Breaking change.** Make ``add_components`` private on ``SimulationContext`` and
+  ``InteractiveContext``. Pass extra components to the constructor's ``components``
+  argument instead
+- Add ``InteractiveContext.register_observation()`` to register named callables that are
+  evaluated at registration and after every step, and to resume paused ones by name
+- Add ``InteractiveContext.pause_observation()`` to stop evaluating observations while
+  keeping their values
+- Include these observations in ``InteractiveContext.get_results()``
+- Add ``ObservationError``, raised when one of these observations fails
+
+**5.14.1 - 10/12/26**
+
+- **Breaking change.** Remove ``InteractiveContext.get_emitter``, which was only
+  callable on an already-finalized simulation.
+
+**5.14.0 - 10/12/26**
+
+- Stop reporting initializers from ``InteractiveContext.find_resources()``
+- Add ``InteractiveContext.get_lookup_table()``
+
+**5.13.1 - 10/08/26**
+
+- Order ``InteractiveContext.find_resources()`` results by how squarely the pattern
+  hit each name rather than alphabetically, and break ties by resource type
+
+**5.13.0 - 10/07/26**
+
+- **Breaking change.** Rename the ``end_time`` argument of ``InteractiveContext.run_until`` to
+  ``target``
+- Allow ``InteractiveContext.run_until`` to take a callable condition and return whether its
+  target was reached
+- Log the ``run_until`` completion message at the INFO level instead of printing it
+
+**5.12.0 - 10/07/26**
+
+- Add ``InteractiveContext.find_resources()`` to search the simulation's resources
+  by name or registering component and report the kind of each match
+
 **5.11.0 - 09/24/26**
 
 - Rename ``Pipeline.mutators`` to ``Pipeline.modifiers``

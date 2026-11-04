@@ -139,7 +139,7 @@ class LookupTable(Resource, Generic[T]):
         warnings.warn(
             "The `key_columns` property is deprecated and will be removed in a future release. "
             "Use `lookup_attributes` to get the full list of lookup attributes.",
-            DeprecationWarning,
+            FutureWarning,
             stacklevel=2,
         )
         return self.interpolation.categorical_parameters if self.interpolation else []
@@ -150,7 +150,7 @@ class LookupTable(Resource, Generic[T]):
         warnings.warn(
             "The `parameter_columns` property is deprecated and will be removed in a future release. "
             "Use `lookup_attributes` to get the full list of lookup attributes.",
-            DeprecationWarning,
+            FutureWarning,
             stacklevel=2,
         )
         if self.interpolation is None:
@@ -235,13 +235,13 @@ class LookupTable(Resource, Generic[T]):
         if isinstance(data, pd.DataFrame) and not has_named_row_index(data):
             warnings.warn(
                 FLAT_DATAFRAME_DEPRECATION_MESSAGE,
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
         if isinstance(data, Mapping):
             warnings.warn(
                 MAPPING_INPUT_DEPRECATION_MESSAGE,
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
             data = pd.DataFrame(data)
@@ -326,7 +326,7 @@ class LookupTable(Resource, Generic[T]):
         return result
 
     def __repr__(self) -> str:
-        return "LookupTable()"
+        return f"{type(self).__name__}({self.name!r})"
 
     @staticmethod
     def get_name(component_name: str, table_name: str) -> str:

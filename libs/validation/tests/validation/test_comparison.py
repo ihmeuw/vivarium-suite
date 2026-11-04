@@ -191,7 +191,7 @@ def test_fuzzy_comparison_get_frame_aggregated_draws(
             names=["year", "sex", "age"],
         ),
     )
-    assert_frame_equal(diff, expected_df)
+    assert_frame_equal(diff.sort_index(), expected_df)
 
 
 @pytest.mark.parametrize("stratifications", ["all", ["year"], []])

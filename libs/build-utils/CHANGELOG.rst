@@ -1,3 +1,57 @@
+**4.13.0 - 11/04/26**
+
+- Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on
+  Sunday cron builds and ``RUN_WEEKLY`` builds, and label those builds ``[weekly]`` in
+  the Jenkins build name. ``requires_slurm: "weekly"`` implies ``weekly_tests``
+
+**4.12.0 - 11/03/26**
+
+- Support beta releases (``X.Y.ZbN``) in ``PACKAGE_VERSION``, the Jenkins changelog
+  check, and ``make validate-tag``
+- Replace ``validate_tag_version.sh`` with the ``vivarium.build_utils.release_version``
+  module, which checks the beta version steps
+- Leave the ``current`` docs link on the last final when ``make deploy-docs``
+  publishes a beta
+- Run ``make validate-tag`` in the Jenkins deploy before tagging. Without a release
+  tag set, it checks the tag ``make tag-version`` would create
+
+**4.11.2 - 10/29/26**
+
+- Fetch the git tags in the Jenkins checkout itself, with the job's credentials, instead of
+  in a separate ``git fetch`` that fails for private repos
+
+**4.11.1 - 10/29/26**
+
+- Fetch git tags after the Jenkins checkout, so setuptools_scm computes the real
+  version of the lib under test instead of ``0.0.1.dev``
+
+**4.11.0 - 10/27/26**
+
+- Run Sphinx directly in ``build-docs`` and ``test-docs`` instead of through
+  ``docs/Makefile``
+
+**4.10.1 - 10/21/26**
+
+- Check the Jenkins deploy changelog update against the last successful build rather
+  than the previous commit, so a push of several commits deploys
+- Fail a Jenkins deploy whose ``CHANGELOG.rst`` version was already released from
+  another commit, via the new ``check-release-tag`` make target
+
+**4.10.0 - 10/19/26**
+
+- Run every check in ``make check``, ``make lint``, and Jenkins even when one fails,
+  with ``FAIL_FAST`` (a Jenkins parameter, or ``make check fail_fast=1`` locally,
+  which also accepts ``FAIL_FAST=1``) to restore stopping at the first failure
+
+**4.9.2 - 10/07/26**
+
+- Add the nutrition optimization pregnancy and child models to the nightly shared
+  environment build
+
+**4.9.1 - 09/25/26**
+
+- Carry each library's supported Python versions on ``Lib``
+
 **4.9.0 - 09/23/26**
 
 - Add ``build-candidate-matrix``, backing a scheduled workflow that runs every package's

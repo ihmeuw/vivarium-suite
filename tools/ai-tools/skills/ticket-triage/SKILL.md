@@ -51,9 +51,9 @@ recommendations, and file the ones the user approves.
    top of §2, two triage-specific defaults: set the issue type from the
    group's content (Bug for a confirmed defect, Story otherwise — the user
    can override), and if you can tell which epic the work belongs to, name it
-   in the draft so the user can place the ticket in that epic's backlog after
-   creation (`create_issue` has no epic field; board placement stays manual
-   per the hub policy). For a *comment* disposition, draft the comment, show
+   in the draft and, once the user approves it, pass it as `epic` in the
+   `create_issue` call (board placement stays manual per the hub policy).
+   For a *comment* disposition, draft the comment, show
    it, and on approval post it.
 8. **Report.** List the filed ticket keys/URLs, the comments posted, the
    skips, and the drops.

@@ -21,10 +21,10 @@ For how risk factor *exposures* modify disease outcomes, see the
    import pandas as pd
    from loguru import logger
    logger.disable("vivarium")
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
-       LinearScaleUp, TherapeuticInertia,
+       LinearScaleUp,
    )
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
@@ -57,11 +57,6 @@ measure with a configured value for simulants in a specified age range.
 a start and end value over a configured date range.
 :class:`~vivarium.public_health.treatment.scale_up.LinearScaleUp`
 
-**TherapeuticInertia** - draws a population-level therapeutic inertia
-value from a triangular distribution, representing the probability that
-treatment is *not* escalated during a healthcare visit.
-:class:`~vivarium.public_health.treatment.therapeutic_inertia.TherapeuticInertia`
-
 
 Common Setup
 ------------
@@ -71,10 +66,10 @@ To run any example in a standalone script, include all of these at the top:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.treatment import (
        Intervention, InterventionEffect, AbsoluteShift,
-       LinearScaleUp, TherapeuticInertia,
+       LinearScaleUp,
    )
    from vivarium.public_health.disease import SI, SIS
    from vivarium.public_health.population import BasePopulation
@@ -182,7 +177,7 @@ The simplest intervention model sets everyone to covered:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -222,7 +217,7 @@ draw:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -292,7 +287,7 @@ at a lower rate than uncovered simulants:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -382,7 +377,7 @@ create a simple attribute pipeline with value 0.5, then override it with 0.3:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            ConstantRatePipeline("test_cause.incidence_rate", rate=0.5),
@@ -424,7 +419,7 @@ retain the original value of 0.5:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            ConstantRatePipeline("test_cause.incidence_rate", rate=0.5),
@@ -539,7 +534,7 @@ over the scale-up period:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Intervention("intervention.my_treatment"),
@@ -577,75 +572,6 @@ over the scale-up period:
    Full coverage achieved: True
 
 
-TherapeuticInertia
-------------------
-
-:class:`~vivarium.public_health.treatment.therapeutic_inertia.TherapeuticInertia`
-models the variety of reasons why a treatment algorithm might deviate from
-clinical guidelines. At setup, a single scalar value is drawn from a
-triangular distribution and exposed via the ``therapeutic_inertia`` pipeline.
-This value represents the probability that treatment is *not* escalated
-during a healthcare visit.
-
-
-Configuration
-^^^^^^^^^^^^^
-
-.. code-block:: yaml
-
-   configuration:
-     therapeutic_inertia:
-       triangle_min: 0.65
-       triangle_max: 0.9
-       triangle_mode: 0.875
-
-
-Basic usage
-^^^^^^^^^^^
-
-.. testcode::
-   :skipif: True
-
-   config = make_base_config()
-   config.update(
-       {
-           "population": {"population_size": 100},
-           "mortality": {"data_sources": {"all_cause_mortality_rate": 0}},
-           "therapeutic_inertia": {
-               "triangle_min": 0.65,
-               "triangle_max": 0.9,
-               "triangle_mode": 0.875,
-           },
-       },
-       layer="override",
-   )
-
-   sim = InteractiveContext(
-       components=[
-           BasePopulation(),
-           TherapeuticInertia(),
-       ],
-       configuration=config,
-       plugin_configuration=base_plugins,
-   )
-
-   # The therapeutic inertia value is a single scalar applied to all simulants.
-   pop = sim.get_population()
-   ti_values = sim.get_value("therapeutic_inertia")(pop.index)
-   # All simulants have the same inertia value (population-level draw).
-   unique_values = ti_values.unique()
-   print(f"Single population-level value: {len(unique_values) == 1}")
-   # The value should be within the configured triangle bounds.
-   ti = unique_values[0]
-   print(f"Within bounds: {0.65 <= ti <= 0.9}")
-
-.. testoutput::
-   :skipif: True
-
-   Single population-level value: True
-   Within bounds: True
-
-
 Configuration Summary
 ---------------------
 
@@ -676,11 +602,6 @@ Configuration Summary
        ``{name}_scale_up.data_sources.start``,
        ``{name}_scale_up.data_sources.end``
      - Linearly ramp coverage over time
-   * - ``TherapeuticInertia``
-     - ``therapeutic_inertia.triangle_min``,
-       ``therapeutic_inertia.triangle_max``,
-       ``therapeutic_inertia.triangle_mode``
-     - Draw a population-level inertia scalar
 
 .. note::
 

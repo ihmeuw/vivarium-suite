@@ -1,3 +1,28 @@
+**6.8.1 - 11/04/26**
+
+- Raise a ``FutureWarning`` for the deprecated ``population`` configuration keys
+  ``age_start``, ``age_end``, and ``exit_age`` instead of logging a message
+- Fix a ``MissingLayerError`` crash when one of those keys is set without its replacement
+- Stop passing the deprecated ``skip_post_processor`` argument to ``PopulationView.get``
+
+**6.8.0 - 10/21/26**
+
+Breaking changes:
+
+- Remove the ``TherapeuticInertia`` component, which failed on setup
+
+**6.7.0 10/05/26**
+
+- Stop normalizing ``NonLogLinearRiskEffect`` relative risks by the RR at the TMREL
+
+Breaking changes:
+
+- Remove ``NonLogLinearRiskEffect.get_tmrel`` and its ``tmred`` data source
+
+**6.6.5 - 09/30/26**
+
+- Bump pandas pin due to use of `include_groups` in grouping function
+
 **6.6.4 - 09/24/26**
 
 - Rename the ``mutator`` argument of the calibration constant combiner to ``modifier``

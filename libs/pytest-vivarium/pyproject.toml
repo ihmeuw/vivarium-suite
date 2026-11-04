@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pytest-vivarium"
-description = "Shared pytest configuration and fixtures for Vivarium projects."
+description = "Shared pytest configuration for Vivarium projects."
 readme = "README.rst"
 requires-python = ">=3.11"
 license = {text = "BSD-3-Clause"}
@@ -33,7 +33,6 @@ dependencies = [
     # NOTE: Must import pytest as runtime dep in order to auto-load plugins
     "vivarium-dependencies[pytest,numpy]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
-    "vivarium-config-tree",
 ]
 
 [project.optional-dependencies]

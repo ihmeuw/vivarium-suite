@@ -1,3 +1,8 @@
+# jobmon
+py:class jobmon.client.api.Tool
+py:class jobmon.client.task.Task
+py:class jobmon.client.workflow.Workflow
+
 # pandas
 py:class pandas.core.indexes.base.Index
 py:class pandas.core.indexes.multi.MultiIndex

@@ -9,9 +9,10 @@ from pytest_mock import MockerFixture
 from scipy import stats
 from vivarium.config_tree import ConfigTree
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
 from tests.helpers import ColumnCreator
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.randomness import (
     RESIDUAL_CHOICE,
@@ -336,7 +337,7 @@ def test_stream_rate_conversion_config(
         base_config.update(
             {"configuration": {"randomness": {"rate_conversion_type": rate_conversion}}}
         )
-    sim = InteractiveContext(base_config, components=[cc])
+    sim = Simulation(base_config, components=[cc])
     # Convert for default
     if rate_conversion is None:
         rate_conversion = "linear"
@@ -354,7 +355,7 @@ def test_component_stream_uses_configured_rate_conversion(base_config: ConfigTre
     )
     component = StreamRequirer()
 
-    InteractiveContext(base_config, components=[component])
+    Simulation(base_config, components=[component])
 
     assert component.randomness.rate_conversion_type == "exponential"
 

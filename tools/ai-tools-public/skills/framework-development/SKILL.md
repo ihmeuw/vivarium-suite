@@ -71,7 +71,24 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
   criterion's literal wording and the actual need to the user rather than
   building the wording.
 
-Exit with a short written design summary the user has agreed to.
+Exit with a short written design summary the user has agreed to. End it with a
+**short testing strategy** on what must be tested to be confident the feature works
+as expected, in three sections with one item per line:
+
+```
+Testing strategy
+
+Feature requirements
+- <what the feature must do>
+
+Use cases
+- <an important behavior that shows a requirement is met, and its expected outcome>
+
+Edge cases
+- <a boundary or failure path that tests a requirement's limits, and the expected behavior>
+```
+
+It says *what* to test, not how; no test code.
 
 ## Phase 2 — Stub the interface and the tests (inline)
 
@@ -80,8 +97,9 @@ Author **two stub layers** — the shared contract, which you own:
 1. **Source stubs** — signatures + ship-quality API docstrings, bodies left as
    ``raise NotImplementedError`` / ``...``. Don't stuff test criteria into them.
 2. **Test stubs** — the acceptance criteria as stubbed test functions:
-   descriptive names + a one-line docstring each, **empty bodies**. This is
-   where you decide *what* gets tested; the test writer only decides *how*.
+   descriptive names + a one-line docstring each, **empty bodies**. Derive them
+   from the testing strategy agreed in Phase 1: at least one stub per use case and
+   edge case. The test writer only decides *how* each is tested.
 
 Scope the contract to the **whole feature**, not just a new helper in isolation:
 stub the call-site wiring (where the new code is invoked) alongside the new unit,
@@ -202,9 +220,11 @@ dropped.
    untidiness: unless the repo ignores ``.claude/worktrees/``, they show as
    untracked content and the finalize block's commit grouping will sweep them
    into the PR.
-2. Invoke the `simsci:_finalize-core` skill and follow it. Three things it can't
+2. Invoke the `simsci:_finalize-core` skill and follow it. Four things it can't
    work out on its own: the Phase 4 loop already settled what is being addressed,
    so the **scope line is already drawn**; the residual validation failures and
-   review findings carried out of that loop are the **leftover** set; and this
-   build ships as a **single PR**. If it is unavailable, report the build summary
+   review findings carried out of that loop are the **leftover** set; this
+   build ships as a **single PR**; and the Phase 1 testing strategy gives the
+   **strategy items**, with each requirement, use case, and edge case as one item.
+   Also pass any outside-suite checks this session ran. If it is unavailable, report the build summary
    and the leftovers and stop, leaving the branch in place.

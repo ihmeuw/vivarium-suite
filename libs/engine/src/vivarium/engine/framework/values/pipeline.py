@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -45,8 +46,9 @@ class RequiresPrettyHook:
 
     That same rule is why ``_repr_pretty_`` is repeated on each class below rather
     than inherited from here: a class defining ``__repr__`` stops the walk before
-    an inherited hook is reached, so a hook defined here would never run. Only the
-    check is shared; the repetition of the hook itself is load-bearing.
+    an inherited hook is reached, so a hook defined here would never run. The
+    declaration has to be repeated, but its body does not, so each one delegates
+    to ``_write_pretty``.
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -56,6 +58,20 @@ class RequiresPrettyHook:
                 f"{cls.__name__} defines __repr__ without _repr_pretty_, which shadows the "
                 "inherited IPython display hook. Define both, or neither."
             )
+
+    def _write_pretty(self, printer: Any) -> None:
+        """Write the description, or the short repr when nested in a container.
+
+        IPython calls the display hook on every object it recurses into, not only
+        on the one echoed in the cell, so a list of these would otherwise run
+        several multi-line descriptions together with no way to tell them apart.
+        ``stack`` holds the objects being printed, so it is one deep for a bare
+        object and deeper for one inside a container. It is an IPython internal,
+        so the ``getattr`` guards against it going missing. Without it the hook
+        shows the description.
+        """
+        nested = len(getattr(printer, "stack", ())) > 1
+        printer.text(repr(self) if nested else str(self))
 
 
 def _callable_display_name(callable_: Callable[..., Any]) -> str:
@@ -105,13 +121,8 @@ class NamedCallable(RequiresPrettyHook):
         return f"<{type(self).__name__} {str(self)!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     def __eq__(self, other: object) -> bool:
         # Equal to the callable it wraps, so a comparison against the bare
@@ -157,13 +168,8 @@ class ValueSource(RequiresPrettyHook):
         return f"<{type(self).__name__} {identifier!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     @property
     def _identifier(self) -> Any:
@@ -267,7 +273,7 @@ class AttributesValueSource(ValueSource):
 class ValueModifier(Resource, RequiresPrettyHook):
     """A resource representing a modifier of a value pipeline."""
 
-    RESOURCE_TYPE = "value_modifier"
+    RESOURCE_TYPE: str = "value_modifier"
 
     def __init__(
         self,
@@ -301,13 +307,8 @@ class ValueModifier(Resource, RequiresPrettyHook):
         return f"<{type(self).__name__} {self.name!r}>"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show this object's description when it is echoed bare in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show this object's description when it is echoed bare in an IPython cell."""
+        self._write_pretty(printer)
 
     def _describe(self) -> tuple[str, str]:
         """Return this modifier's callable name and the name of its component."""
@@ -315,6 +316,17 @@ class ValueModifier(Resource, RequiresPrettyHook):
             self._component.name if self._component is not None else _UNSET_COMPONENT
         )
         return _callable_display_name(self._source), component_name
+
+
+ModifierSelection = ValueModifier | str | Iterable[ValueModifier | str]
+"""The modifiers to apply when calling a pipeline, as objects or names."""
+
+
+def _labels(modifiers: Iterable[ValueModifier | str]) -> list[str]:
+    """Return the names of modifiers given as objects or names."""
+    return [
+        modifier if isinstance(modifier, str) else modifier.name for modifier in modifiers
+    ]
 
 
 class Pipeline(Resource, RequiresPrettyHook):
@@ -337,7 +349,7 @@ class Pipeline(Resource, RequiresPrettyHook):
     attributes; for those, use :class:`~vivarium.engine.framework.values.pipeline.AttributePipeline`.
     """
 
-    RESOURCE_TYPE = "value"
+    RESOURCE_TYPE: str = "value"
     """The type of the resource."""
 
     def __init__(self, name: str, component: Component | None = None) -> None:
@@ -400,6 +412,7 @@ class Pipeline(Resource, RequiresPrettyHook):
         self,
         *args: Any,
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
         **kwargs: Any,
     ) -> Any:
         """Generates the value represented by this pipeline.
@@ -409,6 +422,14 @@ class Pipeline(Resource, RequiresPrettyHook):
         mode
             The mode for pipeline evaluation. One of "default", "source",
             or "no-post-processors".
+        modifiers
+            The modifiers to apply, given as :class:`ValueModifier` objects
+            from :attr:`modifiers` or as their names; all other modifiers are
+            skipped. The selected modifiers still apply in pipeline order, not
+            in the order given, and that order is not guaranteed. None applies
+            every modifier. The result is computed from the current simulation
+            state, so it is not necessarily the value the simulation used during
+            a time step.
         args, kwargs
             Pipeline arguments. These should be the arguments to the
             callable source of the pipeline.
@@ -421,13 +442,21 @@ class Pipeline(Resource, RequiresPrettyHook):
         ------
         DynamicValueError
             If the pipeline is invoked without a source set.
+        ValueError
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
-        return self._call(*args, mode=mode, **kwargs)
+        return self._call(*args, mode=mode, modifiers=modifiers, **kwargs)
 
     def _call(
         self,
         *args: Any,
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
         **kwargs: Any,
     ) -> Any:
         if not self.source:
@@ -435,10 +464,10 @@ class Pipeline(Resource, RequiresPrettyHook):
                 f"The dynamic value pipeline for {self.name} has no source. This likely means "
                 f"you are attempting to modify a value that hasn't been created."
             )
+        selected_modifiers = self._select_modifiers(mode, modifiers)
         value = self.source(*args, **kwargs)
-        if mode != "source":
-            for modifier in self.modifiers:
-                value = self.combiner(value, modifier, *args, **kwargs)
+        for modifier in selected_modifiers:
+            value = self.combiner(value, modifier, *args, **kwargs)
         if mode == "default":
             for processor in self.post_processor:
                 value = processor(value, self.manager)
@@ -447,17 +476,60 @@ class Pipeline(Resource, RequiresPrettyHook):
 
         return value
 
+    def _select_modifiers(
+        self,
+        mode: Literal["default", "source", "no-post-processors"],
+        modifiers: ModifierSelection | None,
+    ) -> list[ValueModifier]:
+        """Return the modifiers to apply, in pipeline order."""
+        if mode == "source":
+            if modifiers is not None:
+                raise ValueError("Cannot select modifiers with mode='source'.")
+            return []
+        if modifiers is None:
+            return self.modifiers
+        if isinstance(modifiers, (str, ValueModifier)):
+            modifiers = [modifiers]
+
+        by_name = {modifier.name: modifier for modifier in self.modifiers}
+        # Unknown names stay strings, so the set difference below keeps them.
+        resolved: list[ValueModifier | str] = []
+        for requested in modifiers:
+            if isinstance(requested, str):
+                requested = by_name.get(requested, requested)
+            elif not isinstance(requested, ValueModifier):
+                raise TypeError(
+                    "Modifiers must be given as ValueModifier objects or their names, "
+                    f"not {type(requested).__name__}: {requested!r}."
+                )
+            resolved.append(requested)
+
+        # ValueModifier keeps the default identity equality and hash, so the set
+        # operations compare objects.
+        selected = set(resolved)
+        unknown = sorted(_labels(selected - set(self.modifiers)))
+        if unknown:
+            raise ValueError(
+                f"Pipeline {self.name} has no modifier(s) {unknown}. "
+                f"Available modifiers: {list(by_name)}."
+            )
+        if len(selected) != len(resolved):
+            duplicates = [
+                modifier for modifier, count in Counter(resolved).items() if count > 1
+            ]
+            raise ValueError(
+                f"Modifier(s) {_labels(duplicates)} were requested more than once for "
+                f"pipeline {self.name}. Each modifier is applied at most once; "
+                "check whether you meant to request a different modifier."
+            )
+        return [modifier for modifier in self.modifiers if modifier in selected]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Show the full description when the pipeline is echoed in an IPython cell.
-
-        IPython's display machinery prefers this hook over ``__repr__``, so the
-        description shows up in a notebook while ``__repr__`` stays short enough
-        for tracebacks and collections.
-        """
-        printer.text(str(self))
+        """Show the full description when the pipeline is echoed in an IPython cell."""
+        self._write_pretty(printer)
 
     def __str__(self) -> str:
         """Render everything registered on this pipeline, in application order.
@@ -606,7 +678,7 @@ class AttributePipeline(Pipeline):
 
     """
 
-    RESOURCE_TYPE = "attribute"
+    RESOURCE_TYPE: str = "attribute"
     """The type of the resource."""
 
     @property
@@ -630,6 +702,7 @@ class AttributePipeline(Pipeline):
         self,
         index: pd.Index[int],
         mode: Literal["default", "source", "no-post-processors"] = "default",
+        modifiers: ModifierSelection | None = None,
     ) -> pd.Series[Any] | pd.DataFrame:
         """Generates the attributes represented by this pipeline.
 
@@ -641,6 +714,14 @@ class AttributePipeline(Pipeline):
         mode
             The mode for pipeline evaluation. One of "default", "source",
             or "no-post-processors".
+        modifiers
+            The modifiers to apply, given as :class:`ValueModifier` objects
+            from :attr:`modifiers` or as their names; all other modifiers are
+            skipped. The selected modifiers still apply in pipeline order, not
+            in the order given, and that order is not guaranteed. None applies
+            every modifier. The result is computed from the current simulation
+            state, so it is not necessarily the value the simulation used during
+            a time step.
 
         Returns
         -------
@@ -650,6 +731,13 @@ class AttributePipeline(Pipeline):
         ------
         DynamicValueError
             If the pipeline is invoked without a source set.
+        ValueError
+            If ``modifiers`` is given with ``mode="source"``, includes a
+            modifier object or name that is not on this pipeline, or includes
+            the same modifier more than once.
+        TypeError
+            If an entry of ``modifiers`` is neither a :class:`ValueModifier` nor
+            a string.
         """
         # NOTE: must pass index in as arg (NOT kwarg!) to match signature of parent Pipeline._call()
         # Always skip post-processor at _call level; AttributePipeline handles it here.
@@ -657,7 +745,7 @@ class AttributePipeline(Pipeline):
         _call_mode: Literal["source", "no-post-processors"] = (
             "source" if mode == "source" else "no-post-processors"
         )
-        attribute = self._call(index, mode=_call_mode)
+        attribute = self._call(index, mode=_call_mode, modifiers=modifiers)
         if mode == "default":
             for processor in self.post_processor:
                 attribute = processor(index, attribute, self.manager)

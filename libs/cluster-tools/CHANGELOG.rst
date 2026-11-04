@@ -1,3 +1,43 @@
+**5.0.0 - 11/04/26**
+
+- **Breaking change.** Move ``psimulate`` and ``vipin`` to the new ``vivarium-psimulate``
+  package, importable as ``vivarium.psimulate``, along with the ``testing`` components
+- **Breaking change.** Move ``with_sim_verbosity``, ``resolve_sim_verbosity``,
+  ``MinutesOrNone``, ``MINUTES_OR_NONE``, ``load_run_config``, ``with_run_config`` and
+  ``resolve_deprecated_positional`` from ``core.cli_tools`` to
+  ``vivarium.psimulate.cli_options``, and ``NUM_ROWS_PER_CENTRAL_LOG_FILE`` from
+  ``utilities`` to ``vivarium.psimulate.performance_logger``
+- **Breaking change.** Move Dagger to the new ``vivarium-dagger`` package, importable as
+  ``vivarium.dagger``. Remove ``with_workflow_config`` from ``core.cli_tools``,
+  since only Dagger used it
+- **Breaking change.** Remove the ``build_artifacts_in_parallel`` re-export from
+  ``core.jobmon``. Import it from ``core.jobmon.artifact``
+- Drop the dependencies that only psimulate, vipin and Dagger needed:
+  ``vivarium-engine``, ``vivarium-config-tree``, ``dill``, ``psutil``, ``numpy``,
+  ``pandas``, ``pyyaml``, ``tables`` and ``pyarrow``
+
+**4.10.0 - 11/03/26**
+
+- Name the environment in every environment-resolution error, including a failing
+  conda lookup, output that is not JSON, and a path that cannot be checked. These
+  failures now raise ``RuntimeError`` instead of the underlying error.
+- Stop adding an empty ``PATH`` entry, which means the current directory, for a venv
+  whose ``pyvenv.cfg`` has an empty ``home``.
+
+**4.9.0 - 11/03/26**
+
+- Prep for splitting of psimulate: make ``core``, ``utilities``, and the package
+  ``__init__`` import nothing from ``psimulate``, ``dagger``, ``vipin``, or ``vivarium-engine``.
+
+**4.8.0 - 10/28/26**
+
+- Rename ``ParallelSimulationContext`` to ``ParallelSimulation`` and require
+  ``vivarium-engine`` 6
+
+**4.7.2 - 10/12/26**
+
+- Tie the positional-argument deprecation test to the 5.0.0 release instead of a date
+
 **4.7.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

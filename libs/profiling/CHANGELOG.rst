@@ -1,3 +1,25 @@
+**0.7.2 - 11/03/26**
+
+- Fix ``make_artifacts -l all``: build the locations in parallel as a Jobmon
+  workflow in place of the removed DRMAA helper, and pass ``--years`` to every
+  location's build
+- Install ``vivarium-cluster-tools[cluster]`` with the ``cluster`` extra, so
+  that the Jobmon build of ``make_artifacts -l all`` can import ``jobmon``
+
+**0.7.1 - 10/29/26**
+
+- Remove the unused ``_load_em_from_meid`` from the data loader, along with
+  the loader's only import of ``vivarium_gbd_access``
+
+**0.7.0 - 10/28/26**
+
+- Require ``vivarium-engine`` 6 and, for the ``cluster`` extra,
+  ``vivarium-cluster-tools`` 4.8.0
+
+**0.6.2 - 10/20/26**
+
+- Use the pytest-vivarium ``cluster`` marker for the SLURM-only parser test
+
 **0.6.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

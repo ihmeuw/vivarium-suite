@@ -48,10 +48,8 @@ subscribers) to events on a particular channel.  The *listeners* will then be
 called any time an event is emitted on the channel and will receive the event
 as an argument.
 
-User components can also create new event channels simply by requesting an
-*emitter* or *listener* from the event system.  This behavior is discouraged,
-however, as it makes understanding the structure of a model much more
-difficult.
+Event names must be lifecycle states. Requesting an *emitter* or
+registering a *listener* for any other name raises a ``LifeCycleError``.
 
 
 Lifecycle Events
@@ -156,22 +154,11 @@ Emitting Events
 +++++++++++++++
 
 The :func:`~ <vivarium.engine.framework.event.interface.EventInterface.get_emitter()>`
-provides a way to get a callable emitter for a given named event. It can be
-used as follows:
-
-.. code-block:: python
-
-   emitter = builder.event.get_emitter('my_event')
+provides a way to get a callable emitter for a named lifecycle event. Any
+other name raises a ``LifeCycleError``.
 
 .. danger::
 
    Do not emit any of the simulation lifecyle events described in the table
    above. These are events that correspond to particular phases in the
    simulation and should only be emitted by the engine itself.
-
-.. caution::
-
-   While users may provide their own named events by requesting an emitter,
-   this is not advised. Adding additional events beyond those emitted by the
-   simulation engine essentially creates arbitrary ``GOTO`` statements in the
-   simulation flow and makes time much more difficult to think about.

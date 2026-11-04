@@ -5,6 +5,7 @@
     "package_url": "https://github.com/ihmeuw/{{cookiecutter.package_name}}",
     "ssh_url": "git@github.com:ihmeuw/{{cookiecutter.package_name}}.git",
     "vivarium_engine_version": "",
+    "vivarium_interactive_version": "",
     "vivarium_public_health_version": "",
     "vivarium_cluster_tools_version": "",
     "vivarium_inputs_version": "",

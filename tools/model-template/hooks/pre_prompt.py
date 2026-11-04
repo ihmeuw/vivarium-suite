@@ -8,6 +8,7 @@ import requests
 # Public PyPI packages: fetched from https://pypi.org/pypi/<name>/json.
 PYPI_PACKAGES = [
     "vivarium-engine",
+    "vivarium-interactive",
     "vivarium-public-health",
     "vivarium-cluster-tools",
     "vivarium-gbd-mapping",

@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from vivarium.engine import InteractiveContext
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.testing_utilities import get_randomness
 from vivarium.fuzzy_checker import FuzzyChecker
+from vivarium.interactive import Simulation
 
 import vivarium.public_health.population.base_population as bp
 import vivarium.public_health.population.data_transformations as dt
@@ -56,7 +56,7 @@ def test_BasePopulation(
         },
         layer="override",
     )
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[base_pop], configuration=config, plugin_configuration=base_plugins
     )
     time_start = simulation._clock.time
@@ -93,6 +93,54 @@ def test_BasePopulation(
     )  # Within a half of a day.
 
 
+@pytest.mark.parametrize(
+    "deprecated_key, new_key",
+    [
+        ("age_start", "initialization_age_min"),
+        ("age_end", "initialization_age_max"),
+        ("exit_age", "untracking_age"),
+    ],
+)
+def test_deprecated_config_key_warns(
+    config, base_plugins, deprecated_key: str, new_key: str
+) -> None:
+    value = config.population.get(new_key, default_value=100)
+    config.update({"population": {deprecated_key: value}}, layer="override")
+    with pytest.warns(FutureWarning, match=f"'{deprecated_key}'.*'{new_key}'"):
+        Simulation(
+            components=[bp.BasePopulation()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+            setup=False,
+        ).setup()
+
+
+@pytest.mark.parametrize(
+    "deprecated_key, new_key",
+    [
+        ("age_start", "initialization_age_min"),
+        ("age_end", "initialization_age_max"),
+        ("exit_age", "untracking_age"),
+    ],
+)
+@pytest.mark.parametrize("new_key_layer", ["override", "model_override"])
+def test_deprecated_config_key_conflicting_with_new_key_raises(
+    config, base_plugins, deprecated_key: str, new_key: str, new_key_layer: str
+) -> None:
+    config.update({"population": {deprecated_key: 90}}, layer="override")
+    # The config fixture already sets the initialization ages at model_override, and a
+    # layer cannot be written twice, so those cases conflict with the fixture's value.
+    if not (new_key_layer == "model_override" and new_key in config.population.keys()):
+        config.update({"population": {new_key: 100}}, layer=new_key_layer)
+    with pytest.raises(ValueError, match=f"'{deprecated_key}' and '{new_key}'"):
+        Simulation(
+            components=[bp.BasePopulation()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+            setup=False,
+        ).setup()
+
+
 def test_age_out_simulants(config, base_plugins):
     start_population_size = 1000
     num_days = 600
@@ -112,7 +160,7 @@ def test_age_out_simulants(config, base_plugins):
         layer="override",
     )
     components = [bp.BasePopulation()]
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=components, configuration=config, plugin_configuration=base_plugins
     )
     time_start = simulation._clock.time
@@ -153,7 +201,7 @@ def test_aged_out_simulant_untracking(
         layer="override",
     )
     components = [bp.BasePopulation()]
-    sim = InteractiveContext(
+    sim = Simulation(
         components=components, configuration=config, plugin_configuration=base_plugins
     )
     pop0 = sim.get_population(["age", "is_aged_out"])
@@ -397,7 +445,7 @@ def test_scaled_population(
     else:
         scaling_factor = scalar_data
     scaled_pop = bp.ScaledPopulation(scaling_factor)
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[scaled_pop], configuration=config, plugin_configuration=base_plugins
     )
     pop = sim.get_population(["age", "sex"])
@@ -557,7 +605,7 @@ def test_base_population_creates_disability_weight_pipeline(config, base_plugins
         },
         layer="override",
     )
-    sim = InteractiveContext(
+    sim = Simulation(
         components=[bp.BasePopulation()],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -586,7 +634,7 @@ def test_disability_weight_pipeline_combination(
     """
     model_0, model_1 = disability_disease_models
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[bp.BasePopulation(), model_0, model_1],
         configuration=config,
         plugin_configuration=base_plugins,
@@ -674,9 +722,9 @@ def _check_locations(simulants):
 
 
 def _make_data_sources_sim(base_config, base_plugins, config_overrides, components=None):
-    """Build an InteractiveContext with the given config overrides."""
+    """Build a Simulation with the given config overrides."""
     base_config.update(config_overrides, layer="override")
-    return InteractiveContext(
+    return Simulation(
         components=components or [bp.BasePopulation()],
         configuration=base_config,
         plugin_configuration=base_plugins,
@@ -863,7 +911,7 @@ def test_fertility_before_aging(base_config, base_plugins):
         layer="override",
     )
 
-    simulation = InteractiveContext(
+    simulation = Simulation(
         components=[bp.BasePopulation(), FertilityDeterministic()],
         configuration=base_config,
         plugin_configuration=base_plugins,

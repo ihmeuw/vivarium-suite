@@ -1,0 +1,1107 @@
+.. _exploration_tutorial:
+
+================================================
+Exploring a Simulation in an Interactive Setting
+================================================
+
+In other tutorials (:ref:`[Boids] <boids_tutorial>` and
+:ref:`[Disease Model] <disease_model_tutorial>`) we've walked through how to build
+components for simulations. We've also shown how to run those simulations
+from the :ref:`command line <cli_tutorial>` and in an
+:ref:`interactive setting <interactive_tutorial>`.
+
+In this tutorial we'll focus on exploring simulations in an interactive
+setting. The only prerequisite is that you've set up your programming
+environment (See
+:ref:`the getting started section <getting_started_tutorial>`). We'll look at
+how to find your way around a simulation - what components, attributes, and
+value pipelines it has, and what runs when - how to examine the
+:term:`population state table <Population State Table>`, how to print and
+interpret the simulation :term:`configuration <Configuration>`, and how to get
+results out of it.
+
+We'll work through all this with a few case studies using the simulations
+built in the other tutorials.
+
+
+.. contents::
+   :depth: 2
+   :local:
+   :backlinks: none
+
+What are we looking at?
+-----------------------
+
+Simulations are complicated things. It's beyond the scope of this tutorial
+to talk about what they are and how they work and when they
+make sense as models of the world. Luckily, once you have one in hand, you
+can start figuring out the answers to many of those questions yourself.
+
+In the case studies that follow, we'll start simply. We'll get our simulations
+:ref:`setup <interactive_setup_tutorial>` in an interactive environment and
+examine various aspects of the simulation state at the beginning
+of the simulation. We'll then run them for a while and see how that state
+changes over time. After we have a handle on examining different aspects
+of the simulation, we'll take a step back to talk about what our expectations
+should be about how the simulation should work and look at some examples
+of how to test those expectations. Finally, we'll setup a comparison across
+two simulations to examine how changing our
+:term:`configuration parameters <Configuration>` alters what happens in a
+simulation.
+
+Getting things set up
+---------------------
+
+Before we can start exploring properties of the simulation, we need to get
+our hands on a :class:`~vivarium.interactive.simulation.Simulation`. This is
+the object we'll use to examine and run our simulation model. You can check
+out our tutorial on :ref:`setting up a simulation <interactive_setup_tutorial>`
+to see the tools that ``vivarium-engine`` provides for building your own simulation
+context objects. For this tutorial on exploring simulations, however,
+we'll start from the example disease model that ships with
+``vivarium-engine``. In a Jupyter notebook or python interpreter, you can run
+the following
+
+.. testcode::
+
+   from vivarium.interactive import Simulation
+   from vivarium.engine.examples.disease_model import get_model_specification_path
+
+   sim = Simulation(get_model_specification_path())
+
+The ``sim`` object returned here is our simulation context. With it, we're
+ready to begin examining various aspects of the simulation state.
+
+.. _exploration_introspection:
+
+Finding your way around
+-----------------------
+
+Before looking at what a simulation *does*, it helps to be able to ask what it
+*contains*. A context carries an index of itself, and the methods below are the
+entry points. Almost everything here works on a freshly built simulation; the one
+exception is called out below.
+
+To see what methods are available, use
+:meth:`~vivarium.interactive.simulation.Simulation.help`:
+
+.. testcode::
+
+   sim.help()
+
+.. testoutput::
+   :options: +ELLIPSIS, +NORMALIZE_WHITESPACE
+
+   Run the simulation
+       setup()   Set up the simulation and create the initial population.
+       step()    Advance the simulation one step.
+   ...
+
+Components
+++++++++++
+
+:meth:`~vivarium.interactive.simulation.Simulation.list_components`
+returns a mapping of component name to component:
+
+.. testcode::
+
+   components = sim.list_components()
+   assert isinstance(components, dict)
+   print(len(components))
+   # print the stringified mapping of the first two
+   print({k: repr(components[k]) for k in list(components)[0:2]})
+
+.. testoutput::
+
+   15
+   {'base_population': 'BasePopulation()', 'mortality': 'Mortality()'}
+
+In addition to the mapping returned by ``list_components``, if you know the name
+of a component, you can get it via
+:meth:`~vivarium.interactive.simulation.Simulation.get_component`.
+``get_component`` is the exception mentioned above: it is restricted to certain
+lifecycle states, and a context that has been set up but not yet stepped is not
+one of them, so it has to be called after the simulation has started moving.
+
+.. testcode::
+
+   sim.step()
+   print(repr(sim.get_component("mortality")))
+
+.. testoutput::
+
+   Mortality()
+
+What runs, and when
++++++++++++++++++++
+
+Three methods show the order in which things happen.
+:meth:`~vivarium.interactive.simulation.Simulation.print_lifecycle_order`
+shows the simulation's lifecycle phases and the states in each, in the order they
+run. A ``*`` marks a phase whose states repeat. See
+:ref:`the simulation lifecycle concept docs <lifecycle_concept>` for what the phases
+and states are.
+
+.. testcode::
+
+    sim.print_lifecycle_order()
+
+.. testoutput::
+    :options: +NORMALIZE_WHITESPACE
+
+    initialization
+        initialization
+    setup
+        setup
+        post_setup
+        population_creation
+    main_loop*
+        time_step__prepare
+        time_step
+        time_step__cleanup
+        collect_metrics
+    simulation_end
+        simulation_end
+        report
+
+:meth:`~vivarium.interactive.simulation.Simulation.get_schedule`
+returns what runs in each lifecycle state as a frame indexed by phase, state and
+priority. It lists each action with its priority, and it lists each
+observation at the state and priority where it is made. The states of the
+``main_loop`` phase repeat every time step.
+
+.. testcode::
+
+    print(sim.get_schedule().to_string())
+
+.. testoutput::
+    :options: +NORMALIZE_WHITESPACE
+
+                                                                            component         kind                  name  active
+    phase     state              priority
+    setup     post_setup         5                                     values_manager       action         on_post_setup    True
+                                 5                                 population_manager       action         on_post_setup    True
+                                 5                                     datetime_clock       action         on_post_setup    True
+                                 5                               lookup_table_manager       action         on_post_setup    True
+                                 5         disease_model.lower_respiratory_infections       action         on_post_setup    True
+    main_loop time_step__prepare 5                                    deaths_observer       action  on_time_step_prepare    True
+              time_step          5                                    base_population       action          on_time_step    True
+                                 5                                          mortality       action          on_time_step    True
+                                 5         disease_model.lower_respiratory_infections       action          on_time_step    True
+              time_step__cleanup 5         disease_model.lower_respiratory_infections       action  on_time_step_cleanup    True
+              collect_metrics    5                                    deaths_observer  observation                  dead   False
+                                 5                                      ylls_observer  observation                  ylls   False
+
+An interactive context does not observe results by default, so the observations
+here have ``active`` set to False. They are listed anyway so that you can see
+when they would run. Pass ``observe=True`` when you build the context to make
+them run.
+
+Interactive observations you add to a :class:`~vivarium.interactive.simulation.Simulation`
+via :meth:`~vivarium.interactive.simulation.Simulation.register_observation`
+are listed at the end of the ``main_loop`` phase, with ``kind`` set to
+``"observation (interactive)"``. They have no state, priority, or component
+because they do not run in a lifecycle state. They run once when registered,
+or at the end of setup if registered before it, and then after every step.
+
+.. warning::
+
+    Rows that share a lifecycle phase, state, and a priority, such as the three
+    ``time_step`` actions above, have no guaranteed order. While the frame does
+    show them in the order they run now, that order can change when components
+    are added or reordered in the model specification. Do not write code that
+    depends on it.
+
+:meth:`~vivarium.interactive.simulation.Simulation.print_initializer_order`
+shows the order in which components populate new simulants.
+
+.. note::
+
+    Initializers run in *dependency* order and no order is guaranteed between
+    initializers that do not depend on each other!
+
+.. testcode::
+   
+    sim.print_initializer_order()
+
+.. testoutput::
+
+    DateTimeClock(datetime_clock).initialize_individual_clock
+    Mortality(mortality).initialize_is_alive
+    BasePopulation(base_population).initialize_entrance_time_and_age
+    DeathsObserver(deaths_observer).initialize_previous_alive
+    BasePopulation(base_population).initialize_sex
+    DiseaseModel(disease_model.lower_respiratory_infections).initialize_state
+    Risk(risk.child_wasting).initialize_propensity
+
+State table attributes and value pipelines
+++++++++++++++++++++++++++++++++++++++++++
+
+This is the distinction that causes the most confusion, so it is worth being
+precise. A simulation exposes two things that are similar but not identical:
+*attributes / attribute pipelines* and *value pipelines*. Refer to the
+:ref:`population management concept page <population_concept>` for more detail.
+
+
+:term:`Attributes <Attribute>` - computed by
+:term:`attribute pipelines <Attribute Pipeline>` - are simulant-specific values;
+they are the columns of the :term:`state table <Population State Table>`.
+:meth:`~vivarium.interactive.simulation.Simulation.list_attributes`
+lists the names of all of the attributes in a given simulation and
+:meth:`~vivarium.interactive.simulation.Simulation.get_population`
+gets their current values.
+
+.. code-block:: python
+
+    attribute_names = sim.list_attributes()
+    print(len(attribute_names))
+    # list four of them
+    print(attribute_names[0:4])
+    print(sim.get_population(["age", "sex"]).head())
+
+::
+
+    24
+    ['entrance_time', 'age', 'sex', 'mortality_rate']
+            age     sex
+    0  1.709032  Female
+    1  2.733035    Male
+    2  0.512616    Male
+    3  2.900084  Female
+    4  1.383266  Female
+
+.. testcode::
+    :hide:
+
+    fresh = Simulation(get_model_specification_path())
+    attribute_names = fresh.list_attributes()
+    assert len(attribute_names) == 24
+    assert attribute_names[0:4] == ["entrance_time", "age", "sex", "mortality_rate"]
+    pop = fresh.get_population(["age", "sex"])
+    assert list(pop.columns) == ["age", "sex"]
+    assert set(pop["sex"]) == {"Female", "Male"}
+    assert pop["age"].between(0, 5).all()
+
+Should you need the actual AttributePipeline object itself, use
+:meth:`~vivarium.interactive.simulation.Simulation.get_attribute`.
+Printing one reports what it represents and where its value comes from: the
+source, the modifiers that adjust it, and the post-processors applied.
+
+.. testcode::
+
+   print(sim.get_attribute("mortality_rate"))
+
+.. testoutput::
+
+   mortality_rate  [attribute pipeline]
+   registered by   mortality
+   description     The rate at which simulants die of any cause
+
+   source          mortality.mortality_rate (lookup_table)
+   combiner        replace_combiner
+   modifiers       3 (order not guaranteed)
+                     - DiseaseModel.delete_cause_specific_mortality
+                        from disease_model.lower_respiratory_infections
+                        Subtract this cause's mortality so each state can add its own
+                     - DiseaseState.add_in_excess_mortality
+                        from disease_state.susceptible_to_lower_respiratory_infections
+                        Add this state's excess mortality to the all-cause rate
+                     - DiseaseState.add_in_excess_mortality
+                        from disease_state.infected_with_lower_respiratory_infections
+                        Add this state's excess mortality to the all-cause rate
+   post-processors 1
+                     1. rescale_post_processor
+
+.. note::
+
+    In IPython and Jupyter, echoing the pipeline on its own shows this same
+    description. A plain Python REPL shows the shorter ``repr`` instead, so
+    ``print()`` is needed there.
+
+.. warning::
+
+    The order of the modifiers is determined by the order in which components are
+    registered **and is not guaranteed to be stable**. Adding a component or
+    reordering them in the model specification can change it. Post-processor order,
+    on the other hand, is guaranteed since only a single component can register a
+    post-processor for a given attribute.
+
+An attribute pipeline (which produces attributes) is a specific type of the more
+generic :term:`Pipeline`, which produces :term:`values <Value>`. While attributes
+are simulant-specific and tabular in shape, values can be anything at all.
+:meth:`~vivarium.interactive.simulation.Simulation.list_values`
+lists the names of any available values and
+:meth:`~vivarium.interactive.simulation.Simulation.get_value`
+returns the corresponding pipeline object itself.
+
+.. testcode::
+
+   print(sim.list_values())
+   print(repr(sim.get_value("simulant_step_size")))
+
+.. testoutput::
+
+   ['simulant_step_size']
+   Pipeline('simulant_step_size')
+
+Note how short that list is! Most of the quantities you might think of as being 
+generated by pipelines - mortality rate, the disease transition rates, etc - 
+are *attributes*, not *values*, and so they will not appear here. Note that
+calling ``get_value()`` on an attribute will raise rather than returning anything
+and its error message will point you back at attributes (and vice versa).
+
+.. testcode::
+
+   try:
+       sim.get_value("mortality_rate")
+   except ValueError as e:
+       print(e)
+
+.. testoutput::
+
+   No value pipeline 'mortality_rate' registered. Are you looking for an attribute pipeline? Try get_attribute().
+
+Calling a pipeline
+~~~~~~~~~~~~~~~~~~
+
+Calling a pipeline evaluates it. The ``mode`` argument controls how much of the
+pipeline runs: ``"source"`` returns the source alone, ``"no-post-processors"``
+applies the modifiers but skips the post-processors, and ``"default"`` runs
+everything. To isolate the contribution of particular modifiers, pass them as
+``modifiers``, either as the objects in the pipeline's ``modifiers`` list or as
+their names. All other modifiers are skipped.
+
+.. testcode::
+
+   mortality_rate = sim.get_attribute("mortality_rate")
+   index = sim.get_population_index()[:1]
+   delete_csmr = mortality_rate.modifiers[0]
+   print(delete_csmr.name)
+   print(mortality_rate(index, mode="source").iloc[0])
+   print(mortality_rate(index, mode="no-post-processors", modifiers=[delete_csmr]).iloc[0])
+
+.. testoutput::
+
+   mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   0.0114
+   0.01024...
+
+``modifiers`` composes with ``mode="default"`` and ``mode="no-post-processors"``.
+Combining it with ``mode="source"`` raises an error, since that mode applies no
+modifiers.
+
+.. warning::
+
+    Keep these caveats in mind when selecting modifiers:
+
+    - The selected modifiers apply in the pipeline's order, not in the order you
+      list them, and **that order is not guaranteed (see above)**. When modifiers do
+      not commute, the result depends on that order.
+    - A modifier's name contains its registration index, so a name saved from an
+      earlier run can stop matching after components are added or reordered. A
+      name that matches no modifier raises an error.
+    - The result is computed from the current state of the simulation. **It is not
+      necessarily the value the simulation used during a time step.**
+
+Finding something by name
+-------------------------
+
+Everything above assumes you already know what the thing you want is called, and
+which kind of thing it is; you might not know either.
+:meth:`~vivarium.interactive.simulation.Simulation.find_resources`
+takes a fragment of a name and reports every :term:`resource <Resource>` whose own
+name, or whose component's name, contains it, along with the type of each one.
+
+.. testcode::
+
+   found = sim.find_resources("mortality")
+   print(found.to_string(index=False))
+
+.. testoutput::
+
+                                                                                                 name  resource_type                                                 component
+                                                                                       mortality_rate      attribute                                                 mortality
+          mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality value_modifier                disease_model.lower_respiratory_infections
+   mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality value_modifier disease_state.susceptible_to_lower_respiratory_infections
+    mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality value_modifier  disease_state.infected_with_lower_respiratory_infections
+                                                                             mortality.mortality_rate   lookup_table                                                 mortality
+                                     infected_with_lower_respiratory_infections.excess_mortality_rate      attribute  disease_state.infected_with_lower_respiratory_infections
+    infected_with_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute  disease_state.infected_with_lower_respiratory_infections
+                                           lower_respiratory_infections.cause_specific_mortality_rate      attribute                disease_model.lower_respiratory_infections
+                                    susceptible_to_lower_respiratory_infections.excess_mortality_rate      attribute disease_state.susceptible_to_lower_respiratory_infections
+   susceptible_to_lower_respiratory_infections.excess_mortality_rate.population_attributable_fraction      attribute disease_state.susceptible_to_lower_respiratory_infections
+                       disease_state.infected_with_lower_respiratory_infections.excess_mortality_rate   lookup_table  disease_state.infected_with_lower_respiratory_infections
+                      disease_state.susceptible_to_lower_respiratory_infections.excess_mortality_rate   lookup_table disease_state.susceptible_to_lower_respiratory_infections
+                                                                                             is_alive      attribute                                                 mortality
+
+Results come back most relevant first, in the following order:
+
+- the resource name matches exactly
+- the resource name begins with the pattern
+- the resource name contains the pattern as one or more whole dot-separated segments
+- the resource name contains the pattern as one or more whole underscore-separated words
+- the resource name contains the pattern as part of a word
+- the resource name does not match at all, and only its component's name does
+
+The two middle bullets are why searching "ever" ranks ``test_ever_eligible``, where
+"ever" is a word of its own, above ``never_treated``, where it is buried inside
+another word.
+
+That last bullet is why ``is_alive`` is at the bottom in the example above: "mortality"
+appears nowhere in its name, and it is listed only because the ``mortality`` component
+registered it.
+
+.. note::
+
+    The pattern provided is matched against the name of each resource *and* the name
+    of the component that registered it, so searching for a component reports everything
+    it owns, whatever those things are called.
+
+.. note::
+
+    Columns, randomness streams, and population initializers are deliberately left
+    out. A column contains the backing data of an attribute of the same name, so
+    reporting it adds a near-duplicate row without adding information. A randomness
+    stream is upstream of the values it randomizes rather than one of them and there's
+    not much to gain from reporting it. An initializer is named for the call that
+    fills a column rather than for the quantity you would search for, so it crowds
+    the results;
+    :meth:`~vivarium.interactive.simulation.Simulation.print_initializer_order`
+    reports those instead.
+
+.. note::
+
+    The resource graph holds no combiners or post-processors, so
+    :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
+    cannot find those. Once you have located a pipeline, printing it reports them,
+    as shown above.
+
+The pattern is matched literally by default; pass ``regex=True`` to treat it as a
+regular expression instead. For example, we can anchor our "mortality" search so
+that it narrows to *exactly* ``mortality`` rather than everything with "mortality"
+somewhere in its name.
+
+.. testcode::
+
+    found = sim.find_resources("^mortality$", regex=True)
+    print(found.to_string(index=False))
+    # There are many other resources that include the word "mortality"
+    assert len(sim.find_resources("mortality")) > len(found)
+
+.. testoutput::
+
+                       name resource_type component
+                   is_alive     attribute mortality
+             mortality_rate     attribute mortality
+   mortality.mortality_rate  lookup_table mortality
+
+Each resource type can be retrieved:
+
+- ``value``: :meth:`~vivarium.interactive.simulation.Simulation.get_value`
+- ``attribute``: :meth:`~vivarium.interactive.simulation.Simulation.get_attribute`
+- ``value_modifier``: no getter; use the corresponding pipeline's ``modifiers``
+  attribute to inspect them
+- ``lookup_table``: :meth:`~vivarium.interactive.simulation.Simulation.get_lookup_table`
+
+For example, we can get the mortality rate lookup table found above:
+
+.. testcode::
+
+   mr_table = sim.get_lookup_table("mortality.mortality_rate")
+   print(mr_table(sim.get_population_index()[:5]))
+
+.. testoutput::
+
+   0    0.0114
+   1    0.0114
+   2    0.0114
+   3    0.0114
+   4    0.0114
+   Name: value, dtype: float64
+
+.. note::
+
+    Matching is case-insensitive, and the pattern is matched *literally* unless
+    you pass ``regex=True``. This default is the safe one for the common move of
+    copying a name out of an earlier result; such a name finds itself even when it
+    contains characters - brackets, parentheses, a dot - that a regular expression
+    would otherwise read as syntax.
+
+Following a resource's dependencies
+-----------------------------------
+
+Once you have found a resource, you might be interested in what it uses and/or what
+uses it. :meth:`~vivarium.interactive.simulation.Simulation.print_dependencies`
+answers both. Pass ``direction="uses"`` to print what the resource uses and ``direction="used-by"``
+to print what other resources use it.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses")
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality  (1 direct branch hidden)
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality  (1 direct branch hidden)
+
+The default depth of 1 reports only the immediate dependencies. A branch with
+more underneath it is marked ``(N direct branches hidden)``, where ``N`` counts
+the branches cut off at that point and not every resource below them. Pass a
+larger ``depth`` to see more of the tree.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", direction="uses", depth=2)
+
+.. testoutput::
+
+   attribute.mortality_rate
+   ├── lookup_table.mortality.mortality_rate
+   ├── value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   │   └── attribute.lower_respiratory_infections.cause_specific_mortality_rate
+   ├── value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   │   └── attribute.susceptible_to_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+   └── value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+       └── attribute.infected_with_lower_respiratory_infections.excess_mortality_rate  (1 direct branch hidden)
+
+Pass ``depth=None`` to walk a chain to its end.
+
+.. testcode::
+
+   sim.print_dependencies("child_wasting.exposure", direction="uses", depth=None)
+
+.. testoutput::
+
+   attribute.child_wasting.exposure
+   ├── attribute.child_wasting.proportion_exposed
+   │   ├── attribute.child_wasting.base_proportion_exposed
+   │   └── value_modifier.child_wasting.proportion_exposed.1.treatment_intervention.sqlns.child_wasting.proportion_exposed.intervention_effect
+   │       └── attribute.sqlns.effect_size
+   └── attribute.child_wasting_propensity
+       └── column.child_wasting_propensity
+           └── initializer.5.risk.child_wasting.initialize_propensity
+               └── stream.child_wasting
+                   ├── attribute.age
+                   │   └── column.age
+                   │       └── initializer.1.base_population.initialize_entrance_time_and_age
+                   │           └── stream.age_initialization
+                   └── attribute.entrance_time
+                       └── column.entrance_time
+                           └── initializer.1.base_population.initialize_entrance_time_and_age  (expanded above)
+
+.. note::
+
+    The dependency tree includes columns, initializers, and streams despite those
+    being excluded from the results of a 
+    :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
+    call. These are included here because they are part of the dependency graph
+    and so are relevant to understanding what a resource uses and what uses it.
+
+The resource graph is a directed acyclic graph rather than a tree, so a resource
+can be reached along more than one path. e.g., in the output above,
+``initializer.1.base_population.initialize_entrance_time_and_age`` is reached through
+both ``attribute.age`` and ``attribute.entrance_time``. If a resource exists in
+more than one branch and also includes its own children, only the first branch is
+unrolled; any subsequent branches that reach it are marked ``(expanded above)``.
+
+A resource with nothing on the side you asked about reports as ``(none)``.
+
+.. testcode::
+
+   sim.print_dependencies("mortality_rate", "used-by")
+
+.. testoutput::
+
+   attribute.mortality_rate
+       (none)
+
+The first argument, ``resource``, takes a bare name, a full resource id such as
+``"attribute.mortality_rate"``, or a :class:`~vivarium.engine.framework.resource.resource.Resource`
+object. Most private columns share a name with an attribute, so a bare name that
+reaches both is refused instead of resolved to one of them.
+
+.. testcode::
+
+   try:
+       sim.print_dependencies("age", "uses")
+   except ValueError as error:
+       print(error)
+
+.. testoutput::
+
+   'age' matches more than one resource. Use one of: 'attribute.age', 'column.age'.
+
+Getting the dependencies as objects
+-----------------------------------
+
+The tree is for reading. To work with a resource object itself, you can explicitly
+fetch it via the appropriate method or use 
+:meth:`~vivarium.interactive.simulation.Simulation.get_dependencies`
+to get a list of all *direct* (depth=1) dependencies of a resource.
+
+.. testcode::
+
+   for resource in sim.get_dependencies("mortality_rate", direction="uses"):
+       print(resource.resource_id)
+
+.. testoutput::
+
+   lookup_table.mortality.mortality_rate
+   value_modifier.mortality_rate.1.disease_model.lower_respiratory_infections.delete_cause_specific_mortality
+   value_modifier.mortality_rate.2.disease_state.susceptible_to_lower_respiratory_infections.add_in_excess_mortality
+   value_modifier.mortality_rate.3.disease_state.infected_with_lower_respiratory_infections.add_in_excess_mortality
+
+Unlike :meth:`~vivarium.interactive.simulation.Simulation.print_dependencies`,
+this will not return columns, randomness streams, and initializers (the same types
+a :meth:`~vivarium.interactive.simulation.Simulation.find_resources`
+call omits).
+
+.. _interactive_results:
+
+Observed results
+----------------
+
+While the state table is always available for inspection in an interactive
+context (via :meth:`~vivarium.interactive.simulation.Simulation.get_population`),
+results are not observed by default. Any
+:class:`observers <vivarium.engine.framework.results.observer.Observer>` the
+model declares are still registered and still maintain their own state-table
+columns; only the per-step results gathering is switched off. Refer to the
+:ref:`results system concept page <results_concept>` for more details about
+observers and observations.
+
+.. testcode::
+
+    from vivarium.interactive import Simulation
+    from vivarium.engine.examples.disease_model import get_model_specification_path
+
+    sim = Simulation(get_model_specification_path())
+    sim.take_steps(10)
+    print(sim.get_results())
+
+.. testoutput::
+
+    {}
+
+Pass ``observe=True`` to collect them:
+
+.. code-block:: python
+
+    sim = Simulation(get_model_specification_path(), observe=True)
+    sim.take_steps(10)
+    for metric, results in sim.get_results().items():
+        print(metric)
+        print(results)
+
+::
+
+    dead
+      stratification  value
+    0            all   15.0
+    ylls
+      stratification        value
+    0            all  1291.333257
+
+.. testcode::
+    :hide:
+
+    from datetime import timedelta
+
+    from vivarium.interactive import Simulation
+    from vivarium.engine.examples.disease_model import get_model_specification_path
+    from vivarium.engine.framework.utilities import from_yearly
+    from vivarium.fuzzy_checker import FuzzyChecker
+
+    fuzzy_checker = FuzzyChecker()
+
+    sim = Simulation(get_model_specification_path(), observe=True)
+    n_steps = 10
+    sim.take_steps(n_steps)
+
+    results = sim.get_results()
+    population_size = sim.configuration.population.population_size
+    deaths = int(results["dead"]["value"].iloc[0])
+    ylls = results["ylls"]["value"].iloc[0]
+
+    # Calibrate deaths against the configured rates. Susceptible simulants die
+    # at the background rate less the LRI CSMR, which DiseaseModel approximates
+    # as incidence times case fatality. The EMR of the few infected simulants
+    # adds well under one expected death here, so the target leaves it out.
+    config = sim.configuration
+    infected = "infected_with_lower_respiratory_infections"
+    incidence = config[
+        f"disease_transition.{infected}.incidence_rate"
+    ].data_sources.incidence_rate
+    remission = config[
+        f"disease_transition.{infected}.remission_rate"
+    ].data_sources.remission_rate
+    emr = config[f"disease_state.{infected}"].data_sources.excess_mortality_rate
+    csmr = incidence * emr / (emr + remission)
+    background = config.mortality.data_sources.mortality_rate - csmr
+    step_probability = from_yearly(background, timedelta(days=config.time.step_size))
+    fuzzy_checker.assert_proportion(
+        deaths,
+        population_size,
+        1 - (1 - step_probability) ** n_steps,
+        name="exploration_tutorial_deaths",
+    )
+
+    # YLLs are a sum of years, not a proportion, so the fuzzy checker does not
+    # apply. Every death contributes life_expectancy minus the simulant's age,
+    # and simulants are aged 0 to age_end, which bounds the per-death value.
+    life_expectancy = sim.configuration.mortality.life_expectancy
+    age_end = sim.configuration.population.age_end
+    assert life_expectancy - age_end < ylls / deaths <= life_expectancy
+
+We see above that there are two results being observed in this simulation:
+the total number of dead simulants and the total years of lives lost (ylls).
+Indeed, we see that there are two Observers registered in this simulation:
+
+.. testcode::
+
+    print([component for component in sim.list_components() if "observer" in component])
+
+.. testoutput::
+
+    ['deaths_observer', 'ylls_observer']
+
+Defaulting to *not* observing results is a deliberate difference from a
+command-line run, which *always* observes. Typically, interactive contexts
+are used for inspecting the state table and pipelines and so there is no need
+to spend time observing results.
+
+Note that because the observers' listeners are registered during setup,
+``observe`` has to be decided when the ``Simulation`` is constructed; it
+cannot be changed during a simulation.
+
+Case study #1: population epidemiology
+--------------------------------------
+
+In this case study, we're going to put together and examine an individual-based
+epidemiology model from a bunch of pre-constructed parts. We'll start out
+rather mechanically, just showing how to set up and run a simulation and pull
+out interesting data. As we go on, we'll talk about what sort of results
+we should expect from the structure of the model and how we can verify those
+expectations.
+
+Checking out the configuration
+++++++++++++++++++++++++++++++
+
+One of the things we might want to look at is the simulation
+:term:`configuration <Configuration>`. Typically, a
+:term:`model specification <Model Specification>` encodes some configuration
+information, but leaves many things set to defaults. We can see what's in the
+configuration by simply printing it.
+
+.. testsetup:: configuration
+
+    from vivarium.interactive import Simulation
+    from vivarium.engine.examples.disease_model import get_model_specification_path
+
+    sim = Simulation(get_model_specification_path())
+
+    del sim.configuration['input_data']
+    del sim.configuration['stratification']['excluded_categories']
+
+.. testcode:: configuration
+
+   print(sim.configuration)
+
+.. testoutput:: configuration
+
+    randomness:
+        key_columns:
+            model_override: ['entrance_time', 'age']
+        map_size:
+            component_configs: 1000000
+        random_seed:
+            component_configs: 0
+        additional_seed:
+            component_configs: None
+        rate_conversion_type:
+            component_configs: linear
+    time:
+        start:
+            year:
+                model_override: 2022
+            month:
+                model_override: 1
+            day:
+                model_override: 1
+        end:
+            year:
+                model_override: 2026
+            month:
+                model_override: 12
+            day:
+                model_override: 31
+        step_size:
+            model_override: 0.5
+        standard_step_size:
+            component_configs: None
+    population:
+        population_size:
+            model_override: 100000
+        age_start:
+            model_override: 0
+        age_end:
+            model_override: 5
+    mortality:
+        data_sources:
+            mortality_rate:
+                model_override: 0.0114
+        life_expectancy:
+            model_override: 88.9
+    disease_state.infected_with_lower_respiratory_infections:
+        data_sources:
+            excess_mortality_rate:
+                model_override: 0.06
+            initialization_weights:
+                component_configs: 0.0
+    disease_transition.infected_with_lower_respiratory_infections.incidence_rate:
+        data_sources:
+            incidence_rate:
+                model_override: 0.871
+    disease_transition.infected_with_lower_respiratory_infections.remission_rate:
+        data_sources:
+            remission_rate:
+                model_override: 45.1
+    child_wasting:
+        proportion_exposed:
+            model_override: 0.0914
+    effect_of_child_wasting_on_infected_with_lower_respiratory_infections.incidence_rate:
+        relative_risk:
+            model_override: 4.63
+    sqlns:
+        effect_size:
+            model_override: 0.18
+    interpolation:
+        order:
+            component_configs: 0
+        validate:
+            component_configs: True
+        extrapolate:
+            component_configs: True
+    stratification:
+        default:
+            component_configs: []
+        deaths:
+            exclude:
+                component_configs: []
+            include:
+                component_configs: []
+        ylls:
+            exclude:
+                component_configs: []
+            include:
+                component_configs: []
+    disease_state.susceptible_to_lower_respiratory_infections:
+        data_sources:
+            initialization_weights:
+                component_configs: 1.0
+            excess_mortality_rate:
+                component_configs: 0.0
+
+
+What do we see here? The configuration is *hierarchical*. There are a set of
+top level *keys* that define named subsets of configuration data. We can access
+just those subsets if we like.
+
+.. testcode::
+
+    print(sim.configuration.randomness)
+
+.. testoutput::
+
+    key_columns:
+        model_override: ['entrance_time', 'age']
+    map_size:
+        component_configs: 1000000
+    random_seed:
+        component_configs: 0
+    additional_seed:
+        component_configs: None
+    rate_conversion_type:
+        component_configs: linear
+
+This randomness subset of configuration data contains more keys. All of the keys
+in our example here (key_columns, map_size, random_seed, additional_seed,
+and rate_conversion_type) point directly to values. We can access these values from the simulation
+as well.
+
+.. testcode::
+
+    print(sim.configuration.randomness.key_columns)
+    print(sim.configuration.randomness.map_size)
+    print(sim.configuration.randomness.random_seed)
+    print(sim.configuration.randomness.additional_seed)
+    print(sim.configuration.randomness.rate_conversion_type)
+
+
+.. testoutput::
+
+    ['entrance_time', 'age']
+    1000000
+    0
+    None
+    linear
+
+.. note::
+
+    It appears that there should be one more layer of keys (``component_configs``
+    or ``model_override``). This is a byproduct of the fact that the simulation
+    configuration is a :class:`~vivarium.config_tree.main.ConfigTree`; those
+    "hidden" keys reflect a priority level in the way the simulation configuration
+    is managed. ``component_configs`` tells us that the corresponding values
+    were set by a simulation component's ``configuration_defaults``, while
+    ``model_override`` tells us that a model specification file set the value.
+
+If you're trying to debug issues, you may want more information than this. You
+can also type ``repr(sim.configuration)`` (this is the equivalent of evaluating
+``sim.configuration`` in a jupyter notebook or ipython cell). This will
+give you considerable information about where each configuration value was
+set and at what priority level. You can read more about how the
+configuration works in the
+:ref:`configuration concept section <configuration_concept>`
+
+.. _frozen_configuration:
+
+One final note: because the simulation has already been setup, you can no longer
+modify the configuration. You must modify the configuration prior to 
+constructing the ``Simulation``, or by constructing it via
+`sim = Simulation(..., setup=False)` and then calling `sim.setup()`
+when ready to proceed.
+
+.. testcode::
+
+    from vivarium.config_tree import ConfigurationError
+
+    try:
+        sim.configuration.randomness.random_seed = 5
+    except ConfigurationError:
+        print("Can't update configuration after setup")
+
+.. testoutput::
+
+    Can't update configuration after setup
+
+Looking at the simulation population
+++++++++++++++++++++++++++++++++++++
+
+Another interesting thing to look at at the beginning of the simulation is
+your starting population.
+
+.. code-block:: python
+
+    pop = sim.get_population(
+        [
+            "age",
+            "is_alive",
+            "entrance_time",
+            "lower_respiratory_infections",
+            "child_wasting_propensity",
+        ]
+    )
+    print(pop.head())
+
+::
+
+            age  is_alive       entrance_time                 lower_respiratory_infections  child_wasting_propensity
+    0  1.721361      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.979461
+    1  2.745364      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.170346
+    2  0.524944      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.593326
+    3  2.912412      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.725294
+    4  1.395594      True 2021-12-31 12:00:00  susceptible_to_lower_respiratory_infections                  0.724847
+
+This gives you a ``pandas.DataFrame`` representing your starting population.
+You can use it to check all sorts of characteristics about individuals or
+the population as a whole.
+
+For example, summary statistics give you a quick look at the population's
+demographics (your exact values will vary with the random draws):
+
+.. code-block:: python
+
+    pop = sim.get_population(["age", "sex"])
+    print(pop.age.describe())
+    print(pop.sex.value_counts())
+
+::
+
+    count    100000.000000
+    mean          2.504026
+    std           1.441763
+    min           0.013709
+    25%           1.255798
+    50%           2.501152
+    75%           3.744254
+    max           5.013655
+    Name: age, dtype: float64
+    sex
+    Female    50135
+    Male      49865
+    Name: count, dtype: int64
+
+.. testcode::
+    :hide:
+
+    fresh = Simulation(get_model_specification_path())
+
+    pop = fresh.get_population(
+        [
+            "age",
+            "sex",
+            "is_alive",
+            "entrance_time",
+            "lower_respiratory_infections",
+            "child_wasting_propensity",
+        ]
+    )
+    assert len(pop) == 100_000
+    assert pop["age"].between(0, 5).all()
+    assert pop["is_alive"].all()
+    assert (
+        pop["lower_respiratory_infections"]
+        == "susceptible_to_lower_respiratory_infections"
+    ).all()
+    assert pop["entrance_time"].nunique() == 1
+    assert set(pop["sex"]) == {"Female", "Male"}
+    from vivarium.fuzzy_checker import FuzzyChecker
+
+    FuzzyChecker().assert_proportion(
+        int(pop["sex"].eq("Female").sum()), len(pop), 0.5, name="tutorial_sex_split"
+    )
+    # Propensities are uniform on [0, 1].
+    propensity = pop["child_wasting_propensity"]
+    assert propensity.between(0, 1).all()
+    assert abs(propensity.mean() - 0.5) < 5 * (1 / 12 / len(pop)) ** 0.5
+    assert abs(propensity.std() - (1 / 12) ** 0.5) < 0.005
+
+
+Understanding the simulation data
++++++++++++++++++++++++++++++++++
+
+Our model starts with a bunch of people with uniformly distributed ages and
+sexes. They march through time half a day at a time, set by ``step_size`` in
+the ``time`` block of the configuration shown above. On each step for each
+person, the simulation will ask and answer several questions: Did they die?
+Did they get sick? If they were sick, did they recover? Are they exposed to
+any risks? At the end we'll examine how many people died and compare that with
+a theoretical life expectancy. Later, we'll consider two simulations that differ
+only by the presence of a new intervention and examine how effective that
+intervention is.
+
+.. todo::
+   Show how to understand the starting population from both the configuration
+   and the population state table. Show how to understand the simulation time
+   and how the clock progresses based on configuration parameters.
+
+
+Case Study #2: Boids
+--------------------
+
+.. todo::
+   Everything

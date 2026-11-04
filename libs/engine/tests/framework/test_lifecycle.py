@@ -52,26 +52,8 @@ class BumbleBee:
     def buzz(self, _event: Event) -> None:
         pass
 
-    def what_we_doin(self, _event: Event) -> None:
-        pass
-
     def __call__(self) -> str:
         return "On the way!"
-
-
-def sting(_event: Event) -> None:
-    pass
-
-
-def test_state_add_handlers() -> None:
-    a = LifeCycleState("a")
-    b = BumbleBee("Alice")
-    a.add_handlers([b.buzz, b.what_we_doin, sting])
-    assert a._handlers == [
-        "BumbleBee(Alice).buzz",
-        "BumbleBee(Alice).what_we_doin",
-        "Unbound function sting",
-    ]
 
 
 def test_phase_init_no_loop() -> None:
@@ -197,6 +179,16 @@ def test_lifecycle_get_states() -> None:
 
     with pytest.raises(LifeCycleError, match="non-existent phase"):
         lc.get_state_names("not_a_phase")
+
+
+def test_lifecycle_get_phase_names() -> None:
+    lc = LifeCycle()
+    # initialization is automatically added on instantiation
+    assert lc.get_phase_names() == ["initialization"]
+
+    for phase in ["phase_b", "phase_a", "phase_c"]:
+        lc.add_phase(phase, [f"{phase}_state"], loop=False)
+    assert lc.get_phase_names() == ["initialization", "phase_b", "phase_a", "phase_c"]
 
 
 def test_lifecycle_integration() -> None:
@@ -342,26 +334,6 @@ def test_lifecycle_manager_set_state_with_loop() -> None:
 
     with pytest.raises(LifeCycleError, match="Invalid transition"):
         lm.set_state("c")  # phase 2 does not permit loops
-
-
-def test_lifecycle_manager_add_handlers() -> None:
-    lm = LifeCycleManager()
-    lm.add_phase("phase1", ["a"])
-
-    init = lm.lifecycle.get_state(INITIALIZATION)
-    a = lm.lifecycle.get_state("a")
-
-    b = BumbleBee("Alice")
-
-    lm.add_handlers(INITIALIZATION, [b.buzz, b.what_we_doin, sting])
-    assert init._handlers == [
-        "BumbleBee(Alice).buzz",
-        "BumbleBee(Alice).what_we_doin",
-        "Unbound function sting",
-    ]
-
-    lm.add_handlers("a", [b.buzz])
-    assert a._handlers == ["BumbleBee(Alice).buzz"]
 
 
 def test_lifecycle_manager_add_constraint_fail() -> None:

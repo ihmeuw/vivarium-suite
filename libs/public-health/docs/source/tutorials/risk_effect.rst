@@ -16,7 +16,7 @@ For how simulants are assigned exposure values, see the :doc:`risk` tutorial.
 
    import numpy as np
    import pandas as pd
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect, NonLogLinearRiskEffect
    from vivarium.public_health.disease import *
    from vivarium.public_health.population import BasePopulation
@@ -57,7 +57,7 @@ To run any example in a standalone script, include all of these at the top:
 
 .. testcode::
 
-   from vivarium.engine import InteractiveContext
+   from vivarium.interactive import Simulation
    from vivarium.public_health.risks import Risk, RiskEffect
    from vivarium.public_health.disease import SI, SIS
    from vivarium.public_health.population import BasePopulation
@@ -111,8 +111,7 @@ The table below lists every data key used by the risk effect components.
      - ``risk_factor.{name}.tmred`` (single-row DataFrame)
      - (scalar record)
      - ``distribution``, ``min``, ``max``
-     - :class:`~vivarium.public_health.risks.effect.RiskEffect` (continuous),
-       :class:`~vivarium.public_health.risks.effect.NonLogLinearRiskEffect`
+     - :class:`~vivarium.public_health.risks.effect.RiskEffect` (continuous)
    * - ``risk_effect.{name}_on_{target}.data_sources.relative_risk_scalar``
      - ``risk_factor.{name}.relative_risk_scalar``
      - (scalar)
@@ -204,8 +203,7 @@ Any of these can be overridden with scalars in the simulation configuration:
 
 For dichotomous risks, all data sources can be overridden this way.
 Continuous risks add ``tmred`` and ``relative_risk_scalar``, which can be
-overridden the same way - see the `NonLogLinearRiskEffect`_ section for an
-example that supplies ``tmred`` through configuration.
+overridden the same way.
 
 
 RiskEffect
@@ -244,7 +242,7 @@ at a higher rate than unexposed simulants:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.test_risk"),
@@ -319,7 +317,7 @@ target rate independently:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[
            BasePopulation(),
            Risk("risk_factor.smoking"),
@@ -421,7 +419,7 @@ baseline is scaled down to compensate.
            },
            layer="override",
        )
-       sim = InteractiveContext(
+       sim = Simulation(
            components=[
                BasePopulation(),
                Risk("risk_factor.test_risk"),
@@ -464,9 +462,11 @@ individually interpolated RR based on their actual exposure level.
 
 The relative risk data must contain a numeric ``parameter`` column with
 exposure thresholds (typically 1000 values spanning the plausible range)
-and corresponding ``value`` entries. The component also requires TMRED
-(Theoretical Minimum-Risk Exposure Distribution) data, which defines the
-exposure level at which relative risk equals 1.
+and corresponding ``value`` entries. The relative risks are used as-is
+apart from being clipped up to ``MINIMUM_RELATIVE_RISK`` (1 by default;
+``None`` disables the clip), so they must be
+consistent with the supplied population attributable fraction data: the PAF
+must have been computed from the same clipped relative risks.
 
 
 Building relative risk data
@@ -502,9 +502,8 @@ Running with continuous exposure
 ``NonLogLinearRiskEffect`` requires a continuous exposure pipeline.
 Because it uses piecewise linear interpolation over numeric exposure
 values, we need a ``Risk`` subclass that produces numeric exposures
-rather than categorical ones. The risk effect's data - including
-``tmred`` - is supplied through its ``data_sources`` configuration, so
-no artifact is needed for it:
+rather than categorical ones. The risk effect's data is supplied through
+its ``data_sources`` configuration, so no artifact is needed for it:
 
 .. note::
 
@@ -515,10 +514,7 @@ no artifact is needed for it:
 
 .. note::
 
-   ``tmred`` is supplied as a single-row DataFrame (with ``distribution``,
-   ``min``, and ``max`` columns), which overrides the data source's default
-   artifact key; ``get_tmred`` then normalizes it to the dict its consumers
-   expect. We choose to write the affected cause's incidence rate to the
+   We choose to write the affected cause's incidence rate to the
    artifact here (via the internal ``sim._data`` API with ``setup=False``);
    see :doc:`the disease tutorial </tutorials/disease>` for how to configure
    disease data through configuration ``data_sources`` instead.
@@ -558,13 +554,6 @@ no artifact is needed for it:
        exposure_min=1, exposure_max=9, rr_min=1.0, rr_max=5.0
    )
 
-   # TMRED defines the exposure level where RR = 1. It is supplied as a
-   # single-row DataFrame so it can be set through configuration; with
-   # min=max=1, the TMREL is exactly 1.0.
-   tmred = pd.DataFrame(
-       {"distribution": ["uniform"], "min": [1], "max": [1], "inverted": [False]}
-   )
-
    risk = ContinuousExposureRisk("risk_factor.test_risk")
    effect = NonLogLinearRiskEffect(risk.name, "cause.test_cause.incidence_rate")
 
@@ -577,7 +566,6 @@ no artifact is needed for it:
            effect.name: {
                "data_sources": {
                    "relative_risk": rr_data,
-                   "tmred": tmred,
                    "population_attributable_fraction": 0,
                }
            },
@@ -585,7 +573,7 @@ no artifact is needed for it:
        layer="override",
    )
 
-   sim = InteractiveContext(
+   sim = Simulation(
        components=[BasePopulation(), risk, effect, SI("test_cause")],
        configuration=config,
        plugin_configuration=base_plugins,
@@ -637,10 +625,8 @@ Configuration Summary
        ``risk_factor.{name}.population_attributable_fraction``
    * - ``NonLogLinearRiskEffect``
      - ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.relative_risk``,
-       ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``,
-       ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.tmred``
+       ``non_log_linear_risk_effect.{name}_on_{target}.data_sources.population_attributable_fraction``
      - ``risk_factor.{name}.relative_risk``,
-       ``risk_factor.{name}.tmred``,
        ``risk_factor.{name}.population_attributable_fraction``
 
 .. note::

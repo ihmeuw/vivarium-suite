@@ -30,6 +30,14 @@ endif
 # A package with no `[project].name` must fail rather than fall back to a directory name.
 DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 
+# Sphinx program and docs folders used by `build-docs` and `test-docs`; `deploy-docs`
+# also uses DOCS_BUILD_DIR.
+# The defaults match the monorepo libraries; a repo with another docs layout overrides
+# them in its own Makefile.
+SPHINXBUILD ?= sphinx-build
+DOCS_SOURCE_DIR ?= docs/source
+DOCS_BUILD_DIR ?= docs/build
+
 # Build the editable_mode=compat config-settings flag only when the distribution name was parsed from [project].
 # NOTE: editable_mode=compat: produces a classic .pth-based editable install
 #   (sys.path entry pointing at src/) instead of the PEP 660 default
@@ -46,7 +54,7 @@ DOCS_NAME ?= $(DIST_NAME_FROM_PROJECT)
 #   "Unknown option editable_mode").
 EDITABLE_COMPAT_FLAG := $(if $(DIST_NAME_FROM_PROJECT),--config-settings-package $(DIST_NAME_FROM_PROJECT):editable_mode=compat,)
 
-PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.rst | head -n 1 | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+')
+PACKAGE_VERSION = $(shell grep -Eo '[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?' CHANGELOG.rst | head -n 1)
 
 # Use this URL to pull IHME Python packages and deploy this package to PyPi.
 # Override with `make ... IHME_PYPI=` (empty) when running in environments that
@@ -86,7 +94,8 @@ help: # Curated help message
 	echo; \
 	echo "build-env                     Create a new environment with installed packages"; \
 	echo "check                         Run development checks"; \
-	echo "                              (isort, black, mypy, tests, docs)"; \
+	echo "                              (isort, black, mypy, tests, docs);"; \
+	echo "                              runs every step and summarizes failures"; \
 	echo "format                        Format code (isort and black)"; \
 	echo "manual-deploy-artifactory     Deploy package; only use if Jenkins deploy fails"; \
 	echo "model <command> [args]        Run model lineage tool (e.g., make model tree,"; \
@@ -140,6 +149,8 @@ debug: # Print debug information
 	@echo "PACKAGE_DIR:                      ${PACKAGE_DIR}"
 	@echo "PACKAGE_VERSION:                  ${PACKAGE_VERSION}"
 	@echo "DOCS_NAME:                        ${DOCS_NAME}"
+	@echo "DOCS_SOURCE_DIR:                  ${DOCS_SOURCE_DIR}"
+	@echo "DOCS_BUILD_DIR:                   ${DOCS_BUILD_DIR}"
 	@echo "PYPI_ARTIFACTORY_CREDENTIALS_USR: ${PYPI_ARTIFACTORY_CREDENTIALS_USR} "
 	@echo
 	@echo "vivarium_build_utils version:     $(shell python -c "import importlib.metadata; print(importlib.metadata.version('vivarium_build_utils'))" 2>/dev/null || echo "unknown")"
@@ -192,9 +203,17 @@ setup-slack:
 .PHONY: lint
 lint: # Check for formatting errors
 # NOTE: This is not actually running isort and black but rather just checking the --diffs.
-	@echo
-	@echo "Running isort and black"
+# Runs both checks even if isort fails, so one run shows every formatting problem.
+# Pass fail_fast=1 (or FAIL_FAST=1) to stop at the first failure.
+	@python -m vivarium.build_utils.run_steps lint-isort lint-black
+
+# Steps of `lint`; left out of `make list` because `lint` is the entry point.
+.PHONY: lint-isort
+lint-isort:
 	isort $(LOCATIONS) --check --verbose --only-modified --diff
+
+.PHONY: lint-black
+lint-black:
 	black $(LOCATIONS) --check --diff
 
 .PHONY: mypy
@@ -213,25 +232,29 @@ mypy-if-typed: # Run mypy only if a py.typed marker exists under src/
 
 .PHONY: build-docs
 build-docs: # Build documentation
-	@if [ -d docs/ ]; then \
-		rm -rf docs/build/; \
-		$(MAKE) -C docs/ html SPHINXOPTS="-T -W --keep-going"; \
+# Run when docs/ or DOCS_SOURCE_DIR exists: another layout under docs/ fails loudly
+# rather than skipping, and a DOCS_SOURCE_DIR outside docs/ still builds.
+	@if [ -d docs/ ] || [ -d $(DOCS_SOURCE_DIR) ]; then \
+		rm -rf $(DOCS_BUILD_DIR); \
+		$(SPHINXBUILD) -M html $(DOCS_SOURCE_DIR) $(DOCS_BUILD_DIR) -T -W --keep-going; \
 	else \
 		echo "No 'docs/' folder found - skipping."; \
 	fi
 
 .PHONY: test-docs
 test-docs: # Test documentation examples
-	@if [ -d docs/ ]; then \
-		$(MAKE) doctest -C docs/; \
+	@if [ -d docs/ ] || [ -d $(DOCS_SOURCE_DIR) ]; then \
+		$(SPHINXBUILD) -M doctest $(DOCS_SOURCE_DIR) $(DOCS_BUILD_DIR); \
 	else \
 		echo "No 'docs/' folder found - skipping."; \
 	fi
 
 .PHONY: validate-tag
-validate-tag: # Validate that current git tag matches CHANGELOG and is valid semver
-    # This is intended to be used only by github deploy workflows
-	@bash $(UTILS_DIR)resources/scripts/validate_tag_version.sh
+validate-tag: # Validate that the release tag matches CHANGELOG and is a valid version bump
+    # The GitHub release workflows set RELEASE_TAG or GITHUB_REF_NAME. Jenkins sets
+    # neither, so the tag defaults to the one tag-version creates.
+	@RELEASE_TAG="$${RELEASE_TAG:-$${GITHUB_REF_NAME:-${TAG_PREFIX}v${PACKAGE_VERSION}}}" \
+		python -m vivarium.build_utils.release_version validate-tag
 
 .PHONY: tag-version
 tag-version: # Tag current version and push to git
@@ -243,6 +266,19 @@ tag-version: # Tag current version and push to git
 	else \
 		git tag -a "$$tag" -m "Release $$tag"; \
 		git push origin "$$tag"; \
+	fi
+
+.PHONY: check-release-tag
+check-release-tag: # Fail if this version was already released from another commit
+    # Jenkins runs this before tag-version. tag-version skips an existing tag so a
+    # FORCE_DEPLOY redrive of the released commit works, but a later commit that
+    # didn't bump CHANGELOG.rst must not re-release the same version.
+	@tag="${TAG_PREFIX}v${PACKAGE_VERSION}"; \
+	if tagged=$$(git rev-parse -q --verify "refs/tags/$$tag^{commit}"); then \
+		if [ "$$tagged" != "$$(git rev-parse HEAD)" ]; then \
+			echo "ERROR: $$tag was already released from $$tagged; bump the CHANGELOG.rst version."; \
+			exit 1; \
+		fi; \
 	fi
 
 .PHONY: build-package
@@ -264,9 +300,11 @@ deploy-docs: # Deploy documentation to shared server
 	@[ "${DOCS_NAME}" ] && echo "" > /dev/null || ( echo "DOCS_NAME is empty; add a [project] name to pyproject.toml or pass DOCS_NAME explicitly"; exit 1 )
 	@case "${DOCS_NAME}" in *[@/]*) echo "DOCS_NAME '${DOCS_NAME}' looks like a Jenkins workspace name rather than a package name; refusing to publish"; exit 1 ;; esac
 	mkdir -m 0775 -p ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
-	cp -R ./docs/build/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
+	cp -R $(DOCS_BUILD_DIR)/html/* ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
-	cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current
+    # A beta's docs are published under its version but never become "current".
+	@case "${PACKAGE_VERSION}" in *b*) echo "Beta ${PACKAGE_VERSION}: not updating the 'current' link." ;; \
+		*) cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsfv ${PACKAGE_VERSION} current ;; esac
 
 .PHONY: clean
 clean: # Clean build artifacts and temporary files
@@ -280,24 +318,9 @@ clean: # Clean build artifacts and temporary files
 
 .PHONY: check
 check: # Run development checks
-	make lint
-# 	Run mypy if any py.typed marker exists under src/ (see mypy-if-typed)
-	@echo
-	make mypy-if-typed
-# 	Run all fast tests
-	@echo
-	@echo "Running fast tests"
-	make test-all
-# 	Build docs
-	@echo
-	@echo "Building documentation"
-	make build-docs
-# 	Test docs
-	@echo
-	@echo "Running doctests"
-	make test-docs
-	@echo
-	@echo "*** All checks passed successfully! ***"
+# 	Runs every step even if an earlier one fails, then prints which steps failed.
+# 	Pass fail_fast=1 (or FAIL_FAST=1) to stop at the first failure.
+	@python -m vivarium.build_utils.run_steps lint mypy-if-typed test-all build-docs test-docs
 
 .PHONY: format
 format: # Format code (isort and black)

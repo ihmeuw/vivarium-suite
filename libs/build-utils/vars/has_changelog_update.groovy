@@ -14,13 +14,13 @@ def call() {
     if (changelogModified == 'true') {
         // Extract only the first version number from the previous changelog
         def previousVersion = sh(
-            script: "git show ${previousCommit}:CHANGELOG.rst | grep -E '[0-9]+\\.[0-9]+\\.[0-9]+' | head -1 | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo ''",
+            script: "git show ${previousCommit}:CHANGELOG.rst | grep -E '[0-9]+\\.[0-9]+\\.[0-9]+(b[0-9]+)?' | head -1 | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+(b[0-9]+)?' || echo ''",
             returnStdout: true
         ).trim()
         
         // Extract only the first version number from the current changelog
         def currentVersion = sh(
-            script: "git show ${currentCommit}:CHANGELOG.rst | grep -E '[0-9]+\\.[0-9]+\\.[0-9]+' | head -1 | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+' || echo ''",
+            script: "git show ${currentCommit}:CHANGELOG.rst | grep -E '[0-9]+\\.[0-9]+\\.[0-9]+(b[0-9]+)?' | head -1 | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+(b[0-9]+)?' || echo ''",
             returnStdout: true
         ).trim()
         
@@ -71,7 +71,7 @@ def call() {
         echo "Changelog date validation passed: ${changelogDate}"
         return true
     } else {
-        echo "ERROR: CHANGELOG.rst was not modified in this commit"
+        echo "ERROR: CHANGELOG.rst was not modified since base commit ${previousCommit}"
         return false
     }
 }

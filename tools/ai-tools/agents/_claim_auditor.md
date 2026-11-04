@@ -10,8 +10,8 @@ tools:
   - mcp__plugin_github_github__get_file_contents
   - mcp__plugin_github_github__list_branches
   - mcp__plugin_mcp-hub_mcp-hub__get_page
-  - mcp__plugin_mcp-jira_mcp-jira__get_issue
-  - mcp__plugin_mcp-jira_mcp-jira__search
+  - mcp__plugin_simsci_jira__get_issue
+  - mcp__plugin_simsci_jira__search
   - mcp__plugin_slack_slack__slack_read_channel
   - mcp__plugin_slack_slack__slack_search_channels
   - mcp__jenkins__getJob
@@ -93,3 +93,7 @@ counts: {ok: N, stale: N, unverifiable: N, unreachable: N}
 Omit `evidence`/`correction` for non-`stale` claims. If you cannot
 complete the audit at all, return `audited: no` with a one-line reason —
 never return an empty or partial result silently.
+
+The `correction` text becomes documentation that people read:
+
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.

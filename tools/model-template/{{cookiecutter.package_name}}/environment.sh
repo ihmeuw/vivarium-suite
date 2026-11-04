@@ -56,7 +56,11 @@ while getopts ":hsflt:" option; do
    esac
 done
 # Parse environment name
-env_name=$(basename "`pwd`")
+env_name=$(make -s print-dist-name)
+if [[ -z "$env_name" ]]; then
+  echo "ERROR: could not determine the distribution name from pyproject.toml" >&2
+  return 1
+fi
 env_name+="_$env_type"
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
@@ -77,7 +81,7 @@ set -E
 
 if [[ "$use_shared" == "yes" ]]; then
   # Deactivate any active conda environments so only the venv is active
-  for i in $(seq ${CONDA_SHLVL}); do
+  for i in $(seq "${CONDA_SHLVL:-0}"); do
     conda deactivate
   done
 

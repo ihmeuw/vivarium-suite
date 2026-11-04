@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vivarium-cluster-tools"
-description = "A set of tools for running simulation using vivarium on cluster."
+description = "Shared cluster, Jobmon, logging and notification helpers for Vivarium tools."
 readme = "README.rst"
 requires-python = ">=3.11"
 license = {text = "BSD-3-Clause"}
@@ -28,12 +28,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,pyyaml,click,tables,loguru,pyarrow,requests]",
+    "vivarium-dependencies[click,loguru,requests]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
-    "vivarium-engine>=5.1.0",
-    "vivarium-config-tree>=5.0.0",
-    "dill",
-    "psutil",
 ]
 
 [project.optional-dependencies]
@@ -47,22 +43,15 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
+docs = ["vivarium-dependencies[sphinx,ipython,matplotlib]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = [
     "vivarium-dependencies[lint]",
     "types-setuptools",
-    "types-psutil",
-    "pyarrow-stubs",
 ]
 dev = ["vivarium-cluster-tools[test,docs,interactive,lint,cluster]"]
 ci_github = ["vivarium-cluster-tools[test,docs,lint]"]
 ci_jenkins = ["vivarium-cluster-tools[ci_github,cluster]"]
-
-[project.scripts]
-psimulate = "vivarium.cluster_tools.psimulate.cli:psimulate"
-dagger = "vivarium.cluster_tools.dagger.cli:dagger"
-vipin = "vivarium.cluster_tools.vipin.cli:vipin"
 
 [project.urls]
 Homepage = "https://github.com/ihmeuw/vivarium-suite"
@@ -124,7 +113,7 @@ explicit_package_bases = true
 # jobmon is in [cluster], which [ci_github] doesn't install — see the
 # rationale on the `cluster` extra above. Mute "Cannot find implementation"
 # so mypy can still check the rest of the source on non-cluster envs.
-module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
+module = ["jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
 
 [tool.coverage.run]

@@ -51,7 +51,6 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "sphinx_click.ext",
     "matplotlib.sphinxext.plot_directive",
 ]
 
@@ -181,7 +180,7 @@ texinfo_documents = [
         f"{project} Documentation",
         author,
         f"{project}",
-        "A set of tools for running simulation using vivarium on cluster.",
+        "Shared cluster, Jobmon, logging and notification helpers for Vivarium tools.",
         "Miscellaneous",
     ),
 ]
@@ -189,10 +188,6 @@ texinfo_documents = [
 # Other docs we can link to
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3/", None),
-    "pandas": ("https://pandas.pydata.org/docs/", None),
-    "tables": ("https://www.pytables.org/", None),
-    "numpy": ("https://numpy.org/doc/stable/", None),
-    "vivarium_engine": ("https://vivarium-engine.readthedocs.io/en/latest/", None),
     "click": ("https://click.palletsprojects.com/en/latest/", None),
 }
 

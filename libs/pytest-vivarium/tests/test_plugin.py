@@ -232,3 +232,32 @@ def test_xdist_auto_num_workers_end_to_end(pytester: pytest.Pytester) -> None:
     result = pytester.runpytest_subprocess("-n", "auto")
     assert result.ret == 0
     result.stdout.fnmatch_lines(["*vivarium xdist auto-workers:*"])
+
+
+def test_xdist_auto_num_workers_takes_precedence_over_xdist_default(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under ``-n auto`` the plugin's worker count is used even when xdist's own hook would run first."""
+    # pluggy calls the most recently registered implementation first, so loading xdist
+    # after this plugin puts xdist's default ahead of ours unless ours is tryfirst.
+    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
+    # xdist's default reads this, so it would pick 2 workers.
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "2")
+    pytester.makeconftest(
+        """
+        from pytest_vivarium import plugin
+
+        plugin._auto_num_workers = lambda: 3
+        """
+    )
+    pytester.makepyfile(
+        """
+        def test_one() -> None:
+            assert True
+        """
+    )
+    result = pytester.runpytest_subprocess(
+        "-p", "pytest_vivarium.plugin", "-p", "xdist.plugin", "-n", "auto"
+    )
+    assert result.ret == 0
+    result.stdout.fnmatch_lines(["3 workers [[]1 item[]]"])

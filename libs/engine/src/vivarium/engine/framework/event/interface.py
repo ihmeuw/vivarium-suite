@@ -38,16 +38,19 @@ class EventInterface(Interface):
         Parameters
         ----------
         event_name
-            The name of the ``Event`` the requested emitter will emit.
-            Users may provide their own named ``Events`` by requesting an emitter
-            with this function, but should do so with caution as it makes time
-            much more difficult to think about.
+            The name of the ``Event`` the requested emitter will emit. It must
+            be a life cycle state.
 
         Returns
         -------
             An emitter for the named ``Event``. The emitter should be called by
             the requesting component at the appropriate point in the simulation
             lifecycle.
+
+        Raises
+        ------
+        LifeCycleError
+            If the event name is not a life cycle state.
         """
         return self._manager.get_emitter(event_name)
 
@@ -74,7 +77,7 @@ class EventInterface(Interface):
         Parameters
         ----------
         event_name
-            The name of the ``Event`` to listen for.
+            The name of the ``Event`` to listen for. It must be a life cycle state.
         listener
             The callable to be invoked any time an ``Event`` with the given
             name is emitted.
@@ -88,5 +91,10 @@ class EventInterface(Interface):
             state table (the state of the simulation at the beginning of the
             next time step should only depend on the current state of the
             system).
+
+        Raises
+        ------
+        LifeCycleError
+            If the event name is not a life cycle state.
         """
         self._manager.register_listener(event_name, listener, priority)

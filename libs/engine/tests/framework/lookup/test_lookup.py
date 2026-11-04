@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import re
 import warnings
 from typing import Any, cast
 
@@ -9,18 +10,29 @@ import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
 from vivarium.config_tree import ConfigTree
+from vivarium.interactive import Simulation
 
 from tests.helpers import LookupCreator
-from vivarium.engine import Component, InteractiveContext
+from vivarium.engine import Component
 from vivarium.engine.framework.configuration import build_simulation_configuration
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.framework.lookup.interface import LookupTableInterface
 from vivarium.engine.framework.lookup.manager import LookupTableManager
-from vivarium.engine.framework.lookup.table import LookupTable, _ColumnSchema
+from vivarium.engine.framework.lookup.table import (
+    FLAT_DATAFRAME_DEPRECATION_MESSAGE,
+    MAPPING_INPUT_DEPRECATION_MESSAGE,
+    LookupTable,
+    _ColumnSchema,
+)
 from vivarium.engine.testing_utilities import TestPopulation, build_table, metadata
 from vivarium.engine.types import DataFrameMapping, LookupTableData, ScalarValue
+
+_LOOKUP_INPUT_DEPRECATION = "|".join(
+    re.escape(message)
+    for message in (FLAT_DATAFRAME_DEPRECATION_MESSAGE, MAPPING_INPUT_DEPRECATION_MESSAGE)
+)
 
 
 @pytest.fixture
@@ -28,7 +40,7 @@ def lookup_manager(mocker: MockerFixture) -> LookupTableManager:
     """A ``LookupTableManager`` with the builder-supplied collaborators mocked.
 
     Suitable for tests that drive ``manager._build_table`` directly without
-    standing up an entire ``InteractiveContext``.
+    standing up an entire ``Simulation``.
     """
     manager = LookupTableManager()
     manager.clock = mocker.Mock()
@@ -119,7 +131,7 @@ def test_interpolated_tables(base_config: ConfigTree) -> None:
     )  # the results we're checking later assume interp order 1
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager.build_table(years_df, "", value_columns=())
     age_table = manager.build_table(ages_df, "", value_columns=())
@@ -172,7 +184,7 @@ def test_interpolated_tables_without_uninterpolated_columns(
     )  # the results we're checking later assume interp order 1
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager.build_table(years_df, "", value_columns=())
 
@@ -210,7 +222,7 @@ def test_interpolated_tables__exact_values_at_input_points(
     base_config.update({"population": {"population_size": 10000}})
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     years = manager._build_table(component, years_df, "", value_columns="value")
 
@@ -237,7 +249,7 @@ def test_interpolated_tables__only_categorical_parameters(
     base_config.update({"population": {"population_size": 10000}})
 
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     lookup_table = manager._build_table(component, input_data, "", value_columns="some_value")
 
@@ -258,7 +270,7 @@ def test_interpolated_table__continuous_and_multiple_categorical(
     value for every (sex, location) group when driven through the manager on a
     population index. Mirror ``test_interpolated_tables__only_categorical_parameters``
     for the categorical setup and ``test_interpolated_tables`` for the
-    age/year build_table + InteractiveContext setup.
+    age/year build_table + Simulation setup.
     """
     year_start = base_config.time.start.year
     year_end = base_config.time.end.year
@@ -287,7 +299,7 @@ def test_interpolated_table__continuous_and_multiple_categorical(
 
     base_config.update({"population": {"population_size": 10000}})
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     lookup_table = manager._build_table(component, data, "", value_columns="value")
 
@@ -315,7 +327,7 @@ def test_lookup_table_scalar_from_list(
     base_config: ConfigTree, data: list[ScalarValue] | tuple[ScalarValue, ...]
 ) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns=["a", "b"])(
         simulation.get_population_index()
@@ -332,7 +344,7 @@ def test_lookup_table_scalar_from_single_value(
     base_config: ConfigTree, data: ScalarValue
 ) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns="a")(
         simulation.get_population_index()
@@ -352,7 +364,7 @@ def test_lookup_table_interpolated_return_types(base_config: ConfigTree) -> None
         },
     )
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     table = manager._build_table(component, data, "", value_columns="value")(
         simulation.get_population_index()
@@ -385,7 +397,7 @@ class TestLookupTableResource:
         self, lookup_manager: LookupTableManager
     ) -> None:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(),
                 pd.DataFrame({"foo": [1, 2, 3], "bar": [4, 5, 6], "baz": [7, 8, 9]}),
@@ -414,7 +426,7 @@ class TestLookupTableResource:
             }
         )
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test_table", value_columns="baz"
             )
@@ -422,6 +434,16 @@ class TestLookupTableResource:
         assert table.name == "lookup_creator.test_table"
         assert table.resource_id == "lookup_table.lookup_creator.test_table"
         assert table.required_resources == ["attribute.foo", "attribute.bar"]
+
+    def test_repr_names_the_table(self, lookup_manager: LookupTableManager) -> None:
+        """Two tables in a list are told apart by their names, not their shared type."""
+        creator = LookupCreator()
+        first = lookup_manager._build_table(creator, 5, "first_table", value_columns="value")
+        second = lookup_manager._build_table(
+            creator, 5, "second_table", value_columns="value"
+        )
+        assert repr(first) == "LookupTable('lookup_creator.first_table')"
+        assert repr(second) == "LookupTable('lookup_creator.second_table')"
 
     def test_adding_resources(self, lookup_manager: LookupTableManager) -> None:
         component = LookupCreator()
@@ -451,7 +473,7 @@ class TestValidateBuildTableParameters:
         # value_columns + indexed guard (an empty Series qualifies as indexed).
         with pytest.raises(ValueError, match="supply some data"):
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
+                warnings.simplefilter("ignore", FutureWarning)
                 lookup_manager._build_table(LookupCreator(), data, "test", value_columns=None)
 
     def test_validate_flat_series_rejected(self, lookup_manager: LookupTableManager) -> None:
@@ -553,7 +575,7 @@ class TestValidateBuildTableParameters:
 
 def test__build_table_from_dict(base_config: ConfigTree) -> None:
     component = TestPopulation()
-    simulation = InteractiveContext(components=[component], configuration=base_config)
+    simulation = Simulation(components=[component], configuration=base_config)
     manager = simulation._tables
     # Both "b" groups share the same a bins: interpolation requires uniform bin
     # edges across categorical groups.
@@ -590,9 +612,7 @@ def test_uncreated_lookup_table_warning(
                 }
             }
 
-    InteractiveContext(
-        components=[ComponentWithUnusedLookupTable()], configuration=base_config
-    )
+    Simulation(components=[ComponentWithUnusedLookupTable()], configuration=base_config)
 
     # Check that the warning was logged at WARNING level
     warning_records = [record for record in caplog.records if record.levelname == "WARNING"]
@@ -946,7 +966,7 @@ class TestLookupTableSetData:
         """Create a simulation with all components, return components after post_setup."""
         components = self._make_components()
         components_dict = {c.name: c for c in components}
-        InteractiveContext(components=components, configuration=self._make_config())
+        Simulation(components=components, configuration=self._make_config())
         return components_dict
 
     @pytest.fixture(scope="class")
@@ -954,7 +974,7 @@ class TestLookupTableSetData:
         """Create a simulation with all components, run one time step, return components."""
         components = self._make_components()
         components_dict = {c.name: c for c in components}
-        sim = InteractiveContext(components=components, configuration=self._make_config())
+        sim = Simulation(components=components, configuration=self._make_config())
         sim.step()
         return components_dict
 
@@ -1172,7 +1192,9 @@ class TestIndexedInput:
         data = self._make_sex_rate_dataframe()
         # Should NOT emit the flat-data deprecation warning.
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.filterwarnings(
+                "error", message=_LOOKUP_INPUT_DEPRECATION, category=FutureWarning
+            )
             table = lookup_manager._build_table(
                 LookupCreator(), data, "test", value_columns=None
             )
@@ -1191,7 +1213,7 @@ class TestIndexedInput:
         self, lookup_manager: LookupTableManager
     ) -> None:
         """Passing a flat DataFrame through the public ``LookupTableInterface``
-        entry point emits exactly one ``DeprecationWarning`` pointing at the
+        entry point emits exactly one ``FutureWarning`` pointing at the
         user's call site."""
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
@@ -1199,7 +1221,12 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             interface.build_table(flat, "test", value_columns="value")
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [
+            r
+            for r in records
+            if issubclass(r.category, FutureWarning)
+            and re.match(_LOOKUP_INPUT_DEPRECATION, str(r.message))
+        ]
         assert len(deprecations) == 1
         assert "flat DataFrame" in str(deprecations[0].message)
         # The warning must point at the user's call site (this test file),
@@ -1226,7 +1253,9 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.filterwarnings(
+                "error", message=_LOOKUP_INPUT_DEPRECATION, category=FutureWarning
+            )
             interface.build_table(5, "test_scalar_vc", value_columns="value")
 
     def test_value_columns_none_for_scalar_uses_default(
@@ -1237,7 +1266,9 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.filterwarnings(
+                "error", message=_LOOKUP_INPUT_DEPRECATION, category=FutureWarning
+            )
             table = interface.build_table(5, "test_scalar_default", value_columns=None)
         assert list(table.value_columns) == ["value"]
 
@@ -1248,7 +1279,9 @@ class TestIndexedInput:
         lookup_manager._get_current_component.return_value = LookupCreator()  # type: ignore [attr-defined]
         interface = LookupTableInterface(lookup_manager)
         with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
+            warnings.filterwarnings(
+                "error", message=_LOOKUP_INPUT_DEPRECATION, category=FutureWarning
+            )
             interface.build_table([1, 2], "test_list_vc", value_columns=["a", "b"])
 
     def test_mapping_input_emits_deprecation_warning(
@@ -1266,7 +1299,12 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             interface.build_table(data, "test", value_columns="value")
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [
+            r
+            for r in records
+            if issubclass(r.category, FutureWarning)
+            and re.match(_LOOKUP_INPUT_DEPRECATION, str(r.message))
+        ]
         assert len(deprecations) == 1
         assert "Mapping" in str(deprecations[0].message)
         assert deprecations[0].filename == __file__
@@ -1287,7 +1325,12 @@ class TestIndexedInput:
         with warnings.catch_warnings(record=True) as records:
             warnings.simplefilter("always")
             table.set_data(flat)
-        deprecations = [r for r in records if issubclass(r.category, DeprecationWarning)]
+        deprecations = [
+            r
+            for r in records
+            if issubclass(r.category, FutureWarning)
+            and re.match(_LOOKUP_INPUT_DEPRECATION, str(r.message))
+        ]
         assert len(deprecations) == 1
         assert "flat DataFrame" in str(deprecations[0].message)
         # Verify stacklevel: the warning should point at this test file
@@ -1297,6 +1340,32 @@ class TestIndexedInput:
         # rather than silently rejecting it.
         assert isinstance(table.data, pd.DataFrame)
         assert sorted(table.data.columns) == sorted(flat.columns)
+
+    def test_set_data_recall_with_mapping_warns(
+        self, lookup_manager: LookupTableManager
+    ) -> None:
+        indexed = self._make_sex_age_dataframe()
+        table = lookup_manager._build_table(LookupCreator(), indexed, "t", value_columns=None)
+        data: DataFrameMapping = {
+            "sex": ["Female", "Female", "Male", "Male"],
+            "age_start": cast("list[ScalarValue]", [0.0, 50.0, 0.0, 50.0]),
+            "age_end": cast("list[ScalarValue]", [50.0, 125.0, 50.0, 125.0]),
+            "rate": cast("list[ScalarValue]", [0.1, 0.2, 0.3, 0.4]),
+        }
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            table.set_data(data)
+        deprecations = [
+            r
+            for r in records
+            if issubclass(r.category, FutureWarning)
+            and re.match(_LOOKUP_INPUT_DEPRECATION, str(r.message))
+        ]
+        assert len(deprecations) == 1
+        assert "Mapping" in str(deprecations[0].message)
+        assert deprecations[0].filename == __file__
+        assert isinstance(table.data, pd.DataFrame)
+        assert sorted(table.data.columns) == sorted(data)
 
     def test_flat_series_rejected(self, lookup_manager: LookupTableManager) -> None:
         flat_series = pd.Series([1, 2, 3])
@@ -1340,7 +1409,7 @@ class TestIndexedInput:
         """Calling an indexed-table on a population index returns properly
         shaped output with the population index AND the correct per-row values."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_rate_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1354,7 +1423,7 @@ class TestIndexedInput:
 
     def test_indexed_series_call_returns_series(self, base_config: ConfigTree) -> None:
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series([0.1, 0.2], index=self._sex_index(), name="rate")
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1372,7 +1441,7 @@ class TestIndexedInput:
         """End-to-end exercise of a Series whose row index is a MultiIndex.
         Covers the ``Series.to_frame().reset_index()`` reshape path."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series(
             [0.1, 0.2, 0.3, 0.4],
             index=pd.MultiIndex.from_tuples(
@@ -1398,7 +1467,7 @@ class TestIndexedInput:
         """End-to-end exercise of indexed input that combines a key column
         (``sex``) with a continuous binned parameter (``age``)."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_age_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         pop_index = simulation.get_population_index()
@@ -1413,7 +1482,7 @@ class TestIndexedInput:
         """Calling an indexed lookup on an empty index returns an empty result
         of the right type/shape."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = self._make_sex_rate_dataframe()
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         result = table(pd.Index([], dtype=int))
@@ -1428,7 +1497,7 @@ class TestIndexedInput:
         named, properly typed empty Series (exercises the squeeze+rename in
         ``LookupTable._call``)."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         data = pd.Series([0.1, 0.2], index=self._sex_index(), name="rate")
         table = simulation._tables._build_table(component, data, "", value_columns=None)
         result = table(pd.Index([], dtype=int))
@@ -1442,7 +1511,7 @@ class TestIndexedInput:
         """Column-MultiIndex return type: empty input must preserve the
         column ``MultiIndex`` tuples and level names on the empty result."""
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         cols = pd.MultiIndex.from_tuples(
             [("rate", "low"), ("rate", "high")], names=["measure", "level"]
         )
@@ -1463,7 +1532,7 @@ class TestIndexedInput:
         self, base_config: ConfigTree
     ) -> None:
         component = TestPopulation()
-        simulation = InteractiveContext(components=[component], configuration=base_config)
+        simulation = Simulation(components=[component], configuration=base_config)
         cols = pd.MultiIndex.from_tuples(
             [("rate", "low"), ("rate", "high")], names=["measure", "level"]
         )
@@ -1592,7 +1661,7 @@ class TestIndexedInput:
             }
         )
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
+            warnings.simplefilter("ignore", FutureWarning)
             table = lookup_manager._build_table(
                 LookupCreator(), flat, "t", value_columns="value"
             )

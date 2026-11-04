@@ -245,50 +245,6 @@ class AttributePipelineCreator(Component):
         )
 
 
-class NestedAttributeCreator(Component):
-    """A helper class to register nested pipelines."""
-
-    def setup(self, builder: Builder) -> None:
-
-        builder.value.register_attribute_producer(
-            "outer",
-            self.outer_source,
-        )
-
-        builder.population.register_initializer(
-            initializer=self.initialize_inner,
-            columns="inner",
-        )
-
-    def initialize_inner(self, pop_data: SimulantData) -> None:
-        inner = pd.Series([i % 3 for i in pop_data.index], index=pop_data.index, name="inner")
-        self.population_view.initialize(inner)
-
-    def outer_source(self, idx: pd.Index[int]) -> pd.DataFrame:
-        """Calls another pipeline to generate a dataframe"""
-        inner = self.population_view.get_frame(idx, "inner")
-        outer = pd.DataFrame(inner)
-        outer.rename(columns={"inner": "outer"}, inplace=True)
-        return pd.concat([inner, outer], axis=1)
-
-
-class NestedLookupCaller(NestedAttributeCreator):
-    """Like NestedAttributeCreator but outer_source calls a lookup table keyed on 'inner'."""
-
-    def setup(self, builder: Builder) -> None:
-        super().setup(builder)
-        self.inner_lookup = self.build_lookup_table(
-            builder,
-            "inner_lookup",
-            data_source=pd.DataFrame({"inner": [0, 1, 2], "value": [10, 20, 30]}),
-        )
-
-    def outer_source(self, idx: pd.Index[int]) -> pd.DataFrame:
-        """Call a lookup table inside a nested pipeline evaluation."""
-        looked_up = self.inner_lookup(idx)
-        return pd.DataFrame({"lookup_value": looked_up})
-
-
 class LookupCreator(ColumnCreator):
 
     CONFIGURATION_DEFAULTS = {

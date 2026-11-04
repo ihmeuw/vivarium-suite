@@ -88,9 +88,9 @@ Pipeline's branch source, which is the right default for most repos.
 Tag prefix
 ----------
 
-The ``TAG_PREFIX`` environment variable controls both ``make tag-version`` and
-``make validate-tag``. It must be set consistently in both targets, or
-``validate-tag`` will silently look at the wrong set of tags.
+The ``TAG_PREFIX`` environment variable controls ``make tag-version``,
+``make validate-tag``, and ``make check-release-tag``. It must be set consistently
+in all of them, or ``validate-tag`` will silently look at the wrong set of tags.
 
 - Standalone repos: leave unset. Tags are ``v<X.Y.Z>``.
 - Monorepo libs: set ``TAG_PREFIX=vivarium-<lib>-`` (e.g. ``vivarium-core-``).
@@ -98,6 +98,36 @@ The ``TAG_PREFIX`` environment variable controls both ``make tag-version`` and
 
 Release workflows that invoke ``make validate-tag`` or ``make tag-version``
 should export ``TAG_PREFIX`` before running them.
+
+Beta releases
+-------------
+
+A CHANGELOG entry of ``**X.Y.ZbN - MM/DD/YY**`` releases a beta, for example
+``**1.3.0b1 - 11/03/26**``. Beta is the only supported pre-release.
+``make validate-tag`` rejects other forms such as ``1.3.0a1``, ``1.3.0rc1``, and
+``1.3.0-beta.1``. It also checks the step from the versions already released:
+
+- final to final: one patch, minor, or major step, as before.
+- final to beta: ``b1`` of a version one step from the last final
+  (``1.2.0 -> 1.3.0b1``).
+- beta to beta: the next beta of the same version (``1.3.0b1 -> 1.3.0b2``).
+- beta to final: the final of that version (``1.3.0b2 -> 1.3.0``).
+
+A beta is not released after its final.
+
+The Jenkins deploy runs ``make validate-tag`` before ``make tag-version``. Jenkins
+sets no release tag, so the target checks the tag ``tag-version`` would create,
+``${TAG_PREFIX}v${PACKAGE_VERSION}``. This also applies the one-step rule to final
+releases deployed by Jenkins, which it did not check before.
+
+``PACKAGE_VERSION`` keeps the ``bN`` suffix, so ``make tag-version`` tags
+``v1.3.0b1`` and the Jenkins changelog check sees ``1.3.0b1 -> 1.3.0b2`` as a
+version update. ``make deploy-docs`` publishes a beta's docs under its version but
+leaves the ``current`` link on the last final.
+
+pip and uv install a beta only when it is requested by version
+(``pip install <dist>==1.3.0b1``) or with ``--pre``, so a plain install keeps
+getting the last final.
 
 Fetching from internal Artifactory
 ----------------------------------
@@ -140,6 +170,23 @@ A deploy requires all of:
 
 - ``deployable: true``
 - the ``main`` branch
-- a deployable change in the tip commit
+- a deployable change since the last successful build
 - a new-commit build or ``FORCE_DEPLOY``
-- a version update in ``CHANGELOG.rst``
+- a version update in ``CHANGELOG.rst`` that wasn't already released from another commit
+- every check in this build passed
+
+Failing checks
+==============
+
+By default a check that fails (lint, mypy, tests, docs, doctests) marks its stage
+and the build as failed but does not stop the build. Every check runs on every
+Python version, so one build shows everything that is failing. ``make check`` and
+``make lint`` behave the same way locally and end with a summary of which steps
+failed. Pass ``fail_fast=1`` (or ``FAIL_FAST=1``) to either one to stop at the
+first failure.
+
+Set the ``FAIL_FAST`` build parameter to stop at the first failing check and abort
+the other Python versions. Jenkins adds a new parameter to a job only after the
+first build that declares it, so ``FAIL_FAST`` appears in "Build with Parameters"
+after the job's first build on a library version that includes it. That first
+build uses the default and runs every check.

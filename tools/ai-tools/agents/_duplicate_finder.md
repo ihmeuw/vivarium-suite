@@ -3,8 +3,8 @@ name: _duplicate_finder
 description: "Use when: checking candidate tickets against the Jira backlog for duplicates, returning a compact match list and keeping raw JQL search traffic out of the orchestrator's context."
 tools:
   # Read-only Jira MCP access only — checks candidate tickets against the backlog.
-  - mcp__plugin_mcp-jira_mcp-jira__search
-  - mcp__plugin_mcp-jira_mcp-jira__get_issue
+  - mcp__plugin_simsci_jira__search
+  - mcp__plugin_simsci_jira__get_issue
 user-invocable: false
 ---
 
@@ -47,3 +47,8 @@ Return only this digest. Do not include raw search results, full issue
 descriptions, or tickets you ruled out. If a search fails or the Jira MCP is
 unavailable, say so explicitly for the affected groups rather than returning
 an empty match list.
+
+Copy each ticket summary exactly as Jira gives it. The *why* lines and any
+failure notes reach the user in the triage report:
+
+- Write prose for people in plain technical English. Use short sentences in the active voice and simple tenses, and one name for each thing. Do not use semicolons, Latin abbreviations, or metaphors. Put code identifiers and paths in backticks.

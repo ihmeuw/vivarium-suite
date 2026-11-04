@@ -1,8 +1,17 @@
-def getPreviousCommit() {
-    return sh(
-        script: "git rev-parse HEAD~1",
-        returnStdout: true
-    ).trim()
+/**
+ * Get the commit the deploy checks should diff HEAD against.
+ *
+ * Uses the last successful build's commit (GIT_PREVIOUS_SUCCESSFUL_COMMIT) so a push
+ * that lands several commits is checked as a whole, falling back to HEAD~1 when that
+ * commit is unusable. See resources/scripts/resolve_deploy_base.sh for the rules.
+ */
+def getDeployBaseCommit() {
+    withEnv(["CANDIDATE_BASE_COMMIT=${env.GIT_PREVIOUS_SUCCESSFUL_COMMIT ?: ''}"]) {
+        return sh(
+            script: libraryResource('scripts/resolve_deploy_base.sh'),
+            returnStdout: true
+        ).trim()
+    }
 }
 
 def getCurrentCommit() {
@@ -21,7 +30,7 @@ def getChangedFiles(previousCommit, currentCommit) {
 
 // Combined function to get both commits and changed files
 def getCommitInfo() {
-    def previousCommit = getPreviousCommit()
+    def previousCommit = getDeployBaseCommit()
     def currentCommit = getCurrentCommit()
     def changedFiles = getChangedFiles(previousCommit, currentCommit)
     

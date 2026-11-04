@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 from vivarium.engine.manager import Interface
 
 if TYPE_CHECKING:
-    from vivarium.engine.framework.event import Event
     from vivarium.engine.framework.lifecycle.manager import LifeCycleManager
 
 
@@ -29,21 +28,6 @@ class LifeCycleInterface(Interface):
 
     def __init__(self, manager: LifeCycleManager):
         self._manager = manager
-
-    def add_handlers(self, state: str, handlers: list[Callable[[Event], None]]) -> None:
-        """Registers a set of functions to be called during a life cycle state.
-
-        This method does not apply any constraints, rather it is used
-        to build up an execution order for introspection.
-
-        Parameters
-        ----------
-        state
-            The name of the state to register the handlers for.
-        handlers
-            A list of functions that will execute during the state.
-        """
-        self._manager.add_handlers(state, handlers)
 
     def add_constraint(
         self,

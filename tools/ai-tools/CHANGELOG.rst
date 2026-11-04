@@ -1,3 +1,38 @@
+**0.31.1 - 10/29/26**
+
+- ``model-development`` and ``_vv_writer``: describe the verification checks as built on
+  ``vivarium.interactive.Simulation``, which replaced ``InteractiveContext`` in
+  vivarium-engine 6
+
+**0.31.0 - 10/28/26**
+
+- ``model-development``: pass the iteration plan's change list and quantitative
+  expectations, and the verification checks, to ``simsci:_finalize-core`` for the
+  test summary (requires ``simsci`` 0.5.0)
+
+**0.30.0 - 10/27/26**
+
+- ``team-conventions``: after a PR leaves draft and is posted to
+  ``#vivarium_dev``, move its MIC ticket to Ready for Review
+
+**0.29.0 - 10/26/26**
+
+- ``team-conventions``, ``ticket-triage``, ``_duplicate_finder``, and
+  ``_claim_auditor``: use the ``jira`` MCP server from ``simsci`` 0.4.0 instead
+  of IHME Infra's ``mcp-jira`` plugin
+  (`MIC-7348 <https://jira.ihme.washington.edu/browse/MIC-7348>`_)
+- ``plugin-setup``: add the setup steps for the ``jira`` MCP server
+- ``ticket-triage``: set the epic in the ``create_issue`` call instead of asking
+  the user to place the ticket after creation
+
+**0.28.0 - 10/13/26**
+
+- Add a ``SessionStart`` hook that adds a short plain-English writing text, based
+  on ASD-STE100 Simplified Technical English, to each session. Set
+  ``SIMSCI_WRITING_STYLE=off`` to disable it (`MIC-7606 <https://jira.ihme.washington.edu/browse/MIC-7606>`_)
+- Add the one-line plain-English writing rule from ``simsci`` 0.3.0 to
+  ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder``
+
 **0.27.1 - 09/22/26**
 
 - ``make-commands``: document that ``build-env`` fails fast and tears down the

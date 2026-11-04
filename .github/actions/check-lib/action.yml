@@ -49,31 +49,36 @@ runs:
       shell: bash
 
     - name: Verify changed libraries resolved from source
+      id: verify
       # Positive check that each library we intended to resolve in-tree (changed
       # + reachable + version-compatible) is actually an editable install.
       run: python -m vivarium.build_utils.dependency_graph verify-editable ${{ inputs.library }} --changed "${{ inputs.changed-libs }}"
       shell: bash
 
+    # Run every check after a verified install, even if an earlier check failed.
     - name: Lint ${{ inputs.library }}
+      if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
       run: cd libs/${{ inputs.library }} && make lint
       shell: bash
 
     - name: Mypy ${{ inputs.library }}
+      if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
       run: cd libs/${{ inputs.library }} && make mypy-if-typed
       shell: bash
 
     - name: Test ${{ inputs.library }}
+      if: ${{ !cancelled() && steps.verify.outcome == 'success' }}
       run: cd libs/${{ inputs.library }} && make test-all
       shell: bash
 
     - name: Build docs for ${{ inputs.library }}
       # 3.11 is the minimum version all packages support; use it as the canonical docs build
-      if: ${{ inputs.python-version == '3.11' }}
+      if: ${{ !cancelled() && steps.verify.outcome == 'success' && inputs.python-version == '3.11' }}
       run: cd libs/${{ inputs.library }} && make build-docs
       shell: bash
 
     - name: Test docs for ${{ inputs.library }}
       # Run doctests on the same canonical 3.11 build as the docs build above
-      if: ${{ inputs.python-version == '3.11' }}
+      if: ${{ !cancelled() && steps.verify.outcome == 'success' && inputs.python-version == '3.11' }}
       run: cd libs/${{ inputs.library }} && make test-docs
       shell: bash

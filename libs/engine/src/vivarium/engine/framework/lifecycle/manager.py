@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from vivarium.engine.framework.lifecycle.constraint_maker import ConstraintMaker
 from vivarium.engine.framework.lifecycle.entities import LifeCycle
@@ -21,9 +21,6 @@ from vivarium.engine.framework.lifecycle.exceptions import (
 )
 from vivarium.engine.framework.lifecycle.lifecycle_states import INITIALIZATION
 from vivarium.engine.manager import Manager
-
-if TYPE_CHECKING:
-    from vivarium.engine.framework.event import Event
 
 
 class LifeCycleManager(Manager):
@@ -103,6 +100,15 @@ class LifeCycleManager(Manager):
                 f"to {new_state.name} requested."
             )
 
+    def get_phase_names(self) -> list[str]:
+        """Get the names of all phases in their order of execution.
+
+        Returns
+        -------
+            A list of phase names in order of execution.
+        """
+        return self.lifecycle.get_phase_names()
+
     def get_state_names(self, phase: str) -> list[str]:
         """Gets all states in the phase in their order of execution.
 
@@ -116,22 +122,6 @@ class LifeCycleManager(Manager):
             A list of state names in order of execution.
         """
         return self.lifecycle.get_state_names(phase)
-
-    def add_handlers(self, state_name: str, handlers: list[Callable[[Event], None]]) -> None:
-        """Registers a set of functions to be called during a life cycle state.
-
-        This method does not apply any constraints, rather it is used
-        to build up an execution order for introspection.
-
-        Parameters
-        ----------
-        state_name
-            The name of the state to register the handlers for.
-        handlers
-            A list of functions that will execute during the state.
-        """
-        s = self.lifecycle.get_state(state_name)
-        s.add_handlers(handlers)
 
     def add_constraint(
         self,

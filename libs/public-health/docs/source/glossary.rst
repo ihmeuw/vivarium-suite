@@ -157,13 +157,6 @@ Glossary
         the population as a summary measure of morbidity. See
         :ref:`disability_observer_concept`.
 
-    Therapeutic Inertia
-        The tendency for treatment algorithms to deviate from clinical
-        guidelines — for example, when treatment is not escalated during a
-        healthcare visit despite guidelines recommending escalation. Modeled
-        as a probability drawn from a triangular distribution. See
-        :ref:`therapeutic_inertia_concept`.
-
     Linear Scale-Up
         A time-varying pattern in which an intervention's coverage is linearly
         interpolated between a start value and an end value over a configured

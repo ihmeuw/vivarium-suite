@@ -1,4 +1,4 @@
-"""Pytest plugin providing common fixtures for vivarium projects.
+"""Pytest plugin providing common configuration for vivarium projects.
 
 This module is automatically loaded by pytest when pytest-vivarium is installed,
 via the pytest11 entry point declared in pyproject.toml.
@@ -12,8 +12,6 @@ from pathlib import Path
 import pytest
 from _pytest.config import Config, argparsing
 from _pytest.python import Function
-from pytest_mock import MockerFixture
-from vivarium.config_tree import ConfigTree
 
 SLOW_TEST_DAY = "Sunday"
 
@@ -186,6 +184,9 @@ def _auto_num_workers() -> int:
     return _resolve_workers(_usable_cpu_count(), _available_memory_gb())
 
 
+# xdist ships its own implementation of this firstresult hook, and without tryfirst
+# whichever plugin was registered last wins, which depends on plugin load order.
+@pytest.hookimpl(tryfirst=True)
 def pytest_xdist_auto_num_workers(config: Config) -> int:
     """Resolve a safe worker count for ``-n auto`` (capped at DEFAULT_MAX_WORKERS, scaled to CPUs/memory, floored at 1).
 
@@ -242,30 +243,3 @@ def is_slow_test_day(slow_test_day: str = SLOW_TEST_DAY) -> bool:
         "Saturday",
         "Sunday",
     ][datetime.today().weekday()] == slow_test_day
-
-
-@pytest.fixture
-def no_gbd_cache(mocker: MockerFixture) -> None:
-    """Disable vivarium_gbd_access caching for test isolation.
-
-    This fixture mocks ``vivarium_gbd_access.utilities.get_input_config`` to return
-    a configuration with ``cache_data`` set to False, ensuring that tests always
-    pull fresh data rather than using cached results.
-
-    Note that this fixture does NOT use ``autouse=True``. If you want it to apply
-    to all tests in a module or package, create a wrapper fixture in your conftest.py:
-
-    .. code-block:: python
-
-        import pytest
-
-        @pytest.fixture(autouse=True)
-        def no_cache(no_gbd_cache):
-            '''Apply no_gbd_cache to all tests in this module.'''
-            pass
-
-    """
-    mocker.patch(
-        "vivarium_gbd_access.utilities.get_input_config",
-        return_value=ConfigTree({"input_data": {"cache_data": False}}),
-    )

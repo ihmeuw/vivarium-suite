@@ -1,0 +1,130 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vivarium-psimulate"
+description = "Run many vivarium simulations in parallel on a Slurm cluster."
+readme = "README.rst"
+requires-python = ">=3.11"
+license = {text = "BSD-3-Clause"}
+authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
+dynamic = ["version"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: BSD",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "vivarium-dependencies[numpy,pandas,pyyaml,click,tables,loguru,pyarrow]",
+    "vivarium-build-utils>=4.0.0,<5.0.0",
+    "vivarium-cluster-tools>=5.0.0",
+    "vivarium-engine>=6.0.0",
+    "vivarium-config-tree>=5.0.0",
+    "dill",
+    "psutil",
+]
+
+[project.optional-dependencies]
+# jobmon_installer_ihme (which in turn installs jobmon) is gated behind `[cluster]`
+# because jobmon 3.2.4 (latest) imports `pkg_resources` which was removed in setuptools
+# 80+ and is absent from Python 3.13's default install. Forcing jobmon onto every
+# install breaks local dev on 3.13, but on the cluster the installer pins a tested
+# jobmon and sidesteps the issue.
+cluster = ["jobmon_installer_ihme"]
+test = [
+    "vivarium-dependencies[pytest]",
+    "pytest-vivarium",
+]
+docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
+lint = [
+    "vivarium-dependencies[lint]",
+    "types-psutil",
+    "pyarrow-stubs",
+]
+dev = ["vivarium-psimulate[test,docs,lint,cluster]"]
+ci_github = ["vivarium-psimulate[test,docs,lint]"]
+ci_jenkins = ["vivarium-psimulate[ci_github,cluster]"]
+
+[project.scripts]
+psimulate = "vivarium.psimulate.cli:psimulate"
+vipin = "vivarium.psimulate.vipin.cli:vipin"
+
+[project.urls]
+Homepage = "https://github.com/ihmeuw/vivarium-suite"
+Source = "https://github.com/ihmeuw/vivarium-suite/tree/main/libs/psimulate"
+
+[tool.vivarium.python-support]
+candidates = ["3.14"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+# Only include vivarium.psimulate and its subpackages. Excluding vivarium
+# itself means the wheel does not ship vivarium/__init__.py, which is owned by
+# vivarium-engine; two distributions writing the same file would clobber each
+# other at install time.
+include = ["vivarium.psimulate", "vivarium.psimulate.*"]
+
+[tool.setuptools.package-data]
+"vivarium.psimulate" = ["py.typed"]
+
+[tool.setuptools_scm]
+# Monorepo tagging convention: tags must be prefixed with "vivarium-psimulate-v"
+# (e.g. ``vivarium-psimulate-v1.0.0``). tag_regex strips the prefix so
+# setuptools_scm sees a clean semver; git_describe_command filters to only this
+# lib's tags so siblings' releases don't pollute the version derivation.
+root = "../.."
+tag_regex = '^vivarium-psimulate-v(?P<version>[^\+]+)$'
+git_describe_command = 'git describe --dirty --tags --long --match "vivarium-psimulate-v*"'
+fallback_version = "0.0.0+no-git-tag"
+
+[tool.black]
+line-length = 94
+
+[tool.isort]
+profile = "black"
+line_length = 94
+multi_line_output = 3
+known_first_party = ["vivarium.psimulate"]
+known_third_party = ["vivarium.cluster_tools", "vivarium.config_tree", "vivarium.engine"]
+
+[tool.mypy]
+# WARNING: settings here that aren't mypy_path / explicit_package_bases must be
+# kept in sync manually with the monorepo-root [tool.mypy]. The local
+# `make mypy` passes --config-file pyproject.toml (this file), so mypy doesn't
+# read the root config. If you change the root, change this too.
+strict = true
+disallow_any_unimported = false
+implicit_reexport = true
+# Anchored so that it matches build/ directories and not module names.
+exclude = ["(^|/)build/"]
+mypy_path = "src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+# jobmon is in [cluster], which [ci_github] doesn't install — see the
+# rationale on the `cluster` extra above. Mute "Cannot find implementation"
+# so mypy can still check the rest of the source on non-cluster envs.
+module = ["dill", "jobmon.*", "jobmon_installer_ihme.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests/"]
+
+[tool.coverage.run]
+source = ["vivarium.psimulate"]
+
+[tool.coverage.report]
+show_missing = true

@@ -312,7 +312,7 @@ class CausalFactorEffect(Component, ABC):
                 f"but got {data['distribution']!r}."
             )
         # Only the 'uniform' distribution reads min/max (see
-        # NonLogLinearRiskEffect.load_relative_risk); 'draws' carries its TMREL
+        # CausalFactorEffect.get_relative_risk_source); 'draws' carries its TMREL
         # elsewhere, so we don't require a numeric range for it.
         if data["distribution"] == "uniform":
             missing_fields = {"min", "max"} - set(data)
