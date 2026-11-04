@@ -1,6 +1,6 @@
 """Opt-in test of the bridge against the production Jobmon server.
 
-The test runs only where jobmon is installed and ``VIVARIUM_WORKFLOW_JOBMON_LIVE`` is set
+The test runs only where jobmon is installed and ``VIVARIUM_DAGGER_JOBMON_LIVE`` is set
 to ``1``; everywhere else, including CI, it is skipped. It runs on Jobmon's multiprocess
 plugin, so it needs no Slurm, but it writes tool, workflow and task rows to the production
 Jobmon database under the tool ``vivarium.dagger.bridge``, as the dagger and psimulate
@@ -19,7 +19,7 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.harness import build_fixture
 
-LIVE_ENV_VAR = "VIVARIUM_WORKFLOW_JOBMON_LIVE"
+LIVE_ENV_VAR = "VIVARIUM_DAGGER_JOBMON_LIVE"
 """The environment variable that must be ``1`` for this module's test to run."""
 
 pytestmark = pytest.mark.skipif(

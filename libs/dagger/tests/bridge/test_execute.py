@@ -44,12 +44,7 @@ from vivarium.dagger.bridge._jobmon_adapter import (
     JobmonRun,
     PlanEntry,
 )
-from vivarium.dagger.bridge.execute import (
-    PAYLOAD_SUFFIX,
-    RUNS_DIR,
-    _new_run_directory,
-    _plan,
-)
+from vivarium.dagger.bridge.execute import PAYLOAD_SUFFIX, RUNS_DIR, _new_run_directory, _plan
 from vivarium.dagger.bridge.payload import payload_for
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, read_result, runner_command
 from vivarium.dagger.frontend.python_step import python_step

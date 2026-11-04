@@ -15,7 +15,7 @@ from vivarium.dagger.harness import FakeJobmon
 _WORKFLOW_DIR = Path(__file__).resolve().parents[2]
 """The ``libs/dagger`` directory, from which a subprocess imports ``tests.bridge``."""
 
-_PROBE_TOOL = "vivarium_workflow_bridge_probe"
+_PROBE_TOOL = "vivarium_dagger_bridge_probe"
 """A tool that exists only in the fake env bin directories these tests make."""
 
 

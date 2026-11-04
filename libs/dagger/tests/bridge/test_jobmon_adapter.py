@@ -514,7 +514,7 @@ def test_check_environment_off_slurm_ignores_an_unsupported_jobmon_slurm(
 
 
 def test_jobmon_is_imported_only_inside_functions_of_the_adapter() -> None:
-    """An ast walk over every module under vivarium/workflow/bridge and over harness.py finds jobmon imported only in _jobmon_adapter.py, and there only inside function bodies."""
+    """An ast walk over every module under vivarium/dagger/bridge and over harness.py finds jobmon imported only in _jobmon_adapter.py, and there only inside function bodies."""
     bridge_modules = sorted(Path(_jobmon_adapter.__file__).parent.rglob("*.py"))
     modules = [*bridge_modules, Path(harness.__file__)]
     names = {path.name for path in modules}

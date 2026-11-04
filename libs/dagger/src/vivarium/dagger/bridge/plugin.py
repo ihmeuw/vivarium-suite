@@ -1,6 +1,6 @@
 """Register the Jobmon bridge with pytask.
 
-pytask loads this module in every run through the ``vivarium_workflow_bridge`` entry
+pytask loads this module in every run through the ``vivarium_dagger_bridge`` entry
 point, so it imports only pytask and the standard library. It does nothing unless a
 build sets ``jobmon=True``. Such a build runs its stale steps through
 :mod:`~vivarium.dagger.bridge.execute` as one Jobmon workflow, unless it is a dry run,

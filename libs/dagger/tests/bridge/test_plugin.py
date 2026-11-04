@@ -22,7 +22,7 @@ from vivarium.dagger.bridge.plugin import (
 )
 from vivarium.dagger.harness import FakeJobmon, build_fixture
 
-_ENTRY_POINT = "vivarium_workflow_bridge"
+_ENTRY_POINT = "vivarium_dagger_bridge"
 """Name of the bridge's entry point in the ``pytask`` group."""
 
 _TIMEOUT = 300
@@ -97,7 +97,7 @@ class _RecordingPluginManager(PluginManager):
 
 
 def test_the_pytask_entry_point_loads_the_plugin_module() -> None:
-    """importlib.metadata.entry_points(group='pytask') has 'vivarium_workflow_bridge' pointing at vivarium.dagger.bridge.plugin, and the assertion's message tells the developer to re-run 'pip install -e .' if it is missing."""
+    """importlib.metadata.entry_points(group='pytask') has 'vivarium_dagger_bridge' pointing at vivarium.dagger.bridge.plugin, and the assertion's message tells the developer to re-run 'pip install -e .' if it is missing."""
     entry_points = importlib.metadata.entry_points(group="pytask")
 
     assert _ENTRY_POINT in entry_points.names, (

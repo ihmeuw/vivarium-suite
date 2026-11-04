@@ -191,7 +191,7 @@ def pytask_execute_build(session: Session) -> bool:
             f"step's resources. Jobmon reported: {error}"
         ) from error
     _jobmon_adapter.run(jobmon_run)
-    # TODO(MIC-7529): record each step's result from <signature>.result.json in workdir.
+    # TODO(MIC-7747): record each step's result from <signature>.result.json in workdir.
     return True
 
 
