@@ -1,3 +1,11 @@
+**6.9.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+- Get the pandas floor from ``vivarium-dependencies[pandas]`` instead of declaring
+  ``pandas>=2.2.0``
+- Get pyyaml for the tests from ``vivarium-dependencies[pyyaml]``
+
 **6.8.1 - 11/04/26**
 
 - Raise a ``FutureWarning`` for the deprecated ``population`` configuration keys

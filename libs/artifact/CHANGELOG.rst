@@ -1,3 +1,8 @@
+**1.2.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+
 **1.1.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built

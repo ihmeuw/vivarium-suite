@@ -1,3 +1,8 @@
+**0.4.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+
 **0.3.1 - 10/16/26**
 
 - Make the ``-n auto`` worker-count hook run before pytest-xdist's default, so the

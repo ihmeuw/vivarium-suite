@@ -1,3 +1,8 @@
+**3.3.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+
 **3.2.2 - 11/02/26**
 
 - Re-enable the tests that were skipped for outdated API usage and update them to

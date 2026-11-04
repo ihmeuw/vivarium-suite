@@ -1,3 +1,8 @@
+**6.1.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+
 **6.0.2 - 11/04/26**
 
 - Raise ``FutureWarning`` instead of ``DeprecationWarning`` so they show in model repos by default

@@ -1,3 +1,10 @@
+**0.8.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
+  and sets floors on the rest of the scientific stack
+- Get matplotlib and pyyaml from ``vivarium-dependencies`` so that they have the
+  shared floors
+
 **0.7.2 - 11/03/26**
 
 - Fix ``make_artifacts -l all``: build the locations in parallel as a Jobmon
