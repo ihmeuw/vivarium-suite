@@ -1,3 +1,7 @@
+**6.0.2 - 11/04/26**
+
+- Raise ``FutureWarning`` instead of ``DeprecationWarning`` so they show in model repos by default
+
 **6.0.1 - 10/28/26**
 
 - Remove the ``BaseSimulationContext`` alias. Use ``BaseSimulation``

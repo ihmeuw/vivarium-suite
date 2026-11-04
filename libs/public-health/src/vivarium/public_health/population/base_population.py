@@ -7,13 +7,13 @@ Provide tools for sampling and assigning core demographic characteristics to sim
 
 """
 
+import warnings
 from collections.abc import Callable, Iterable
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from loguru import logger
-from vivarium.config_tree import ConfigurationKeyError
+from vivarium.config_tree import ConfigurationKeyError, MissingLayerError
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import Builder
 from vivarium.engine.framework.event import Event
@@ -329,7 +329,7 @@ class BasePopulation(Component):
 
         Checks whether any of the deprecated configuration keys (``age_start``,
         ``age_end``, ``exit_age``) are present in the population configuration.
-        For each deprecated key found, a warning is logged indicating the
+        For each deprecated key found, a :class:`FutureWarning` names the
         preferred replacement key.
 
         Raises
@@ -351,7 +351,7 @@ class BasePopulation(Component):
                     new_key_value = self.config.get(mapper[key], layer=layer)
                     provided_new_key = True
                     break
-                except ConfigurationKeyError:
+                except (ConfigurationKeyError, MissingLayerError):
                     pass
 
             if provided_new_key and self.config[key] != new_key_value:
@@ -360,10 +360,11 @@ class BasePopulation(Component):
                     f"These keys cannot both be provided. '{key}' will soon be deprecated so please "
                     f"use '{mapper[key]}'. "
                 )
-            logger.warning(
-                "FutureWarning: "
+            warnings.warn(
                 f"Configuration key '{key}' will be deprecated in future versions of Vivarium "
-                f"Public Health. Use the new key '{mapper[key]}' instead."
+                f"Public Health. Use the new key '{mapper[key]}' instead.",
+                FutureWarning,
+                stacklevel=2,
             )
 
     def _load_population_structure(self, builder: Builder) -> pd.DataFrame:
