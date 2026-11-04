@@ -304,7 +304,7 @@ deploy-docs: # Deploy documentation to shared server
 	chmod -R 0775 ${DOCS_ROOT_PATH}/${DOCS_NAME}/${PACKAGE_VERSION}
     # A beta's docs are published under its version but never become "current".
 	@case "${PACKAGE_VERSION}" in *b*) echo "Beta ${PACKAGE_VERSION}: not updating the 'current' link." ;; \
-		*) cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsFfv ${PACKAGE_VERSION} current ;; esac
+		*) cd ${DOCS_ROOT_PATH}/${DOCS_NAME} && ln -nsfv ${PACKAGE_VERSION} current ;; esac
 
 .PHONY: clean
 clean: # Clean build artifacts and temporary files

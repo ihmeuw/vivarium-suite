@@ -524,7 +524,7 @@ class RiskAttributableDisease(ExcessMortalityState):
             The modified DataFrame of mortality rates.
         """
         rate = self.population_view.get(
-            index, self.excess_mortality_rate_name, skip_post_processor=True
+            index, self.excess_mortality_rate_name, mode="no-post-processors"
         )
         rates_df[self.cause.name] = rate
         return rates_df

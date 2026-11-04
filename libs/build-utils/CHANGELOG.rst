@@ -1,3 +1,9 @@
+**4.13.0 - 11/04/26**
+
+- Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on
+  Sunday cron builds and ``RUN_WEEKLY`` builds, and label those builds ``[weekly]`` in
+  the Jenkins build name. ``requires_slurm: "weekly"`` implies ``weekly_tests``
+
 **4.12.0 - 11/03/26**
 
 - Support beta releases (``X.Y.ZbN``) in ``PACKAGE_VERSION``, the Jenkins changelog
