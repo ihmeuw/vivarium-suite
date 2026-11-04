@@ -1,17 +1,21 @@
 **2.0.0 - 11/04/26**
 
-- **Breaking change.** Add a lower bound to each extra of the core scientific
-  stack. For the compiled libraries, the bound is the oldest release with wheels
-  for every supported Python version (3.11 to 3.13).
+- **Breaking change.** Require pandas 3 and numpy 2.
 
   - ``pandas>=3.0.0``: the suite supports pandas 3, and pandas 3 is the
     oldest version it tests.
   - ``numpy>=2.1.0``: pyarrow requires numpy 2 at import time, and numpy
     2.1.0 is the first release with Python 3.13 wheels.
+
+- **Breaking change.** Remove the ``numpy_lt_2`` extra. No package in the
+  monorepo uses it, and numpy 1 does not work with the ``pyarrow`` extra.
+- Add a lower bound to the other extras of the core scientific stack. For the
+  compiled libraries, the bound is the oldest release with wheels for every
+  supported Python version (3.11 to 3.13).
+
   - ``pyarrow>=18.0.0``: the first release with Python 3.13 wheels. It also
     supports numpy 2 and is above the pyarrow 13 minimum of pandas 3.
-  - ``scipy>=1.14.1``: the first release with Python 3.13 wheels. The
-    temporary ``<1.17.0`` cap stays.
+  - ``scipy>=1.14.1``: the first release with Python 3.13 wheels.
   - ``tables>=3.10.1``: the first release with Python 3.13 wheels. It also
     supports numpy 2.
   - ``matplotlib>=3.9.2``: the first release with Python 3.13 wheels. It also
@@ -23,8 +27,6 @@
   - ``networkx>=3.0``: networkx is pure Python, and the suite passes its tests
     with networkx 3.0.
 
-- **Breaking change.** Remove the ``numpy_lt_2`` extra. No package in the
-  monorepo uses it, and numpy 1 does not work with the ``pyarrow`` extra.
 - Add a ``pandera`` extra with ``pandera[pandas]>=0.31.0``. It also includes the
   ``pandas`` extra, so it has the pandas floor. vivarium-validation tests
   pandera 0.31.0 with pandas 3.
