@@ -1,4 +1,4 @@
-**5.0.0 - 11/03/26**
+**5.0.0 - 11/04/26**
 
 - **Breaking change.** Move ``psimulate`` and ``vipin`` to the new ``vivarium-psimulate``
   package, importable as ``vivarium.psimulate``, along with the ``testing`` components.
