@@ -22,9 +22,6 @@ dependencies = []
 # defined below.
 
 # core scientific stack
-# Each floor is the oldest version the suite supports. For the compiled
-# libraries it is also the oldest release with wheels for every supported
-# Python version (3.11 to 3.13). The CHANGELOG gives the reason for each floor.
 numpy = ["numpy>=2.1.0"]
 pandas = [
     "pandas>=3.0.0",

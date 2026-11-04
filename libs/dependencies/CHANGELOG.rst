@@ -23,13 +23,11 @@
   - ``networkx>=3.0``: networkx is pure Python, and the suite passes its tests
     with networkx 3.0.
 
+- **Breaking change.** Remove the ``numpy_lt_2`` extra. No package in the
+  monorepo uses it, and numpy 1 does not work with the ``pyarrow`` extra.
 - Add a ``pandera`` extra with ``pandera[pandas]>=0.31.0``. It also includes the
   ``pandas`` extra, so it has the pandas floor. vivarium-validation tests
   pandera 0.31.0 with pandas 3.
-- Keep the ``pandas-stubs<=2.2.3.250308`` cap. The pandas 3 stubs give about 100
-  new mypy errors across the suite, most of them in vivarium-engine.
-- **Breaking change.** Remove the ``numpy_lt_2`` extra. No package in the
-  monorepo uses it, and numpy 1 does not work with the ``pyarrow`` extra.
 
 **1.3.1 - 09/22/26**
 
