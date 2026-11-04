@@ -10,6 +10,7 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` | *(no docs)* |
 | `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` | https://vivarium-cluster-tools.readthedocs.io |
 | `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` | https://vivarium-config-tree.readthedocs.io |
+| `libs/dagger/` | `vivarium-dagger` | `import vivarium.dagger` | https://vivarium-dagger.readthedocs.io |
 | `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* | *(no docs)* |
 | `libs/engine/` | `vivarium-engine` | `import vivarium.engine` | https://vivarium-engine.readthedocs.io |
 | `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` | https://vivarium-fuzzy-checker.readthedocs.io |
@@ -19,7 +20,6 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* | https://pytest-vivarium.readthedocs.io |
 | `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` | https://vivarium-risk-distributions.readthedocs.io |
 | `libs/validation/` | `vivarium-validation` | `import vivarium.validation` | https://vivarium-validation.readthedocs.io |
-| `libs/workflow/` | `vivarium-workflow` | `import vivarium.workflow` | https://vivarium-workflow.readthedocs.io |
 
 ## Tools
 
