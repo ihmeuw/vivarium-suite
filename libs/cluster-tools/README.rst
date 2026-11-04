@@ -11,6 +11,13 @@ Vivarium Cluster Tools
 Vivarium cluster tools is a python package that makes running ``vivarium``
 simulations at scale on a Slurm cluster easy.
 
+.. note::
+
+    The next major release, 5.0.0, moves ``psimulate`` and ``vipin`` to a new
+    ``vivarium-psimulate`` package and ``dagger`` to ``vivarium-workflow``.
+    ``vivarium-cluster-tools`` keeps the shared cluster, Jobmon, logging, and
+    notification code that these tools use.
+
 **Supported Python versions: 3.11, 3.12, 3.13**
 
 You can install ``vivarium-cluster-tools`` from PyPI with pip:
