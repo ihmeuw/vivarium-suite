@@ -1,3 +1,8 @@
+**6.8.1 - 11/04/26**
+
+- Get the pandas floor from ``vivarium-dependencies[pandas]`` instead of declaring
+  ``pandas>=2.2.0``
+
 **6.8.0 - 10/21/26**
 
 Breaking changes:

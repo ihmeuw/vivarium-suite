@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru]",
+    "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru,matplotlib]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-gbd-mapping>=6.0.0",
     "vivarium-engine>=6.0.0",
@@ -37,7 +37,6 @@ dependencies = [
     "jinja2",
     "pyyaml",
     "memory-profiler",
-    "matplotlib",
     "seaborn",
     "scalene",
     "nbformat>=5.0",

@@ -1,3 +1,8 @@
+**0.7.3 - 11/04/26**
+
+- Get matplotlib from ``vivarium-dependencies[matplotlib]`` so that it has the
+  shared floor
+
 **0.7.2 - 11/03/26**
 
 - Fix ``make_artifacts -l all``: build the locations in parallel as a Jobmon
