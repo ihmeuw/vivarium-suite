@@ -577,7 +577,7 @@ class TestKeywordArgs:
         mock_main.assert_called_once()
 
 
-class TestPositionalArgDeprecationWarning:
+class TestPositionalArgDeprecation:
     """Using the old positional arguments still works but emits a warning."""
 
     def test_run_positional_args_emit_warning(

@@ -193,13 +193,13 @@ class LookupTableInterface(Interface):
         if isinstance(data, pd.DataFrame) and not has_named_row_index(data):
             warnings.warn(
                 FLAT_DATAFRAME_DEPRECATION_MESSAGE,
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
         if isinstance(data, Mapping):
             warnings.warn(
                 MAPPING_INPUT_DEPRECATION_MESSAGE,
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
         return self._manager.build_table(data, name, value_columns)
