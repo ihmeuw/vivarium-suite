@@ -1,4 +1,4 @@
-**6.8.1 - 11/03/26**
+**6.8.1 - 11/04/26**
 
 - Raise a ``FutureWarning`` for the deprecated ``population`` configuration keys
   ``age_start``, ``age_end``, and ``exit_age`` instead of logging a message
