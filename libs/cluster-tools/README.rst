@@ -43,10 +43,5 @@ or build it from source by cloning the monorepo and installing this package:
     Jobmon workflows, such as ``build_artifacts_in_parallel``, needs it. The base
     install resolves on public PyPI.
 
-    The ``[psimulate]`` extra (``pip install vivarium-cluster-tools[psimulate]``)
-    installs ``vivarium-psimulate[cluster]``, so an environment that used
-    ``psimulate`` from ``vivarium-cluster-tools[cluster]`` can keep it by changing
-    the extra.
-
 `Check out the docs! <https://vivarium-cluster-tools.readthedocs.io/en/latest/>`_
 ---------------------------------------------------------------------------------

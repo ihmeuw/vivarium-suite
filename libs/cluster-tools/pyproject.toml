@@ -39,9 +39,6 @@ dependencies = [
 # install breaks local dev on 3.13, but on the cluster the installer pins a tested
 # jobmon and sidesteps the issue.
 cluster = ["jobmon_installer_ihme"]
-# Installs psimulate and vipin. The in-tree dependency graph reads only runtime deps
-# and ci_github, so this extra forms no cycle.
-psimulate = ["vivarium-psimulate[cluster]"]
 test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",

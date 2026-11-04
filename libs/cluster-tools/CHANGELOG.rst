@@ -1,8 +1,7 @@
 **5.0.0 - 11/04/26**
 
 - **Breaking change.** Move ``psimulate`` and ``vipin`` to the new ``vivarium-psimulate``
-  package, importable as ``vivarium.psimulate``, along with the ``testing`` components.
-  The new ``psimulate`` extra installs ``vivarium-psimulate[cluster]``
+  package, importable as ``vivarium.psimulate``, along with the ``testing`` components
 - **Breaking change.** Move ``with_sim_verbosity``, ``resolve_sim_verbosity``,
   ``MinutesOrNone``, ``MINUTES_OR_NONE``, ``load_run_config``, ``with_run_config`` and
   ``resolve_deprecated_positional`` from ``core.cli_tools`` to
