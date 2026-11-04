@@ -171,6 +171,13 @@ class TestLoadLibs:
         assert engine.version == "2.3.4"
         assert engine.path == libs_dir / "engine"
 
+    def test_parses_beta_pending_version(self, make_monorepo: MonorepoFactory) -> None:
+        """A beta CHANGELOG entry keeps its ``bN`` suffix, so it is not released as the final."""
+        libs_dir = make_monorepo(
+            {"engine": {"dist_name": "vivarium-engine", "version": "2.4.0b1"}}
+        )
+        assert load_libs(libs_dir)["engine"].version == "2.4.0b1"
+
     def test_collects_only_in_tree_upstreams(
         self,
         make_monorepo: MonorepoFactory,
