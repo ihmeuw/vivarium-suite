@@ -1,4 +1,4 @@
-**6.0.2 - 11/03/26**
+**6.0.2 - 11/04/26**
 
 - Raise ``FutureWarning`` instead of ``DeprecationWarning`` so they show in model repos by default
 
