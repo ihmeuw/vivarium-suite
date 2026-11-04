@@ -1,4 +1,4 @@
-**0.5.0 - 10/29/26**
+**0.5.0 - 11/04/26**
 
 - Require ``vivarium-inputs>=9.2.0`` in the ``gbd`` extra and remove its pandas and numpy
   pins, which only central comp's shared functions required
