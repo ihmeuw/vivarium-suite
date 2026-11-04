@@ -25,8 +25,7 @@ dependencies = []
 numpy = ["numpy>=2.1.0"]
 pandas = [
     "pandas>=3.0.0",
-    # These stubs type pandas 2.2. The pandas 3 stubs give about 100 new mypy
-    # errors across the suite, so the cap stays until those errors are fixed.
+    # Cap until MIC-7774 moves the suite to the pandas 3 stubs.
     "pandas-stubs<=2.2.3.250308",
 ]
 pandera = [
