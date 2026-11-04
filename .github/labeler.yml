@@ -18,6 +18,10 @@ config-tree:
   - changed-files:
     - any-glob-to-any-file: 'libs/config-tree/**'
 
+dagger:
+  - changed-files:
+    - any-glob-to-any-file: 'libs/dagger/**'
+
 dependencies:
   - changed-files:
     - any-glob-to-any-file: 'libs/dependencies/**'
@@ -57,10 +61,6 @@ risk-distributions:
 pytest-vivarium:
   - changed-files:
     - any-glob-to-any-file: 'libs/pytest-vivarium/**'
-
-workflow:
-  - changed-files:
-    - any-glob-to-any-file: 'libs/workflow/**'
 
 ai-tools:
   - changed-files:

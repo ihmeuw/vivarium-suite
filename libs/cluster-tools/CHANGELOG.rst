@@ -8,8 +8,8 @@
   ``resolve_deprecated_positional`` from ``core.cli_tools`` to
   ``vivarium.psimulate.cli_options``, and ``NUM_ROWS_PER_CENTRAL_LOG_FILE`` from
   ``utilities`` to ``vivarium.psimulate.performance_logger``
-- **Breaking change.** Move Dagger to ``vivarium-workflow``, importable as
-  ``vivarium.workflow.dagger``. Remove ``with_workflow_config`` from ``core.cli_tools``,
+- **Breaking change.** Move Dagger to the new ``vivarium-dagger`` package, importable as
+  ``vivarium.dagger``. Remove ``with_workflow_config`` from ``core.cli_tools``,
   since only Dagger used it
 - **Breaking change.** Remove the ``build_artifacts_in_parallel`` re-export from
   ``core.jobmon``. Import it from ``core.jobmon.artifact``
