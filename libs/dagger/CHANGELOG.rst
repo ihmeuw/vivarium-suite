@@ -1,3 +1,8 @@
+**0.2.0 - 10/28/26**
+
+- Add the backend, the python_step frontend, and the test harness.
+- Pin the ``cluster`` extra to ``jobmon_installer_ihme`` 10.12.2
+
 **0.1.0 - 11/04/26**
 
 - Initial release: Dagger moved from vivarium-cluster-tools

@@ -28,18 +28,16 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[click,loguru,pyyaml]",
+    "vivarium-dependencies[click,loguru,pandas,pyarrow,pyyaml]",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-cluster-tools>=5.0.0",
+    "pytask>=0.6.0,<0.7.0",
 ]
 
 [project.optional-dependencies]
-# jobmon_installer_ihme (which in turn installs jobmon) is gated behind `[cluster]`
-# because jobmon 3.2.4 (latest) imports `pkg_resources` which was removed in setuptools
-# 80+ and is absent from Python 3.13's default install. Forcing jobmon onto every
-# install breaks local dev on 3.13, but on the cluster the installer pins a tested
-# jobmon and sidesteps the issue.
-cluster = ["jobmon_installer_ihme"]
+# Jobmon stays out of the base install. The installer pins the Jobmon set that the bridge
+# and the `dagger` runner are tested against, and supplies IHME's server config.
+cluster = ["jobmon_installer_ihme==10.12.2"]
 # Dagger's `simulation` step runs psimulate, which brings in vivarium-engine. The step
 # imports it only when a workflow uses it, so other workflows don't need the engine.
 simulation = ["vivarium-psimulate>=1.0.0"]
@@ -113,9 +111,8 @@ mypy_path = "src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-# jobmon is in [cluster], which [ci_github] doesn't install — see the
-# rationale on the `cluster` extra above. Mute "Cannot find implementation"
-# so mypy can still check the rest of the source on non-cluster envs.
+# jobmon is in [cluster], which [ci_github] doesn't install. Mute "Cannot find
+# implementation" so mypy can still check the rest of the source on non-cluster envs.
 module = ["jobmon.*", "jobmon_installer_ihme.*"]
 ignore_missing_imports = true
 
