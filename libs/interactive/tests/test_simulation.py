@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -10,8 +11,10 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
+from vivarium.config_tree import ConfigTree
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import BaseSimulation, Builder
 from vivarium.engine.framework.event import Event
@@ -46,6 +49,7 @@ from tests.helpers import (
 )
 from vivarium.interactive import ObservationError, Simulation
 from vivarium.interactive.simulation import (
+    _CONFIGURATION_KEYWORDS,
     _HELP_SECTIONS,
     _match_rank,
     _render_dependency_tree,
@@ -1677,7 +1681,7 @@ def test_init_signature_agrees_with_base_simulation() -> None:
     parent = inspect.signature(BaseSimulation.__init__).parameters
     child = inspect.signature(Simulation.__init__).parameters
 
-    child_only = ("self", "observe", "setup")
+    child_only = ("self", *_CONFIGURATION_KEYWORDS, "observe", "setup")
     inherited = [name for name in parent if name != "self"]
     assert [name for name in child if name not in child_only] == inherited
 
@@ -1715,7 +1719,7 @@ def test_positional_arguments_map_to_parameters() -> None:
     assert sim.configuration.population.population_size == 123
 
 
-@pytest.mark.parametrize("parameter", ["setup", "observe"])
+@pytest.mark.parametrize("parameter", ["setup", "observe", *_CONFIGURATION_KEYWORDS])
 def test_args_are_keyword_only(parameter: str) -> None:
     """keyword-only args are not parent parameters so must not take that slot."""
     param = inspect.signature(Simulation.__init__).parameters[parameter]
@@ -1733,6 +1737,180 @@ def test_keyword_only_parameters_reject_a_positional_call() -> None:
         # Deliberately invalid: mypy catches this statically, and the ignore lets
         # us also pin the runtime behaviour.
         Simulation(None, None, None, None, None, 0, False)  # type: ignore[call-arg]
+
+
+class TestConfigurationKeywords:
+    """The keyword parameters write the framework-owned keys they name.
+
+    Most cases skip setup, since what is under test is the configuration the
+    keywords write, not what the managers do with it.
+    """
+
+    KEYWORD_VALUES: dict[str, Any] = {
+        "population_size": 123,
+        "seed": 7,
+        "draw": 3,
+        "artifact_path": "/data/artifact.hdf",
+        "start_time": {"year": 2025, "month": 1, "day": 1},
+        "end_time": {"year": 2025, "month": 6, "day": 30},
+    }
+    SPECIFICATION_VALUES: dict[str, Any] = {
+        "population_size": 50,
+        "seed": 1,
+        "draw": 0,
+        "artifact_path": "/data/spec_artifact.hdf",
+        "start_time": {"year": 2020, "month": 1, "day": 1},
+        "end_time": {"year": 2020, "month": 12, "day": 31},
+    }
+
+    @pytest.fixture(scope="class")
+    @classmethod
+    def model_specification(cls, tmp_path_factory: pytest.TempPathFactory) -> Path:
+        configuration: dict[str, Any] = {}
+        for keyword, value in cls.SPECIFICATION_VALUES.items():
+            _merge(configuration, _nested(_CONFIGURATION_KEYWORDS[keyword], value))
+        path = tmp_path_factory.mktemp("specification") / "model_specification.yaml"
+        with open(path, "w") as file:
+            yaml.dump({"configuration": configuration}, file)
+        return path
+
+    @pytest.mark.parametrize("keyword", _CONFIGURATION_KEYWORDS)
+    def test_keyword_sets_its_path(self, keyword: str) -> None:
+        sim = Simulation(**{keyword: self.KEYWORD_VALUES[keyword]}, setup=False)
+        assert (
+            _value_at(sim, _CONFIGURATION_KEYWORDS[keyword]) == self.KEYWORD_VALUES[keyword]
+        )
+
+    @pytest.mark.parametrize("keyword", _CONFIGURATION_KEYWORDS)
+    def test_keyword_matches_configuration_argument(self, keyword: str) -> None:
+        """Both routes must leave the same value, layer, and source on every key."""
+        path = _CONFIGURATION_KEYWORDS[keyword]
+        by_keyword = Simulation(**{keyword: self.KEYWORD_VALUES[keyword]}, setup=False)
+        by_configuration = Simulation(
+            configuration=_nested(path, self.KEYWORD_VALUES[keyword]), setup=False
+        )
+        assert _metadata_at(by_keyword, path) == _metadata_at(by_configuration, path)
+
+    @pytest.mark.parametrize("keyword", _CONFIGURATION_KEYWORDS)
+    def test_keyword_overrides_specification(
+        self, keyword: str, model_specification: Path
+    ) -> None:
+        sim = Simulation(
+            model_specification, **{keyword: self.KEYWORD_VALUES[keyword]}, setup=False
+        )
+        assert (
+            _value_at(sim, _CONFIGURATION_KEYWORDS[keyword]) == self.KEYWORD_VALUES[keyword]
+        )
+
+    @pytest.mark.parametrize("keyword", _CONFIGURATION_KEYWORDS)
+    def test_omitted_keyword_keeps_specification(
+        self, keyword: str, model_specification: Path
+    ) -> None:
+        sim = Simulation(model_specification, setup=False)
+        assert (
+            _value_at(sim, _CONFIGURATION_KEYWORDS[keyword])
+            == self.SPECIFICATION_VALUES[keyword]
+        )
+
+    @pytest.mark.parametrize("keyword", _CONFIGURATION_KEYWORDS)
+    def test_conflict_with_configuration_argument_raises(self, keyword: str) -> None:
+        path = _CONFIGURATION_KEYWORDS[keyword]
+        with pytest.raises(
+            ValueError, match=rf"^{keyword}=.* conflicts .* {re.escape(path)} "
+        ):
+            Simulation(
+                configuration=_nested(path, self.SPECIFICATION_VALUES[keyword]),
+                **{keyword: self.KEYWORD_VALUES[keyword]},
+                setup=False,
+            )
+
+    def test_conflict_reports_the_value_as_passed(self) -> None:
+        with pytest.raises(ValueError, match=r"^start_time='2025-01-01' conflicts"):
+            Simulation(
+                configuration=_nested("time.start", self.SPECIFICATION_VALUES["start_time"]),
+                start_time="2025-01-01",
+                setup=False,
+            )
+
+    def test_keyword_applies_through_setup(self) -> None:
+        sim = Simulation(
+            configuration=HARRY_POTTER_CONFIG,
+            components=[Hogwarts()],
+            population_size=12,
+        )
+        assert len(sim.get_population("student_id")) == 12
+
+    @pytest.mark.parametrize("keyword", ["start_time", "end_time"])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            pd.Timestamp("2025-03-04"),
+            date(2025, 3, 4),
+            "2025-03-04",
+            {"year": 2025, "month": 3, "day": 4},
+        ],
+        ids=["timestamp", "date", "string", "dict"],
+    )
+    def test_time_bound_is_stored_as_a_date(self, keyword: str, value: Any) -> None:
+        sim = Simulation(**{keyword: value}, setup=False)
+        assert _value_at(sim, _CONFIGURATION_KEYWORDS[keyword]) == {
+            "year": 2025,
+            "month": 3,
+            "day": 4,
+        }
+
+    def test_time_bound_passes_a_number_to_a_simple_clock(self) -> None:
+        sim = Simulation(
+            components=[],
+            plugin_configuration={
+                "required": {
+                    "clock": {"controller": "vivarium.engine.framework.time.SimpleClock"}
+                }
+            },
+            start_time=5,
+            end_time=10,
+        )
+        assert sim.current_time == 5
+
+    @pytest.mark.parametrize("keyword", ["start_time", "end_time"])
+    @pytest.mark.parametrize(
+        "value", [pd.Timestamp("2025-03-04 12:00"), "2025-03-04T00:00:01"]
+    )
+    def test_time_bound_with_a_time_of_day_raises(self, keyword: str, value: Any) -> None:
+        with pytest.raises(ValueError, match="has a time of day"):
+            Simulation(**{keyword: value}, setup=False)
+
+
+def _nested(path: str, value: Any) -> dict[str, Any]:
+    """Wrap a value in one dict per key of a dotted configuration path."""
+    for key in reversed(path.split(".")):
+        value = {key: value}
+    return value  # type: ignore[no-any-return]
+
+
+def _merge(target: dict[str, Any], update: dict[str, Any]) -> None:
+    """Merge a nested dict into another in place."""
+    for key, value in update.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            _merge(target[key], value)
+        else:
+            target[key] = value
+
+
+def _value_at(sim: Simulation, path: str) -> Any:
+    """Return the configuration value at a dotted path, with a subtree as a dict."""
+    value = sim.configuration.get(path.split("."))
+    return value.to_dict() if isinstance(value, ConfigTree) else value
+
+
+def _metadata_at(sim: Simulation, path: str) -> Any:
+    """Return the layered metadata of every key at or below a dotted path."""
+    parent_path, _, key = path.rpartition(".")
+    parent = sim.configuration.get_tree(parent_path.split("."))
+    child = parent[key]
+    if isinstance(child, ConfigTree):
+        return {name: _metadata_at(sim, f"{path}.{name}") for name in child.keys()}
+    return parent.metadata(key)
 
 
 class TestResultsGathering:
