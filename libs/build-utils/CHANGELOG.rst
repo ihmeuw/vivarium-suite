@@ -1,3 +1,8 @@
+**4.13.1 - 11/05/26**
+
+- Log the uv cache size on each Jenkins build node every day in the cleanup job, and
+  clean the cache fully every Sunday
+
 **4.13.0 - 11/04/26**
 
 - Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on
