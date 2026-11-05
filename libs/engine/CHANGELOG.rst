@@ -4,6 +4,11 @@
   dependencies to ``click>=8.4.0``, ``loguru>=0.7.2``, ``networkx>=3.0``,
   ``numpy>=2.1.0``, ``pandas>=3.0.0``, ``pyarrow>=18.0.0``, ``scipy>=1.14.1``,
   ``tables>=3.10.1``
+- Remove the dtype check in ``PopulationView.update`` that accepted the string and
+  datetime dtypes of both pandas 2 and pandas 3. pandas now decides whether new values
+  fit a column, and the column always keeps its dtype. Values that the dtype cannot
+  hold still raise ``PopulationError``. Integers written to a float column, and
+  existing categories written as strings to a categorical column, are now accepted.
 
 **6.0.2 - 11/04/26**
 

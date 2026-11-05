@@ -892,17 +892,34 @@ class PopulationManager(Manager):
         Only the rows in ``update``'s index are written; every other row is left
         alone. Simulants being added are written by :meth:`initialize` instead.
 
+        Each column keeps its existing dtype. Values that the existing dtype cannot
+        hold, such as a fraction in an integer column, raise.
+
         Parameters
         ----------
         update
             The new values, indexed by the simulants to write. Its columns must
             already exist in the frame being written.
+
+        Raises
+        ------
+        TypeError
+            If the existing dtype of a column cannot hold the new values.
         """
         frame = self.private_columns
-        if update.index.equals(frame.index):
-            frame[update.columns] = update
-        else:
+        if not update.index.equals(frame.index):
             frame.loc[update.index, update.columns] = update
+            return
+
+        # Assigning whole columns is much faster than writing into them, but it takes
+        # the update's dtype. So only columns that already have the existing dtype are
+        # assigned. The rest are written into, which keeps the existing dtype.
+        same_dtype = [c for c in update.columns if update[c].dtype == frame[c].dtype]
+        other_dtype = [c for c in update.columns if c not in same_dtype]
+        if same_dtype:
+            frame[same_dtype] = update[same_dtype]
+        if other_dtype:
+            frame.loc[:, other_dtype] = update[other_dtype]
 
     def initialize(self, data: pd.DataFrame) -> None:
         """Add the given columns to the simulants being initialized.
