@@ -10,12 +10,14 @@ Monorepo for the Vivarium simulation framework and ecosystem libraries.
 | `libs/build-utils/` | `vivarium-build-utils` | `import vivarium.build_utils` | *(no docs)* |
 | `libs/cluster-tools/` | `vivarium-cluster-tools` | `import vivarium.cluster_tools` | https://vivarium-cluster-tools.readthedocs.io |
 | `libs/config-tree/` | `vivarium-config-tree` | `import vivarium.config_tree` | https://vivarium-config-tree.readthedocs.io |
+| `libs/dagger/` | `vivarium-dagger` | `import vivarium.dagger` | https://vivarium-dagger.readthedocs.io |
 | `libs/dependencies/` | `vivarium-dependencies` | *(meta-package)* | *(no docs)* |
 | `libs/engine/` | `vivarium-engine` | `import vivarium.engine` | https://vivarium-engine.readthedocs.io |
 | `libs/fuzzy-checker/` | `vivarium-fuzzy-checker` | `import vivarium.fuzzy_checker` | https://vivarium-fuzzy-checker.readthedocs.io |
 | `libs/gbd-mapping/` | `vivarium-gbd-mapping` | `import vivarium.gbd_mapping` | https://vivarium-gbd-mapping.readthedocs.io |
 | `libs/interactive/` | `vivarium-interactive` | `import vivarium.interactive` | https://vivarium-interactive.readthedocs.io |
 | `libs/profiling/` | `vivarium-profiling` | `import vivarium.profiling` | *(no docs)* |
+| `libs/psimulate/` | `vivarium-psimulate` | `import vivarium.psimulate` | https://vivarium-psimulate.readthedocs.io |
 | `libs/public-health/` | `vivarium-public-health` | `import vivarium.public_health` | https://vivarium-public-health.readthedocs.io |
 | `libs/pytest-vivarium/` | `pytest-vivarium` | *(pytest plugin — auto-loaded)* | https://pytest-vivarium.readthedocs.io |
 | `libs/risk-distributions/` | `vivarium-risk-distributions` | `import vivarium.risk_distributions` | https://vivarium-risk-distributions.readthedocs.io |

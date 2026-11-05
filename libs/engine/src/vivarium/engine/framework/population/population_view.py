@@ -199,7 +199,7 @@ class PopulationView:
             warnings.warn(
                 "The 'skip_post_processor' parameter is deprecated. "
                 "Use mode='no-post-processors' instead.",
-                DeprecationWarning,
+                FutureWarning,
                 stacklevel=2,
             )
             if mode == "source":

@@ -3,7 +3,7 @@
 Cluster CLI options
 ===================
 
-Command line options for configuring the cluster environment in psimulate runs.
+Command line options for configuring the cluster environment of submitted jobs.
 
 """
 

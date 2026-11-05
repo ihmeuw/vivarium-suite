@@ -381,7 +381,7 @@ def rate_to_step_probability(
 
     column = data.columns[0]
     probability = rate_to_probability(
-        data[column].copy(),
+        data[column].to_numpy(copy=True),
         time_scaling_factor=step_size,
         rate_conversion_type=rate_conversion_type,
     )

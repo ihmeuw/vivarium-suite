@@ -93,6 +93,54 @@ def test_BasePopulation(
     )  # Within a half of a day.
 
 
+@pytest.mark.parametrize(
+    "deprecated_key, new_key",
+    [
+        ("age_start", "initialization_age_min"),
+        ("age_end", "initialization_age_max"),
+        ("exit_age", "untracking_age"),
+    ],
+)
+def test_deprecated_config_key_warns(
+    config, base_plugins, deprecated_key: str, new_key: str
+) -> None:
+    value = config.population.get(new_key, default_value=100)
+    config.update({"population": {deprecated_key: value}}, layer="override")
+    with pytest.warns(FutureWarning, match=f"'{deprecated_key}'.*'{new_key}'"):
+        Simulation(
+            components=[bp.BasePopulation()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+            setup=False,
+        ).setup()
+
+
+@pytest.mark.parametrize(
+    "deprecated_key, new_key",
+    [
+        ("age_start", "initialization_age_min"),
+        ("age_end", "initialization_age_max"),
+        ("exit_age", "untracking_age"),
+    ],
+)
+@pytest.mark.parametrize("new_key_layer", ["override", "model_override"])
+def test_deprecated_config_key_conflicting_with_new_key_raises(
+    config, base_plugins, deprecated_key: str, new_key: str, new_key_layer: str
+) -> None:
+    config.update({"population": {deprecated_key: 90}}, layer="override")
+    # The config fixture already sets the initialization ages at model_override, and a
+    # layer cannot be written twice, so those cases conflict with the fixture's value.
+    if not (new_key_layer == "model_override" and new_key in config.population.keys()):
+        config.update({"population": {new_key: 100}}, layer=new_key_layer)
+    with pytest.raises(ValueError, match=f"'{deprecated_key}' and '{new_key}'"):
+        Simulation(
+            components=[bp.BasePopulation()],
+            configuration=config,
+            plugin_configuration=base_plugins,
+            setup=False,
+        ).setup()
+
+
 def test_age_out_simulants(config, base_plugins):
     start_population_size = 1000
     num_days = 600
