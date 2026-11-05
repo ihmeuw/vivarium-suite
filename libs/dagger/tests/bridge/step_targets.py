@@ -32,6 +32,12 @@ STDOUT_PRINT = "printed to sys.stdout"
 STDERR_PRINT = "printed to sys.stderr"
 """Line that :func:`write_to_streams_and_descriptors` prints to ``sys.stderr``."""
 
+KILLED_STDERR = "written to stderr before the runner was killed"
+"""Line that :func:`exit_without_a_result` writes to standard error before it exits."""
+
+KILLED_EXIT_STATUS = 137
+"""The exit status of :func:`exit_without_a_result`, as for a process that SIGKILL ended."""
+
 _CHILD_COMMAND = "echo capture-out-2; echo capture-err-3 >&2"
 """Shell command whose output :func:`write_to_every_stream` puts between its own lines."""
 
@@ -98,3 +104,14 @@ def record_pid(**upstreams: Path) -> pd.DataFrame:
     frames = [pd.read_parquet(upstreams[name]) for name in sorted(upstreams)]
     frames.append(pd.DataFrame({"pid": [os.getpid()]}))
     return pd.concat(frames, ignore_index=True)
+
+
+def raise_step_failure_reading(**upstreams: Path) -> pd.DataFrame:
+    """Accept any upstream products, then fail with StepFailure."""
+    raise StepFailure(FAILURE_MESSAGE)
+
+
+def exit_without_a_result(**upstreams: Path) -> pd.DataFrame:
+    """Write a line to stderr, then end the runner's process at once, as SIGKILL would."""
+    os.write(2, f"{KILLED_STDERR}\n".encode())
+    os._exit(KILLED_EXIT_STATUS)

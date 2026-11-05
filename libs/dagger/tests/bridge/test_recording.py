@@ -7,8 +7,10 @@ the build's process.
 
 import io
 import json
+import math
 import os
 import re
+import shlex
 import socket
 import tomllib
 from collections import Counter
@@ -60,6 +62,12 @@ _NO_PRODUCT = "no_product_step"
 
 _NOT_PRODUCED = "The task did not produce the following files"
 """The start of pytask's message for a step that did not write a declared product."""
+
+_WRITES_ONE = "writes_one_of_two"
+"""Name of the command step that writes only one of its two declared products."""
+
+_COPIES = "copies_the_written_product"
+"""Name of the command step that copies the product that :data:`_WRITES_ONE` wrote."""
 
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 """An ANSI escape sequence, which pytask's console writes when it styles its output."""
@@ -128,6 +136,50 @@ def _steps_without_inputs(
 def _constant_steps(registry: ArtifactRegistry, names: Sequence[str]) -> list[Task]:
     """Return one independent python step per name, each writing a constant frame."""
     return _steps_without_inputs(registry, dict.fromkeys(names, step_targets.constant))
+
+
+def _two_step_chain(registry: ArtifactRegistry) -> list[Task]:
+    """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
+    first = python_step(
+        step_targets.constant, inputs={}, produces="first.parquet", registry=registry
+    )
+    second = python_step(
+        step_targets.stack,
+        inputs={"upstream": "first.parquet"},
+        produces="second.parquet",
+        registry=registry,
+    )
+    return [first, second]
+
+
+def _chain_missing_a_product(directory: Path) -> tuple[list[Task], Path]:
+    """Return two command steps with stable code identities, and the second's product.
+
+    The first step declares ``written.txt`` and ``missing.txt`` under ``directory`` but
+    writes only ``written.txt``. The second step copies ``written.txt`` to ``copy.txt``.
+    """
+    written = directory / "written.txt"
+    copy = directory / "copy.txt"
+    writes_one = Task(
+        name=_WRITES_ONE,
+        run=f"echo written > {shlex.quote(str(written))}",
+        inputs={},
+        outputs={
+            "written": file_node(written),
+            "missing": file_node(directory / "missing.txt"),
+        },
+        resources={},
+        env=None,
+    )
+    copies = Task(
+        name=_COPIES,
+        run=f"cp {shlex.quote(str(written))} {shlex.quote(str(copy))}",
+        inputs={"source": file_node(written)},
+        outputs={"copy": file_node(copy)},
+        resources={},
+        env=None,
+    )
+    return _stable([writes_one, copies]), copy
 
 
 def _bound_names(jobmon: FakeJobmon) -> list[list[str]]:
@@ -721,18 +773,23 @@ def test_a_result_still_being_written_is_not_recorded_and_its_task_is_returned(
 ) -> None:
     """_record_available, given a run directory that holds only '<signature>.result.json.<host>.<pid>.tmp' for a stale task, appends no report for it and returns it."""
     tasks = _constant_steps(_registry(tmp_path), ["pending.parquet"])
+    appended: list[ExecutionReport] = []
 
     def record_pending(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
         """Move each result back to the runner's temporary name, then record."""
         for task in stale:
             result = workdir / f"{task.signature}{RESULT_SUFFIX}"
             result.rename(_temporary_name(result))
-        return _record_available(session, stale, workdir)
+        before = len(session.execution_reports)
+        unrecorded = _record_available(session, stale, workdir)
+        appended.extend(session.execution_reports[before:])
+        return unrecorded
 
+    # The build settles the returned task afterwards, so only this call's reports count.
     root = tmp_path / "state"
-    session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_pending)
+    _, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_pending)
 
-    assert outcomes(session) == {}
+    assert appended == []
     assert [task.name for task in unrecorded] == ["pending.parquet"]
 
 
@@ -742,18 +799,24 @@ def test_record_available_returns_the_tasks_without_a_result_in_order(
 ) -> None:
     """_record_available, given a result file for the first of three stale tasks only, records the first and returns the other two in the order of the stale list."""
     tasks = _constant_steps(_registry(tmp_path), ["a.parquet", "b.parquet", "c.parquet"])
+    appended: list[ExecutionReport] = []
 
     def record_first_only(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
         """Record the stale tasks in reverse plan order, with a result for the first only."""
         ordered = stale[::-1]
         for task in ordered[1:]:
             (workdir / f"{task.signature}{RESULT_SUFFIX}").unlink()
-        return _record_available(session, ordered, workdir)
+        before = len(session.execution_reports)
+        unrecorded = _record_available(session, ordered, workdir)
+        appended.extend(session.execution_reports[before:])
+        return unrecorded
 
+    # The build settles the returned tasks afterwards, so only this call's reports count.
     root = tmp_path / "state"
-    session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_first_only)
+    _, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_first_only)
 
-    assert outcomes(session) == {"c.parquet": TaskOutcome.SUCCESS}
+    recorded = [(report.task.name, report.outcome) for report in appended]
+    assert recorded == [("c.parquet", TaskOutcome.SUCCESS)]
     assert [task.name for task in unrecorded] == ["b.parquet", "a.parquet"]
 
 
@@ -790,25 +853,116 @@ def test_an_unreadable_result_file_is_a_fail_naming_the_file(
 # Jobmon raising during the run
 
 
-def test_when_the_workflow_run_raises_the_finished_steps_are_recorded_and_the_build_fails(
+def test_when_the_workflow_run_raises_the_finished_steps_are_recorded_and_the_rest_settled(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """End to end: with FakeJobmon(error_after=1), a bridged build of a two-step chain records the first step SUCCESS with a pytask.lock entry, gives the second step no report, keeps a RuntimeError as the run's error, exits FAILED, and prints a message that names RuntimeError and says that the steps without a result were not recorded."""
-    fx = build_fixture(tmp_path)
-    first = fx.steps[0]
+    """End to end: with FakeJobmon(error_after=1), a bridged build of a two-step chain records the first step SUCCESS with a pytask.lock entry, reports the second step FAIL with a RemoteTaskFailed whose message names RuntimeError and says that the step was not recorded, keeps a RuntimeError as the run's error, exits FAILED without raising, and prints pytask's summary."""
+    tasks = _two_step_chain(_registry(tmp_path))
+    root = tmp_path / "state"
     jobmon = FakeJobmon(error_after=1)
+    capsys.readouterr()
 
     with jobmon:
-        capsys.readouterr()
-        session = build(fx.tasks, fx.state, jobmon=True)
-        captured = capsys.readouterr()
+        session = build(tasks, root, jobmon=True)
 
+    captured = capsys.readouterr()
     output = _squashed(captured.out + captured.err)
+    assert _report(session, "first.parquet").outcome == TaskOutcome.SUCCESS
+    assert "first.parquet" in _lockfile_entries(root)
+    error = _remote_failure(_report(session, "second.parquet"))
+    assert "RuntimeError" in str(error), str(error)
+    assert "not recorded" in str(error), str(error)
+    assert (error.exc_type, error.exc_message, error.node_traceback) == (None, None, None)
     [jobmon_run] = jobmon.runs
     assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
-    # TODO(MIC-7748): settlement gives the step without a result a report.
-    assert outcomes(session) == {first: TaskOutcome.SUCCESS}
-    assert first in _lockfile_entries(fx.state)
     assert session.exit_code == ExitCode.FAILED
-    assert "RuntimeError" in output, output
-    assert _squashed("the steps without a result were not recorded") in output, output
+    # pytask sets execution_end only in pytask_execute_log_end, which a raising hook skips.
+    assert math.isfinite(session.execution_end)
+    assert "Summary" in output, output
+    assert _squashed("Collected tasks") in output, output
+
+
+# A step after a step that failed at recording
+
+
+def test_a_step_after_a_step_missing_its_product_is_skip_previous_failed_with_no_entry(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """A bridged chain of two command steps with stable code identities, where the first exits 0 without writing one of its two declared products and the second reads the product that was written, reports the first FAIL and the second SKIP_PREVIOUS_FAILED, and pytask.lock has an entry for neither, although the second ran on its node."""
+    tasks, copy = _chain_missing_a_product(tmp_path)
+    root = tmp_path / "state"
+
+    session = build(tasks, root, jobmon=True)
+
+    assert _bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES]]
+    assert outcomes(session) == {
+        _WRITES_ONE: TaskOutcome.FAIL,
+        _COPIES: TaskOutcome.SKIP_PREVIOUS_FAILED,
+    }
+    assert isinstance(_failure(_report(session, _WRITES_ONE)), NodeNotFoundError)
+    entries = _lockfile_entries(root)
+    assert _WRITES_ONE not in entries
+    assert _COPIES not in entries
+    assert copy.exists()
+
+
+def test_a_step_after_a_step_with_an_unreadable_result_is_skip_previous_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_record_available, given a two-step chain whose first step's result file is spoiled and whose second step has a valid successful result, reports the first FAIL with a RemoteTaskFailed naming the file and the second SKIP_PREVIOUS_FAILED with no pytask.lock entry, and returns no task."""
+    registry = _registry(tmp_path)
+    tasks = _two_step_chain(registry)
+    spoiled: list[str] = []
+
+    def record_spoiled(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
+        """Spoil the first step's result, then record both steps."""
+        [first] = [task for task in stale if task.name == "first.parquet"]
+        result = workdir / f"{first.signature}{RESULT_SUFFIX}"
+        _spoil(result, "not_json")
+        spoiled.append(result.name)
+        return _record_available(session, stale, workdir)
+
+    root = tmp_path / "state"
+    with FakeJobmon():
+        session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_spoiled)
+
+    [file_name] = spoiled
+    error = _remote_failure(_report(session, "first.parquet"))
+    assert file_name in str(error), str(error)
+    assert _report(session, "second.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert "second.parquet" not in _lockfile_entries(root)
+    assert registry.path_for("second.parquet").exists()
+    assert unrecorded == []
+
+
+def test_bridged_outcomes_match_a_local_build_when_a_step_fails_only_at_recording(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """For the chain whose first step does not write a declared product, the outcomes and pytask.lock entries of a bridged build equal those of a local build of the same steps in another directory."""
+    local_tasks, _ = _chain_missing_a_product(_mkdir(tmp_path / "local"))
+    bridged_tasks, _ = _chain_missing_a_product(_mkdir(tmp_path / "bridged"))
+    local_root, bridged_root = tmp_path / "local" / "state", tmp_path / "bridged" / "state"
+    local = build(local_tasks, local_root)
+
+    bridged = build(bridged_tasks, bridged_root, jobmon=True)
+
+    assert _bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES]]
+    assert outcomes(local) == {
+        _WRITES_ONE: TaskOutcome.FAIL,
+        _COPIES: TaskOutcome.SKIP_PREVIOUS_FAILED,
+    }
+    assert outcomes(bridged) == outcomes(local)
+    assert _lockfile_entries(bridged_root) == _lockfile_entries(local_root)
+
+
+def test_the_next_build_after_a_failure_at_recording_plans_both_steps_again(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """After the bridged build of that chain, a second bridged build binds a plan holding both steps, because neither was recorded."""
+    tasks, _ = _chain_missing_a_product(tmp_path)
+    root = tmp_path / "state"
+    build(tasks, root, jobmon=True)
+
+    build(tasks, root, jobmon=True)
+
+    assert _bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES], [_WRITES_ONE, _COPIES]]

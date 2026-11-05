@@ -356,7 +356,9 @@ class FakeJobmon:
         run's status ``None`` and its task statuses empty, as Jobmon leaves them when it
         is interrupted. With ``"sigterm"`` it first checks that SIGTERM has a handler that
         Python calls, and sends the signal only then, so that a test cannot end its own
-        process. The handler's exception then propagates out of this method.
+        process. The handler's exception, such as the bridge's
+        :class:`~vivarium.dagger.bridge.execute.BridgeInterrupted`, then propagates out of
+        this method.
 
         Parameters
         ----------
