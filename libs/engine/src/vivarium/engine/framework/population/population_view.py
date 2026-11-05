@@ -458,37 +458,13 @@ class PopulationView:
             self._component, index=index, columns=columns
         )
         previous_index = current_data.index
-        previous_dtypes = (
-            current_data.dtypes
-            if isinstance(current_data, pd.DataFrame)
-            else current_data.to_frame().dtypes
-        )
         result = modifier(current_data)
         result_df = self._coerce_update_result(result, column_list, previous_index)
 
         if result_df.empty:
             return
 
-        component_name = self._component.name
-
-        def corrupting_error() -> PopulationError:
-            changed = ", ".join(
-                f"{column} from {previous_dtypes[column]} to {result_df[column].dtype}"
-                for column in result_df.columns
-                if result_df[column].dtype != previous_dtypes[column]
-            )
-            return PopulationError(
-                f"Component '{component_name}' is corrupting the population table "
-                f"by modifying the dtype of a column it updates ({changed})."
-            )
-
-        try:
-            self._manager.update(result_df)
-        except TypeError as exc:
-            raise corrupting_error() from exc
-        written_dtypes = self._manager.private_columns.dtypes[result_df.columns]
-        if not written_dtypes.equals(previous_dtypes[result_df.columns]):
-            raise corrupting_error()
+        self._manager.update(self._component, result_df)
 
     def __repr__(self) -> str:
         name = self._component.name if self._component else "None"
