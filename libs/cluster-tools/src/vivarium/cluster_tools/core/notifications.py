@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -10,6 +12,13 @@ from loguru import logger
 
 SLACK_API_BASE = "https://slack.com/api"
 SLACK_TIMEOUT = 10  # seconds
+SLACK_BOT_CONFIG = Path(
+    "/mnt/team/simulation_science/priv/engineering/config/slack_bot_config.sh"
+)
+"""Team file that sets the bot token with an ``export`` line."""
+_TOKEN_LINE = re.compile(
+    r"""^\s*(?:export\s+)?PSIMULATE_SLACK_BOT_TOKEN=["']?([^"'\s]+)["']?\s*$"""
+)
 
 
 def _slack_post(token: str, method: str, **payload: Any) -> dict[str, Any]:
@@ -22,6 +31,23 @@ def _slack_post(token: str, method: str, **payload: Any) -> dict[str, Any]:
     )
     data: dict[str, Any] = resp.json()
     return data
+
+
+def _read_token() -> str | None:
+    """Return the bot token from the environment, or else from the team config file."""
+    token = os.environ.get("PSIMULATE_SLACK_BOT_TOKEN")
+    if token:
+        return token
+    # uv venvs never run the conda activation script that exports the token.
+    try:
+        lines = SLACK_BOT_CONFIG.read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        match = _TOKEN_LINE.match(line)
+        if match:
+            return match.group(1)
+    return None
 
 
 def _resolve_user_id(token: str, username: str) -> str | None:
@@ -54,8 +80,8 @@ def send_slack_notification(
 
     The launching user is the SLURM ``$USER``, resolved to a Slack user via a
     ``{user}@uw.edu`` email lookup. Reads ``PSIMULATE_SLACK_BOT_TOKEN`` from the
-    environment. If the token is unset or any API call fails, logs a warning and
-    returns without raising.
+    environment, or from the team config file when it is unset. If no token is
+    found or any API call fails, logs a warning and returns without raising.
 
     Parameters
     ----------
@@ -89,9 +115,9 @@ def send_slack_notification(
             logger.debug("Slack notification suppressed via --no-slack.")
             return
 
-        token = os.environ.get("PSIMULATE_SLACK_BOT_TOKEN")
+        token = _read_token()
         if not token:
-            logger.debug("PSIMULATE_SLACK_BOT_TOKEN not set. Skipping Slack notification.")
+            logger.debug("No Slack bot token found. Skipping Slack notification.")
             return
 
         launcher = os.environ.get("USER", "unknown")
