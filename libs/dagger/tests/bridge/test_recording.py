@@ -288,9 +288,9 @@ class _LooksAtTheRoot(FakeJobmon):
     seen: list[set[str]] = field(default_factory=list, init=False)
     """The task ids in the root's pytask.lock and its journal at the end of each run."""
 
-    def run(self, jobmon_run: JobmonRun) -> None:
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
         """Run every entry as FakeJobmon does, then note the task ids the root holds."""
-        super().run(jobmon_run)
+        super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
         self.seen.append(set(_lockfile_entries(self.root)) | _journal_ids(self.root))
 
 

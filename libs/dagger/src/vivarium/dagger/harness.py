@@ -10,7 +10,8 @@ Every step defaults to an always-stale code identity, so it re-runs on every bui
 exercise skipping, forcing, and resuming before steps can declare a code fingerprint.
 
 :class:`FakeJobmon` stands in for Jobmon, so a build with ``jobmon=True`` runs its steps
-through the bridge's node runner with no Jobmon server.
+through the bridge's node runner with no Jobmon server. It can also stop the run as Jobmon
+does when it raises, or interrupt it with SIGTERM or a ``KeyboardInterrupt``.
 
 The selective-staleness assertions (perturb one input, exactly its cone re-runs) are not
 here yet; they arrive with the code fingerprint.
@@ -19,12 +20,14 @@ here yet; they arrive with the code fingerprint.
 from __future__ import annotations
 
 import hashlib
+import os
+import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import Any, Literal, NoReturn
 
 import pandas as pd
 from pytask import PNode, TaskOutcome
@@ -211,11 +214,26 @@ class FakeJobmon:
         with FakeJobmon() as jobmon:
             build(fx.tasks, fx.state, jobmon=True)
         assert [entry.name for entry in jobmon.plans[0]] == list(fx.steps)
+
+    Raises
+    ------
+    ValueError
+        If both :attr:`error_after` and :attr:`interrupt_after` are set.
     """
 
     error_after: int | None = None
     """How many entries, in plan order, :meth:`run` handles before it stops as the real
     adapter does when Jobmon's ``Workflow.run`` raises. ``None`` runs the whole plan."""
+    workflow_id: int | None = None
+    """The workflow id of each run that :meth:`bind` returns."""
+    interrupt_after: int | None = None
+    """How many entries, in plan order, :meth:`run` handles before it interrupts the
+    build in the way that :attr:`interrupt_with` names. ``None`` does not interrupt."""
+    interrupt_with: Literal["sigterm", "keyboard_interrupt"] = "sigterm"
+    """How :meth:`run` interrupts the build once :attr:`interrupt_after` entries are
+    handled. With ``"sigterm"`` it sends SIGTERM to its own process, and with
+    ``"keyboard_interrupt"`` it raises ``KeyboardInterrupt``, as Jobmon does when a user
+    confirms the stop at its prompt."""
     plans: list[list[PlanEntry]] = field(default_factory=list, init=False)
     """Every plan bound inside the block, in the order bound."""
     options: list[dict[str, Any]] = field(default_factory=list, init=False)
@@ -224,10 +242,20 @@ class FakeJobmon:
     runs: list[JobmonRun] = field(default_factory=list, init=False)
     """Every run that :meth:`bind` returned inside the block, in the order bound, so a
     test can read a run's status, task statuses and error after the build."""
+    timeouts: list[int | None] = field(default_factory=list, init=False)
+    """The ``seconds_until_timeout`` of each call of :meth:`run`, in the order called."""
+    sigterm_handlers: list[object] = field(default_factory=list, init=False)
+    """SIGTERM's handler, as :func:`signal.getsignal` returns it, when each call of
+    :meth:`run` started, in the order called."""
     _replaced: dict[str, Any] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
     """The adapter's own functions while this object's replace them, by name."""
+
+    def __post_init__(self) -> None:
+        """Refuse both a stop with an error and an interrupt."""
+        if self.error_after is not None and self.interrupt_after is not None:
+            raise ValueError("Set at most one of error_after and interrupt_after.")
 
     def __enter__(self) -> FakeJobmon:
         """Replace the adapter's functions with this object's."""
@@ -260,7 +288,7 @@ class FakeJobmon:
         resource_scales: Mapping[str, float] | None,
         workflow_name: str,
     ) -> JobmonRun:
-        """Record a plan, its options and its run, and return the run with no workflow id.
+        """Record a plan, its options and its run, and return the run.
 
         Parameters
         ----------
@@ -279,8 +307,8 @@ class FakeJobmon:
 
         Returns
         -------
-            A run of ``plan`` whose ``workflow_id`` is ``None``, which is also appended to
-            :attr:`runs`.
+            A run of ``plan`` whose ``workflow_id`` is :attr:`workflow_id`, which is also
+            appended to :attr:`runs`.
 
         Raises
         ------
@@ -300,12 +328,15 @@ class FakeJobmon:
                 "workflow_name": workflow_name,
             }
         )
-        jobmon_run = JobmonRun(plan=entries, workflow_id=None)
+        jobmon_run = JobmonRun(plan=entries, workflow_id=self.workflow_id)
         self.runs.append(jobmon_run)
         return jobmon_run
 
-    def run(self, jobmon_run: JobmonRun) -> None:
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
         """Run each entry's command with ``/bin/sh`` in plan order, and set the statuses.
+
+        The call first appends ``seconds_until_timeout`` to :attr:`timeouts` and SIGTERM's
+        current handler to :attr:`sigterm_handlers`.
 
         An entry whose command exits with status 0 gets the task status ``"D"``, and one
         that exits otherwise gets ``"F"``. An entry with an upstream whose status is not
@@ -320,13 +351,35 @@ class FakeJobmon:
         says that the fake stopped after that many entries. The method still returns
         normally.
 
+        With :attr:`interrupt_after` set, only that many entries are run or withheld, and
+        then the method interrupts the build as :attr:`interrupt_with` names, leaving the
+        run's status ``None`` and its task statuses empty, as Jobmon leaves them when it
+        is interrupted. With ``"sigterm"`` it first checks that SIGTERM has a handler that
+        Python calls, and sends the signal only then, so that a test cannot end its own
+        process. The handler's exception then propagates out of this method.
+
         Parameters
         ----------
         jobmon_run
             A run that :meth:`bind` returned.
+        seconds_until_timeout
+            Recorded in :attr:`timeouts`.
+
+        Raises
+        ------
+        KeyboardInterrupt
+            With :attr:`interrupt_after` set and :attr:`interrupt_with` ``"keyboard_interrupt"``.
+        RuntimeError
+            With :attr:`interrupt_after` set and :attr:`interrupt_with` ``"sigterm"``, if
+            SIGTERM's handler is not a Python function, so the signal is not sent, or if
+            the signal was sent and its handler returned without raising.
         """
+        self.timeouts.append(seconds_until_timeout)
+        self.sigterm_handlers.append(signal.getsignal(signal.SIGTERM))
         statuses: dict[str, str | None] = {}
         for index, entry in enumerate(jobmon_run.plan):
+            if self.interrupt_after is not None and index >= self.interrupt_after:
+                break
             if self.error_after is not None and index >= self.error_after:
                 statuses[entry.signature] = None
                 continue
@@ -335,6 +388,8 @@ class FakeJobmon:
                 continue
             finished = subprocess.run(["/bin/sh", "-c", entry.command], check=False)
             statuses[entry.signature] = "D" if finished.returncode == 0 else "F"
+        if self.interrupt_after is not None:
+            self._interrupt()
         if self.error_after is not None:
             jobmon_run.task_statuses = {signature: None for signature in statuses}
             jobmon_run.error = RuntimeError(
@@ -345,3 +400,19 @@ class FakeJobmon:
         jobmon_run.task_statuses = statuses
         all_done = all(status == "D" for status in statuses.values())
         jobmon_run.status = "D" if all_done else "E"
+
+    def _interrupt(self) -> NoReturn:
+        """Interrupt the build as :attr:`interrupt_with` names, leaving the run untouched."""
+        if self.interrupt_with == "keyboard_interrupt":
+            raise KeyboardInterrupt
+        handler = signal.getsignal(signal.SIGTERM)
+        if not callable(handler):
+            raise RuntimeError(
+                "FakeJobmon did not send SIGTERM, because its handler is not a Python "
+                f"function ({handler!r}), so the signal would end the test process."
+            )
+        os.kill(os.getpid(), signal.SIGTERM)
+        raise RuntimeError(
+            f"FakeJobmon sent SIGTERM, but its handler {handler!r} returned without "
+            "raising."
+        )

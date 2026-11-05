@@ -933,3 +933,70 @@ def test_bind_lets_a_keyboard_interrupt_from_jobmon_pass_through(
         _bind([_entry("a"), _entry("b", "a")])
 
     assert info.value is interrupt
+
+
+# The run's timeout
+
+
+class _TimedWorkflow(_StandInWorkflow):
+    """Stand in for a bound Jobmon workflow, recording the arguments of each run."""
+
+    def __init__(self, status: str, final_statuses: Mapping[_StandInTask, str]) -> None:
+        super().__init__(status, final_statuses)
+        self.calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def run(self, *args: Any, **kwargs: Any) -> str:
+        """Record the arguments, then end as the stand-in workflow does."""
+        self.calls.append((args, kwargs))
+        return super().run(*args, **kwargs)
+
+
+class _StopFromOutside(SystemExit):
+    """Stand in for the bridge's SystemExit subclass for an interrupted run."""
+
+
+def _timed_run() -> tuple[JobmonRun, _TimedWorkflow]:
+    """Return a bound run of one entry whose workflow records the arguments of each run."""
+    plan = (_entry("a"),)
+    tasks = {entry.signature: _StandInTask() for entry in plan}
+    workflow = _TimedWorkflow("D", {task: "D" for task in tasks.values()})
+    return JobmonRun(plan=plan, workflow_id=19, workflow=workflow, tasks=tasks), workflow
+
+
+def test_run_passes_its_timeout_to_the_workflow_run() -> None:
+    """run(jobmon_run, seconds_until_timeout=7200) calls the stand-in workflow's run with fail_fast=False and seconds_until_timeout=7200."""
+    jobmon_run, workflow = _timed_run()
+
+    run(jobmon_run, seconds_until_timeout=7200)
+
+    assert workflow.calls == [((), {"fail_fast": False, "seconds_until_timeout": 7200})]
+    assert jobmon_run.status == "D"
+
+
+def test_run_without_a_timeout_leaves_jobmons_default() -> None:
+    """run(jobmon_run) and run(jobmon_run, seconds_until_timeout=None) call the stand-in workflow's run with fail_fast=False and no seconds_until_timeout argument."""
+    left_out, left_out_workflow = _timed_run()
+    given_none, given_none_workflow = _timed_run()
+
+    run(left_out)
+    run(given_none, seconds_until_timeout=None)
+
+    assert left_out_workflow.calls == [((), {"fail_fast": False})]
+    assert given_none_workflow.calls == [((), {"fail_fast": False})]
+
+
+def test_an_interrupt_from_the_workflow_run_leaves_status_and_task_statuses_unset() -> None:
+    """When the stand-in workflow's run raises KeyboardInterrupt or a SystemExit subclass, run lets it through and the JobmonRun's status is None, its task_statuses is empty and its error is None."""
+    plan = (_entry("a"), _entry("b", "a"))
+    for interrupt in (KeyboardInterrupt(), _StopFromOutside(143)):
+        tasks = {entry.signature: _StandInTask() for entry in plan}
+        workflow = _RaisingWorkflow(interrupt)
+        jobmon_run = JobmonRun(plan=plan, workflow_id=20, workflow=workflow, tasks=tasks)
+
+        with pytest.raises(type(interrupt)) as info:
+            run(jobmon_run, seconds_until_timeout=60)
+
+        assert info.value is interrupt
+        assert jobmon_run.status is None
+        assert jobmon_run.task_statuses == {}
+        assert jobmon_run.error is None

@@ -2,10 +2,14 @@
 
 import os
 import shlex
+import signal
 import subprocess
 import sys
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from types import FrameType
 from typing import Any
 
 import pandas as pd
@@ -62,6 +66,34 @@ def _appends(name: str, log: Path) -> str:
 def _adapter_functions() -> tuple[object, object, object]:
     """Return the adapter's check_environment, bind and run, as the bridge looks them up."""
     return _jobmon_adapter.check_environment, _jobmon_adapter.bind, _jobmon_adapter.run
+
+
+class _Stopped(Exception):
+    """The error that a test's SIGTERM handler raises."""
+
+
+def _recording_handler(
+    calls: list[int], *, raises: bool = False
+) -> Callable[[int, FrameType | None], None]:
+    """Return a SIGTERM handler that appends each signal to ``calls``, then may raise."""
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        """Note the signal, and raise _Stopped if asked to."""
+        calls.append(signum)
+        if raises:
+            raise _Stopped
+
+    return handler
+
+
+@contextmanager
+def _sigterm_handler(handler: Callable[[int, FrameType | None], Any]) -> Iterator[None]:
+    """Install ``handler`` for SIGTERM in the block, and restore the earlier one after."""
+    previous = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def test_build_fixture_runs_and_writes_its_products(tmp_path: Path) -> None:
@@ -332,3 +364,132 @@ def test_fake_jobmon_error_after_counts_an_entry_that_it_withholds(tmp_path: Pat
     assert not log.exists()
     assert jobmon_run.task_statuses == expected
     assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
+
+
+def test_fake_jobmon_bind_gives_each_run_its_workflow_id() -> None:
+    """FakeJobmon(workflow_id=4242).bind returns a run whose workflow_id is 4242."""
+    with FakeJobmon(workflow_id=4242) as jobmon:
+        first = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        second = _jobmon_adapter.bind([_entry("b", "true")], **_BIND_OPTIONS)
+
+    assert first.workflow_id == 4242
+    assert second.workflow_id == 4242
+    assert [jobmon_run.workflow_id for jobmon_run in jobmon.runs] == [4242, 4242]
+
+
+def test_fake_jobmon_records_the_timeout_and_sigterm_handler_of_each_run(
+    tmp_path: Path,
+) -> None:
+    """Two calls of FakeJobmon.run, with seconds_until_timeout 60 and then without it, leave timeouts [60, None] and sigterm_handlers holding SIGTERM's handler at each call."""
+    plan = [_entry("a", "true")]
+    calls: list[int] = []
+    sentinel = _recording_handler(calls)
+
+    with FakeJobmon() as jobmon:
+        before = signal.getsignal(signal.SIGTERM)
+        _jobmon_adapter.run(
+            _jobmon_adapter.bind(plan, **_BIND_OPTIONS), seconds_until_timeout=60
+        )
+        with _sigterm_handler(sentinel):
+            _jobmon_adapter.run(_jobmon_adapter.bind(plan, **_BIND_OPTIONS))
+
+    assert jobmon.timeouts == [60, None]
+    assert jobmon.sigterm_handlers == [before, sentinel]
+    assert calls == []
+
+
+def test_fake_jobmon_interrupt_after_sends_sigterm_after_that_many_entries(
+    tmp_path: Path,
+) -> None:
+    """With a Python SIGTERM handler that raises a test exception, FakeJobmon(interrupt_after=1).run on a two-entry plan runs the first command only and then lets that exception out; the run's status is None and its task_statuses is empty."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("first", _appends("first", log)),
+        _entry("second", _appends("second", log)),
+    ]
+    calls: list[int] = []
+
+    with _sigterm_handler(_recording_handler(calls, raises=True)):
+        with FakeJobmon(interrupt_after=1):
+            jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+            with pytest.raises(_Stopped):
+                _jobmon_adapter.run(jobmon_run)
+
+    assert calls == [signal.SIGTERM]
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.status is None
+    assert jobmon_run.task_statuses == {}
+
+
+def test_fake_jobmon_refuses_to_send_sigterm_without_a_python_handler(tmp_path: Path) -> None:
+    """With SIGTERM's handler set to SIG_DFL, FakeJobmon(interrupt_after=0).run raises RuntimeError and the test process gets no signal."""
+    # A signal sent here would end the process, so the check runs in a child process.
+    code = (
+        "import signal\n"
+        "from vivarium.dagger.bridge import _jobmon_adapter\n"
+        "from vivarium.dagger.bridge._jobmon_adapter import PlanEntry\n"
+        "from vivarium.dagger.harness import FakeJobmon\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_DFL)\n"
+        "entry = PlanEntry(\n"
+        "    signature='sig-a', name='a', command='true', upstreams=(), resources={}\n"
+        ")\n"
+        "with FakeJobmon(interrupt_after=0):\n"
+        "    jobmon_run = _jobmon_adapter.bind(\n"
+        "        [entry], cluster='slurm', default_resources={}, max_attempts=2,\n"
+        "        resource_scales=None, workflow_name='fake_workflow',\n"
+        "    )\n"
+        "    try:\n"
+        "        _jobmon_adapter.run(jobmon_run)\n"
+        "    except RuntimeError:\n"
+        "        print('refused', end='')\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    assert result.stdout == "refused", result.stderr
+
+
+def test_fake_jobmon_raises_runtime_error_when_the_sigterm_handler_returns(
+    tmp_path: Path,
+) -> None:
+    """With a Python SIGTERM handler that returns without raising, FakeJobmon(interrupt_after=0).run raises RuntimeError."""
+    calls: list[int] = []
+
+    with _sigterm_handler(_recording_handler(calls)), FakeJobmon(interrupt_after=0):
+        jobmon_run = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        with pytest.raises(RuntimeError):
+            _jobmon_adapter.run(jobmon_run)
+
+    assert calls == [signal.SIGTERM]
+
+
+def test_fake_jobmon_interrupt_with_keyboard_interrupt_raises_it(tmp_path: Path) -> None:
+    """FakeJobmon(interrupt_after=1, interrupt_with='keyboard_interrupt').run on a two-entry plan runs the first command only and raises KeyboardInterrupt, leaving the run's status None and its task_statuses empty."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("first", _appends("first", log)),
+        _entry("second", _appends("second", log)),
+    ]
+
+    with FakeJobmon(interrupt_after=1, interrupt_with="keyboard_interrupt"):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        with pytest.raises(KeyboardInterrupt):
+            _jobmon_adapter.run(jobmon_run)
+
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.status is None
+    assert jobmon_run.task_statuses == {}
+
+
+def test_fake_jobmon_refuses_both_error_after_and_interrupt_after() -> None:
+    """FakeJobmon(error_after=1, interrupt_after=1) raises ValueError."""
+    with pytest.raises(ValueError):
+        FakeJobmon(error_after=1, interrupt_after=1)
