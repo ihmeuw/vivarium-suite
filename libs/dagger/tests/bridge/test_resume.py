@@ -66,8 +66,8 @@ def _has_word(word: str, text: str) -> bool:
 
 
 def _gives_status(label: str, code: str, text: str) -> bool:
-    """Check whether ``text`` gives ``code`` right after ``label``, quoted or not."""
-    pattern = rf"\b(?i:{re.escape(label)})\W*{re.escape(code)}\b"
+    """Check whether ``text`` gives ``code`` right after ``label``, quoted or not, or after "is"."""
+    pattern = rf"\b(?i:{re.escape(label)})\W*(?:is\W*)?{re.escape(code)}\b"
     return re.search(pattern, text) is not None
 
 

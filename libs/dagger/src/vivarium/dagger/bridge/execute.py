@@ -317,13 +317,14 @@ def pytask_execute_build(session: Session) -> bool:
     pytask has marked as skipped because an ancestor failed is reported as
     SKIP_PREVIOUS_FAILED. Any other step is reported as FAIL with a
     :class:`RemoteTaskFailed` whose ``exc_type``, ``exc_message`` and ``node_traceback``
-    are ``None``. Its message names the step, says that the step has no result, so it was
-    not recorded and will run again in the next build, and gives the step's Jobmon task
-    status, the workflow id and the workflow's status, each as ``unknown`` when Jobmon gave
-    none. It also says why: that Jobmon stopped the workflow with an error, giving the
-    error's type and message; that the build was interrupted; that the build was
-    interrupted before the Jobmon workflow was bound; or that the workflow ended without a
-    result for the step, as when the runner was killed on its node. Its ``stdout`` and
+    are ``None``. Its message names the step and first says why it has no result: that
+    Jobmon stopped the workflow with an error, giving the error's type and message; that
+    the build was interrupted; that the build was interrupted before the Jobmon workflow
+    was bound; or that the workflow ended without a result for the step, as when the
+    runner was killed on its node. It then says that the step was not recorded and will
+    run again in the next build, and gives the step's Jobmon task status, the workflow id
+    and the workflow's status, each as ``unknown`` when Jobmon gave none. When no workflow
+    was bound, it says instead that the step has no Jobmon status. Its ``stdout`` and
     ``stderr`` are the tails of the output that the step's runner wrote to its capture
     files (:func:`~vivarium.dagger.bridge.runner.capture_paths`), or empty when there are
     none, and non-empty tails are also in the report's sections as captured output of the
@@ -931,27 +932,15 @@ def _settle(
     ``workdir`` is the run directory, which holds the capture files of each leftover's
     runner.
     """
-    workflow_id = "unknown"
-    workflow_status = "unknown"
-    task_statuses: Mapping[str, str | None] = {}
-    if jobmon_run is not None:
-        if jobmon_run.workflow_id is not None:
-            workflow_id = str(jobmon_run.workflow_id)
-        if jobmon_run.status is not None:
-            workflow_status = jobmon_run.status
-        task_statuses = jobmon_run.task_statuses
     ending = "" if cause.endswith((".", "!", "?")) else "."
     for task in leftovers:
         reason = _ancestor_failure(task)
         if reason is not None:
             _report_exception(session, task, SkippedAncestorFailed(reason))
             continue
-        task_status = task_statuses.get(task.signature) or "unknown"
         message = (
-            f"Step '{task.name}' has no result, so it was not recorded and will run again "
-            f"in the next build. Jobmon task status '{task_status}', workflow "
-            f"{workflow_id}, workflow status '{workflow_status}'. The step has no result "
-            f"because {cause}{ending}"
+            f"Step '{task.name}' has no result because {cause}{ending} It was not recorded "
+            f"and will run again in the next build. {_jobmon_statuses(task, jobmon_run)}"
         )
         capture = capture_paths(workdir / f"{task.signature}{RESULT_SUFFIX}")
         stdout, stderr = _tail(capture[0]), _tail(capture[1])
@@ -961,6 +950,22 @@ def _settle(
             task.report_sections.append(("call", "stderr", stderr))
         error = RemoteTaskFailed(message, stdout=stdout, stderr=stderr)
         _report_exception(session, task, error)
+
+
+def _jobmon_statuses(task: PTask, jobmon_run: JobmonRun | None) -> str:
+    """Return the sentences that give a settled step's Jobmon task and workflow status."""
+    if jobmon_run is None:
+        return "It has no Jobmon status, because no Jobmon workflow was bound."
+    task_status = jobmon_run.task_statuses.get(task.signature) or "unknown"
+    workflow = (
+        "The Jobmon workflow"
+        if jobmon_run.workflow_id is None
+        else f"Jobmon workflow {jobmon_run.workflow_id}"
+    )
+    return (
+        f"Its Jobmon task status is '{task_status}'. {workflow} has the workflow status "
+        f"'{jobmon_run.status or 'unknown'}'."
+    )
 
 
 def _ancestor_failure(task: PTask) -> str | None:
