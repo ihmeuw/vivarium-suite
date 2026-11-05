@@ -266,8 +266,8 @@ def manageUvCache() {
         if [ "${cleanToday}" != "true" ]; then
             exit 0
         fi
-        # Unpinned, like the builds that fill the cache, so the cleaner is never older
-        # than they are and always sees when they are using it.
+        # Unpinned, like the builds that fill the cache, so the cleaner is not older than
+        # the uv that marks the cache as in use.
         /svc-simsci/miniconda3/bin/python -m pip install --quiet --target "${uvDir}" uv
         # uv waits for builds that are using the cache, so cap the wait: the node stages
         # run in turn, and one stuck stage would hold up the rest.
