@@ -6,8 +6,6 @@
 - Get the pandas and pandera floors from ``vivarium-dependencies`` instead of
   declaring ``pandas>=2.2.0`` and ``pandera>=0.31.0``
 - Call ``stack`` without ``future_stack=True``, which is the default in pandas 3
-- Require ``vivarium-inputs>=9.3.0`` in the ``gbd`` extra, the first release that
-  uses ``vivarium-dependencies`` 2
 
 **0.5.0 - 11/04/26**
 
