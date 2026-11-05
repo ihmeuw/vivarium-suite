@@ -54,10 +54,11 @@ With the default code identity no step counts as unchanged, so every step runs a
 :mod:`~vivarium.dagger.bridge.plugin` says what this means for the build's time limit.
 
 The hook does all of this while it holds the run lock on the build's root
-(:func:`~vivarium.dagger.backend.lock.run_lock`), so two builds with ``jobmon=True`` never
-plan, run or record on one root at once. A build that finds the lock held stops before it
-plans, fails with a message that names the run that holds the lock, and leaves that run's
-lockfile and journal as they are.
+(:func:`~vivarium.dagger.backend.lock.run_lock`), so two bridged builds never plan, run or
+record on one root at once. A dry run or an explanation with ``jobmon=True`` does not use
+this hook, so it takes no lock and can plan beside a bridged build. A bridged build that
+finds the lock held stops before it plans, fails with a message that names the run that
+holds the lock, and leaves that run's ``pytask.lock`` and journal as they are.
 """
 
 import inspect
@@ -223,7 +224,9 @@ def pytask_execute_build(session: Session) -> bool:
     takes the lock, it reads pytask's lockfile and its journal again into
     ``session.config["lockfile_state"]``, so that it plans from what an earlier build
     recorded up to the moment that build released the lock, and not from what pytask read
-    when this build started. The lock is released however the hook ends, also when a
+    when this build started. The earlier build writes its lockfile and then deletes the
+    journal just after it releases the lock, so if the lockfile changes while it is being
+    read, the hook reads both again. The lock is released however the hook ends, also when a
     ``KeyboardInterrupt`` or a ``SystemExit`` passes through it. pytask writes its
     lockfile from that state in its ``pytask_unconfigure`` hook, a few milliseconds after
     this hook has released the lock.
@@ -384,24 +387,24 @@ def pytask_execute_build(session: Session) -> bool:
     Raises
     ------
     pytask.ExecutionError
-        If the Jobmon environment check fails; if ``jobmon_timeout`` is set to anything
-        but a positive whole number of seconds, with a message that names the key and the
-        value; or if ``jobmon_timeout`` is not set and the Slurm allocation's remaining
-        time cannot be read or is shorter than the safety buffer, with a message that
-        gives that error and says to set ``jobmon_timeout``. In these cases no run
-        directory has been created. Also if Jobmon refuses to bind the workflow, which the
-        adapter reports as
+        If another process holds the run lock on the build's root, with the message of the
+        :class:`~vivarium.dagger.backend.lock.RunLocked`. This is checked before anything
+        else, so nothing has then been planned, created or written, and pytask's lockfile
+        and journal are left as they are. Also if the Jobmon environment check fails; if
+        ``jobmon_timeout`` is set to anything but a positive whole number of seconds, with
+        a message that names the key and the value; or if ``jobmon_timeout`` is not set and
+        the Slurm allocation's remaining time cannot be read or is shorter than the safety
+        buffer, with a message that gives that error and says to set ``jobmon_timeout``. In
+        these cases no run directory has been created. Also if Jobmon refuses to bind the
+        workflow, which the adapter reports as
         :class:`~vivarium.dagger.bridge._jobmon_adapter.JobmonBindError`, for example
         because neither ``jobmon_resources`` nor a step's resources name a queue. The
         message then names ``jobmon_cluster`` and the compute resources to check and
         quotes the adapter's message, which gives the type and message of Jobmon's error.
         The run directory, its recipes and the product directories have then already been
-        created, but no state file, and no step has run. Each message is printed through
-        pytask's console first, so the build fails with that message and no traceback.
-        Also, before any of these checks, if another process holds the run lock on the
-        build's root, with the message of the
-        :class:`~vivarium.dagger.backend.lock.RunLocked`. Nothing has then been planned,
-        created or written, and pytask's lockfile and journal are left as they are.
+        created, but no state file, and no step has run. Each of these messages, the
+        refusal included, is printed through pytask's console first, so the build fails
+        with that message and no traceback.
     OSError
         If the run lock file cannot be created or opened for reading and writing, or if
         ``flock`` fails on it for a reason other than a held lock, such as ``ENOLCK``, as
@@ -468,6 +471,10 @@ def _execute(session: Session) -> bool:
     return True
 
 
+_RELOAD_ATTEMPTS = 3
+"""How many times the hook reads pytask's lockfile while another build's flush changes it."""
+
+
 def _reload_lockfile_state(session: Session) -> None:
     """Replace pytask's lockfile state with a fresh read of the files, unless it is None."""
     state = session.config.get("lockfile_state")
@@ -476,7 +483,23 @@ def _reload_lockfile_state(session: Session) -> None:
     # pytask read the files when it parsed its configuration, before this build held the
     # lock, so an earlier build may have recorded steps since. The state's own class is
     # used because pytask does not export it.
-    session.config["lockfile_state"] = type(state).from_path(state.path, state.root)
+    for _ in range(_RELOAD_ATTEMPTS):
+        before = _file_stamp(state.path)
+        fresh = type(state).from_path(state.path, state.root)
+        # The previous holder may flush after releasing the lock: it replaces pytask.lock and
+        # then deletes the journal, so a read of the old lockfile can miss the journal.
+        if _file_stamp(state.path) == before:
+            break
+    session.config["lockfile_state"] = fresh
+
+
+def _file_stamp(path: Path) -> tuple[int, int, int] | None:
+    """Return the inode, modification time and size of ``path``, or None if it is missing."""
+    try:
+        status = path.stat()
+    except FileNotFoundError:
+        return None
+    return (status.st_ino, status.st_mtime_ns, status.st_size)
 
 
 def _refuse(session: Session, error: RunLocked) -> ExecutionError:

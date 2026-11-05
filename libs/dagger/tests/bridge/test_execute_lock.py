@@ -683,6 +683,50 @@ def test_reload_lockfile_state_reads_the_lockfile_and_journal_as_they_are_now(
     assert entries == {"kept": "1", "replaced": "2", "added": "1"}
 
 
+def test_reload_lockfile_state_reads_again_when_a_flush_lands_during_the_read(
+    tmp_path: Path,
+) -> None:
+    """When the previous holder replaces pytask.lock and deletes its journal while _reload_lockfile_state reads them, so the first read sees the old lockfile and no journal, the reload reads again and its state has the journal's entries."""
+
+    class _FlushedWhileRead(LockfileState):
+        """Read pytask.lock as a build would just before another build's flush lands."""
+
+        armed = False
+        reads = 0
+
+        @classmethod
+        def from_path(cls, path: Path, root: Path) -> LockfileState:
+            """Once armed, first read the old lockfile alone, then flush."""
+            if not cls.armed:
+                return super().from_path(path, root)
+            cls.reads += 1
+            if cls.reads > 1:
+                return super().from_path(path, root)
+            journal = path.with_suffix(f"{path.suffix}.journal")
+            flushed = super().from_path(path, root)
+            journal.unlink()
+            stale = super().from_path(path, root)
+            flushed.flush()
+            return stale
+
+    root = make_dir(tmp_path / "state")
+    lockfile = root / LOCKFILE
+    _write_lockfile(root, {"kept": "1"})
+    _write_journal(root, {"added": "1"})
+    earlier = _FlushedWhileRead.from_path(lockfile, root)
+    session = Session(
+        config={"root": root, "lockfile_path": lockfile, "lockfile_state": earlier}
+    )
+    _FlushedWhileRead.armed = True
+
+    _reload_lockfile_state(session)
+
+    state = session.config["lockfile_state"]
+    entries = {entry.id: entry.state for entry in state.lockfile.task}
+    assert entries == {"kept": "1", "added": "1"}
+    assert _FlushedWhileRead.reads == 2
+
+
 def test_reload_lockfile_state_keeps_a_none_state(tmp_path: Path) -> None:
     """With session.config['lockfile_state'] set to None, _reload_lockfile_state leaves it None."""
     root = make_dir(tmp_path / "state")
