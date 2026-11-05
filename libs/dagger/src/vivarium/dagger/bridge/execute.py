@@ -93,11 +93,11 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.payload import Payload, payload_for
 from vivarium.dagger.bridge.runner import (
-    OUTPUT_TAIL_BYTES,
     RESULT_SUFFIX,
     RunResult,
     capture_paths,
     read_result,
+    read_tail,
     runner_command,
 )
 from vivarium.dagger.bridge.state import (
@@ -978,9 +978,6 @@ def _ancestor_failure(task: PTask) -> str | None:
 def _tail(path: Path) -> str:
     """Return the tail of ``path`` that a node result keeps, or an empty string on error."""
     try:
-        with open(path, "rb") as file:
-            size = file.seek(0, os.SEEK_END)
-            file.seek(max(0, size - OUTPUT_TAIL_BYTES))
-            return file.read().decode("utf-8", errors="replace")
+        return read_tail(path)
     except OSError:
         return ""
