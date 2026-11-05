@@ -5,10 +5,12 @@ do not conflict within one process. The child helpers are in ``tests.backend.loc
 """
 
 import ast
+import copy
 import errno
 import inspect
 import json
 import os
+import pickle
 import re
 import socket
 import stat
@@ -213,6 +215,22 @@ def test_run_locked_is_a_runtime_error_with_path_and_holder() -> None:
     assert issubclass(RunLocked, RuntimeError)
     assert error.path == _EXAMPLE_PATH
     assert error.holder == _EXAMPLE_HOLDER
+
+
+@pytest.mark.parametrize("how", ["copy", "deepcopy", "pickle"])
+def test_run_locked_survives_a_copy_and_a_pickle_round_trip(how: str) -> None:
+    """copy.copy, copy.deepcopy and a pickle round trip of a RunLocked give a RunLocked with the same path, holder and message."""
+    error = RunLocked(_EXAMPLE_PATH, _EXAMPLE_HOLDER)
+
+    if how == "copy":
+        again = copy.copy(error)
+    elif how == "deepcopy":
+        again = copy.deepcopy(error)
+    else:
+        again = pickle.loads(pickle.dumps(error))
+
+    assert isinstance(again, RunLocked)
+    assert (again.path, again.holder, str(again)) == (error.path, error.holder, str(error))
 
 
 def test_the_lock_is_free_after_the_block_returns(tmp_path: Path) -> None:

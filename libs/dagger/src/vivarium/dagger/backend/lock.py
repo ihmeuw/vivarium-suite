@@ -81,6 +81,10 @@ class RunLocked(RuntimeError):
         self.path = path
         self.holder = holder
 
+    def __reduce__(self) -> tuple[type["RunLocked"], tuple[Path, str]]:
+        """Rebuild the error from its path and holder when it is copied or pickled."""
+        return (type(self), (self.path, self.holder))
+
 
 @contextmanager
 def run_lock(path: Path) -> Iterator[None]:
