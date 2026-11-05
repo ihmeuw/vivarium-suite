@@ -36,7 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
-    "vivarium-dependencies[pytest,networkx,pyyaml,loguru,ipython]",
+    "vivarium-dependencies[ipython,loguru,networkx,pytest,pyyaml]",
     "pytest-vivarium",
     "vivarium-fuzzy-checker",
 ]

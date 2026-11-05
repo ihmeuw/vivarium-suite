@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,pyyaml,click,tables,loguru,pyarrow]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[click,loguru,numpy,pandas,pyarrow,pyyaml,tables]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-cluster-tools>=5.0.0",
     "vivarium-engine>=6.0.0",
@@ -48,7 +48,7 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]"]
+docs = ["vivarium-dependencies[ipython,matplotlib,sphinx,sphinx-click]"]
 lint = [
     "vivarium-dependencies[lint]",
     "types-psutil",

@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,numpy,scipy,click,tables,loguru,matplotlib,pyyaml]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[click,loguru,matplotlib,numpy,pandas,pyyaml,scipy,tables]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-gbd-mapping>=6.0.0",
     "vivarium-engine>=6.0.0",

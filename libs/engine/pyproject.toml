@@ -34,7 +34,7 @@ classifiers = [
 dependencies = [
     "vivarium-artifact>=1.0.2",
     "vivarium-config-tree",
-    "vivarium-dependencies[numpy,pandas,pyyaml,scipy,click,tables,loguru,pyarrow,networkx]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[click,loguru,networkx,numpy,pandas,pyarrow,pyyaml,scipy,tables]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "dill",
 ]
@@ -48,7 +48,7 @@ test = [
     "vivarium-interactive",
 ]
 docs = [
-    "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    "vivarium-dependencies[ipython,matplotlib,sphinx,sphinx-click]",
     "sphinxcontrib-video",
 ]
 lint = [

@@ -31,14 +31,14 @@ classifiers = [
 ]
 dependencies = [
     # NOTE: Must import pytest as runtime dep in order to auto-load plugins
-    "vivarium-dependencies[pytest,numpy]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[numpy,pytest]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
 [project.optional-dependencies]
 cluster = []
 test = []
-docs = ["vivarium-dependencies[sphinx,docutils]"]
+docs = ["vivarium-dependencies[docutils,sphinx]"]
 interactive = []
 lint = ["vivarium-dependencies[lint]"]
 dev = ["pytest-vivarium[test,docs,interactive,lint]"]

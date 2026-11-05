@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[numpy,pandas,loguru,pyyaml,matplotlib,ipython,pyarrow,pandera]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[ipython,loguru,matplotlib,numpy,pandas,pandera,pyarrow,pyyaml]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-artifact",
     "vivarium-config-tree>=5.2.0",
@@ -48,7 +48,7 @@ test = [
     # `-n auto` worker cap that `make test-all` relies on).
     "pytest-vivarium",
 ]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib,docutils]"]
+docs = ["vivarium-dependencies[docutils,ipython,matplotlib,sphinx,sphinx-click]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
 gbd = ["vivarium-inputs>=9.3.0"]

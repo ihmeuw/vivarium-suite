@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pyyaml]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[pyyaml]<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
@@ -34,7 +34,7 @@ test = [
     "pytest-vivarium",
 ]
 docs = [
-    "vivarium-dependencies[sphinx,sphinx-click,ipython,matplotlib]",
+    "vivarium-dependencies[ipython,matplotlib,sphinx,sphinx-click]",
     "sphinxcontrib-video",
 ]
 interactive = ["vivarium-dependencies[interactive]"]

@@ -1,7 +1,7 @@
 **3.3.0 - 11/04/26**
 
-- Require ``vivarium-dependencies>=2.0.0``, which requires pandas 3 and numpy 2
-  and sets floors on the rest of the scientific stack
+- Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
+  dependencies to ``numpy>=2.1.0``, ``pandas>=3.0.0``, ``scipy>=1.14.1``
 
 **3.2.2 - 11/02/26**
 

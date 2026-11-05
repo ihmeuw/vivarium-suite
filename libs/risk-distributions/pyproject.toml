@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[pandas,numpy,scipy]>=2.0.0,<3.0.0",
+    "vivarium-dependencies[numpy,pandas,scipy]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
