@@ -510,3 +510,52 @@ def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Pat
     assert re.search(r"\breturn\b", stripped), message
     assert not reg.path_for("out.parquet").exists()
     assert not direct.exists()
+
+
+def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) -> None:
+    """A python_step named 'b' whose input key has no producer raises WiringError whose message starts with "Step 'b': " and names the key and the did-you-mean key."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_output("caps/ethiopia.csv")
+
+    with pytest.raises(WiringError) as info:
+        python_step(
+            _read_frame,
+            inputs={"data": "caps/ethiopa.csv"},
+            produces="out.parquet",
+            registry=reg,
+            name="b",
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'b': "), message
+    assert "'caps/ethiopa.csv'" in message
+    assert "Did you mean 'caps/ethiopia.csv'" in message
+
+
+def test_producing_a_root_input_error_names_the_step(tmp_path: Path) -> None:
+    """A python_step named 'b' whose produces key is a declared root input raises WiringError whose message starts with "Step 'b': "."""
+    source = tmp_path / "src.parquet"
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src.parquet": source})
+
+    with pytest.raises(WiringError) as info:
+        python_step(_constant, inputs={}, produces="src.parquet", registry=reg, name="b")
+
+    message = str(info.value)
+    assert message.startswith("Step 'b': "), message
+    assert "'src.parquet'" in message
+
+
+def test_the_step_name_prefix_defaults_to_the_produces_key(tmp_path: Path) -> None:
+    """Without name=, the WiringError message for an unresolved input starts with "Step '<produces key>': "."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError) as info:
+        python_step(
+            _read_frame,
+            inputs={"data": "missing.parquet"},
+            produces="out.parquet",
+            registry=reg,
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'out.parquet': "), message
