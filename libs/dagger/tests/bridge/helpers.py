@@ -17,6 +17,7 @@ from pytask import ExecutionReport, Session, TaskOutcome
 
 from tests.bridge import step_targets
 from vivarium.dagger.backend.build import build
+from vivarium.dagger.backend.lock import RUN_LOCK_NAME
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
@@ -207,3 +208,8 @@ def only_state(root: Path) -> RunState:
     """Return the state of the one run under ``root``."""
     [path] = state_files(root)
     return read_run_state(path)
+
+
+def run_lock_path(tmp_path: Path) -> Path:
+    """Return the run lock file of the builds under ``tmp_path``, in :func:`build_root`."""
+    return build_root(tmp_path) / RUN_LOCK_NAME
