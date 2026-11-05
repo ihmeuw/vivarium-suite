@@ -10,7 +10,7 @@ import re
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +33,15 @@ from pytask import (
 from vivarium.cluster_tools.core.cluster import interface as cluster_interface
 
 from tests.bridge import step_targets
+from tests.bridge.helpers import (
+    bound_names,
+    failure_of,
+    make_dir,
+    registry,
+    report_for,
+    squashed,
+    stable,
+)
 from vivarium.dagger.backend.build import build, outcomes, to_pytask_task
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.nodes import file_node
@@ -49,7 +58,7 @@ from vivarium.dagger.bridge.execute import PAYLOAD_SUFFIX, RUNS_DIR, _new_run_di
 from vivarium.dagger.bridge.payload import payload_for
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, read_result, runner_command
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, build_fixture, stable_code_id
+from vivarium.dagger.harness import FakeJobmon, build_fixture
 
 _CHAIN: dict[str, list[str]] = {
     "a.parquet": [],
@@ -94,8 +103,6 @@ _QUEUE_MESSAGE = (
 """Message of the JobmonBindError that a stand-in bind raises when no queue is named. It
 has the adapter's form, the type and message of Jobmon's error."""
 
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-"""An ANSI escape sequence, which pytask's console writes when it styles its output."""
 
 _RUN_DIRECTORY_NAME = re.compile(r"\d{8}-\d{6}-[0-9a-fA-F]{6}")
 """The name of a run directory: a ``YYYYmmdd-HHMMSS`` time stamp and six hex digits."""
@@ -115,18 +122,7 @@ def _node_imports(node_pythonpath: None) -> None:
     """Let every node runner in this module import ``tests.bridge.step_targets``."""
 
 
-def _mkdir(path: Path) -> Path:
-    """Create ``path`` and its parents if missing, and return it."""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _registry(tmp_path: Path) -> ArtifactRegistry:
-    """Return a registry whose products go under ``tmp_path / "out"``."""
-    return ArtifactRegistry(output_root=tmp_path / "out", run_name="run1")
-
-
-def _steps(registry: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
+def _steps(artifacts: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
     """Return one python step per key of ``graph``, reading the steps that the key lists.
 
     A step that reads nothing writes a constant frame, and any other step stacks the frames
@@ -139,17 +135,8 @@ def _steps(registry: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> li
             target: Callable[..., pd.DataFrame] = step_targets.stack
         else:
             target = step_targets.constant
-        tasks.append(python_step(target, inputs=inputs, produces=name, registry=registry))
+        tasks.append(python_step(target, inputs=inputs, produces=name, registry=artifacts))
     return tasks
-
-
-def _stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
-    """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
-    stable: list[Task] = []
-    for task in tasks:
-        version = "2" if task.name in changed else "1"
-        stable.append(replace(task, code_id=stable_code_id(f"{task.name}::code", version)))
-    return stable
 
 
 def _steps_with_missing_raw(
@@ -160,22 +147,17 @@ def _steps_with_missing_raw(
     The steps can read the root input ``raw``, the file ``directory / "raw.parquet"``. It
     exists while the steps are wired, as the registry requires, and is deleted afterwards.
     """
-    raw = _mkdir(directory) / "raw.parquet"
+    raw = make_dir(directory) / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    registry = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
-    tasks = _steps(registry, graph)
+    artifacts = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
+    tasks = _steps(artifacts, graph)
     raw.unlink()
-    return registry, tasks
+    return artifacts, tasks
 
 
 def _signatures(session: Session) -> dict[str, str]:
     """Return the pytask signature of each of the session's tasks, by name."""
     return {task.name: task.signature for task in session.tasks}
-
-
-def _bound_names(jobmon: FakeJobmon) -> list[list[str]]:
-    """Return the step names of each plan that ``jobmon`` bound, in plan order."""
-    return [[entry.name for entry in plan] for plan in jobmon.plans]
 
 
 def _entries(jobmon: FakeJobmon) -> dict[str, PlanEntry]:
@@ -195,26 +177,6 @@ def _recipe(entry: PlanEntry) -> Path:
     words = shlex.split(entry.command)
     [recipe] = [Path(word) for word in words if word.endswith(PAYLOAD_SUFFIX)]
     return recipe
-
-
-def _report(session: Session, name: str) -> ExecutionReport:
-    """Return the session's one report for the step called ``name``."""
-    [report] = [report for report in session.execution_reports if report.task.name == name]
-    return report
-
-
-def _failure(report: ExecutionReport) -> BaseException:
-    """Return the exception that a FAIL report holds."""
-    assert report.outcome == TaskOutcome.FAIL
-    assert report.exc_info is not None
-    error = report.exc_info[1]
-    assert error is not None
-    return error
-
-
-def _squashed(text: str) -> str:
-    """Return ``text`` without ANSI escapes or whitespace, so that wrapped lines join up."""
-    return "".join(_ANSI.sub("", text).split())
 
 
 def _pytask_build(tasks: Sequence[PTask], root: Path, **kwargs: Any) -> Session:
@@ -251,7 +213,7 @@ def _answer_timeout(
 def _fake_squeue(bin_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Put first on PATH an squeue that notes each call in a file; return that file."""
     calls = bin_dir / "squeue_calls.log"
-    squeue = _mkdir(bin_dir) / "squeue"
+    squeue = make_dir(bin_dir) / "squeue"
     squeue.write_text(f'#!/bin/sh\necho "$*" >> {shlex.quote(str(calls))}\necho 1:00:00\n')
     squeue.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
@@ -292,7 +254,7 @@ def _foreign(product: Path) -> None:
 
 
 def _refused_step(
-    registry: ArtifactRegistry, run: str, name: str = _REFUSED
+    artifacts: ArtifactRegistry, run: str, name: str = _REFUSED
 ) -> tuple[Task, Path]:
     """Return a step that cannot run on a node, for the reason ``run`` names, and its product.
 
@@ -306,19 +268,19 @@ def _refused_step(
             name=name,
             run=_write_by_hand,
             inputs={},
-            outputs={"product": registry.register_output(product_key)},
+            outputs={"product": artifacts.register_output(product_key)},
             resources={},
             env=None,
         )
-        return task, registry.path_for(product_key)
+        return task, artifacts.path_for(product_key)
     if run == "main":
         target: Callable[[], pd.DataFrame] = _in_main
     else:
         target = lambda: pd.DataFrame({"n": [1]})
     task = python_step(
-        target, inputs={}, produces=f"{name}.parquet", registry=registry, name=name
+        target, inputs={}, produces=f"{name}.parquet", registry=artifacts, name=name
     )
-    return task, registry.path_for(f"{name}.parquet")
+    return task, artifacts.path_for(f"{name}.parquet")
 
 
 def _tool_step(name: str, probe_tool: str, directory: Path) -> Task:
@@ -417,23 +379,23 @@ def test_a_jobmon_build_runs_every_stale_step_in_one_plan_and_in_other_processes
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """End to end: a two-step python_step chain whose targets save their process id in their products, built with jobmon=True, binds exactly one plan with both steps in topological order; the build exits OK, both products exist, and each recorded pid differs from the test process's."""
-    registry = _registry(tmp_path)
+    artifacts = registry(tmp_path)
     first = python_step(
-        step_targets.record_pid, inputs={}, produces="first.parquet", registry=registry
+        step_targets.record_pid, inputs={}, produces="first.parquet", registry=artifacts
     )
     second = python_step(
         step_targets.record_pid,
         inputs={"upstream": "first.parquet"},
         produces="second.parquet",
-        registry=registry,
+        registry=artifacts,
     )
 
     session = build([first, second], tmp_path / "state", jobmon=True)
 
     assert session.exit_code == ExitCode.OK
-    assert _bound_names(fake_jobmon) == [["first.parquet", "second.parquet"]]
-    first_pids = pd.read_parquet(registry.path_for("first.parquet"))["pid"].tolist()
-    second_pids = pd.read_parquet(registry.path_for("second.parquet"))["pid"].tolist()
+    assert bound_names(fake_jobmon) == [["first.parquet", "second.parquet"]]
+    first_pids = pd.read_parquet(artifacts.path_for("first.parquet"))["pid"].tolist()
+    second_pids = pd.read_parquet(artifacts.path_for("second.parquet"))["pid"].tolist()
     assert len(first_pids) == 1
     assert len(second_pids) == 2
     assert second_pids[0] == first_pids[0]
@@ -444,15 +406,15 @@ def test_the_harness_fixture_through_the_bridge_writes_the_products_a_local_buil
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """End to end: the harness fixture built with jobmon=True writes products equal to those of a local build of an identical fixture."""
-    local = build_fixture(_mkdir(tmp_path / "local"))
+    local = build_fixture(make_dir(tmp_path / "local"))
     ran = dict.fromkeys(local.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(local.tasks, local.state)) == ran
-    bridged = build_fixture(_mkdir(tmp_path / "bridged"))
+    bridged = build_fixture(make_dir(tmp_path / "bridged"))
 
     session = build(bridged.tasks, bridged.state, jobmon=True)
 
     assert session.exit_code == ExitCode.OK
-    assert _bound_names(fake_jobmon) == [list(bridged.steps)]
+    assert bound_names(fake_jobmon) == [list(bridged.steps)]
     for step in local.steps:
         produced = pd.read_parquet(bridged.registry.path_for(step))
         expected = pd.read_parquet(local.registry.path_for(step))
@@ -466,22 +428,22 @@ def test_unchanged_steps_are_reported_skip_unchanged_and_left_out_of_the_plan(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """With stable code identities and one step's version changed after a first build, the second jobmon build reports the unchanged upstream steps SKIP_UNCHANGED in session.execution_reports, and the plan holds only the changed step and the steps after it."""
-    tasks = _steps(_registry(tmp_path), _CHAIN)
+    tasks = _steps(registry(tmp_path), _CHAIN)
     root = tmp_path / "state"
     ran = dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
-    assert outcomes(build(_stable(tasks), root)) == ran
+    assert outcomes(build(stable(tasks), root)) == ran
 
-    session = build(_stable(tasks, changed={"b.parquet"}), root, jobmon=True)
+    session = build(stable(tasks, changed={"b.parquet"}), root, jobmon=True)
 
     assert outcomes(session)["a.parquet"] == TaskOutcome.SKIP_UNCHANGED
-    assert _bound_names(fake_jobmon) == [["b.parquet", "c.parquet"]]
+    assert bound_names(fake_jobmon) == [["b.parquet", "c.parquet"]]
 
 
 def test_nothing_stale_creates_no_run_directory_and_binds_nothing(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """When every step is unchanged, a jobmon build reports every step SKIP_UNCHANGED, binds no plan, and creates no directory under <root>/.pytask/jobmon."""
-    tasks = _stable(_steps(_registry(tmp_path), _CHAIN))
+    tasks = stable(_steps(registry(tmp_path), _CHAIN))
     root = tmp_path / "state"
     assert outcomes(build(tasks, root)) == dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
 
@@ -494,13 +456,13 @@ def test_nothing_stale_creates_no_run_directory_and_binds_nothing(
 
 def test_force_submits_every_step(tmp_path: Path, fake_jobmon: FakeJobmon) -> None:
     """With stable code identities and nothing changed, a jobmon build with force=True binds a plan holding every step."""
-    tasks = _stable(_steps(_registry(tmp_path), _CHAIN))
+    tasks = stable(_steps(registry(tmp_path), _CHAIN))
     root = tmp_path / "state"
     assert outcomes(build(tasks, root)) == dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
 
     build(tasks, root, jobmon=True, force=True)
 
-    assert _bound_names(fake_jobmon) == [list(_CHAIN)]
+    assert bound_names(fake_jobmon) == [list(_CHAIN)]
 
 
 @pytest.mark.parametrize("selection", ["expression", "marker_expression"])
@@ -508,13 +470,13 @@ def test_deselected_steps_report_skip_and_are_not_submitted(
     tmp_path: Path, selection: str, fake_jobmon: FakeJobmon
 ) -> None:
     """Selecting one step through pytask's own selection (expression= or a marker plus marker_expression=) in a jobmon build reports the deselected steps SKIP and leaves them out of the plan, while the selected step and its ancestors are submitted."""
-    registry = _registry(tmp_path)
+    artifacts = registry(tmp_path)
     graph: dict[str, list[str]] = {
         "alpha.parquet": [],
         "beta.parquet": ["alpha.parquet"],
         "gamma.parquet": ["alpha.parquet"],
     }
-    tasks = _steps(registry, graph)
+    tasks = _steps(artifacts, graph)
     root = tmp_path / "state"
 
     if selection == "expression":
@@ -525,15 +487,15 @@ def test_deselected_steps_report_skip_and_are_not_submitted(
         session = _pytask_build(marked, root, jobmon=True, marker_expression="selected")
 
     assert outcomes(session)["gamma.parquet"] == TaskOutcome.SKIP
-    assert _bound_names(fake_jobmon) == [["alpha.parquet", "beta.parquet"]]
-    assert not registry.path_for("gamma.parquet").exists()
+    assert bound_names(fake_jobmon) == [["alpha.parquet", "beta.parquet"]]
+    assert not artifacts.path_for("gamma.parquet").exists()
 
 
 def test_a_persisted_step_between_two_stale_steps_is_crossed_by_the_dependency(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a chain a -> b -> c with b marked persist and its product present, b reports PERSISTENCE, the plan holds a and c, and c's entry waits for a."""
-    tasks = _steps(_registry(tmp_path), _CHAIN)
+    tasks = _steps(registry(tmp_path), _CHAIN)
     root = tmp_path / "state"
     assert outcomes(build(tasks, root)) == dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
     pytask_tasks = [
@@ -555,13 +517,13 @@ def test_a_missing_input_fails_its_step_at_plan_time_and_unrelated_steps_still_r
     """A step whose root input file is missing reports FAIL and its downstream step SKIP_PREVIOUS_FAILED, neither is in the plan, and an unrelated stale step is still submitted and writes its product."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    registry = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "x.parquet": ["raw"],
         "y.parquet": ["x.parquet"],
         "z.parquet": [],
     }
-    tasks = _steps(registry, graph)
+    tasks = _steps(artifacts, graph)
     raw.unlink()
 
     session = build(tasks, tmp_path / "state", jobmon=True)
@@ -569,8 +531,8 @@ def test_a_missing_input_fails_its_step_at_plan_time_and_unrelated_steps_still_r
     reported = outcomes(session)
     assert reported["x.parquet"] == TaskOutcome.FAIL
     assert reported["y.parquet"] == TaskOutcome.SKIP_PREVIOUS_FAILED
-    assert _bound_names(fake_jobmon) == [["z.parquet"]]
-    assert registry.path_for("z.parquet").exists()
+    assert bound_names(fake_jobmon) == [["z.parquet"]]
+    assert artifacts.path_for("z.parquet").exists()
 
 
 def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_nothing(
@@ -579,13 +541,13 @@ def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_n
     """With stop_after_first_failure, when the first two steps in plan order both read a missing root input, a jobmon build reports only the first of them, as FAIL, and exits FAILED: planning ends at that step, so the second, which would also fail at plan time, gets no report. An unrelated stale step later in plan order is not submitted and its product is not written, no plan is bound, and no run directory exists."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    registry = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": ["raw"],
         "b.parquet": ["raw"],
         "z.parquet": [],
     }
-    tasks = _steps(registry, graph)
+    tasks = _steps(artifacts, graph)
     raw.unlink()
     root = tmp_path / "state"
 
@@ -596,7 +558,7 @@ def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_n
     assert outcomes(session) == {"a.parquet": TaskOutcome.FAIL}
     assert fake_jobmon.plans == []
     assert _run_directories(root) == []
-    assert not registry.path_for("z.parquet").exists()
+    assert not artifacts.path_for("z.parquet").exists()
 
 
 def test_stop_after_first_failure_submits_none_of_the_stale_steps_planned_before_it(
@@ -605,13 +567,13 @@ def test_stop_after_first_failure_submits_none_of_the_stale_steps_planned_before
     """With stop_after_first_failure, when a stale step comes before a step with a missing root input in plan order, a jobmon build reports the failing step FAIL and exits FAILED, gives the step after it no report, binds no plan, creates no run directory, and does not write the earlier stale step's product."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    registry = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": [],
         "m.parquet": ["raw"],
         "z.parquet": [],
     }
-    tasks = _steps(registry, graph)
+    tasks = _steps(artifacts, graph)
     raw.unlink()
     root = tmp_path / "state"
 
@@ -623,7 +585,7 @@ def test_stop_after_first_failure_submits_none_of_the_stale_steps_planned_before
     assert "z.parquet" not in reported
     assert fake_jobmon.plans == []
     assert _run_directories(root) == []
-    assert not registry.path_for("a.parquet").exists()
+    assert not artifacts.path_for("a.parquet").exists()
 
 
 def test_planning_leaves_dry_run_false_when_the_protocol_raises(tmp_path: Path) -> None:
@@ -649,7 +611,7 @@ def test_dry_run_is_false_after_a_jobmon_build(
 
     session = build(fx.tasks, fx.state, jobmon=True)
 
-    assert _bound_names(fake_jobmon) == [list(fx.steps)]
+    assert bound_names(fake_jobmon) == [list(fx.steps)]
     assert session.config["dry_run"] is False
 
 
@@ -664,10 +626,10 @@ def test_the_plan_is_sorted_by_name_within_each_wave(
         "a.parquet": ["d.parquet", "c.parquet", "b.parquet"],
     }
 
-    build(_steps(_registry(tmp_path), graph), tmp_path / "state", jobmon=True)
+    build(_steps(registry(tmp_path), graph), tmp_path / "state", jobmon=True)
 
     expected = ["b.parquet", "c.parquet", "d.parquet", "a.parquet"]
-    assert _bound_names(fake_jobmon) == [expected]
+    assert bound_names(fake_jobmon) == [expected]
 
 
 # Dependencies between plan entries
@@ -677,7 +639,7 @@ def test_each_entry_of_a_chain_waits_for_the_step_before_it(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a chain a -> b -> c, the entries' upstreams are () for a, (a,) for b and (b,) for c, as signatures."""
-    session = build(_steps(_registry(tmp_path), _CHAIN), tmp_path / "state", jobmon=True)
+    session = build(_steps(registry(tmp_path), _CHAIN), tmp_path / "state", jobmon=True)
 
     signature = _signatures(session)
     upstreams = {name: entry.upstreams for name, entry in _entries(fake_jobmon).items()}
@@ -692,7 +654,7 @@ def test_the_last_step_of_a_diamond_waits_for_both_branches(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a diamond a -> (b, c) -> d, d's entry waits for exactly b and c, and b and c each wait for a."""
-    session = build(_steps(_registry(tmp_path), _DIAMOND), tmp_path / "state", jobmon=True)
+    session = build(_steps(registry(tmp_path), _DIAMOND), tmp_path / "state", jobmon=True)
 
     signature = _signatures(session)
     entries = _entries(fake_jobmon)
@@ -706,12 +668,12 @@ def test_an_entry_does_not_wait_for_a_step_that_is_not_stale(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """With stable code identities, when only c of a -> b -> c changed, c's entry has no upstreams."""
-    tasks = _steps(_registry(tmp_path), _CHAIN)
+    tasks = _steps(registry(tmp_path), _CHAIN)
     root = tmp_path / "state"
     ran = dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
-    assert outcomes(build(_stable(tasks), root)) == ran
+    assert outcomes(build(stable(tasks), root)) == ran
 
-    build(_stable(tasks, changed={"c.parquet"}), root, jobmon=True)
+    build(stable(tasks, changed={"c.parquet"}), root, jobmon=True)
 
     entries = _entries(fake_jobmon)
     assert list(entries) == ["c.parquet"]
@@ -725,39 +687,39 @@ def test_a_missing_input_after_a_stale_step_fails_its_step_and_the_others_still_
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL with a message naming y and the missing file's full path and both z and w SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and writes the products of a and u but not those of y, z and w."""
-    registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
+    artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     missing = (tmp_path / "raw.parquet").resolve()
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
-    message = str(_failure(_report(session, "y.parquet")))
+    message = str(failure_of(report_for(session, "y.parquet")))
     assert "y.parquet" in message, message
     assert str(missing) in message, message
-    assert _report(session, "z.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
-    assert _report(session, "w.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
-    assert _bound_names(fake_jobmon) == [["a.parquet", "u.parquet"]]
-    assert registry.path_for("a.parquet").exists()
-    assert registry.path_for("u.parquet").exists()
-    assert not registry.path_for("y.parquet").exists()
-    assert not registry.path_for("z.parquet").exists()
-    assert not registry.path_for("w.parquet").exists()
+    assert report_for(session, "z.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert report_for(session, "w.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert bound_names(fake_jobmon) == [["a.parquet", "u.parquet"]]
+    assert artifacts.path_for("a.parquet").exists()
+    assert artifacts.path_for("u.parquet").exists()
+    assert not artifacts.path_for("y.parquet").exists()
+    assert not artifacts.path_for("z.parquet").exists()
+    assert not artifacts.path_for("w.parquet").exists()
 
 
 def test_a_missing_input_that_a_stale_step_writes_does_not_fail_its_step(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a first build of a chain a -> b -> c, where the files that b and c read do not exist before the build because a and b write them, a jobmon build reports no step FAIL, binds one plan holding all three steps, exits OK and writes every product."""
-    registry = _registry(tmp_path)
-    tasks = _steps(registry, _CHAIN)
-    assert not any(registry.path_for(step).exists() for step in _CHAIN)
+    artifacts = registry(tmp_path)
+    tasks = _steps(artifacts, _CHAIN)
+    assert not any(artifacts.path_for(step).exists() for step in _CHAIN)
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
     reported = outcomes(session)
     assert TaskOutcome.FAIL not in reported.values(), reported
-    assert _bound_names(fake_jobmon) == [list(_CHAIN)]
+    assert bound_names(fake_jobmon) == [list(_CHAIN)]
     assert session.exit_code == ExitCode.OK
-    assert all(registry.path_for(step).exists() for step in _CHAIN)
+    assert all(artifacts.path_for(step).exists() for step in _CHAIN)
 
 
 def test_a_missing_input_failure_has_no_chained_error_or_traceback(
@@ -768,8 +730,8 @@ def test_a_missing_input_failure_has_no_chained_error_or_traceback(
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
-    report = _report(session, "y.parquet")
-    error = _failure(report)
+    report = report_for(session, "y.parquet")
+    error = failure_of(report)
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
@@ -780,7 +742,7 @@ def test_when_every_stale_step_fails_the_input_check_no_run_is_created_or_bound(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With force=True, under which pytask's dry-run checks no step's inputs, a jobmon build of one step whose root input file is missing reports that step FAIL and exits FAILED, never calls the Jobmon environment check, binds no plan and creates no directory under <root>/.pytask/jobmon."""
-    registry, tasks = _steps_with_missing_raw(tmp_path, {"x.parquet": ["raw"]})
+    artifacts, tasks = _steps_with_missing_raw(tmp_path, {"x.parquet": ["raw"]})
     root = tmp_path / "state"
     checked: list[str] = []
 
@@ -798,7 +760,7 @@ def test_when_every_stale_step_fails_the_input_check_no_run_is_created_or_bound(
     assert checked == []
     assert jobmon.plans == []
     assert _run_directories(root) == []
-    assert not registry.path_for("x.parquet").exists()
+    assert not artifacts.path_for("x.parquet").exists()
 
 
 def test_a_missing_input_after_a_stale_step_gets_the_outcomes_of_a_local_build(
@@ -826,26 +788,26 @@ def test_a_refused_step_after_a_failed_input_check_is_skipped_and_the_others_sti
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing and a step that cannot run on a node reads y's product and writes its own into a directory that does not exist, a jobmon build reports y FAIL and the refused step once, as SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and does not create the refused step's product directory."""
-    registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
+    artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     refused = python_step(
         _in_main_reading,
         inputs={"upstream": "y.parquet"},
         produces="later/refused.parquet",
-        registry=registry,
+        registry=artifacts,
         name=_REFUSED,
     )
-    product = registry.path_for("later/refused.parquet")
+    product = artifacts.path_for("later/refused.parquet")
     assert not product.parent.exists()
 
     session = build([*tasks, refused], tmp_path / "state", jobmon=True)
 
-    assert _report(session, "y.parquet").outcome == TaskOutcome.FAIL
+    assert report_for(session, "y.parquet").outcome == TaskOutcome.FAIL
     # The refusal check runs only on the steps to submit, so it adds no FAIL report here.
     names = [report.task.name for report in session.execution_reports]
     assert names.count(_REFUSED) == 1, names
-    assert _report(session, _REFUSED).outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
-    assert _bound_names(fake_jobmon) == [["a.parquet", "u.parquet"]]
-    assert registry.path_for("u.parquet").exists()
+    assert report_for(session, _REFUSED).outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert bound_names(fake_jobmon) == [["a.parquet", "u.parquet"]]
+    assert artifacts.path_for("u.parquet").exists()
     assert not product.parent.exists()
 
 
@@ -853,7 +815,7 @@ def test_stop_after_first_failure_ends_the_input_check_and_submits_nothing(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """With stop_after_first_failure, in a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL and exits FAILED, gives z and w no report, binds no plan, creates no run directory, and writes the products of neither a nor u."""
-    registry, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
+    artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     root = tmp_path / "state"
 
     session = build(tasks, root, jobmon=True, stop_after_first_failure=True)
@@ -866,8 +828,8 @@ def test_stop_after_first_failure_ends_the_input_check_and_submits_nothing(
     assert "w.parquet" not in reported, reported
     assert fake_jobmon.plans == []
     assert _run_directories(root) == []
-    assert not registry.path_for("a.parquet").exists()
-    assert not registry.path_for("u.parquet").exists()
+    assert not artifacts.path_for("a.parquet").exists()
+    assert not artifacts.path_for("u.parquet").exists()
 
 
 # Refusing steps that cannot run on a node
@@ -878,12 +840,12 @@ def test_a_step_that_cannot_run_on_a_node_fails_naming_it_and_nothing_is_submitt
     tmp_path: Path, run: str, fake_jobmon: FakeJobmon
 ) -> None:
     """A stale step whose python_step target is in __main__ or is a lambda, or whose run is a hand-built callable, reports FAIL with a message naming the step; no plan is bound, no run directory exists, and no step body ran."""
-    task, product = _refused_step(_registry(tmp_path), run)
+    task, product = _refused_step(registry(tmp_path), run)
     root = tmp_path / "state"
 
     session = build([task], root, jobmon=True)
 
-    assert _REFUSED in str(_failure(_report(session, _REFUSED)))
+    assert _REFUSED in str(failure_of(report_for(session, _REFUSED)))
     assert fake_jobmon.plans == []
     assert _run_directories(root) == []
     assert not product.exists()
@@ -902,7 +864,7 @@ def test_a_pytask_task_not_built_by_the_backend_is_refused_with_a_plain_message(
 
     session = _pytask_build([task], tmp_path / "state", jobmon=True)
 
-    error = _failure(_report(session, "foreign_task"))
+    error = failure_of(report_for(session, "foreign_task"))
     message = str(error)
     assert "foreign_task" in message
     assert "built" in message and "vivarium.dagger" in message, message
@@ -916,12 +878,12 @@ def test_a_step_whose_arguments_cannot_be_loaded_is_refused_with_a_plain_message
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """A stale step with an input node whose load raises on the controller reports FAIL with a message naming the step and no chained error or traceback, no plan is bound, and no run directory exists."""
-    registry = _registry(tmp_path)
+    artifacts = registry(tmp_path)
     task = python_step(
         step_targets.constant,
         inputs={},
         produces="unloadable.parquet",
-        registry=registry,
+        registry=artifacts,
         name=_UNLOADABLE,
     )
     task = replace(task, inputs={"broken": _UnloadableNode("unloadable_input")})
@@ -929,8 +891,8 @@ def test_a_step_whose_arguments_cannot_be_loaded_is_refused_with_a_plain_message
 
     session = build([task], root, jobmon=True)
 
-    report = _report(session, _UNLOADABLE)
-    error = _failure(report)
+    report = report_for(session, _UNLOADABLE)
+    error = failure_of(report)
     assert _UNLOADABLE in str(error), str(error)
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
@@ -944,41 +906,41 @@ def test_a_refusal_shows_its_reason_once_with_no_chained_error_or_traceback(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], fake_jobmon: FakeJobmon
 ) -> None:
     """The FAIL report of a refused step holds a ValueError with no __cause__, no __context__ and no traceback, and the build's console output shows the refusal's reason exactly once."""
-    task, _ = _refused_step(_registry(tmp_path), "lambda")
+    task, _ = _refused_step(registry(tmp_path), "lambda")
     capsys.readouterr()
 
     session = build([task], tmp_path / "state", jobmon=True)
 
     captured = capsys.readouterr()
-    report = _report(session, _REFUSED)
-    error = _failure(report)
+    report = report_for(session, _REFUSED)
+    error = failure_of(report)
     assert isinstance(error, ValueError)
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
     assert error.__context__ is None
     # payload_for's reason for a lambda target says this once; a chained error repeats it.
-    output = _squashed(captured.out + captured.err)
-    assert output.count(_squashed("it is a lambda")) == 1, captured.out
+    output = squashed(captured.out + captured.err)
+    assert output.count(squashed("it is a lambda")) == 1, captured.out
 
 
 def test_a_refused_step_stops_every_other_stale_step_from_being_submitted(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """When two of three independent stale steps are refused, each for a different reason, the build exits FAILED, each refused step reports FAIL with a message naming it, no plan is bound, and the third step's product is not written."""
-    registry = _registry(tmp_path)
-    refused, _ = _refused_step(registry, "lambda")
-    also_refused, _ = _refused_step(registry, "hand_built", name="second_refused")
-    [fine] = _steps(registry, {"fine.parquet": []})
+    artifacts = registry(tmp_path)
+    refused, _ = _refused_step(artifacts, "lambda")
+    also_refused, _ = _refused_step(artifacts, "hand_built", name="second_refused")
+    [fine] = _steps(artifacts, {"fine.parquet": []})
 
     session = build([fine, refused, also_refused], tmp_path / "state", jobmon=True)
 
     assert session.exit_code == ExitCode.FAILED
     for name in (_REFUSED, "second_refused"):
-        message = str(_failure(_report(session, name)))
+        message = str(failure_of(report_for(session, name)))
         assert name in message, message
     assert fake_jobmon.plans == []
-    assert not registry.path_for("fine.parquet").exists()
+    assert not artifacts.path_for("fine.parquet").exists()
 
 
 # The run directory and the recipes
@@ -1022,7 +984,7 @@ def test_two_builds_use_different_run_directories(
 
 def test_run_directories_made_in_the_same_second_are_distinct(tmp_path: Path) -> None:
     """Five run directories made one right after the other under one root, so that at least two share their time stamp, are five distinct directories, each named <YYYYmmdd-HHMMSS>-<6 hex digits>."""
-    _mkdir(tmp_path / RUNS_DIR)
+    make_dir(tmp_path / RUNS_DIR)
 
     made = [_new_run_directory(tmp_path) for _ in range(5)]
 
@@ -1087,7 +1049,7 @@ def test_a_command_step_without_env_finds_this_envs_executables_first_on_the_nod
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_jobmon: FakeJobmon
 ) -> None:
     """With a directory holding a decoy 'python' put first on the build's PATH, a command step with env None that runs 'python' through the bridge runs this environment's python, not the decoy."""
-    decoy = _mkdir(tmp_path / "decoy") / "python"
+    decoy = make_dir(tmp_path / "decoy") / "python"
     decoy.write_text("#!/bin/sh\necho decoy\n")
     decoy.chmod(0o755)
     monkeypatch.setenv("PATH", f"{decoy.parent}{os.pathsep}{os.environ['PATH']}")
@@ -1103,7 +1065,7 @@ def test_a_command_step_without_env_finds_this_envs_executables_first_on_the_nod
 
     build([task], tmp_path / "state", jobmon=True)
 
-    assert _bound_names(fake_jobmon) == [["which_python"]]
+    assert bound_names(fake_jobmon) == [["which_python"]]
     assert Path(product.read_text().strip()).resolve() == Path(sys.prefix).resolve()
 
 
@@ -1129,14 +1091,14 @@ def test_a_command_step_whose_product_directory_is_missing_succeeds_on_the_node(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """A command step after a python step, writing its product into a directory that does not exist yet, succeeds through the bridge, because the bridge creates the product's parent directory before it submits."""
-    registry = _registry(tmp_path)
-    [first] = _steps(registry, {"first.parquet": []})
-    source = registry.path_for("first.parquet")
+    artifacts = registry(tmp_path)
+    [first] = _steps(artifacts, {"first.parquet": []})
+    source = artifacts.path_for("first.parquet")
     copy = tmp_path / "later" / "deeper" / "copy.parquet"
     copy_step = Task(
         name="copy_step",
         run=f"cp {shlex.quote(str(source))} {shlex.quote(str(copy))}",
-        inputs={"source": registry.resolve_input("first.parquet")},
+        inputs={"source": artifacts.resolve_input("first.parquet")},
         outputs={"copy": file_node(copy)},
         resources={},
         env=None,
@@ -1210,7 +1172,7 @@ def test_a_failed_jobmon_environment_check_fails_the_build_with_its_message_only
     output = captured.out + captured.err
     assert session.exit_code == ExitCode.FAILED
     assert checked == ["multiprocess"]
-    assert _squashed(_CHECK_MESSAGE) in _squashed(output), output
+    assert squashed(_CHECK_MESSAGE) in squashed(output), output
     assert "Traceback" not in output, output
     assert jobmon.plans == []
     assert _run_directories(fx.state) == []
@@ -1233,9 +1195,9 @@ def test_a_refused_bind_fails_the_build_with_a_plain_message_after_writing_the_r
     assert session.exit_code == ExitCode.FAILED
     [refused] = jobmon.refused
     assert [entry.name for entry in refused] == list(fx.steps)
-    assert _squashed("jobmon_cluster") in _squashed(output), output
-    assert _squashed("jobmon_resources") in _squashed(output), output
-    assert _squashed(_QUEUE_MESSAGE) in _squashed(output), output
+    assert squashed("jobmon_cluster") in squashed(output), output
+    assert squashed("jobmon_resources") in squashed(output), output
+    assert squashed(_QUEUE_MESSAGE) in squashed(output), output
     assert "Traceback" not in output, output
     [run_directory] = _run_directories(fx.state)
     signature = _signatures(session)
@@ -1249,7 +1211,7 @@ def test_a_build_with_nothing_stale_does_not_check_the_jobmon_environment(
 ) -> None:
     """When every step is unchanged, a jobmon build exits OK even though check_environment would raise."""
     fx = build_fixture(tmp_path)
-    tasks = _stable(fx.tasks)
+    tasks = stable(fx.tasks)
     assert outcomes(build(tasks, fx.state)) == dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
     checked: list[str] = []
 
@@ -1322,7 +1284,7 @@ def test_jobmon_timeout_overrides_the_allocation_without_asking_slurm(
 
     assert session.exit_code == ExitCode.OK
     assert asked == []
-    assert _bound_names(fake_jobmon) == [list(fx.steps)]
+    assert bound_names(fake_jobmon) == [list(fx.steps)]
     assert fake_jobmon.timeouts == [60]
 
 
@@ -1353,8 +1315,8 @@ def test_an_allocation_too_short_fails_the_build_before_anything_is_written(
     output = captured.out + captured.err
     assert session.exit_code == ExitCode.FAILED
     assert asked == [_SLURM_JOB_ID]
-    assert _squashed(str(error)) in _squashed(output), output
-    assert _squashed("jobmon_timeout") in _squashed(output), output
+    assert squashed(str(error)) in squashed(output), output
+    assert squashed("jobmon_timeout") in squashed(output), output
     assert "Traceback" not in output, output
     assert fake_jobmon.plans == []
     assert _run_directories(fx.state) == []
@@ -1377,8 +1339,8 @@ def test_an_invalid_jobmon_timeout_fails_the_build_before_anything_is_written(
     captured = capsys.readouterr()
     output = captured.out + captured.err
     assert session.exit_code == ExitCode.FAILED
-    assert _squashed("jobmon_timeout") in _squashed(output), output
-    assert _squashed(str(value)) in _squashed(output), output
+    assert squashed("jobmon_timeout") in squashed(output), output
+    assert squashed(str(value)) in squashed(output), output
     assert "Traceback" not in output, output
     assert fake_jobmon.plans == []
     assert _run_directories(fx.state) == []
@@ -1389,7 +1351,7 @@ def test_a_build_with_nothing_stale_does_not_work_out_the_timeout(
 ) -> None:
     """With get_workflow_timeout_seconds monkeypatched to raise, a second bridged build of unchanged steps with stable code identities succeeds without calling it."""
     fx = build_fixture(tmp_path)
-    tasks = _stable(fx.tasks)
+    tasks = stable(fx.tasks)
     first = build(tasks, fx.state, jobmon=True)
     assert outcomes(first) == dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
     monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
@@ -1400,4 +1362,4 @@ def test_a_build_with_nothing_stale_does_not_work_out_the_timeout(
     assert session.exit_code == ExitCode.OK
     assert outcomes(session) == dict.fromkeys(fx.steps, TaskOutcome.SKIP_UNCHANGED)
     assert asked == []
-    assert _bound_names(fake_jobmon) == [list(fx.steps)]
+    assert bound_names(fake_jobmon) == [list(fx.steps)]

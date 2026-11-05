@@ -1,4 +1,4 @@
-"""Helpers shared by the bridge's settlement, interrupt and state tests.
+"""Helpers shared by the bridge's tests.
 
 The pipelines here run their steps through ``tests.bridge.step_targets``, so a test that
 builds them with ``jobmon=True`` needs the ``node_pythonpath`` fixture.
@@ -16,10 +16,11 @@ import pandas as pd
 from pytask import ExecutionReport, Session, TaskOutcome
 
 from tests.bridge import step_targets
+from vivarium.dagger.backend.build import build
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
-from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE
+from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE, RunState, read_run_state
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon, stable_code_id
 
@@ -39,6 +40,15 @@ CHAIN = ("a.parquet", "b.parquet", "c.parquet")
 INDEPENDENT = "d.parquet"
 """The step of :func:`chain_and_independent` that no other step depends on."""
 
+A, B, C = CHAIN
+"""The steps of the chain a -> b -> c."""
+
+D = INDEPENDENT
+"""The step that no other step depends on."""
+
+PLAN_ORDER = (A, D, B, C)
+"""The order in which the bridge plans a -> b -> c plus d: by wave, then by name."""
+
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 """An ANSI escape sequence, which pytask's console writes when it styles its output."""
 
@@ -48,9 +58,23 @@ def registry(tmp_path: Path) -> ArtifactRegistry:
     return ArtifactRegistry(output_root=tmp_path / "out", run_name="run1")
 
 
-def stable(tasks: Sequence[Task]) -> list[Task]:
-    """Return ``tasks``, each with a stable code identity."""
-    return [replace(task, code_id=stable_code_id(f"{task.name}::code")) for task in tasks]
+def make_dir(path: Path) -> Path:
+    """Create ``path`` and its parents if missing, and return it."""
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
+    """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
+    return [
+        replace(
+            task,
+            code_id=stable_code_id(
+                f"{task.name}::code", "2" if task.name in changed else "1"
+            ),
+        )
+        for task in tasks
+    ]
 
 
 def chain_and_independent(
@@ -103,11 +127,18 @@ def report_counts(session: Session) -> dict[str, int]:
     return counts
 
 
-def remote_failure(report: ExecutionReport) -> RemoteTaskFailed:
-    """Return the RemoteTaskFailed that a FAIL report holds."""
+def failure_of(report: ExecutionReport) -> BaseException:
+    """Return the exception that a FAIL report holds."""
     assert report.outcome == TaskOutcome.FAIL
     assert report.exc_info is not None
     error = report.exc_info[1]
+    assert error is not None
+    return error
+
+
+def remote_failure(report: ExecutionReport) -> RemoteTaskFailed:
+    """Return the RemoteTaskFailed that a FAIL report holds."""
+    error = failure_of(report)
     assert isinstance(error, RemoteTaskFailed), repr(error)
     return error
 
@@ -143,3 +174,36 @@ def state_files(root: Path) -> list[Path]:
 def squashed(text: str) -> str:
     """Return ``text`` without ANSI escapes or whitespace, so that wrapped lines join up."""
     return "".join(_ANSI.sub("", text).split())
+
+
+def build_root(tmp_path: Path) -> Path:
+    """Return the root of the builds under ``tmp_path``."""
+    return tmp_path / "state"
+
+
+def chain_build(
+    tmp_path: Path,
+    jobmon: FakeJobmon,
+    *,
+    failing: Collection[str] = (),
+    killed: Collection[str] = (),
+    stable_ids: bool = False,
+    **options: Any,
+) -> Session:
+    """Build a -> b -> c plus d under ``tmp_path`` with jobmon=True through ``jobmon``.
+
+    The products go under ``tmp_path / "out"`` and the root is :func:`build_root`. A step
+    named in ``failing`` raises on its node, and one named in ``killed`` ends its runner
+    without a result. ``stable_ids`` gives every step a stable code identity.
+    """
+    tasks = chain_and_independent(registry(tmp_path), failing=failing, killed=killed)
+    if stable_ids:
+        tasks = stable(tasks)
+    with jobmon:
+        return build(tasks, build_root(tmp_path), jobmon=True, **options)
+
+
+def only_state(root: Path) -> RunState:
+    """Return the state of the one run under ``root``."""
+    [path] = state_files(root)
+    return read_run_state(path)

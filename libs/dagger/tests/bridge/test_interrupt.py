@@ -23,15 +23,20 @@ from pytask import ExitCode, Session, TaskOutcome
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
-    CHAIN,
-    INDEPENDENT,
     JOURNAL,
     LOCKFILE,
+    PLAN_ORDER,
     WORKFLOW_ID,
+    A,
+    B,
+    C,
+    D,
     bound_names,
-    chain_and_independent,
+    build_root,
+    chain_build,
     journal_ids,
     lockfile_entries,
+    only_state,
     recorded_pids,
     registry,
     remote_failure,
@@ -59,15 +64,6 @@ from vivarium.dagger.bridge.state import (
 )
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon
-
-A, B, C = CHAIN
-"""The steps of the chain a -> b -> c."""
-
-D = INDEPENDENT
-"""The step that no other step depends on."""
-
-PLAN_ORDER = (A, D, B, C)
-"""The order in which the bridge plans a -> b -> c plus d: by wave, then by name."""
 
 _INTERRUPTED_OUTCOMES = {
     A: TaskOutcome.SUCCESS,
@@ -278,11 +274,6 @@ def _sigterm_kept() -> Iterator[None]:
     signal.signal(signal.SIGTERM, previous)
 
 
-def _root(tmp_path: Path) -> Path:
-    """Return the root of the builds under ``tmp_path``."""
-    return tmp_path / "state"
-
-
 def _send_sigterm() -> None:
     """Send SIGTERM to this thread, but only while Python handles or ignores it."""
     handler = signal.getsignal(signal.SIGTERM)
@@ -311,26 +302,6 @@ def _sigterm_handler(handler: _Handler) -> Iterator[None]:
         signal.signal(signal.SIGTERM, previous)
 
 
-def _chain_build(
-    tmp_path: Path,
-    jobmon: FakeJobmon,
-    *,
-    failing: Sequence[str] = (),
-    stable_ids: bool = False,
-) -> Session:
-    """Build a -> b -> c plus d under ``tmp_path`` with jobmon=True through ``jobmon``.
-
-    The products go under ``tmp_path / "out"`` and the root is :func:`_root`. A step named
-    in ``failing`` raises on its node. ``stable_ids`` gives every step a stable code
-    identity.
-    """
-    tasks = chain_and_independent(registry(tmp_path), failing=failing)
-    if stable_ids:
-        tasks = stable(tasks)
-    with jobmon:
-        return build(tasks, _root(tmp_path), jobmon=True)
-
-
 def _interrupted_build(
     tmp_path: Path,
     interrupt_with: Literal["sigterm", "keyboard_interrupt"] = "sigterm",
@@ -340,7 +311,7 @@ def _interrupted_build(
     jobmon = FakeJobmon(
         interrupt_after=2, interrupt_with=interrupt_with, workflow_id=workflow_id
     )
-    return _chain_build(tmp_path, jobmon)
+    return chain_build(tmp_path, jobmon)
 
 
 def _two_independent(tmp_path: Path) -> list[Task]:
@@ -352,12 +323,6 @@ def _two_independent(tmp_path: Path) -> list[Task]:
             for name in _TWO
         ]
     )
-
-
-def _only_state(root: Path) -> RunState:
-    """Return the state of the one run under ``root``."""
-    [path] = state_files(root)
-    return read_run_state(path)
 
 
 def _run_child(code: str, tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -515,7 +480,7 @@ def test_sigterm_during_the_run_records_settles_and_writes_the_lockfile(
     tmp_path: Path,
 ) -> None:
     """End to end: with FakeJobmon(interrupt_after=2, workflow_id=4242), a bridged build of a -> b -> c plus d returns normally; a and d are SUCCESS with pytask.lock entries, b is FAIL, c is SKIP_PREVIOUS_FAILED, each step has one report, pytask.lock.journal is gone, and no product records the test process's pid."""
-    root = _root(tmp_path)
+    root = build_root(tmp_path)
 
     session = _interrupted_build(tmp_path)
 
@@ -552,14 +517,14 @@ def test_an_interrupted_build_ends_with_pytasks_failed_exit_code(
     every_step_ran = FakeJobmon(interrupt_after=len(PLAN_ORDER), workflow_id=WORKFLOW_ID)
 
     interrupted = _interrupted_build(early)
-    interrupted_late = _chain_build(late, every_step_ran)
+    interrupted_late = chain_build(late, every_step_ran)
 
     assert outcomes(interrupted) == _INTERRUPTED_OUTCOMES
     assert interrupted.exit_code == ExitCode.FAILED
     assert outcomes(interrupted_late) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
     assert interrupted_late.exit_code == ExitCode.OK
-    assert set(lockfile_entries(_root(late))) == set(PLAN_ORDER)
-    state = _only_state(_root(late))
+    assert set(lockfile_entries(build_root(late))) == set(PLAN_ORDER)
+    state = only_state(build_root(late))
     assert state.status == "interrupted"
     assert state.pending == ()
 
@@ -570,7 +535,7 @@ def test_sigterm_leaves_an_interrupted_state_with_the_workflow_id_and_pending_st
     """After that interrupted build, the state file and session.config[RUN_STATE_KEY] have status 'interrupted', workflow id 4242, workflow_status None, error None and pending (b, c)."""
     session = _interrupted_build(tmp_path)
 
-    state = _only_state(_root(tmp_path))
+    state = only_state(build_root(tmp_path))
     assert state.status == "interrupted"
     assert state.workflow_id == WORKFLOW_ID
     assert state.workflow_status is None
@@ -589,9 +554,9 @@ def test_the_sigterm_handler_is_the_bridges_during_the_run_and_restored_after(
     finished = FakeJobmon()
 
     with _sigterm_handler(sentinel):
-        _chain_build(tmp_path / "interrupted", interrupted)
+        chain_build(tmp_path / "interrupted", interrupted)
         after_interrupt = signal.getsignal(signal.SIGTERM)
-        _chain_build(tmp_path / "finished", finished)
+        chain_build(tmp_path / "finished", finished)
         after_finish = signal.getsignal(signal.SIGTERM)
 
     for jobmon in (interrupted, finished):
@@ -601,7 +566,7 @@ def test_the_sigterm_handler_is_the_bridges_during_the_run_and_restored_after(
     assert after_interrupt is sentinel
     assert after_finish is sentinel
     assert calls == []
-    assert _only_state(tmp_path / "interrupted" / "state").status == "interrupted"
+    assert only_state(tmp_path / "interrupted" / "state").status == "interrupted"
 
 
 def test_keyboard_interrupt_during_the_run_has_the_same_outcome_as_sigterm(
@@ -617,8 +582,8 @@ def test_keyboard_interrupt_during_the_run_has_the_same_outcome_as_sigterm(
     assert outcomes(session) == outcomes(signalled) == _INTERRUPTED_OUTCOMES
     assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1)
     for directory in (by_signal, by_keyboard):
-        assert set(lockfile_entries(_root(directory))) == {A, D}
-        state = _only_state(_root(directory))
+        assert set(lockfile_entries(build_root(directory))) == {A, D}
+        state = only_state(build_root(directory))
         assert state.status == "interrupted"
         assert state.workflow_id == WORKFLOW_ID
         assert state.pending == (B, C)
@@ -628,10 +593,10 @@ def test_the_next_build_after_an_interrupt_runs_exactly_the_pending_steps(
     tmp_path: Path,
 ) -> None:
     """With stable code identities, after the interrupted build, the next bridged build binds a plan of exactly b and c and reports a and d SKIP_UNCHANGED."""
-    _chain_build(tmp_path, FakeJobmon(interrupt_after=2), stable_ids=True)
+    chain_build(tmp_path, FakeJobmon(interrupt_after=2), stable_ids=True)
     jobmon = FakeJobmon()
 
-    session = _chain_build(tmp_path, jobmon, stable_ids=True)
+    session = chain_build(tmp_path, jobmon, stable_ids=True)
 
     assert bound_names(jobmon) == [[B, C]]
     reported = outcomes(session)
@@ -648,7 +613,7 @@ def test_sigterm_during_bind_fails_every_step_and_leaves_a_state_without_a_workf
     """With a FakeJobmon subclass whose bind sends SIGTERM to the process before it returns, the build returns normally, every submitted step is FAIL or SKIP_PREVIOUS_FAILED, each FAIL's message says the build was interrupted before the Jobmon workflow was bound, and the state file is 'interrupted' with workflow_id None and every submitted step pending."""
     jobmon = _SigtermInBind(workflow_id=WORKFLOW_ID)
 
-    session = _chain_build(tmp_path, jobmon)
+    session = chain_build(tmp_path, jobmon)
 
     assert bound_names(jobmon) == [list(PLAN_ORDER)]
     assert outcomes(session) == {
@@ -662,7 +627,7 @@ def test_sigterm_during_bind_fails_every_step_and_leaves_a_state_without_a_workf
         assert name in message, message
         assert "interrupted" in message.lower(), message
         assert "bound" in message, message
-    state = _only_state(_root(tmp_path))
+    state = only_state(build_root(tmp_path))
     assert state.status == "interrupted"
     assert state.workflow_id is None
     assert state.pending == PLAN_ORDER
@@ -673,18 +638,18 @@ def test_a_second_sigterm_while_the_first_unwinds_is_ignored(tmp_path: Path) -> 
     """With a FakeJobmon subclass whose run sends SIGTERM and sends a second SIGTERM while the first one's BridgeInterrupted propagates, the build returns normally, each step has exactly one report, and the state file is 'interrupted'."""
     jobmon = _SigtermTwice(workflow_id=WORKFLOW_ID)
 
-    session = _chain_build(tmp_path, jobmon)
+    session = chain_build(tmp_path, jobmon)
 
     assert jobmon.second_ignored
     assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1)
-    assert _only_state(_root(tmp_path)).status == "interrupted"
+    assert only_state(build_root(tmp_path)).status == "interrupted"
 
 
 def test_sigterm_after_the_run_ends_the_process_and_the_journal_keeps_what_was_recorded(
     tmp_path: Path,
 ) -> None:
     """In a child Python process, a bridged build of two independent steps whose recording of the second step sends SIGTERM to the process ends the process with return code -15; the root has no pytask.lock, its pytask.lock.journal holds the first step, and the next build reports the first step SKIP_UNCHANGED (stable code identities)."""
-    root = _root(tmp_path)
+    root = build_root(tmp_path)
 
     child = _run_child(_TERM_WHILE_RECORDING, tmp_path)
 
@@ -703,12 +668,12 @@ def test_a_handler_installed_over_the_bridges_still_lets_sigterm_reach_it(
     """With a FakeJobmon subclass whose run first installs a SIGTERM handler that calls the previous handler inside 'except Exception: pass', as Jobmon's logging setup does, and then sends SIGTERM, the build is interrupted and settled as without that handler."""
     jobmon = _WrappedRun(interrupt_after=2, workflow_id=WORKFLOW_ID)
 
-    session = _chain_build(tmp_path, jobmon)
+    session = chain_build(tmp_path, jobmon)
 
     assert outcomes(session) == _INTERRUPTED_OUTCOMES
     assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1)
-    assert set(lockfile_entries(_root(tmp_path))) == {A, D}
-    state = _only_state(_root(tmp_path))
+    assert set(lockfile_entries(build_root(tmp_path))) == {A, D}
+    state = only_state(build_root(tmp_path))
     assert state.status == "interrupted"
     assert state.workflow_id == WORKFLOW_ID
     assert state.pending == (B, C)
@@ -753,7 +718,7 @@ def test_off_the_main_thread_no_handler_is_installed_and_the_build_settles(
 
     with _sigterm_handler(sentinel):
         raised = _in_a_thread(
-            lambda: sessions.append(_chain_build(tmp_path, jobmon, failing=(B,)))
+            lambda: sessions.append(chain_build(tmp_path, jobmon, failing=(B,)))
         )
         after = signal.getsignal(signal.SIGTERM)
 
@@ -795,19 +760,19 @@ def test_sigterm_raises_is_a_no_op_off_the_main_thread() -> None:
 
 def test_a_sigkilled_build_leaves_a_running_state_and_records_nothing(tmp_path: Path) -> None:
     """In a child Python process, a bridged build through a FakeJobmon subclass whose run sends SIGKILL to the process after one entry ends with return code -9; the state file is 'running' with the fake's workflow id and every submitted step pending, pytask.lock has no entry, and the next bridged build in this process binds the same plan as the killed build."""
-    root = _root(tmp_path)
+    root = build_root(tmp_path)
 
     child = _run_child(_SIGKILL_DURING_THE_RUN, tmp_path)
 
     assert child.returncode == -signal.SIGKILL, (child.returncode, child.stderr[-4000:])
-    state = _only_state(root)
+    state = only_state(root)
     assert state.status == "running"
     assert state.workflow_id == WORKFLOW_ID
     assert state.pending == PLAN_ORDER
     assert lockfile_entries(root) == {}
     assert journal_ids(root) == set()
     jobmon = FakeJobmon()
-    _chain_build(tmp_path, jobmon, stable_ids=True)
+    chain_build(tmp_path, jobmon, stable_ids=True)
     assert bound_names(jobmon) == [list(state.pending)]
 
 
@@ -819,7 +784,7 @@ def test_the_next_build_warns_naming_the_workflow_id_of_an_unfinished_run(
     tmp_path: Path, earlier: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When the latest state under the root is 'interrupted' (after an interrupted build) or 'running' (written by hand, as a killed build leaves it), the next bridged build prints, before it binds, a warning that names that run's workflow id and run directory and says its jobs may still be running."""
-    root = _root(tmp_path)
+    root = build_root(tmp_path)
     if earlier == "interrupted":
         _interrupted_build(tmp_path, workflow_id=_EARLIER_ID)
         [path] = state_files(root)
@@ -841,7 +806,7 @@ def test_the_next_build_warns_naming_the_workflow_id_of_an_unfinished_run(
     jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
     capsys.readouterr()
 
-    _chain_build(tmp_path, jobmon)
+    chain_build(tmp_path, jobmon)
 
     [before_bind] = jobmon.printed
     printed = squashed(before_bind)
@@ -854,20 +819,20 @@ def test_no_warning_after_a_finished_run(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """After a bridged build whose state is 'finished' with no error, also one with failed steps, the next bridged build prints no warning about an unfinished run."""
-    failed = _chain_build(tmp_path, FakeJobmon(workflow_id=_EARLIER_ID), failing=(B,))
+    failed = chain_build(tmp_path, FakeJobmon(workflow_id=_EARLIER_ID), failing=(B,))
     failed_state = failed.config[RUN_STATE_KEY]
     assert isinstance(failed_state, RunState)
     assert failed_state.status == "finished"
     after_failed = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
     capsys.readouterr()
-    clean = _chain_build(tmp_path, after_failed)
+    clean = chain_build(tmp_path, after_failed)
     clean_state = clean.config[RUN_STATE_KEY]
     assert isinstance(clean_state, RunState)
     assert clean_state.status == "finished"
     after_clean = _OutputAtBind(workflow_id=WORKFLOW_ID, capsys=capsys)
     capsys.readouterr()
 
-    _chain_build(tmp_path, after_clean)
+    chain_build(tmp_path, after_clean)
 
     checks = [(after_failed, failed_state), (after_clean, clean_state)]
     for jobmon, earlier in checks:
@@ -881,13 +846,13 @@ def test_no_warning_after_a_build_interrupted_while_binding(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """After a build interrupted while binding, whose state has no workflow id, and no earlier run, the next bridged build prints no warning about an unfinished run."""
-    _chain_build(tmp_path, _SigtermInBind(workflow_id=_EARLIER_ID))
-    [path] = state_files(_root(tmp_path))
+    chain_build(tmp_path, _SigtermInBind(workflow_id=_EARLIER_ID))
+    [path] = state_files(build_root(tmp_path))
     assert read_run_state(path).workflow_id is None
     jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
     capsys.readouterr()
 
-    _chain_build(tmp_path, jobmon)
+    chain_build(tmp_path, jobmon)
 
     [before_bind] = jobmon.printed
     printed = squashed(before_bind)
@@ -899,7 +864,7 @@ def test_a_build_interrupted_while_binding_does_not_hide_an_earlier_unfinished_r
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When an earlier run's state is 'running' (written by hand, as a killed build leaves it) and a later build was interrupted while binding, the next bridged build still warns before it binds, naming the earlier run's workflow id and run directory."""
-    root = _root(tmp_path)
+    root = build_root(tmp_path)
     earlier_run = root / RUNS_DIR / "20261104-120000-abcdef"
     earlier_run.mkdir(parents=True)
     write_run_state(
@@ -913,13 +878,13 @@ def test_a_build_interrupted_while_binding_does_not_hide_an_earlier_unfinished_r
         )
     )
     os.utime(earlier_run / STATE_FILE, (1_000_000_000, 1_000_000_000))
-    _chain_build(tmp_path, _SigtermInBind(workflow_id=WORKFLOW_ID))
+    chain_build(tmp_path, _SigtermInBind(workflow_id=WORKFLOW_ID))
     statuses = sorted((read_run_state(path).status for path in state_files(root)))
     assert statuses == ["interrupted", "running"]
     jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
     capsys.readouterr()
 
-    _chain_build(tmp_path, jobmon)
+    chain_build(tmp_path, jobmon)
 
     [before_bind] = jobmon.printed
     printed = squashed(before_bind)
@@ -933,19 +898,19 @@ def test_the_next_build_warns_naming_the_workflow_id_and_error_of_a_run_jobmon_s
     tmp_path: Path, error_after: int, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When the latest state under the root is 'finished' with its error set (as after a Jobmon timeout), the next bridged build prints, before it binds, a warning that names that run's workflow id and run directory, gives the error, and says its jobs may still be running."""
-    stopped = _chain_build(
+    stopped = chain_build(
         tmp_path, FakeJobmon(error_after=error_after, workflow_id=_EARLIER_ID)
     )
     earlier = stopped.config[RUN_STATE_KEY]
     assert isinstance(earlier, RunState)
     assert earlier.status == "finished"
     assert earlier.error is not None
-    [path] = state_files(_root(tmp_path))
+    [path] = state_files(build_root(tmp_path))
     message = f"FakeJobmon stopped the workflow after {error_after} entries"
     jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
     capsys.readouterr()
 
-    _chain_build(tmp_path, jobmon)
+    chain_build(tmp_path, jobmon)
 
     [before_bind] = jobmon.printed
     printed = squashed(before_bind)
@@ -959,13 +924,13 @@ def test_an_unreadable_latest_state_gives_a_warning_naming_the_file_and_the_buil
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """When the latest state file under the root holds text that is not JSON, the next bridged build prints a warning naming that file, then binds and runs its plan as usual."""
-    spoiled = _root(tmp_path) / RUNS_DIR / "20261104-120000-abcdef" / STATE_FILE
+    spoiled = build_root(tmp_path) / RUNS_DIR / "20261104-120000-abcdef" / STATE_FILE
     spoiled.parent.mkdir(parents=True)
     spoiled.write_text("{ this is not JSON", encoding="utf-8")
     jobmon = _OutputAtBind(workflow_id=WORKFLOW_ID, capsys=capsys)
     capsys.readouterr()
 
-    session = _chain_build(tmp_path, jobmon)
+    session = chain_build(tmp_path, jobmon)
 
     [before_bind] = jobmon.printed
     assert squashed(str(spoiled)) in squashed(before_bind), before_bind
