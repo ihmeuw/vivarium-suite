@@ -877,6 +877,57 @@ def test_no_warning_after_a_finished_run(
         assert earlier.workdir.name not in printed, before_bind
 
 
+def test_no_warning_after_a_build_interrupted_while_binding(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """After a build interrupted while binding, whose state has no workflow id, and no earlier run, the next bridged build prints no warning about an unfinished run."""
+    _chain_build(tmp_path, _SigtermInBind(workflow_id=_EARLIER_ID))
+    [path] = state_files(_root(tmp_path))
+    assert read_run_state(path).workflow_id is None
+    jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
+    capsys.readouterr()
+
+    _chain_build(tmp_path, jobmon)
+
+    [before_bind] = jobmon.printed
+    printed = squashed(before_bind)
+    assert path.parent.name not in printed, before_bind
+    assert "still be running" not in printed, before_bind
+
+
+def test_a_build_interrupted_while_binding_does_not_hide_an_earlier_unfinished_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When an earlier run's state is 'running' (written by hand, as a killed build leaves it) and a later build was interrupted while binding, the next bridged build still warns before it binds, naming the earlier run's workflow id and run directory."""
+    root = _root(tmp_path)
+    earlier_run = root / RUNS_DIR / "20261104-120000-abcdef"
+    earlier_run.mkdir(parents=True)
+    write_run_state(
+        RunState(
+            workdir=earlier_run,
+            status="running",
+            workflow_id=_EARLIER_ID,
+            workflow_status=None,
+            error=None,
+            pending=PLAN_ORDER,
+        )
+    )
+    os.utime(earlier_run / STATE_FILE, (1_000_000_000, 1_000_000_000))
+    _chain_build(tmp_path, _SigtermInBind(workflow_id=WORKFLOW_ID))
+    statuses = sorted((read_run_state(path).status for path in state_files(root)))
+    assert statuses == ["interrupted", "running"]
+    jobmon = _OutputAtBind(workflow_id=_LATER_ID, capsys=capsys)
+    capsys.readouterr()
+
+    _chain_build(tmp_path, jobmon)
+
+    [before_bind] = jobmon.printed
+    printed = squashed(before_bind)
+    assert str(_EARLIER_ID) in printed, before_bind
+    assert squashed(str(earlier_run)) in printed, before_bind
+    assert "still" in before_bind.lower(), before_bind
+
+
 @pytest.mark.parametrize("error_after", [1, len(PLAN_ORDER)], ids=["early", "after_all"])
 def test_the_next_build_warns_naming_the_workflow_id_and_error_of_a_run_jobmon_stopped_with_an_error(
     tmp_path: Path, error_after: int, capsys: pytest.CaptureFixture[str]

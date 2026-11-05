@@ -252,6 +252,24 @@ def test_latest_run_state_skips_a_newer_run_directory_without_a_state_file(
     assert latest_run_state(tmp_path) == state
 
 
+def test_latest_run_state_with_bound_only_passes_over_a_newer_state_without_a_workflow_id(
+    tmp_path: Path,
+) -> None:
+    """With bound_only=True, latest_run_state passes over a newer state that has no workflow id and returns the newest state that has one; without bound_only it returns the newer state, and with only states that have no workflow id it returns None."""
+    bound = _full_state(_run_directory(tmp_path, _FIRST_NAME))
+    unbound = _bare_state(_run_directory(tmp_path, _SECOND_NAME))
+    write_run_state(bound)
+    write_run_state(unbound)
+    _set_mtime(bound.workdir / STATE_FILE, 1_000_000_000)
+    _set_mtime(unbound.workdir / STATE_FILE, 1_000_000_100)
+    only_unbound = tmp_path / "only_unbound"
+    write_run_state(_bare_state(_run_directory(only_unbound, _FIRST_NAME)))
+
+    assert latest_run_state(tmp_path, bound_only=True) == bound
+    assert latest_run_state(tmp_path) == unbound
+    assert latest_run_state(only_unbound, bound_only=True) is None
+
+
 def test_latest_run_state_raises_when_the_runs_directory_cannot_be_listed(
     tmp_path: Path,
 ) -> None:

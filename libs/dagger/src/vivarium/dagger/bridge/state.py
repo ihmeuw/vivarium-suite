@@ -141,7 +141,7 @@ def read_run_state(path: Path) -> RunState:
     )
 
 
-def latest_run_state(root: Path) -> RunState | None:
+def latest_run_state(root: Path, *, bound_only: bool = False) -> RunState | None:
     """Return the state of the most recent bridge run under a build's root.
 
     The most recent run is the one whose state file was modified last, among the run
@@ -154,35 +154,40 @@ def latest_run_state(root: Path) -> RunState | None:
     ----------
     root
         The build's root.
+    bound_only
+        Skip runs whose state has no workflow id, so that a build interrupted while binding
+        does not hide an earlier run whose workflow was bound.
 
     Returns
     -------
         The latest run's state, or ``None`` if no run directory under ``root`` has a state
-        file.
+        file (with a workflow id, when ``bound_only`` is set).
 
     Raises
     ------
     OSError
         If the runs directory or a state file cannot be listed or read.
     ValueError
-        If the latest state file is not a run state, as :func:`read_run_state` raises.
+        If a state file that is read is not a run state, as :func:`read_run_state` raises.
     """
     try:
         directories = list((root / RUNS_DIR).iterdir())
     except (FileNotFoundError, NotADirectoryError):
         return None
-    latest: tuple[int, str, Path] | None = None
+    candidates: list[tuple[int, str, Path]] = []
     for directory in directories:
         path = directory / STATE_FILE
         try:
             modified = path.stat().st_mtime_ns
         except (FileNotFoundError, NotADirectoryError):
             continue
-        # The directory name breaks a tie, so the choice does not depend on listing order.
-        candidate = (modified, directory.name, path)
-        if latest is None or candidate[:2] > latest[:2]:
-            latest = candidate
-    return None if latest is None else read_run_state(latest[2])
+        candidates.append((modified, directory.name, path))
+    # The directory name breaks a tie, so the choice does not depend on listing order.
+    for _, _, path in sorted(candidates, reverse=True):
+        state = read_run_state(path)
+        if not bound_only or state.workflow_id is not None:
+            return state
+    return None
 
 
 def _problem(data: dict[str, Any]) -> str | None:

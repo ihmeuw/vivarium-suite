@@ -253,16 +253,16 @@ def pytask_execute_build(session: Session) -> bool:
     ``SLURM_JOB_ID`` set), it is the allocation's remaining time less a safety buffer, from
     :func:`vivarium.cluster_tools.core.cluster.interface.get_workflow_timeout_seconds`, as
     for the ``dagger`` runner; outside one, it is Jobmon's own default. Next, if the
-    latest earlier run under the root
-    (:func:`~vivarium.dagger.bridge.state.latest_run_state`) did not finish (its state
-    is not ``"finished"``), or finished after Jobmon stopped it with an error (its
-    state's ``error`` is set), the hook prints a warning through pytask's console that
-    names that run's workflow id and run directory, gives that error if there is one, and
-    says that its jobs on compute nodes may still be running and writing the same
-    products. There is no warning when that run was interrupted before its Jobmon
-    workflow was bound (its state has no workflow id), because none of its jobs ran. If
-    that state file cannot be read, the warning names the file instead. Either way the
-    build goes on.
+    latest earlier run under the root whose Jobmon workflow was bound
+    (:func:`~vivarium.dagger.bridge.state.latest_run_state` with ``bound_only=True``) did
+    not finish (its state is not ``"finished"``), or finished after Jobmon stopped it
+    with an error (its state's ``error`` is set), the hook prints a warning through
+    pytask's console that names that run's workflow id and run directory, gives that
+    error if there is one, and says that its jobs on compute nodes may still be running
+    and writing the same products. A run interrupted before its workflow was bound (its
+    state has no workflow id) launched no jobs, so it is passed over and the run before
+    it is checked. If a state file cannot be read, the warning names the file instead.
+    Either way the build goes on.
 
     It then creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
@@ -595,7 +595,7 @@ def _workflow_timeout(config: Mapping[str, Any]) -> int | None:
 def _warn_if_last_run_unfinished(root: Path) -> None:
     """Warn naming the latest run under ``root`` if it did not finish or Jobmon errored."""
     try:
-        state = latest_run_state(root)
+        state = latest_run_state(root, bound_only=True)
     except (OSError, ValueError) as error:
         _warn(
             "The bridge could not read the state file of the latest earlier run under "
@@ -605,9 +605,6 @@ def _warn_if_last_run_unfinished(root: Path) -> None:
         return
     if state is None or (state.status == "finished" and state.error is None):
         return
-    # Interrupted before bind gave it a workflow id, so none of its jobs was launched.
-    if state.status == "interrupted" and state.workflow_id is None:
-        return
     # After a Jobmon error, such as its timeout, the submitted jobs can keep running.
     if state.status == "finished":
         what = "stopped with an error"
@@ -615,9 +612,8 @@ def _warn_if_last_run_unfinished(root: Path) -> None:
         what = f"did not finish: its state is {state.status!r}"
     if state.error is not None:
         what = f"{what} ({state.error})"
-    workflow = "unknown" if state.workflow_id is None else state.workflow_id
     _warn(
-        f"The latest earlier run under {root}, Jobmon workflow {workflow} in "
+        f"The latest earlier run under {root}, Jobmon workflow {state.workflow_id} in "
         f"{state.workdir}, {what}. Its jobs on compute nodes may still be running and "
         "writing the same products as this build."
     )
