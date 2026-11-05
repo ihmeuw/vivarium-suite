@@ -19,6 +19,12 @@ _PROBE_TOOL = "vivarium_dagger_bridge_probe"
 """A tool that exists only in the fake env bin directories these tests make."""
 
 
+@pytest.fixture(autouse=True)
+def _outside_slurm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unset SLURM_JOB_ID, so that no bridged build asks Slurm for its remaining time."""
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+
+
 @pytest.fixture
 def fake_jobmon() -> Iterator[FakeJobmon]:
     """Stand in for Jobmon for the test, so a build with jobmon=True runs with no server."""

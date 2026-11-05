@@ -206,7 +206,14 @@ def pytask_execute_build(session: Session) -> bool:
     :func:`~vivarium.dagger.backend.preview.preview`, can already have created product
     directories.
 
-    Otherwise it checks the Jobmon environment, creates a new run directory
+    Otherwise it checks the Jobmon environment and works out how long Jobmon may run the
+    workflow. That is ``jobmon_timeout`` when the build sets it, which must then be a
+    positive whole number of seconds. Without it, inside a Slurm allocation (with
+    ``SLURM_JOB_ID`` set), it is the allocation's remaining time less a safety buffer, from
+    :func:`vivarium.cluster_tools.core.cluster.interface.get_workflow_timeout_seconds`, as
+    for the ``dagger`` runner; outside one, it is Jobmon's own default.
+
+    It then creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
     as ``<signature>.payload.json``, creates the parent directory of the products of each
     step to submit, and binds and runs one workflow. Its entries are the steps to submit
@@ -219,7 +226,8 @@ def pytask_execute_build(session: Session) -> bool:
     the result to ``<signature>.result.json`` beside the recipe. The workflow is named
     after the root directory and takes its cluster, default resources, attempts and
     resource scales from the configuration keys that
-    :mod:`~vivarium.dagger.bridge.plugin` describes.
+    :mod:`~vivarium.dagger.bridge.plugin` describes, and the run gets the timeout worked
+    out above.
 
     When the workflow ends, the hook records the result of each submitted step whose
     result file is in the run directory, in plan order, and appends its report to
@@ -249,8 +257,13 @@ def pytask_execute_build(session: Session) -> bool:
     Raises
     ------
     pytask.ExecutionError
-        If the Jobmon environment check fails, or if Jobmon refuses to bind the
-        workflow, which the adapter reports as
+        If the Jobmon environment check fails; if ``jobmon_timeout`` is set to anything
+        but a positive whole number of seconds, with a message that names the key and the
+        value; or if ``jobmon_timeout`` is not set and the Slurm allocation's remaining
+        time cannot be read or is shorter than the safety buffer, with a message that
+        gives that error and says to set ``jobmon_timeout``. In these cases no run
+        directory has been created. Also if Jobmon refuses to bind the workflow, which
+        the adapter reports as
         :class:`~vivarium.dagger.bridge._jobmon_adapter.JobmonBindError`, for example
         because neither ``jobmon_resources`` nor a step's resources name a queue. The
         message is printed through pytask's console first, so the build fails with that
@@ -282,6 +295,7 @@ def pytask_execute_build(session: Session) -> bool:
         _jobmon_adapter.check_environment(cluster)
     except _jobmon_adapter.JobmonEnvironmentError as error:
         raise _failure(str(error)) from error
+    timeout = _workflow_timeout(config)
     root = Path(config["root"])
     workdir = _new_run_directory(root)
     plan = _compile(session, to_submit, payloads, workdir)
@@ -301,7 +315,7 @@ def pytask_execute_build(session: Session) -> bool:
             "jobmon_cluster and the compute resources in jobmon_resources and in each "
             f"step's resources. Jobmon reported: {error}"
         ) from error
-    _jobmon_adapter.run(jobmon_run)
+    _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
     # TODO(MIC-7748): settle the steps that this returns, so every planned step gets a report.
     _record_available(session, to_submit, workdir)
     if jobmon_run.error is not None:
@@ -470,6 +484,32 @@ def _failure(message: str) -> ExecutionError:
     """Print ``message`` in pytask's failure style and return an ExecutionError with it."""
     console.print(message, style="failed", markup=False, highlight=False, soft_wrap=True)
     return ExecutionError(message)
+
+
+def _workflow_timeout(config: Mapping[str, Any]) -> int | None:
+    """Return Jobmon's timeout from ``jobmon_timeout`` or the Slurm allocation, or None."""
+    value: object = config.get("jobmon_timeout")
+    if value is None:
+        # Imported here, so that loading the bridge does not import cluster-tools.
+        from vivarium.cluster_tools.core.cluster.interface import get_workflow_timeout_seconds
+
+        try:
+            return get_workflow_timeout_seconds()
+        # ValueError: squeue gave a remaining time that cluster-tools cannot parse, such as
+        # UNLIMITED or NOT_SET.
+        except (RuntimeError, ValueError) as error:
+            raise _failure(
+                "The bridge could not work out how long Jobmon may run the workflow from "
+                f"the remaining time of this Slurm allocation ({error}). Set "
+                "jobmon_timeout to the number of seconds that Jobmon may run the workflow."
+            ) from error
+    # bool is a subclass of int, but True is not a number of seconds.
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    raise _failure(
+        "jobmon_timeout must be a positive whole number of seconds, but the build set it "
+        f"to {value!r}."
+    )
 
 
 def _new_run_directory(root: Path) -> Path:

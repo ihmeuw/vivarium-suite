@@ -26,6 +26,11 @@ pytask's configuration, so a build sets the bridge's keys there:
     How much Jobmon raises each named resource after a step fails for lack of it, as a
     fraction, such as ``{"memory": 0.5}``. The default, ``None``, keeps Jobmon's own,
     which raises memory and runtime by half.
+``jobmon_timeout``
+    How many seconds Jobmon may run the workflow before it stops waiting, as a positive
+    whole number. The default, ``None``, takes the remaining time of the Slurm allocation
+    that the build runs in, less a safety buffer, as the ``dagger`` runner does, and
+    outside an allocation keeps Jobmon's own default of 36000 seconds (10 hours).
 
 For example::
 
@@ -40,11 +45,10 @@ extra: ``pip install "vivarium-dagger[cluster]"``.
 The build records the steps' results in pytask's lockfile only after the whole workflow
 ends. If the build's process is killed before then, for example at its Slurm time limit,
 no step is recorded and the next build runs every step again, including the steps that
-had finished. Give that process more time than the whole workflow needs. Jobmon itself
-stops waiting after its default timeout of 36000 seconds (10 hours), whatever that
-process's time limit. A longer workflow therefore fails at 10 hours: the build records
-the steps that had finished and then fails with Jobmon's error. While the workflow runs,
-Jobmon's progress lines, such as ``Workflow 50.0% complete (1/2 tasks)``, are printed on
+had finished. Give that process more time than the whole workflow needs. When Jobmon
+stops waiting at its timeout (see ``jobmon_timeout``), the build records the steps that
+had finished and then fails with Jobmon's error. While the workflow runs, Jobmon's
+progress lines, such as ``Workflow 50.0% complete (1/2 tasks)``, are printed on
 standard error, or above pytask's live table when standard output is a terminal, and
 Jobmon's GUI shows each step.
 """
@@ -82,6 +86,7 @@ def pytask_parse_config(config: dict[str, Any]) -> None:
     config.setdefault("jobmon_resources", {})
     config.setdefault("jobmon_max_attempts", DEFAULT_MAX_ATTEMPTS)
     config.setdefault("jobmon_resource_scales", None)
+    config.setdefault("jobmon_timeout", None)
 
 
 @hookimpl(trylast=True)

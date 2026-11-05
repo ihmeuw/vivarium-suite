@@ -30,6 +30,7 @@ from pytask import (
     TaskOutcome,
     TaskWithoutPath,
 )
+from vivarium.cluster_tools.core.cluster import interface as cluster_interface
 
 from tests.bridge import step_targets
 from vivarium.dagger.backend.build import build, outcomes, to_pytask_task
@@ -98,6 +99,15 @@ _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 _RUN_DIRECTORY_NAME = re.compile(r"\d{8}-\d{6}-[0-9a-fA-F]{6}")
 """The name of a run directory: a ``YYYYmmdd-HHMMSS`` time stamp and six hex digits."""
+
+_SLURM_JOB_ID = "4321"
+"""The Slurm job id that the timeout tests put in ``SLURM_JOB_ID``."""
+
+_SLURM_MESSAGE = "Only 2 minutes are left in the allocation, on purpose."
+"""Message of the RuntimeError that a stand-in Slurm timeout lookup raises."""
+
+_UNREADABLE_SQUEUE_MESSAGE = "invalid literal for int() with base 10: 'UNLIMITED'"
+"""Message of the ValueError that the Slurm timeout lookup raises for an unreadable time."""
 
 
 @pytest.fixture(autouse=True)
@@ -213,6 +223,39 @@ def _pytask_build(tasks: Sequence[PTask], root: Path, **kwargs: Any) -> Session:
     config = root / "pytask.toml"
     config.write_text("[tool.pytask.ini_options]\n")
     return pytask.build(tasks=list(tasks), config=config, task_files=(), **kwargs)
+
+
+def _answer_timeout(
+    monkeypatch: pytest.MonkeyPatch, answer: int | None | Exception
+) -> list[str | None]:
+    """Make the Slurm timeout lookup return ``answer``, or raise it; return its calls.
+
+    The lookup is ``get_workflow_timeout_seconds`` in cluster-tools. Each call appends the
+    ``SLURM_JOB_ID`` that it sees to the returned list.
+    """
+    asked: list[str | None] = []
+
+    def get_workflow_timeout_seconds() -> int | None:
+        """Note the call, then answer it."""
+        asked.append(os.environ.get("SLURM_JOB_ID"))
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(
+        cluster_interface, "get_workflow_timeout_seconds", get_workflow_timeout_seconds
+    )
+    return asked
+
+
+def _fake_squeue(bin_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Put first on PATH an squeue that notes each call in a file; return that file."""
+    calls = bin_dir / "squeue_calls.log"
+    squeue = _mkdir(bin_dir) / "squeue"
+    squeue.write_text(f'#!/bin/sh\necho "$*" >> {shlex.quote(str(calls))}\necho 1:00:00\n')
+    squeue.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    return calls
 
 
 def _with_mark(task: Task, mark: str) -> TaskWithoutPath:
@@ -1222,3 +1265,139 @@ def test_a_build_with_nothing_stale_does_not_check_the_jobmon_environment(
     assert session.exit_code == ExitCode.OK
     assert checked == []
     assert jobmon.plans == []
+
+
+# Jobmon's timeout
+
+
+def test_jobmon_timeout_is_passed_to_the_run(tmp_path: Path, fake_jobmon: FakeJobmon) -> None:
+    """A bridged build with jobmon_timeout=7200 calls the adapter's run with seconds_until_timeout=7200, so FakeJobmon.timeouts is [7200]."""
+    fx = build_fixture(tmp_path)
+
+    session = build(fx.tasks, fx.state, jobmon=True, jobmon_timeout=7200)
+
+    assert session.exit_code == ExitCode.OK
+    assert fake_jobmon.timeouts == [7200]
+
+
+def test_without_jobmon_timeout_the_slurm_allocation_sets_the_timeout(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With get_workflow_timeout_seconds in vivarium.cluster_tools.core.cluster.interface monkeypatched to return 1234, a bridged build without jobmon_timeout calls run with seconds_until_timeout=1234."""
+    fx = build_fixture(tmp_path)
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+    asked = _answer_timeout(monkeypatch, 1234)
+
+    session = build(fx.tasks, fx.state, jobmon=True)
+
+    assert session.exit_code == ExitCode.OK
+    assert asked == [_SLURM_JOB_ID]
+    assert fake_jobmon.timeouts == [1234]
+
+
+def test_without_an_allocation_or_jobmon_timeout_the_run_keeps_jobmons_default(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_ID unset, a bridged build without jobmon_timeout calls run with seconds_until_timeout=None, and squeue is not called."""
+    fx = build_fixture(tmp_path)
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+    calls = _fake_squeue(tmp_path / "bin", monkeypatch)
+
+    session = build(fx.tasks, fx.state, jobmon=True)
+
+    assert session.exit_code == ExitCode.OK
+    assert fake_jobmon.timeouts == [None]
+    assert not calls.exists(), calls.read_text()
+
+
+def test_jobmon_timeout_overrides_the_allocation_without_asking_slurm(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With get_workflow_timeout_seconds monkeypatched to raise, a bridged build with jobmon_timeout=60 runs its plan with seconds_until_timeout=60 and never calls it."""
+    fx = build_fixture(tmp_path)
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+    asked = _answer_timeout(monkeypatch, RuntimeError(_SLURM_MESSAGE))
+
+    session = build(fx.tasks, fx.state, jobmon=True, jobmon_timeout=60)
+
+    assert session.exit_code == ExitCode.OK
+    assert asked == []
+    assert _bound_names(fake_jobmon) == [list(fx.steps)]
+    assert fake_jobmon.timeouts == [60]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        RuntimeError(_SLURM_MESSAGE),
+        ValueError(_UNREADABLE_SQUEUE_MESSAGE),
+    ],
+    ids=["too_short", "unreadable"],
+)
+def test_an_allocation_too_short_fails_the_build_before_anything_is_written(
+    tmp_path: Path,
+    fake_jobmon: FakeJobmon,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+) -> None:
+    """With get_workflow_timeout_seconds monkeypatched to raise RuntimeError('<message>') (an allocation shorter than the buffer) or ValueError('<message>') (an squeue time that cannot be read), a bridged build without jobmon_timeout fails with pytask.ExecutionError whose printed message quotes '<message>' and names jobmon_timeout, with no traceback; nothing is bound and no run directory is created."""
+    fx = build_fixture(tmp_path)
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+    asked = _answer_timeout(monkeypatch, error)
+    capsys.readouterr()
+
+    session = build(fx.tasks, fx.state, jobmon=True)
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert session.exit_code == ExitCode.FAILED
+    assert asked == [_SLURM_JOB_ID]
+    assert _squashed(str(error)) in _squashed(output), output
+    assert _squashed("jobmon_timeout") in _squashed(output), output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
+    assert _run_directories(fx.state) == []
+    assert not any(fx.registry.path_for(step).exists() for step in fx.steps)
+
+
+@pytest.mark.parametrize("value", [0, -1, 1.5, True, "60"])
+def test_an_invalid_jobmon_timeout_fails_the_build_before_anything_is_written(
+    tmp_path: Path,
+    fake_jobmon: FakeJobmon,
+    value: object,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A bridged build with jobmon_timeout set to 0, -1, 1.5, True or '60' fails with pytask.ExecutionError whose message names jobmon_timeout and the value; nothing is bound and no run directory is created."""
+    fx = build_fixture(tmp_path)
+    capsys.readouterr()
+
+    session = build(fx.tasks, fx.state, jobmon=True, jobmon_timeout=value)
+
+    captured = capsys.readouterr()
+    output = captured.out + captured.err
+    assert session.exit_code == ExitCode.FAILED
+    assert _squashed("jobmon_timeout") in _squashed(output), output
+    assert _squashed(str(value)) in _squashed(output), output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
+    assert _run_directories(fx.state) == []
+
+
+def test_a_build_with_nothing_stale_does_not_work_out_the_timeout(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With get_workflow_timeout_seconds monkeypatched to raise, a second bridged build of unchanged steps with stable code identities succeeds without calling it."""
+    fx = build_fixture(tmp_path)
+    tasks = _stable(fx.tasks)
+    first = build(tasks, fx.state, jobmon=True)
+    assert outcomes(first) == dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+    asked = _answer_timeout(monkeypatch, RuntimeError(_SLURM_MESSAGE))
+
+    session = build(tasks, fx.state, jobmon=True)
+
+    assert session.exit_code == ExitCode.OK
+    assert outcomes(session) == dict.fromkeys(fx.steps, TaskOutcome.SKIP_UNCHANGED)
+    assert asked == []
+    assert _bound_names(fake_jobmon) == [list(fx.steps)]
