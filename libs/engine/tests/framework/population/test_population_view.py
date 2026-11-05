@@ -34,6 +34,7 @@ from vivarium.engine.framework.population import (
     PopulationManager,
     PopulationView,
 )
+from vivarium.engine.framework.population.exceptions import ColumnDtypeError
 from vivarium.engine.testing_utilities import TestPopulation
 
 ##########################
@@ -1093,11 +1094,41 @@ def test_population_view_update_keeps_the_existing_dtype(
 
 
 @pytest.mark.parametrize("scope", ["full", "partial"])
+def test_population_view_update_same_and_other_dtype_columns_together(
+    pies_and_cubes_pop_mgr: PopulationManager, scope: str
+) -> None:
+    """A same-dtype column and a different-dtype column update together correctly."""
+    existing, new_values = _DTYPE_CASES["datetime_other_unit"]
+    original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
+    original_pi = pies_and_cubes_pop_mgr.private_columns["pi"].copy()
+    index = original.index if scope == "full" else original.index[::2]
+    update = pd.DataFrame(
+        {
+            "pi": original_pi.loc[index] * 2,
+            "extra": new_values.set_axis(original.index).loc[index],
+        }
+    )
+
+    pies_and_cubes_pop_mgr.get_view(PieComponent()).update(["pi", "extra"], lambda _: update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    assert updated["pi"].dtype == original_pi.dtype
+    assert updated["extra"].dtype == original.dtype
+    pd.testing.assert_series_equal(updated.loc[index, "pi"], update["pi"])
+    pd.testing.assert_series_equal(
+        updated.loc[index, "extra"], update["extra"].astype(original.dtype)
+    )
+    rest = original.index.difference(index)
+    pd.testing.assert_series_equal(updated.loc[rest, "pi"], original_pi.loc[rest])
+    pd.testing.assert_series_equal(updated.loc[rest, "extra"], original.loc[rest])
+
+
+@pytest.mark.parametrize("scope", ["full", "partial"])
 @pytest.mark.parametrize("case", list(_CORRUPTING_CASES))
 def test_population_view_update_values_the_dtype_cannot_hold_raise(
     pies_and_cubes_pop_mgr: PopulationManager, case: str, scope: str
 ) -> None:
-    """Values the column's dtype cannot hold raise a PopulationError and change nothing."""
+    """Values the column's dtype cannot hold raise a PopulationError."""
     existing, new_values = _CORRUPTING_CASES[case]
     original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
     index = original.index if scope == "full" else original.index[::2]
@@ -1106,11 +1137,11 @@ def test_population_view_update_values_the_dtype_cannot_hold_raise(
     with pytest.raises(
         PopulationError,
         match="Component 'pie_component' is corrupting the population table by modifying "
-        "the dtype",
-    ):
+        rf"the dtype of a column it updates \(extra from {original.dtype} to ",
+    ) as exc_info:
         pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
 
-    pd.testing.assert_series_equal(pies_and_cubes_pop_mgr.private_columns["extra"], original)
+    assert isinstance(exc_info.value.__cause__, ColumnDtypeError)
 
 
 def test_population_view_update_during_a_creation_pass_raises(

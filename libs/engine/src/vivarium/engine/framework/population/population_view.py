@@ -21,7 +21,7 @@ import pandas as pd
 
 import vivarium.engine.framework.population.utilities as pop_utils
 from vivarium.engine.framework.lifecycle import lifecycle_states
-from vivarium.engine.framework.population.exceptions import PopulationError
+from vivarium.engine.framework.population.exceptions import ColumnDtypeError, PopulationError
 
 if TYPE_CHECKING:
     from vivarium.engine.component import Component
@@ -458,30 +458,20 @@ class PopulationView:
             self._component, index=index, columns=columns
         )
         previous_index = current_data.index
-        previous_dtypes = (
-            current_data.dtypes
-            if isinstance(current_data, pd.DataFrame)
-            else current_data.to_frame().dtypes
-        )
         result = modifier(current_data)
         result_df = self._coerce_update_result(result, column_list, previous_index)
 
         if result_df.empty:
             return
 
-        # Each column keeps its existing dtype, and the manager raises a TypeError if
-        # the new values do not fit it.
+        # Each column keeps its existing dtype, and the manager raises a
+        # ColumnDtypeError if the new values do not fit it.
         try:
             self._manager.update(result_df)
-        except TypeError as exc:
-            changed = ", ".join(
-                f"{column} from {previous_dtypes[column]} to {result_df[column].dtype}"
-                for column in result_df.columns
-                if result_df[column].dtype != previous_dtypes[column]
-            )
+        except ColumnDtypeError as exc:
             raise PopulationError(
                 f"Component '{self._component.name}' is corrupting the population table "
-                f"by modifying the dtype of a column it updates ({changed}): {exc}"
+                f"by modifying the dtype of a column it updates ({exc.description})."
             ) from exc
 
     def __repr__(self) -> str:

@@ -16,7 +16,7 @@ import vivarium.engine.framework.population.utilities as pop_utils
 from vivarium.engine.component import Component
 from vivarium.engine.framework.event import Event
 from vivarium.engine.framework.lifecycle import lifecycle_states
-from vivarium.engine.framework.population.exceptions import PopulationError
+from vivarium.engine.framework.population.exceptions import ColumnDtypeError, PopulationError
 from vivarium.engine.framework.population.population_view import PopulationView
 from vivarium.engine.framework.resource import Resource
 from vivarium.engine.manager import Manager
@@ -893,7 +893,8 @@ class PopulationManager(Manager):
         alone. Simulants being added are written by :meth:`initialize` instead.
 
         Each column keeps its existing dtype. Values that the existing dtype cannot
-        hold, such as a fraction in an integer column, raise.
+        hold, such as a fraction in an integer column, raise a ``TypeError``. When
+        that happens, the frame may already hold part of the update.
 
         Parameters
         ----------
@@ -903,38 +904,42 @@ class PopulationManager(Manager):
 
         Raises
         ------
-        TypeError
-            If the existing dtype of a column cannot hold the new values.
+        ColumnDtypeError
+            If the existing dtype of a column cannot hold the new values. It is a
+            ``TypeError``.
         """
         frame = self.private_columns
-        full_index = update.index.equals(frame.index)
+        existing_dtypes = frame.dtypes[update.columns]
+        same_dtype = [c for c in update.columns if update[c].dtype == existing_dtypes[c]]
+        other_dtype = [c for c in update.columns if c not in same_dtype]
 
-        # A column whose dtype differs from the update's is written into a copy
-        # first. pandas raises for most values the column cannot hold, but on a
-        # partial write it changes the column's dtype for some, such as NaN in an int
-        # column. Checking the copy rejects those before anything is written.
-        same_dtype = [c for c in update.columns if update[c].dtype == frame[c].dtype]
-        written = {}
-        for column in update.columns:
-            if column in same_dtype:
-                continue
-            copy = frame[column].copy()
-            copy.loc[update.index] = update[column]
-            if copy.dtype != frame[column].dtype:
-                raise TypeError(
-                    f"Invalid value for dtype '{frame[column].dtype}' in column '{column}'"
-                )
-            written[column] = copy
+        def _rejected(columns: list[str]) -> ColumnDtypeError:
+            return ColumnDtypeError(
+                {c: (str(existing_dtypes[c]), str(update[c].dtype)) for c in columns}
+            )
 
         # Assigning whole columns is much faster than writing into them, but it takes
-        # the update's dtype. So only columns that already have the existing dtype are
-        # assigned that way.
-        if same_dtype and full_index:
-            frame[same_dtype] = update[same_dtype]
-        elif same_dtype:
-            frame.loc[update.index, same_dtype] = update[same_dtype]
-        for column, values in written.items():
-            frame[column] = values
+        # the update's dtype. So only same-dtype columns are assigned. The rest are
+        # written into, which keeps the existing dtype.
+        try:
+            if update.index.equals(frame.index):
+                if same_dtype:
+                    frame[same_dtype] = update[same_dtype]
+                if other_dtype:
+                    frame.loc[:, other_dtype] = update[other_dtype]
+            else:
+                frame.loc[update.index, update.columns] = update
+        except TypeError as exc:
+            # Only a column whose dtype differs can fail to hold its new values.
+            if not other_dtype:
+                raise
+            raise _rejected(other_dtype) from exc
+
+        # pandas raises for most values a column cannot hold. On a partial write it
+        # changes the column's dtype for some, such as NaN in an int column.
+        changed = [c for c in other_dtype if frame[c].dtype != existing_dtypes[c]]
+        if changed:
+            raise _rejected(changed)
 
     def initialize(self, data: pd.DataFrame) -> None:
         """Add the given columns to the simulants being initialized.
