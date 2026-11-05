@@ -1056,6 +1056,11 @@ _CORRUPTING_CASES: dict[str, tuple[pd.Series[Any], pd.Series[Any]]] = {
         pd.Series(np.arange(_N_PIES)),
         pd.Series(["cherry"] * _N_PIES, dtype="str"),
     ),
+    # On a partial write, pandas would accept this and turn the column into float64.
+    "nan_into_int": (
+        pd.Series(np.arange(_N_PIES)),
+        pd.Series([np.nan] * _N_PIES),
+    ),
 }
 
 
@@ -1092,7 +1097,7 @@ def test_population_view_update_keeps_the_existing_dtype(
 def test_population_view_update_values_the_dtype_cannot_hold_raise(
     pies_and_cubes_pop_mgr: PopulationManager, case: str, scope: str
 ) -> None:
-    """Values the column's dtype cannot hold raise a PopulationError."""
+    """Values the column's dtype cannot hold raise a PopulationError and change nothing."""
     existing, new_values = _CORRUPTING_CASES[case]
     original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
     index = original.index if scope == "full" else original.index[::2]
@@ -1100,9 +1105,12 @@ def test_population_view_update_values_the_dtype_cannot_hold_raise(
 
     with pytest.raises(
         PopulationError,
-        match="A component is corrupting the population table by modifying the dtype",
+        match="Component 'pie_component' is corrupting the population table by modifying "
+        "the dtype",
     ):
         pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
+
+    pd.testing.assert_series_equal(pies_and_cubes_pop_mgr.private_columns["extra"], original)
 
 
 def test_population_view_update_during_a_creation_pass_raises(
@@ -1360,7 +1368,8 @@ class TestScopedUpdate:
 
         with pytest.raises(
             PopulationError,
-            match="A component is corrupting the population table by modifying the dtype",
+            match="Component 'pie_component' is corrupting the population table by "
+            "modifying the dtype",
         ):
             pie_view.update("pie", to_integers, index=scoped)
 

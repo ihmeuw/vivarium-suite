@@ -469,19 +469,19 @@ class PopulationView:
         if result_df.empty:
             return
 
-        # Each column keeps its existing dtype. pandas decides whether the new values
-        # fit it, and raises if they do not.
+        # Each column keeps its existing dtype, and the manager raises a TypeError if
+        # the new values do not fit it.
         try:
             self._manager.update(result_df)
-        except (TypeError, ValueError) as exc:
+        except TypeError as exc:
             changed = ", ".join(
                 f"{column} from {previous_dtypes[column]} to {result_df[column].dtype}"
                 for column in result_df.columns
                 if result_df[column].dtype != previous_dtypes[column]
             )
             raise PopulationError(
-                "A component is corrupting the population table by modifying the dtype "
-                f"of a column it updates ({changed}): {exc}"
+                f"Component '{self._component.name}' is corrupting the population table "
+                f"by modifying the dtype of a column it updates ({changed}): {exc}"
             ) from exc
 
     def __repr__(self) -> str:

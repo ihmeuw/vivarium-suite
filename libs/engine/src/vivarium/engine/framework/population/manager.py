@@ -907,19 +907,34 @@ class PopulationManager(Manager):
             If the existing dtype of a column cannot hold the new values.
         """
         frame = self.private_columns
-        if not update.index.equals(frame.index):
-            frame.loc[update.index, update.columns] = update
-            return
+        full_index = update.index.equals(frame.index)
+
+        # A column whose dtype differs from the update's is written into a copy
+        # first. pandas raises for most values the column cannot hold, but on a
+        # partial write it changes the column's dtype for some, such as NaN in an int
+        # column. Checking the copy rejects those before anything is written.
+        same_dtype = [c for c in update.columns if update[c].dtype == frame[c].dtype]
+        written = {}
+        for column in update.columns:
+            if column in same_dtype:
+                continue
+            copy = frame[column].copy()
+            copy.loc[update.index] = update[column]
+            if copy.dtype != frame[column].dtype:
+                raise TypeError(
+                    f"Invalid value for dtype '{frame[column].dtype}' in column '{column}'"
+                )
+            written[column] = copy
 
         # Assigning whole columns is much faster than writing into them, but it takes
         # the update's dtype. So only columns that already have the existing dtype are
-        # assigned. The rest are written into, which keeps the existing dtype.
-        same_dtype = [c for c in update.columns if update[c].dtype == frame[c].dtype]
-        other_dtype = [c for c in update.columns if c not in same_dtype]
-        if same_dtype:
+        # assigned that way.
+        if same_dtype and full_index:
             frame[same_dtype] = update[same_dtype]
-        if other_dtype:
-            frame.loc[:, other_dtype] = update[other_dtype]
+        elif same_dtype:
+            frame.loc[update.index, same_dtype] = update[same_dtype]
+        for column, values in written.items():
+            frame[column] = values
 
     def initialize(self, data: pd.DataFrame) -> None:
         """Add the given columns to the simulants being initialized.
