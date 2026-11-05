@@ -1,3 +1,10 @@
+**5.1.0 - 11/05/26**
+
+- Accept ``.venv`` as the project venv in the current directory in ``resolve_env_prefix``
+- Read the psimulate Slack token from the team config file when
+  ``PSIMULATE_SLACK_BOT_TOKEN`` is unset, since uv venvs never run the conda activation
+  script that exports it
+
 **5.0.0 - 11/04/26**
 
 - **Breaking change.** Move ``psimulate`` and ``vipin`` to the new ``vivarium-psimulate``
