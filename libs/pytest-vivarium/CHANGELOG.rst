@@ -1,3 +1,8 @@
+**0.4.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
+  dependencies to ``numpy>=2.1.0``
+
 **0.3.1 - 10/16/26**
 
 - Make the ``-n auto`` worker-count hook run before pytest-xdist's default, so the

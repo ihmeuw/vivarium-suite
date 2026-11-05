@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[click,loguru,requests]",
+    "vivarium-dependencies[click,loguru,requests]<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
@@ -43,7 +43,7 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-docs = ["vivarium-dependencies[sphinx,ipython,matplotlib]"]
+docs = ["vivarium-dependencies[ipython,matplotlib,sphinx]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = [
     "vivarium-dependencies[lint]",

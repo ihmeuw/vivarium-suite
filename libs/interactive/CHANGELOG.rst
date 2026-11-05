@@ -1,3 +1,8 @@
+**1.1.0b2 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
+  dependencies to ``numpy>=2.1.0``, ``pandas>=3.0.0``
+
 **1.1.0b1 - 11/03/26**
 
 - Add ``population_size``, ``seed``, ``draw``, ``artifact_path``, ``start_time``, and ``end_time`` keyword parameters to ``Simulation``
