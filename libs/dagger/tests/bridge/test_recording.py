@@ -7,10 +7,10 @@ the build's process.
 
 import io
 import json
+import math
 import os
-import re
+import shlex
 import socket
-import tomllib
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -24,6 +24,18 @@ from rich.console import Console
 from rich.theme import Theme
 
 from tests.bridge import step_targets
+from tests.bridge.helpers import (
+    bound_names,
+    failure_of,
+    journal_ids,
+    lockfile_entries,
+    make_dir,
+    registry,
+    remote_failure,
+    report_for,
+    squashed,
+    stable,
+)
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import preview
@@ -34,20 +46,7 @@ from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.execute import RemoteTaskFailed, _record_available
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, RunResult, read_result, write_result
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import (
-    FakeJobmon,
-    Fixture,
-    Perturbed,
-    build_fixture,
-    stable_code_id,
-)
-
-_LOCKFILE = "pytask.lock"
-"""The name of pytask's lockfile in a build's root."""
-
-_JOURNAL = "pytask.lock.journal"
-"""The name of the journal in a build's root that pytask appends each lockfile entry to
-while the build runs."""
+from vivarium.dagger.harness import FakeJobmon, Fixture, Perturbed, build_fixture
 
 _FAILING = "failing_step"
 """Name of the step whose target raises on its node."""
@@ -61,8 +60,12 @@ _NO_PRODUCT = "no_product_step"
 _NOT_PRODUCED = "The task did not produce the following files"
 """The start of pytask's message for a step that did not write a declared product."""
 
-_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-"""An ANSI escape sequence, which pytask's console writes when it styles its output."""
+_WRITES_ONE = "writes_one_of_two"
+"""Name of the command step that writes only one of its two declared products."""
+
+_COPIES = "copies_the_written_product"
+"""Name of the command step that copies the product that :data:`_WRITES_ONE` wrote."""
+
 
 _WIDE = 1000
 """A console width at which no line of a rendered report wraps."""
@@ -93,86 +96,69 @@ def _node_imports(node_pythonpath: None) -> None:
     """Let every node runner in this module import ``tests.bridge.step_targets``."""
 
 
-def _mkdir(path: Path) -> Path:
-    """Create ``path`` and its parents if missing, and return it."""
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _registry(tmp_path: Path) -> ArtifactRegistry:
-    """Return a registry whose products go under ``tmp_path / "out"``."""
-    return ArtifactRegistry(output_root=tmp_path / "out", run_name="run1")
-
-
-def _stable(tasks: Sequence[Task]) -> list[Task]:
-    """Return ``tasks``, each with a stable code identity."""
-    return [replace(task, code_id=stable_code_id(f"{task.name}::code")) for task in tasks]
-
-
 def _stable_fixture(directory: Path) -> Fixture:
     """Return the harness fixture under ``directory`` with stable code identities."""
     fx = build_fixture(directory)
-    return replace(fx, tasks=_stable(fx.tasks))
+    return replace(fx, tasks=stable(fx.tasks))
 
 
 def _steps_without_inputs(
-    registry: ArtifactRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
+    artifacts: ArtifactRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
 ) -> list[Task]:
     """Return one python step per product key in ``targets``, running its target."""
     return [
-        python_step(target, inputs={}, produces=produces, registry=registry)
+        python_step(target, inputs={}, produces=produces, registry=artifacts)
         for produces, target in targets.items()
     ]
 
 
-def _constant_steps(registry: ArtifactRegistry, names: Sequence[str]) -> list[Task]:
+def _constant_steps(artifacts: ArtifactRegistry, names: Sequence[str]) -> list[Task]:
     """Return one independent python step per name, each writing a constant frame."""
-    return _steps_without_inputs(registry, dict.fromkeys(names, step_targets.constant))
+    return _steps_without_inputs(artifacts, dict.fromkeys(names, step_targets.constant))
 
 
-def _bound_names(jobmon: FakeJobmon) -> list[list[str]]:
-    """Return the step names of each plan that ``jobmon`` bound, in plan order."""
-    return [[entry.name for entry in plan] for plan in jobmon.plans]
+def _two_step_chain(artifacts: ArtifactRegistry) -> list[Task]:
+    """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
+    first = python_step(
+        step_targets.constant, inputs={}, produces="first.parquet", registry=artifacts
+    )
+    second = python_step(
+        step_targets.stack,
+        inputs={"upstream": "first.parquet"},
+        produces="second.parquet",
+        registry=artifacts,
+    )
+    return [first, second]
 
 
-def _report(session: Session, name: str) -> ExecutionReport:
-    """Return the session's one report for the step called ``name``."""
-    [report] = [report for report in session.execution_reports if report.task.name == name]
-    return report
+def _chain_missing_a_product(directory: Path) -> tuple[list[Task], Path]:
+    """Return two command steps with stable code identities, and the second's product.
 
-
-def _failure(report: ExecutionReport) -> BaseException:
-    """Return the exception that a FAIL report holds."""
-    assert report.outcome == TaskOutcome.FAIL
-    assert report.exc_info is not None
-    error = report.exc_info[1]
-    assert error is not None
-    return error
-
-
-def _remote_failure(report: ExecutionReport) -> RemoteTaskFailed:
-    """Return the RemoteTaskFailed that a FAIL report holds."""
-    error = _failure(report)
-    assert isinstance(error, RemoteTaskFailed), repr(error)
-    return error
-
-
-def _lockfile_entries(root: Path) -> dict[str, dict[str, Any]]:
-    """Return the entries of ``root``'s pytask.lock by task id, or none if it is missing."""
-    path = root / _LOCKFILE
-    if not path.exists():
-        return {}
-    lockfile = tomllib.loads(path.read_text(encoding="utf-8"))
-    return {entry["id"]: entry for entry in lockfile.get("task", [])}
-
-
-def _journal_ids(root: Path) -> set[str]:
-    """Return the task ids in ``root``'s lockfile journal, or none if there is none."""
-    path = root / _JOURNAL
-    if not path.exists():
-        return set()
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return {json.loads(line)["id"] for line in lines if line.strip()}
+    The first step declares ``written.txt`` and ``missing.txt`` under ``directory`` but
+    writes only ``written.txt``. The second step copies ``written.txt`` to ``copy.txt``.
+    """
+    written = directory / "written.txt"
+    copy = directory / "copy.txt"
+    writes_one = Task(
+        name=_WRITES_ONE,
+        run=f"echo written > {shlex.quote(str(written))}",
+        inputs={},
+        outputs={
+            "written": file_node(written),
+            "missing": file_node(directory / "missing.txt"),
+        },
+        resources={},
+        env=None,
+    )
+    copies = Task(
+        name=_COPIES,
+        run=f"cp {shlex.quote(str(written))} {shlex.quote(str(copy))}",
+        inputs={"source": file_node(written)},
+        outputs={"copy": file_node(copy)},
+        resources={},
+        env=None,
+    )
+    return stable([writes_one, copies]), copy
 
 
 def _rendered(report: ExecutionReport) -> str:
@@ -182,11 +168,6 @@ def _rendered(report: ExecutionReport) -> str:
     theme = Theme({outcome.style: "none" for outcome in TaskOutcome})
     Console(file=buffer, width=_WIDE, color_system=None, theme=theme).print(report)
     return buffer.getvalue()
-
-
-def _squashed(text: str) -> str:
-    """Return ``text`` without ANSI escapes or whitespace, so that wrapped lines join up."""
-    return "".join(_ANSI.sub("", text).split())
 
 
 def _temporary_name(result: Path) -> Path:
@@ -229,11 +210,11 @@ def _build_a_failing_step(tmp_path: Path) -> ExecutionReport:
         step_targets.raise_step_failure,
         inputs={},
         produces="failing.parquet",
-        registry=_registry(tmp_path),
+        registry=registry(tmp_path),
         name=_FAILING,
     )
     session = build([task], tmp_path / "state", jobmon=True)
-    return _report(session, _FAILING)
+    return report_for(session, _FAILING)
 
 
 def _build_a_step_without_its_product(tmp_path: Path) -> tuple[Session, Path]:
@@ -288,10 +269,10 @@ class _LooksAtTheRoot(FakeJobmon):
     seen: list[set[str]] = field(default_factory=list, init=False)
     """The task ids in the root's pytask.lock and its journal at the end of each run."""
 
-    def run(self, jobmon_run: JobmonRun) -> None:
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
         """Run every entry as FakeJobmon does, then note the task ids the root holds."""
-        super().run(jobmon_run)
-        self.seen.append(set(_lockfile_entries(self.root)) | _journal_ids(self.root))
+        super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
+        self.seen.append(set(lockfile_entries(self.root)) | journal_ids(self.root))
 
 
 # End to end
@@ -301,18 +282,18 @@ def test_a_bridged_build_succeeds_and_writes_the_lockfile_entries_of_a_local_bui
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """End to end: the harness fixture with stable code identities, built with jobmon=True through FakeJobmon and the real node runner, reports SUCCESS for both steps, and its pytask.lock entries equal those that a local build of an identical fixture writes."""
-    local = _stable_fixture(_mkdir(tmp_path / "local"))
+    local = _stable_fixture(make_dir(tmp_path / "local"))
     ran = dict.fromkeys(local.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(local.tasks, local.state)) == ran
-    bridged = _stable_fixture(_mkdir(tmp_path / "bridged"))
+    bridged = _stable_fixture(make_dir(tmp_path / "bridged"))
 
     session = build(bridged.tasks, bridged.state, jobmon=True)
 
     assert outcomes(session) == ran
-    assert _bound_names(fake_jobmon) == [list(bridged.steps)]
-    entries = _lockfile_entries(bridged.state)
+    assert bound_names(fake_jobmon) == [list(bridged.steps)]
+    entries = lockfile_entries(bridged.state)
     assert sorted(entries) == sorted(bridged.steps)
-    assert entries == _lockfile_entries(local.state)
+    assert entries == lockfile_entries(local.state)
 
 
 def test_a_second_bridged_build_reports_skip_unchanged_and_binds_nothing(
@@ -326,7 +307,7 @@ def test_a_second_bridged_build_reports_skip_unchanged_and_binds_nothing(
     session = build(fx.tasks, fx.state, jobmon=True)
 
     assert outcomes(session) == dict.fromkeys(fx.steps, TaskOutcome.SKIP_UNCHANGED)
-    assert _bound_names(fake_jobmon) == [list(fx.steps)]
+    assert bound_names(fake_jobmon) == [list(fx.steps)]
 
 
 @pytest.mark.usefixtures("fake_jobmon")
@@ -344,22 +325,22 @@ def test_a_local_build_after_a_bridged_build_reports_skip_unchanged(tmp_path: Pa
 @pytest.mark.usefixtures("fake_jobmon")
 def test_no_step_body_runs_in_the_build_process(tmp_path: Path) -> None:
     """In a bridged two-step chain whose targets record their process id, both steps report SUCCESS and no recorded process id is the test process's own."""
-    registry = _registry(tmp_path)
+    artifacts = registry(tmp_path)
     first = python_step(
-        step_targets.record_pid, inputs={}, produces="first.parquet", registry=registry
+        step_targets.record_pid, inputs={}, produces="first.parquet", registry=artifacts
     )
     second = python_step(
         step_targets.record_pid,
         inputs={"upstream": "first.parquet"},
         produces="second.parquet",
-        registry=registry,
+        registry=artifacts,
     )
 
     session = build([first, second], tmp_path / "state", jobmon=True)
 
     ran = dict.fromkeys(["first.parquet", "second.parquet"], TaskOutcome.SUCCESS)
     assert outcomes(session) == ran
-    pids = pd.read_parquet(registry.path_for("second.parquet"))["pid"].tolist()
+    pids = pd.read_parquet(artifacts.path_for("second.parquet"))["pid"].tolist()
     assert len(pids) == 2
     assert os.getpid() not in pids
 
@@ -389,7 +370,7 @@ def test_steps_are_recorded_only_after_the_workflow_run_returns(tmp_path: Path) 
 
     [seen] = jobmon.seen
     assert seen.isdisjoint(fx.steps), seen
-    assert sorted(_lockfile_entries(fx.state)) == sorted(fx.steps)
+    assert sorted(lockfile_entries(fx.state)) == sorted(fx.steps)
 
 
 # A step that fails on its node
@@ -402,7 +383,7 @@ def test_a_step_that_raises_on_its_node_is_a_fail_with_remote_task_failed(
     """A bridged step whose target raises StepFailure reports FAIL, its exc_info[1] is a RemoteTaskFailed, and the message names the step and contains the node's exception line 'tests.bridge.step_targets.StepFailure: the step failed on purpose'."""
     report = _build_a_failing_step(tmp_path)
 
-    error = _failure(report)
+    error = failure_of(report)
     assert isinstance(error, RemoteTaskFailed), repr(error)
     assert _FAILING in str(error)
     assert _EXCEPTION_LINE in str(error)
@@ -415,7 +396,7 @@ def test_remote_task_failed_carries_the_node_exception_type_message_traceback_an
     """That step's RemoteTaskFailed has exc_type 'tests.bridge.step_targets.StepFailure', exc_message equal to step_targets.FAILURE_MESSAGE, a node_traceback whose last line is the exception line, a stdout that holds step_targets.STDOUT_BEFORE_FAILURE and a stderr that holds step_targets.STDERR_BEFORE_FAILURE; its exc_type, exc_message, stdout and stderr equal those fields of the step's result file, and its node_traceback equals the file's exc."""
     report = _build_a_failing_step(tmp_path)
 
-    error = _remote_failure(report)
+    error = remote_failure(report)
     result = _only_result(tmp_path / "state")
     assert error.exc_type == "tests.bridge.step_targets.StepFailure"
     assert error.exc_message == step_targets.FAILURE_MESSAGE
@@ -463,7 +444,7 @@ def test_a_failed_result_without_a_node_traceback_is_a_fail_naming_only_the_step
 ) -> None:
     """_record_available, given a result with success False and exc, exc_type and exc_message None, reports FAIL with a RemoteTaskFailed whose message names the step and holds no traceback, whose exc_type, exc_message and node_traceback are None, and whose stdout and stderr are the result's."""
     name = "untold.parquet"
-    tasks = _constant_steps(_registry(tmp_path), [name])
+    tasks = _constant_steps(registry(tmp_path), [name])
 
     def record_failed(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
         """Replace the task's result with a failure that has no exception, then record."""
@@ -484,7 +465,7 @@ def test_a_failed_result_without_a_node_traceback_is_a_fail_naming_only_the_step
     root = tmp_path / "state"
     session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_failed)
 
-    error = _remote_failure(_report(session, name))
+    error = remote_failure(report_for(session, name))
     message = str(error)
     assert name in message
     assert "Traceback" not in message, message
@@ -499,26 +480,26 @@ def test_a_step_that_failed_on_its_node_has_no_lockfile_entry_and_its_descendant
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """After a bridged build of a chain whose first step fails on its node, pytask.lock has no entry for the failed step, and the pytask task of the step after it carries a skip_ancestor_failed marker."""
-    registry = _registry(tmp_path)
+    artifacts = registry(tmp_path)
     fails = python_step(
         step_targets.raise_step_failure,
         inputs={},
         produces="fails.parquet",
-        registry=registry,
+        registry=artifacts,
     )
     after = python_step(
         step_targets.stack,
         inputs={"upstream": "fails.parquet"},
         produces="after.parquet",
-        registry=registry,
+        registry=artifacts,
     )
     root = tmp_path / "state"
 
     session = build([fails, after], root, jobmon=True)
 
-    assert _bound_names(fake_jobmon) == [["fails.parquet", "after.parquet"]]
+    assert bound_names(fake_jobmon) == [["fails.parquet", "after.parquet"]]
     assert outcomes(session)["fails.parquet"] == TaskOutcome.FAIL
-    assert "fails.parquet" not in _lockfile_entries(root)
+    assert "fails.parquet" not in lockfile_entries(root)
     [after_task] = [task for task in session.tasks if task.name == "after.parquet"]
     assert "skip_ancestor_failed" in [mark.name for mark in after_task.markers]
 
@@ -531,7 +512,7 @@ def test_a_step_that_failed_on_its_node_is_planned_again_by_the_next_build(
         "fails.parquet": step_targets.raise_step_failure,
         "succeeds.parquet": step_targets.constant,
     }
-    tasks = _stable(_steps_without_inputs(_registry(tmp_path), targets))
+    tasks = stable(_steps_without_inputs(registry(tmp_path), targets))
     root = tmp_path / "state"
     assert outcomes(build(tasks, root, jobmon=True)) == {
         "fails.parquet": TaskOutcome.FAIL,
@@ -540,7 +521,7 @@ def test_a_step_that_failed_on_its_node_is_planned_again_by_the_next_build(
 
     session = build(tasks, root, jobmon=True)
 
-    assert _bound_names(fake_jobmon)[1:] == [["fails.parquet"]]
+    assert bound_names(fake_jobmon)[1:] == [["fails.parquet"]]
     assert outcomes(session)["succeeds.parquet"] == TaskOutcome.SKIP_UNCHANGED
 
 
@@ -552,16 +533,16 @@ def test_every_result_is_recorded_after_a_failure_with_stop_after_first_failure(
         "a_fails.parquet": step_targets.raise_step_failure,
         "b_succeeds.parquet": step_targets.constant,
     }
-    tasks = _steps_without_inputs(_registry(tmp_path), targets)
+    tasks = _steps_without_inputs(registry(tmp_path), targets)
     root = tmp_path / "state"
 
     session = build(tasks, root, jobmon=True, stop_after_first_failure=True)
 
-    assert _bound_names(fake_jobmon) == [list(targets)]
+    assert bound_names(fake_jobmon) == [list(targets)]
     reported = outcomes(session)
     assert reported["a_fails.parquet"] == TaskOutcome.FAIL
     assert reported["b_succeeds.parquet"] == TaskOutcome.SUCCESS
-    assert "b_succeeds.parquet" in _lockfile_entries(root)
+    assert "b_succeeds.parquet" in lockfile_entries(root)
 
 
 def test_remote_task_failed_keeps_its_message_and_each_keyword() -> None:
@@ -597,12 +578,12 @@ def test_a_command_step_that_exits_zero_without_its_product_is_a_fail_naming_the
     """A bridged command step whose command exits 0 but writes no declared product reports FAIL with a NodeNotFoundError whose message says 'The task did not produce the following files' and names the file, and it has no pytask.lock entry."""
     session, product = _build_a_step_without_its_product(tmp_path)
 
-    error = _failure(_report(session, _NO_PRODUCT))
+    error = failure_of(report_for(session, _NO_PRODUCT))
     assert isinstance(error, NodeNotFoundError), repr(error)
-    message = _squashed(str(error))
-    assert _squashed(_NOT_PRODUCED) in message
+    message = squashed(str(error))
+    assert squashed(_NOT_PRODUCED) in message
     assert product.name in message
-    assert _NO_PRODUCT not in _lockfile_entries(tmp_path / "state")
+    assert _NO_PRODUCT not in lockfile_entries(tmp_path / "state")
 
 
 @pytest.mark.usefixtures("fake_jobmon")
@@ -610,9 +591,9 @@ def test_a_missing_product_report_shows_only_pytasks_message(tmp_path: Path) -> 
     """The rendered report of that step shows pytask's missing-product message and no frame from bridge/execute.py or pluggy."""
     session, _ = _build_a_step_without_its_product(tmp_path)
 
-    rendered = _rendered(_report(session, _NO_PRODUCT))
+    rendered = _rendered(report_for(session, _NO_PRODUCT))
 
-    assert _squashed(_NOT_PRODUCED) in _squashed(rendered)
+    assert squashed(_NOT_PRODUCED) in squashed(rendered)
     for internal in ("execute.py", "pluggy"):
         assert internal not in rendered, rendered
 
@@ -646,12 +627,12 @@ def test_a_successful_steps_output_is_kept_in_its_report_sections(tmp_path: Path
         step_targets.write_to_streams_and_descriptors,
         inputs={},
         produces="talks.parquet",
-        registry=_registry(tmp_path),
+        registry=registry(tmp_path),
     )
 
     session = build([task], tmp_path / "state", jobmon=True)
 
-    report = _report(session, "talks.parquet")
+    report = report_for(session, "talks.parquet")
     assert report.outcome == TaskOutcome.SUCCESS
     call = {key: text for when, key, text in report.sections if when == "call"}
     assert step_targets.STDOUT_PRINT in call.get("stdout", "")
@@ -663,11 +644,11 @@ def test_a_successful_steps_output_is_kept_in_its_report_sections(tmp_path: Path
 @pytest.mark.usefixtures("fake_jobmon")
 def test_a_result_with_empty_output_adds_no_report_sections(tmp_path: Path) -> None:
     """A bridged step whose target writes nothing to standard output or standard error reports SUCCESS with no 'call' entry in report.sections."""
-    tasks = _constant_steps(_registry(tmp_path), ["quiet.parquet"])
+    tasks = _constant_steps(registry(tmp_path), ["quiet.parquet"])
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
-    report = _report(session, "quiet.parquet")
+    report = report_for(session, "quiet.parquet")
     assert report.outcome == TaskOutcome.SUCCESS
     assert [section for section in report.sections if section[0] == "call"] == []
 
@@ -686,7 +667,7 @@ def test_a_step_with_the_default_code_identity_is_submitted_on_every_bridged_bui
     session = build(fx.tasks, fx.state, jobmon=True)
 
     assert outcomes(session) == ran
-    assert _bound_names(fake_jobmon) == [list(fx.steps), list(fx.steps)]
+    assert bound_names(fake_jobmon) == [list(fx.steps), list(fx.steps)]
 
 
 # Recording what the run directory holds
@@ -698,7 +679,7 @@ def test_results_are_recorded_in_the_order_of_the_stale_tasks(
     tmp_path: Path, reverse: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_record_available, given two stale tasks whose result files are both in the run directory, appends their reports to session.execution_reports in the order of the stale list, whatever the order of the directory listing."""
-    tasks = _constant_steps(_registry(tmp_path), ["first.parquet", "second.parquet"])
+    tasks = _constant_steps(registry(tmp_path), ["first.parquet", "second.parquet"])
     given: list[str] = []
 
     def record_in_order(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
@@ -720,19 +701,24 @@ def test_a_result_still_being_written_is_not_recorded_and_its_task_is_returned(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_record_available, given a run directory that holds only '<signature>.result.json.<host>.<pid>.tmp' for a stale task, appends no report for it and returns it."""
-    tasks = _constant_steps(_registry(tmp_path), ["pending.parquet"])
+    tasks = _constant_steps(registry(tmp_path), ["pending.parquet"])
+    appended: list[ExecutionReport] = []
 
     def record_pending(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
         """Move each result back to the runner's temporary name, then record."""
         for task in stale:
             result = workdir / f"{task.signature}{RESULT_SUFFIX}"
             result.rename(_temporary_name(result))
-        return _record_available(session, stale, workdir)
+        before = len(session.execution_reports)
+        unrecorded = _record_available(session, stale, workdir)
+        appended.extend(session.execution_reports[before:])
+        return unrecorded
 
+    # The build settles the returned task afterwards, so only this call's reports count.
     root = tmp_path / "state"
-    session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_pending)
+    _, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_pending)
 
-    assert outcomes(session) == {}
+    assert appended == []
     assert [task.name for task in unrecorded] == ["pending.parquet"]
 
 
@@ -741,19 +727,25 @@ def test_record_available_returns_the_tasks_without_a_result_in_order(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_record_available, given a result file for the first of three stale tasks only, records the first and returns the other two in the order of the stale list."""
-    tasks = _constant_steps(_registry(tmp_path), ["a.parquet", "b.parquet", "c.parquet"])
+    tasks = _constant_steps(registry(tmp_path), ["a.parquet", "b.parquet", "c.parquet"])
+    appended: list[ExecutionReport] = []
 
     def record_first_only(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
         """Record the stale tasks in reverse plan order, with a result for the first only."""
         ordered = stale[::-1]
         for task in ordered[1:]:
             (workdir / f"{task.signature}{RESULT_SUFFIX}").unlink()
-        return _record_available(session, ordered, workdir)
+        before = len(session.execution_reports)
+        unrecorded = _record_available(session, ordered, workdir)
+        appended.extend(session.execution_reports[before:])
+        return unrecorded
 
+    # The build settles the returned tasks afterwards, so only this call's reports count.
     root = tmp_path / "state"
-    session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_first_only)
+    _, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_first_only)
 
-    assert outcomes(session) == {"c.parquet": TaskOutcome.SUCCESS}
+    recorded = [(report.task.name, report.outcome) for report in appended]
+    assert recorded == [("c.parquet", TaskOutcome.SUCCESS)]
     assert [task.name for task in unrecorded] == ["b.parquet", "a.parquet"]
 
 
@@ -763,7 +755,7 @@ def test_an_unreadable_result_file_is_a_fail_naming_the_file(
     tmp_path: Path, how: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """_record_available, given for one stale task a result file that cannot be read as a node result (text that is not JSON, a JSON array, an object without exc_type, an object whose success is the string 'true' or whose stdout is null, or a directory at the result file's path) and a valid result for another, returns, reports the first FAIL with a RemoteTaskFailed whose message names the step and the file and whose exc_type, exc_message and node_traceback are None, and still records the second SUCCESS."""
-    tasks = _constant_steps(_registry(tmp_path), ["broken.parquet", "fine.parquet"])
+    tasks = _constant_steps(registry(tmp_path), ["broken.parquet", "fine.parquet"])
     broken: list[str] = []
 
     def record_broken(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
@@ -779,36 +771,127 @@ def test_an_unreadable_result_file_is_a_fail_naming_the_file(
     session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_broken)
 
     [file_name] = broken
-    error = _remote_failure(_report(session, "broken.parquet"))
+    error = remote_failure(report_for(session, "broken.parquet"))
     assert "broken.parquet" in str(error)
     assert file_name in str(error)
     assert (error.exc_type, error.exc_message, error.node_traceback) == (None, None, None)
-    assert _report(session, "fine.parquet").outcome == TaskOutcome.SUCCESS
+    assert report_for(session, "fine.parquet").outcome == TaskOutcome.SUCCESS
     assert unrecorded == []
 
 
 # Jobmon raising during the run
 
 
-def test_when_the_workflow_run_raises_the_finished_steps_are_recorded_and_the_build_fails(
+def test_when_the_workflow_run_raises_the_finished_steps_are_recorded_and_the_rest_settled(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """End to end: with FakeJobmon(error_after=1), a bridged build of a two-step chain records the first step SUCCESS with a pytask.lock entry, gives the second step no report, keeps a RuntimeError as the run's error, exits FAILED, and prints a message that names RuntimeError and says that the steps without a result were not recorded."""
-    fx = build_fixture(tmp_path)
-    first = fx.steps[0]
+    """End to end: with FakeJobmon(error_after=1), a bridged build of a two-step chain records the first step SUCCESS with a pytask.lock entry, reports the second step FAIL with a RemoteTaskFailed whose message names RuntimeError and says that the step was not recorded, keeps a RuntimeError as the run's error, exits FAILED without raising, and prints pytask's summary."""
+    tasks = _two_step_chain(registry(tmp_path))
+    root = tmp_path / "state"
     jobmon = FakeJobmon(error_after=1)
+    capsys.readouterr()
 
     with jobmon:
-        capsys.readouterr()
-        session = build(fx.tasks, fx.state, jobmon=True)
-        captured = capsys.readouterr()
+        session = build(tasks, root, jobmon=True)
 
-    output = _squashed(captured.out + captured.err)
+    captured = capsys.readouterr()
+    output = squashed(captured.out + captured.err)
+    assert report_for(session, "first.parquet").outcome == TaskOutcome.SUCCESS
+    assert "first.parquet" in lockfile_entries(root)
+    error = remote_failure(report_for(session, "second.parquet"))
+    assert "RuntimeError" in str(error), str(error)
+    assert "not recorded" in str(error), str(error)
+    assert (error.exc_type, error.exc_message, error.node_traceback) == (None, None, None)
     [jobmon_run] = jobmon.runs
     assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
-    # TODO(MIC-7748): settlement gives the step without a result a report.
-    assert outcomes(session) == {first: TaskOutcome.SUCCESS}
-    assert first in _lockfile_entries(fx.state)
     assert session.exit_code == ExitCode.FAILED
-    assert "RuntimeError" in output, output
-    assert _squashed("the steps without a result were not recorded") in output, output
+    # pytask sets execution_end only in pytask_execute_log_end, which a raising hook skips.
+    assert math.isfinite(session.execution_end)
+    assert "Summary" in output, output
+    assert squashed("Collected tasks") in output, output
+
+
+# A step after a step that failed at recording
+
+
+def test_a_step_after_a_step_missing_its_product_is_skip_previous_failed_with_no_entry(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """A bridged chain of two command steps with stable code identities, where the first exits 0 without writing one of its two declared products and the second reads the product that was written, reports the first FAIL and the second SKIP_PREVIOUS_FAILED, and pytask.lock has an entry for neither, although the second ran on its node."""
+    tasks, copy = _chain_missing_a_product(tmp_path)
+    root = tmp_path / "state"
+
+    session = build(tasks, root, jobmon=True)
+
+    assert bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES]]
+    assert outcomes(session) == {
+        _WRITES_ONE: TaskOutcome.FAIL,
+        _COPIES: TaskOutcome.SKIP_PREVIOUS_FAILED,
+    }
+    assert isinstance(failure_of(report_for(session, _WRITES_ONE)), NodeNotFoundError)
+    entries = lockfile_entries(root)
+    assert _WRITES_ONE not in entries
+    assert _COPIES not in entries
+    assert copy.exists()
+
+
+def test_a_step_after_a_step_with_an_unreadable_result_is_skip_previous_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_record_available, given a two-step chain whose first step's result file is spoiled and whose second step has a valid successful result, reports the first FAIL with a RemoteTaskFailed naming the file and the second SKIP_PREVIOUS_FAILED with no pytask.lock entry, and returns no task."""
+    artifacts = registry(tmp_path)
+    tasks = _two_step_chain(artifacts)
+    spoiled: list[str] = []
+
+    def record_spoiled(session: Session, stale: list[PTask], workdir: Path) -> list[PTask]:
+        """Spoil the first step's result, then record both steps."""
+        [first] = [task for task in stale if task.name == "first.parquet"]
+        result = workdir / f"{first.signature}{RESULT_SUFFIX}"
+        _spoil(result, "not_json")
+        spoiled.append(result.name)
+        return _record_available(session, stale, workdir)
+
+    root = tmp_path / "state"
+    with FakeJobmon():
+        session, unrecorded = _build_recording_with(tasks, root, monkeypatch, record_spoiled)
+
+    [file_name] = spoiled
+    error = remote_failure(report_for(session, "first.parquet"))
+    assert file_name in str(error), str(error)
+    assert report_for(session, "second.parquet").outcome == TaskOutcome.SKIP_PREVIOUS_FAILED
+    assert "second.parquet" not in lockfile_entries(root)
+    assert artifacts.path_for("second.parquet").exists()
+    assert unrecorded == []
+
+
+def test_bridged_outcomes_match_a_local_build_when_a_step_fails_only_at_recording(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """For the chain whose first step does not write a declared product, the outcomes and pytask.lock entries of a bridged build equal those of a local build of the same steps in another directory."""
+    local_tasks, _ = _chain_missing_a_product(make_dir(tmp_path / "local"))
+    bridged_tasks, _ = _chain_missing_a_product(make_dir(tmp_path / "bridged"))
+    local_root, bridged_root = tmp_path / "local" / "state", tmp_path / "bridged" / "state"
+    local = build(local_tasks, local_root)
+
+    bridged = build(bridged_tasks, bridged_root, jobmon=True)
+
+    assert bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES]]
+    assert outcomes(local) == {
+        _WRITES_ONE: TaskOutcome.FAIL,
+        _COPIES: TaskOutcome.SKIP_PREVIOUS_FAILED,
+    }
+    assert outcomes(bridged) == outcomes(local)
+    assert lockfile_entries(bridged_root) == lockfile_entries(local_root)
+
+
+def test_the_next_build_after_a_failure_at_recording_plans_both_steps_again(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """After the bridged build of that chain, a second bridged build binds a plan holding both steps, because neither was recorded."""
+    tasks, _ = _chain_missing_a_product(tmp_path)
+    root = tmp_path / "state"
+    build(tasks, root, jobmon=True)
+
+    build(tasks, root, jobmon=True)
+
+    assert bound_names(fake_jobmon) == [[_WRITES_ONE, _COPIES], [_WRITES_ONE, _COPIES]]

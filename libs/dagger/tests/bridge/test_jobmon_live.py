@@ -52,9 +52,9 @@ def test_a_two_step_chain_runs_through_jobmon_on_the_multiprocess_plugin(
     runs: list[JobmonRun] = []
     adapter_run = _jobmon_adapter.run
 
-    def run_and_keep(jobmon_run: JobmonRun) -> None:
+    def run_and_keep(jobmon_run: JobmonRun, **options: Any) -> None:
         """Run the workflow with the adapter's own run, then keep it for the assertions."""
-        adapter_run(jobmon_run)
+        adapter_run(jobmon_run, **options)
         runs.append(jobmon_run)
 
     monkeypatch.setattr(_jobmon_adapter, "run", run_and_keep)

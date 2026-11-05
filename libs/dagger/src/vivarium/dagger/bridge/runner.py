@@ -206,14 +206,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     stderr_tail = ""
     write_error: Exception | None = None
     try:
-        stderr_tail = _tail(stderr_path)
+        stderr_tail = read_tail(stderr_path)
         result = RunResult(
             task=task,
             success=error is None,
             exc=exc,
             exc_type=None if error is None else _type_name(type(error)),
             exc_message=None if error is None else str(error),
-            stdout=_tail(stdout_path),
+            stdout=read_tail(stdout_path),
             stderr=stderr_tail,
             duration=duration,
         )
@@ -331,8 +331,21 @@ def _fileno(stream: TextIO) -> int | None:
         return None
 
 
-def _tail(path: Path) -> str:
-    """Return the last ``OUTPUT_TAIL_BYTES`` bytes of ``path``, decoded as UTF-8."""
+def read_tail(path: Path) -> str:
+    """Return the last ``OUTPUT_TAIL_BYTES`` bytes of a capture file, decoded as UTF-8.
+
+    Bytes that are not valid UTF-8 are replaced, so a tail that starts inside a multi-byte
+    character still decodes.
+
+    Parameters
+    ----------
+    path
+        The capture file to read.
+
+    Returns
+    -------
+        The decoded tail of the file.
+    """
     with open(path, "rb") as file:
         size = file.seek(0, os.SEEK_END)
         file.seek(max(0, size - OUTPUT_TAIL_BYTES))

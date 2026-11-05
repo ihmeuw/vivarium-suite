@@ -297,7 +297,7 @@ def bind(
     return JobmonRun(plan=entries, workflow_id=workflow_id, workflow=workflow, tasks=tasks)
 
 
-def run(jobmon_run: JobmonRun) -> None:
+def run(jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
     """Run a bound workflow in the calling thread until it ends.
 
     Jobmon keeps running the tasks that do not wait on a failed one. While the workflow
@@ -306,25 +306,33 @@ def run(jobmon_run: JobmonRun) -> None:
     terminal. When the workflow ends, the run's ``status`` is set to the workflow run's
     final status. If Jobmon's ``Workflow.run`` raises an ``Exception`` instead, the
     exception is kept as the run's ``error``, ``status`` stays ``None``, and this
-    function returns normally. ``Workflow.run`` is called with Jobmon's default timeout,
-    so it raises a ``RuntimeError`` in this way when the workflow has not ended after
-    36000 seconds (10 hours). When Jobmon catches an error in its orchestrator itself,
+    function returns normally. This is also how a run that reaches its timeout ends.
+    When Jobmon catches an error in its orchestrator itself,
     ``Workflow.run`` returns a status such as ``"E"`` and keeps the error on the
     workflow. The run's ``status`` is then set as usual, and its ``error`` is set to
     that error. In each case, the run's ``task_statuses`` gets each task's final status,
     or ``None`` for a task that Jobmon gave none, as Jobmon does for every task when
     ``Workflow.run`` raises before the workflow ends. A ``KeyboardInterrupt`` or
-    ``SystemExit`` from Jobmon passes through unchanged.
+    ``SystemExit`` from Jobmon passes through unchanged, and leaves the run's ``status``
+    ``None`` and its ``task_statuses`` empty.
 
     Parameters
     ----------
     jobmon_run
         A run that :func:`bind` returned.
+    seconds_until_timeout
+        How many seconds Jobmon may run the workflow before it stops waiting, passed to
+        ``Workflow.run``. ``None`` leaves it out, so Jobmon's own default of 36000
+        seconds applies.
     """
+    # Leaving the timeout out keeps Jobmon's own default.
+    options: dict[str, Any] = {}
+    if seconds_until_timeout is not None:
+        options["seconds_until_timeout"] = seconds_until_timeout
     with _swarm_progress():
         # Jobmon's run errors share no base class narrower than Exception.
         try:
-            jobmon_run.status = jobmon_run.workflow.run(fail_fast=False)
+            jobmon_run.status = jobmon_run.workflow.run(fail_fast=False, **options)
         except Exception as error:
             jobmon_run.error = error
         else:

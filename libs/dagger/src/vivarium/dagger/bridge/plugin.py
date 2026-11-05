@@ -26,6 +26,11 @@ pytask's configuration, so a build sets the bridge's keys there:
     How much Jobmon raises each named resource after a step fails for lack of it, as a
     fraction, such as ``{"memory": 0.5}``. The default, ``None``, keeps Jobmon's own,
     which raises memory and runtime by half.
+``jobmon_timeout``
+    How many seconds Jobmon may run the workflow before it stops waiting, as a positive
+    whole number. The default, ``None``, takes the remaining time of the Slurm allocation
+    that the build runs in, less a safety buffer, as the ``dagger`` runner does, and
+    outside an allocation keeps Jobmon's own default of 36000 seconds (10 hours).
 
 For example::
 
@@ -37,16 +42,26 @@ compute node with ``/opt/slurm/bin`` on ``PATH``, because Jobmon's Slurm plugin 
 ``scontrol``, ``squeue`` and ``scancel`` from that host. The bridge needs the ``cluster``
 extra: ``pip install "vivarium-dagger[cluster]"``.
 
-The build records the steps' results in pytask's lockfile only after the whole workflow
-ends. If the build's process is killed before then, for example at its Slurm time limit,
-no step is recorded and the next build runs every step again, including the steps that
-had finished. Give that process more time than the whole workflow needs. Jobmon itself
-stops waiting after its default timeout of 36000 seconds (10 hours), whatever that
-process's time limit. A longer workflow therefore fails at 10 hours: the build records
-the steps that had finished and then fails with Jobmon's error. While the workflow runs,
-Jobmon's progress lines, such as ``Workflow 50.0% complete (1/2 tasks)``, are printed on
-standard error, or above pytask's live table when standard output is a terminal, and
-Jobmon's GUI shows each step.
+The build records the steps' results in pytask's lockfile only after the workflow stops.
+When the build's process gets SIGTERM, as Slurm sends at the end of a job's time limit
+before it kills the job, the build stops waiting for the workflow, records the steps
+whose results are already written, reports every other step as failed or skipped, and
+writes pytask's lockfile. The build then ends with pytask's summary and is not killed,
+and it fails unless every step was recorded as successful. The bridge does not cancel
+the workflow, so its jobs that are already on compute nodes can still be running and
+writing products, and the next build prints a warning that names the run. The next
+build runs every step that was not recorded as successful and every step after one,
+and skips any other recorded step whose inputs and code identity are unchanged. With
+the default code identity no step counts as unchanged, so every step runs again.
+If the process is killed outright, for example once Slurm's grace period after SIGTERM
+is over, no step is recorded and the next build runs every step again, including the
+steps that had finished. Give that process more time than the whole workflow needs.
+Each run's state file, ``<root>/.pytask/jobmon/<run>/state.json``, gives the run's
+Jobmon workflow id even then (see :mod:`~vivarium.dagger.bridge.state`), and the build
+leaves the run's final state in its configuration under ``bridge_run``. While the
+workflow runs, Jobmon's progress lines, such as ``Workflow 50.0% complete (1/2 tasks)``,
+are printed on standard error, or above pytask's live table when standard output is a
+terminal, and Jobmon's GUI shows each step.
 """
 
 from typing import Any
@@ -82,6 +97,7 @@ def pytask_parse_config(config: dict[str, Any]) -> None:
     config.setdefault("jobmon_resources", {})
     config.setdefault("jobmon_max_attempts", DEFAULT_MAX_ATTEMPTS)
     config.setdefault("jobmon_resource_scales", None)
+    config.setdefault("jobmon_timeout", None)
 
 
 @hookimpl(trylast=True)

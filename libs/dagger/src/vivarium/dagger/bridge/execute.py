@@ -35,8 +35,23 @@ checks and hashes each step's products and writes its lockfile entry exactly as 
 build does, and a later build skips a step whose inputs and code are unchanged. A step
 that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
 recorded while the workflow runs, so pytask's table shows no step finishing until the
-whole workflow ends, and a build killed before then records no step
-(:mod:`~vivarium.dagger.bridge.plugin` says what that means for the build's time limit).
+whole workflow ends.
+
+The hook then settles every submitted step that still has no report, so each step of the
+plan ends with exactly one report. A step after a failed step is reported as
+SKIP_PREVIOUS_FAILED, and any other step without a result is reported as FAIL with a
+:class:`RemoteTaskFailed` that gives the step's Jobmon status and the workflow's id and
+status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the
+Jobmon workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the
+workflow, records the results already written, settles the rest and returns, so pytask
+still writes its lockfile. The hook does not cancel the workflow, so its jobs that are
+already on compute nodes can still be running. Each run also keeps a state file (see
+:mod:`~vivarium.dagger.bridge.state`) that gives its Jobmon workflow id even when the
+build is killed. To continue a stopped run, build again: the next build plans from the
+lockfile, so it runs every step that was not recorded as successful and every step after
+one, and skips any other recorded step whose inputs and code identity are unchanged.
+With the default code identity no step counts as unchanged, so every step runs again.
+:mod:`~vivarium.dagger.bridge.plugin` says what this means for the build's time limit.
 """
 
 import inspect
@@ -44,10 +59,14 @@ import json
 import os
 import secrets
 import shlex
+import signal
 import sys
-from collections.abc import Mapping, MutableMapping, Sequence, Set
+import threading
+from collections.abc import Iterator, Mapping, MutableMapping, Sequence, Set
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from types import FrameType
 from typing import Any, cast
 
 from pytask import (
@@ -63,6 +82,7 @@ from pytask import (
     SkippedAncestorFailed,
     TaskOutcome,
     console,
+    get_marks,
     hookimpl,
 )
 
@@ -70,17 +90,27 @@ from vivarium.dagger.backend.build import TASK_KEY
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge import _jobmon_adapter
-from vivarium.dagger.bridge._jobmon_adapter import PlanEntry
+from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.payload import Payload, payload_for
 from vivarium.dagger.bridge.runner import (
     RESULT_SUFFIX,
     RunResult,
+    capture_paths,
     read_result,
+    read_tail,
     runner_command,
 )
+from vivarium.dagger.bridge.state import (
+    RUN_STATE_KEY,
+    RUNS_DIR,
+    RunState,
+    latest_run_state,
+    write_run_state,
+)
 
-RUNS_DIR = Path(".pytask", "jobmon")
-"""The directory, relative to a build's root, that holds one directory per bridge run."""
+INTERRUPTED_EXIT_CODE = 143
+"""The exit code of :class:`BridgeInterrupted`, which is 128 plus SIGTERM's number, as a
+shell reports a process that SIGTERM ended."""
 
 PAYLOAD_SUFFIX = ".payload.json"
 """The suffix of a step's recipe file in a run directory. The name before it is the
@@ -163,6 +193,17 @@ class RemoteTaskFailed(Exception):
         self.stderr = stderr
 
 
+class BridgeInterrupted(SystemExit):
+    """Raised on SIGTERM while the bridge binds or runs the Jobmon workflow.
+
+    The bridge raises it in the build's main thread. It subclasses :class:`SystemExit`,
+    not :class:`Exception`, so that it passes through Jobmon's handlers, which catch
+    ``Exception``, and out of Jobmon's event loop. The bridge catches it itself, records
+    and settles the run, and returns, so it does not end the build. Its exit code is
+    :data:`INTERRUPTED_EXIT_CODE`.
+    """
+
+
 @hookimpl(tryfirst=True)
 def pytask_execute_build(session: Session) -> bool:
     """Run the build's stale steps as one Jobmon workflow instead of in this process.
@@ -206,7 +247,24 @@ def pytask_execute_build(session: Session) -> bool:
     :func:`~vivarium.dagger.backend.preview.preview`, can already have created product
     directories.
 
-    Otherwise it checks the Jobmon environment, creates a new run directory
+    Otherwise it checks the Jobmon environment and works out how long Jobmon may run the
+    workflow. That is ``jobmon_timeout`` when the build sets it, which must then be a
+    positive whole number of seconds. Without it, inside a Slurm allocation (with
+    ``SLURM_JOB_ID`` set), it is the allocation's remaining time less a safety buffer, from
+    :func:`vivarium.cluster_tools.core.cluster.interface.get_workflow_timeout_seconds`, as
+    for the ``dagger`` runner; outside one, it is Jobmon's own default. Next, if the
+    latest earlier run under the root whose Jobmon workflow was bound
+    (:func:`~vivarium.dagger.bridge.state.latest_run_state` with ``bound_only=True``) did
+    not finish (its state is not ``"finished"``), or finished after Jobmon stopped it
+    with an error (its state's ``error`` is set), the hook prints a warning through
+    pytask's console that names that run's workflow id and run directory, gives that
+    error if there is one, and says that its jobs on compute nodes may still be running
+    and writing the same products. A run interrupted before its workflow was bound (its
+    state has no workflow id) launched no jobs, so it is passed over and the run before
+    it is checked. If a state file cannot be read, the warning names the file instead.
+    Either way the build goes on.
+
+    It then creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
     as ``<signature>.payload.json``, creates the parent directory of the products of each
     step to submit, and binds and runs one workflow. Its entries are the steps to submit
@@ -219,9 +277,24 @@ def pytask_execute_build(session: Session) -> bool:
     the result to ``<signature>.result.json`` beside the recipe. The workflow is named
     after the root directory and takes its cluster, default resources, attempts and
     resource scales from the configuration keys that
-    :mod:`~vivarium.dagger.bridge.plugin` describes.
+    :mod:`~vivarium.dagger.bridge.plugin` describes, and the run gets the timeout worked
+    out above. As soon as the workflow is bound, the hook writes the run's state file
+    (:func:`~vivarium.dagger.bridge.state.write_run_state`) with the status
+    ``"running"``, the workflow id, and every submitted step as pending, so a build
+    killed from then on leaves the workflow id behind.
 
-    When the workflow ends, the hook records the result of each submitted step whose
+    While the hook binds and runs the workflow in the main thread, the first SIGTERM that
+    the process receives raises :class:`BridgeInterrupted`, and any later SIGTERM is
+    ignored until the run has stopped. Afterwards SIGTERM's earlier handler is in effect
+    again. If Jobmon put its own handler in front of the bridge's meanwhile, which it does
+    when it sets up its logging and which calls the bridge's handler in turn, the bridge's
+    handler is switched off instead, so that a later SIGTERM gets the earlier handling. Off
+    the main thread, the hook changes no signal handling. A :class:`BridgeInterrupted`, or
+    a ``KeyboardInterrupt`` from Jobmon (which Jobmon raises when a user confirms the stop
+    at its prompt), stops the run; the hook catches it and goes on to record and settle the
+    run, so pytask still writes its lockfile.
+
+    When the run has stopped, the hook records the result of each submitted step whose
     result file is in the run directory, in plan order, and appends its report to
     ``session.execution_reports``. Recording runs, in this process, the per-task hooks
     that a local build runs around a step's body, except setup and the call itself: it
@@ -233,9 +306,41 @@ def pytask_execute_build(session: Session) -> bool:
     step that failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`,
     with no lockfile entry, and pytask marks every step after it as skipped because an
     ancestor failed. A step whose result file cannot be read is a FAIL in the same way,
-    and its :class:`RemoteTaskFailed` names the file. Every result is recorded, also
-    after ``max_failures`` steps have failed. A submitted step with no result file, such
-    as one that Jobmon did not run because a step before it failed, gets no report.
+    and its :class:`RemoteTaskFailed` names the file. A step that has a result but that
+    pytask has marked in this way, because a step before it in plan order failed, also
+    when that step failed only at recording, is reported as SKIP_PREVIOUS_FAILED with no
+    lockfile entry, as a local build reports it, although its body ran on its node. Every
+    result is recorded, also after ``max_failures`` steps have failed.
+
+    Then the hook settles each submitted step that has no result file, in plan order,
+    without calling pytask's execute protocol or running any step's body. A step that
+    pytask has marked as skipped because an ancestor failed is reported as
+    SKIP_PREVIOUS_FAILED. Any other step is reported as FAIL with a
+    :class:`RemoteTaskFailed` whose ``exc_type``, ``exc_message`` and ``node_traceback``
+    are ``None``. Its message names the step and first says why it has no result: that
+    Jobmon stopped the workflow with an error, giving the error's type and message; that
+    the build was interrupted; that the build was interrupted before the Jobmon workflow
+    was bound; or that the workflow ended without a result for the step, as when the
+    runner was killed on its node. It then says that the step was not recorded and will
+    run again in the next build, and gives the step's Jobmon task status, the workflow id
+    and the workflow's status, each as ``unknown`` when Jobmon gave none. When no workflow
+    was bound, it says instead that the step has no Jobmon status. Its ``stdout`` and
+    ``stderr`` are the tails of the output that the step's runner wrote to its capture
+    files (:func:`~vivarium.dagger.bridge.runner.capture_paths`), or empty when there are
+    none, and non-empty tails are also in the report's sections as captured output of the
+    call. pytask then marks every step after such a FAIL as skipped, so those steps are
+    reported as SKIP_PREVIOUS_FAILED and not as further FAILs. Every submitted step thus
+    ends with exactly one report, also when ``max_failures`` or
+    ``stop_after_first_failure`` is set. A SIGTERM that arrives while the hook records or
+    settles gets the earlier handling, by default ending the process, and pytask's lockfile
+    journal then keeps the steps recorded so far.
+
+    Last, the hook writes the run's state file again, with the status ``"interrupted"``
+    after an interrupt and ``"finished"`` otherwise, Jobmon's workflow status, the error
+    that stopped Jobmon if there was one, and the names of the submitted steps not recorded
+    as successful. It also leaves that state in ``session.config`` under
+    :data:`~vivarium.dagger.bridge.state.RUN_STATE_KEY`. A build that submits nothing
+    writes no state file and leaves no state there.
 
     Parameters
     ----------
@@ -244,26 +349,25 @@ def pytask_execute_build(session: Session) -> bool:
 
     Returns
     -------
-        ``True``, so pytask's own loop runs no step.
+        ``True``, so pytask's own loop runs no step and pytask then writes its lockfile.
 
     Raises
     ------
     pytask.ExecutionError
-        If the Jobmon environment check fails, or if Jobmon refuses to bind the
-        workflow, which the adapter reports as
+        If the Jobmon environment check fails; if ``jobmon_timeout`` is set to anything
+        but a positive whole number of seconds, with a message that names the key and the
+        value; or if ``jobmon_timeout`` is not set and the Slurm allocation's remaining
+        time cannot be read or is shorter than the safety buffer, with a message that
+        gives that error and says to set ``jobmon_timeout``. In these cases no run
+        directory has been created. Also if Jobmon refuses to bind the workflow, which the
+        adapter reports as
         :class:`~vivarium.dagger.bridge._jobmon_adapter.JobmonBindError`, for example
         because neither ``jobmon_resources`` nor a step's resources name a queue. The
-        message is printed through pytask's console first, so the build fails with that
-        message and no traceback. For a refused bind, the message names
-        ``jobmon_cluster`` and the compute resources to check and quotes the adapter's
-        message, which gives the type and message of Jobmon's error. The run directory,
-        its recipes and the product directories have then already been created, but no
-        step has run. Also if Jobmon's ``Workflow.run`` raised, or stopped with, an
-        ``Exception`` before the workflow ended, which the adapter keeps as the run's
-        :attr:`~vivarium.dagger.bridge._jobmon_adapter.JobmonRun.error`. The results
-        already in the run directory are recorded first. The message, printed the same
-        way, says that the steps without a result were not recorded and gives the type
-        and message of Jobmon's error.
+        message then names ``jobmon_cluster`` and the compute resources to check and
+        quotes the adapter's message, which gives the type and message of Jobmon's error.
+        The run directory, its recipes and the product directories have then already been
+        created, but no state file, and no step has run. Each message is printed through
+        pytask's console first, so the build fails with that message and no traceback.
     """
     stale = _plan(session)
     # pytask's own loop also stops once max_failures is reached or a task is interrupted.
@@ -282,35 +386,26 @@ def pytask_execute_build(session: Session) -> bool:
         _jobmon_adapter.check_environment(cluster)
     except _jobmon_adapter.JobmonEnvironmentError as error:
         raise _failure(str(error)) from error
+    timeout = _workflow_timeout(config)
     root = Path(config["root"])
+    _warn_if_last_run_unfinished(root)
     workdir = _new_run_directory(root)
     plan = _compile(session, to_submit, payloads, workdir)
     _prepare_products(session, to_submit)
-    try:
-        jobmon_run = _jobmon_adapter.bind(
-            plan,
-            cluster=cluster,
-            default_resources=config["jobmon_resources"],
-            max_attempts=config["jobmon_max_attempts"],
-            resource_scales=config["jobmon_resource_scales"],
-            workflow_name=root.name,
-        )
-    except _jobmon_adapter.JobmonBindError as error:
-        raise _failure(
-            f"Jobmon could not bind the workflow on the {cluster!r} cluster. Check "
-            "jobmon_cluster and the compute resources in jobmon_resources and in each "
-            f"step's resources. Jobmon reported: {error}"
-        ) from error
-    _jobmon_adapter.run(jobmon_run)
-    # TODO(MIC-7748): settle the steps that this returns, so every planned step gets a report.
-    _record_available(session, to_submit, workdir)
-    if jobmon_run.error is not None:
-        run_error = jobmon_run.error
-        raise _failure(
-            "Jobmon stopped the workflow with an error before it ended, so the steps "
-            "without a result were not recorded and will run again in the next build. "
-            f"Jobmon raised {type(run_error).__name__}: {run_error}"
-        ) from run_error
+    jobmon_run, interrupted = _bind_and_run(session, plan, to_submit, workdir, timeout)
+    leftovers = _record_available(session, to_submit, workdir)
+    cause = _cause(jobmon_run, interrupted=interrupted)
+    _settle(session, leftovers, jobmon_run, cause, workdir=workdir)
+    final = RunState(
+        workdir=workdir,
+        status="interrupted" if interrupted else "finished",
+        workflow_id=None if jobmon_run is None else jobmon_run.workflow_id,
+        workflow_status=None if jobmon_run is None else jobmon_run.status,
+        error=_run_error(jobmon_run),
+        pending=_not_succeeded(session, to_submit),
+    )
+    write_run_state(final)
+    session.config[RUN_STATE_KEY] = final
     return True
 
 
@@ -472,6 +567,152 @@ def _failure(message: str) -> ExecutionError:
     return ExecutionError(message)
 
 
+def _workflow_timeout(config: Mapping[str, Any]) -> int | None:
+    """Return Jobmon's timeout from ``jobmon_timeout`` or the Slurm allocation, or None."""
+    value: object = config.get("jobmon_timeout")
+    if value is None:
+        # Imported here, so that loading the bridge does not import cluster-tools.
+        from vivarium.cluster_tools.core.cluster.interface import get_workflow_timeout_seconds
+
+        try:
+            return get_workflow_timeout_seconds()
+        # ValueError: squeue gave a remaining time that cluster-tools cannot parse, such as
+        # UNLIMITED or NOT_SET.
+        except (RuntimeError, ValueError) as error:
+            raise _failure(
+                "The bridge could not work out how long Jobmon may run the workflow from "
+                f"the remaining time of this Slurm allocation ({error}). Set "
+                "jobmon_timeout to the number of seconds that Jobmon may run the workflow."
+            ) from error
+    # bool is a subclass of int, but True is not a number of seconds.
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    raise _failure(
+        "jobmon_timeout must be a positive whole number of seconds, but the build set it "
+        f"to {value!r}."
+    )
+
+
+def _warn_if_last_run_unfinished(root: Path) -> None:
+    """Warn naming the latest run under ``root`` if it did not finish or Jobmon errored."""
+    try:
+        state = latest_run_state(root, bound_only=True)
+    except (OSError, ValueError) as error:
+        _warn(
+            "The bridge could not read the state file of the latest earlier run under "
+            f"{root}, so it cannot tell whether that run finished "
+            f"({_describe(error)}). The build goes on."
+        )
+        return
+    if state is None or (state.status == "finished" and state.error is None):
+        return
+    # After a Jobmon error, such as its timeout, the submitted jobs can keep running.
+    if state.status == "finished":
+        what = "stopped with an error"
+    else:
+        what = f"did not finish: its state is {state.status!r}"
+    if state.error is not None:
+        what = f"{what} ({state.error})"
+    _warn(
+        f"The latest earlier run under {root}, Jobmon workflow {state.workflow_id} in "
+        f"{state.workdir}, {what}. Its jobs on compute nodes may still be running and "
+        "writing the same products as this build."
+    )
+
+
+def _warn(message: str) -> None:
+    """Print ``message`` in pytask's warning style."""
+    console.print(message, style="warning", markup=False, highlight=False, soft_wrap=True)
+
+
+def _describe(error: BaseException) -> str:
+    """Return ``error`` as ``"<type name>: <message>"``."""
+    return f"{type(error).__name__}: {error}"
+
+
+def _bind_and_run(
+    session: Session,
+    plan: Sequence[PlanEntry],
+    submitted: Sequence[PTask],
+    workdir: Path,
+    timeout: int | None,
+) -> tuple[JobmonRun | None, bool]:
+    """Bind and run ``plan``; return the run and whether the build was interrupted.
+
+    The run is None if the build was interrupted before the workflow was bound.
+    """
+    config = session.config
+    cluster: str = config["jobmon_cluster"]
+    jobmon_run: JobmonRun | None = None
+    bind_error: _jobmon_adapter.JobmonBindError | None = None
+    interrupted = False
+    try:
+        with _sigterm_raises():
+            try:
+                jobmon_run = _jobmon_adapter.bind(
+                    plan,
+                    cluster=cluster,
+                    default_resources=config["jobmon_resources"],
+                    max_attempts=config["jobmon_max_attempts"],
+                    resource_scales=config["jobmon_resource_scales"],
+                    workflow_name=Path(config["root"]).name,
+                )
+            except _jobmon_adapter.JobmonBindError as error:
+                bind_error = error
+            else:
+                running = RunState(
+                    workdir=workdir,
+                    status="running",
+                    workflow_id=jobmon_run.workflow_id,
+                    workflow_status=None,
+                    error=None,
+                    pending=tuple(task.name for task in submitted),
+                )
+                write_run_state(running)
+                _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
+    except (BridgeInterrupted, KeyboardInterrupt):
+        interrupted = True
+    # Raised outside the SIGTERM block, so that a SIGTERM cannot turn it into an interrupt.
+    if bind_error is not None:
+        raise _failure(
+            f"Jobmon could not bind the workflow on the {cluster!r} cluster. Check "
+            "jobmon_cluster and the compute resources in jobmon_resources and in each "
+            f"step's resources. Jobmon reported: {bind_error}"
+        ) from bind_error
+    return jobmon_run, interrupted
+
+
+def _cause(jobmon_run: JobmonRun | None, *, interrupted: bool) -> str:
+    """Return why the run's steps without a result have none, as a clause."""
+    if interrupted and jobmon_run is None:
+        return "the build was interrupted before the Jobmon workflow was bound"
+    if interrupted:
+        return "the build was interrupted"
+    if jobmon_run is not None and jobmon_run.error is not None:
+        return f"Jobmon stopped the workflow with an error, {_describe(jobmon_run.error)}"
+    return (
+        "the workflow ended without a result for the step, as when the step's runner is "
+        "killed on its node"
+    )
+
+
+def _run_error(jobmon_run: JobmonRun | None) -> str | None:
+    """Return the error that stopped the Jobmon run as ``"<type>: <message>"``, or None."""
+    if jobmon_run is None or jobmon_run.error is None:
+        return None
+    return _describe(jobmon_run.error)
+
+
+def _not_succeeded(session: Session, submitted: Sequence[PTask]) -> tuple[str, ...]:
+    """Return the names of the submitted tasks without a SUCCESS report, in plan order."""
+    succeeded = {
+        report.task.signature
+        for report in session.execution_reports
+        if report.outcome == TaskOutcome.SUCCESS
+    }
+    return tuple(task.name for task in submitted if task.signature not in succeeded)
+
+
 def _new_run_directory(root: Path) -> Path:
     """Create and return a new, uniquely named run directory under ``root / RUNS_DIR``."""
     runs = root / RUNS_DIR
@@ -542,13 +783,23 @@ def _compile(
 
 
 def _record_available(session: Session, stale: Sequence[PTask], workdir: Path) -> list[PTask]:
-    """Record the stale tasks that have a result file; return the others in order."""
+    """Record the stale tasks that have a result file; return the others in order.
+
+    A task with a result that pytask has marked ``skip_ancestor_failed`` is reported as
+    SKIP_PREVIOUS_FAILED instead of being recorded.
+    """
     listed = set(os.listdir(workdir))
     unfinished: list[PTask] = []
     for task in stale:
         name = f"{task.signature}{RESULT_SUFFIX}"
         if name not in listed:
             unfinished.append(task)
+            continue
+        # A step before this one failed, possibly only at recording, so a local build
+        # would not have run this one and it gets no lockfile entry.
+        reason = _ancestor_failure(task)
+        if reason is not None:
+            _report_exception(session, task, SkippedAncestorFailed(reason))
             continue
         path = workdir / name
         try:
@@ -624,3 +875,114 @@ def _finish(session: Session, task: PTask, report: ExecutionReport) -> None:
     session.hook.pytask_execute_task_process_report(session=session, report=report)
     session.hook.pytask_execute_task_log_end(session=session, task=task, report=report)
     session.execution_reports.append(report)
+
+
+@contextmanager
+def _sigterm_raises() -> Iterator[None]:
+    """Turn the first SIGTERM into ``BridgeInterrupted`` in the main thread while the block runs."""
+    # signal.signal raises ValueError off the main thread.
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.getsignal(signal.SIGTERM)
+    active = True
+    raised = False
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        """Raise BridgeInterrupted once, then ignore SIGTERM; when off, pass it on."""
+        nonlocal raised
+        if not active:
+            _forward_sigterm(previous, signum, frame)
+            return
+        if raised:
+            return
+        raised = True
+        raise BridgeInterrupted(INTERRUPTED_EXIT_CODE)
+
+    try:
+        signal.signal(signal.SIGTERM, handler)
+        yield
+    finally:
+        active = False
+        # Jobmon's logging setup can put a handler in front of this one that calls it and
+        # stays installed. Switched off, this one then passes SIGTERM to ``previous``.
+        if signal.getsignal(signal.SIGTERM) is handler:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL if previous is None else previous)
+
+
+def _forward_sigterm(previous: object, signum: int, frame: FrameType | None) -> None:
+    """Handle SIGTERM as ``previous``, the handler from before the bridge's, would."""
+    if callable(previous):
+        previous(signum, frame)
+    elif previous != signal.SIG_IGN:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+def _settle(
+    session: Session,
+    leftovers: Sequence[PTask],
+    jobmon_run: JobmonRun | None,
+    cause: str,
+    *,
+    workdir: Path,
+) -> None:
+    """Report each leftover in plan order without running it: a skip if marked, else a FAIL.
+
+    ``workdir`` is the run directory, which holds the capture files of each leftover's
+    runner.
+    """
+    ending = "" if cause.endswith((".", "!", "?")) else "."
+    for task in leftovers:
+        reason = _ancestor_failure(task)
+        if reason is not None:
+            _report_exception(session, task, SkippedAncestorFailed(reason))
+            continue
+        message = (
+            f"Step '{task.name}' has no result because {cause}{ending} It was not recorded "
+            f"and will run again in the next build. {_jobmon_statuses(task, jobmon_run)}"
+        )
+        capture = capture_paths(workdir / f"{task.signature}{RESULT_SUFFIX}")
+        stdout, stderr = _tail(capture[0]), _tail(capture[1])
+        if stdout:
+            task.report_sections.append(("call", "stdout", stdout))
+        if stderr:
+            task.report_sections.append(("call", "stderr", stderr))
+        error = RemoteTaskFailed(message, stdout=stdout, stderr=stderr)
+        _report_exception(session, task, error)
+
+
+def _jobmon_statuses(task: PTask, jobmon_run: JobmonRun | None) -> str:
+    """Return the sentences that give a settled step's Jobmon task and workflow status."""
+    if jobmon_run is None:
+        return "It has no Jobmon status, because no Jobmon workflow was bound."
+    task_status = jobmon_run.task_statuses.get(task.signature) or "unknown"
+    workflow = (
+        "The Jobmon workflow"
+        if jobmon_run.workflow_id is None
+        else f"Jobmon workflow {jobmon_run.workflow_id}"
+    )
+    return (
+        f"Its Jobmon task status is '{task_status}'. {workflow} has the workflow status "
+        f"'{jobmon_run.status or 'unknown'}'."
+    )
+
+
+def _ancestor_failure(task: PTask) -> str | None:
+    """Return the reasons of the task's ``skip_ancestor_failed`` marks, or None if none."""
+    marks = get_marks(task, "skip_ancestor_failed")
+    if not marks:
+        return None
+    # The same default as pytask's own parser of the mark.
+    return "\n".join(
+        str(mark.kwargs.get("reason", mark.args[0] if mark.args else "No reason provided."))
+        for mark in marks
+    )
+
+
+def _tail(path: Path) -> str:
+    """Return the tail of ``path`` that a node result keeps, or an empty string on error."""
+    try:
+        return read_tail(path)
+    except OSError:
+        return ""
