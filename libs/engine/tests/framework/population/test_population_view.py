@@ -1135,8 +1135,8 @@ def test_population_view_update_values_the_dtype_cannot_hold_raise(
 
     with pytest.raises(
         PopulationError,
-        match="Component 'pie_component' is corrupting the population table by modifying "
-        rf"the dtype of a column it updates \(extra from {original.dtype} to ",
+        match="A component is corrupting the population table by modifying the dtype "
+        rf"of a column it updates \(extra from {original.dtype} to ",
     ):
         pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
 
@@ -1396,8 +1396,7 @@ class TestScopedUpdate:
 
         with pytest.raises(
             PopulationError,
-            match="Component 'pie_component' is corrupting the population table by "
-            "modifying the dtype",
+            match="A component is corrupting the population table by modifying the dtype",
         ):
             pie_view.update("pie", to_integers, index=scoped)
 

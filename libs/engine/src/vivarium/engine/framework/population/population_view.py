@@ -464,7 +464,7 @@ class PopulationView:
         if result_df.empty:
             return
 
-        self._manager.update(self._component, result_df)
+        self._manager.update(result_df)
 
     def __repr__(self) -> str:
         name = self._component.name if self._component else "None"

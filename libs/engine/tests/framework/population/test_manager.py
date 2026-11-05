@@ -8,12 +8,7 @@ import pytest
 from pytest_mock import MockerFixture
 from vivarium.interactive import Simulation
 
-from tests.framework.population.conftest import (
-    CUBE_COL_NAMES,
-    PIE_COL_NAMES,
-    PIE_RECORDS,
-    PieComponent,
-)
+from tests.framework.population.conftest import CUBE_COL_NAMES, PIE_COL_NAMES, PIE_RECORDS
 from tests.framework.population.helpers import (
     assert_squeezing_multi_level_multi_outer,
     assert_squeezing_multi_level_single_outer_multi_inner,
@@ -570,7 +565,7 @@ class TestPopulationManagerWrites:
         update = pd.DataFrame({"pi": original["pi"] * 2, "cube": original["cube"] + 1})
         assert update.index.equals(original.index)
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         updated = pies_and_cubes_pop_mgr.private_columns
         pd.testing.assert_frame_equal(updated[["pi", "cube"]], update)
@@ -604,7 +599,7 @@ class TestPopulationManagerWrites:
         omitted = original.index.difference(index)
         update = pd.DataFrame({"pi": original.loc[index, "pi"] * 2})
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         updated = pies_and_cubes_pop_mgr.private_columns
         pd.testing.assert_series_equal(
@@ -626,7 +621,7 @@ class TestPopulationManagerWrites:
         omitted = original.index.difference(index)
         update = pd.DataFrame({"pie": "banana_cream", "pi": 0.0}, index=index)
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         updated = pies_and_cubes_pop_mgr.private_columns
         assert not updated.loc[omitted, PIE_COL_NAMES].isna().to_numpy().any()
@@ -646,7 +641,7 @@ class TestPopulationManagerWrites:
         expected = original[column].copy()
         expected.loc[index] = update[column]
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         updated = pies_and_cubes_pop_mgr.private_columns
         assert updated[column].dtype == original[column].dtype
@@ -658,7 +653,7 @@ class TestPopulationManagerWrites:
         """An update with an empty index changes nothing."""
         update = original.loc[original.index[:0], PIE_COL_NAMES]
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         pd.testing.assert_frame_equal(pies_and_cubes_pop_mgr.private_columns, original)
 
@@ -674,7 +669,7 @@ class TestPopulationManagerWrites:
             {"pi": [-1.0, -2.0, -3.0, -4.0], "cube": [-1, -2, -3, -4]}, index=index
         )
 
-        pies_and_cubes_pop_mgr.update(PieComponent(), update)
+        pies_and_cubes_pop_mgr.update(update)
 
         updated = pies_and_cubes_pop_mgr.private_columns
         pd.testing.assert_frame_equal(updated.loc[index, ["pi", "cube"]], update)

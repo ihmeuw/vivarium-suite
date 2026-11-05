@@ -886,7 +886,7 @@ class PopulationManager(Manager):
 
         return df
 
-    def update(self, component: Component | Manager, update: pd.DataFrame) -> None:
+    def update(self, update: pd.DataFrame) -> None:
         """Write new values for the simulants in update's index.
 
         Only the rows in ``update``'s index are written; every other row is left
@@ -898,8 +898,6 @@ class PopulationManager(Manager):
 
         Parameters
         ----------
-        component
-            The component writing the update. Its name goes in the error message.
         update
             The new values, indexed by the simulants to write. Its columns must
             already exist in the frame being written.
@@ -919,8 +917,8 @@ class PopulationManager(Manager):
                 if update[column].dtype != existing_dtypes[column]
             )
             return PopulationError(
-                f"Component '{component.name}' is corrupting the population table "
-                f"by modifying the dtype of a column it updates ({changed})."
+                "A component is corrupting the population table by modifying the dtype "
+                f"of a column it updates ({changed})."
             )
 
         # Assigning whole columns is much faster than writing into them, but it takes
