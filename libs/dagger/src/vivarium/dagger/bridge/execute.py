@@ -52,6 +52,12 @@ lockfile, so it runs every step that was not recorded as successful and every st
 one, and skips any other recorded step whose inputs and code identity are unchanged.
 With the default code identity no step counts as unchanged, so every step runs again.
 :mod:`~vivarium.dagger.bridge.plugin` says what this means for the build's time limit.
+
+The hook does all of this while it holds the run lock on the build's root
+(:func:`~vivarium.dagger.backend.lock.run_lock`), so two builds with ``jobmon=True`` never
+plan, run or record on one root at once. A build that finds the lock held stops before it
+plans, fails with a message that names the run that holds the lock, and leaves that run's
+lockfile and journal as they are.
 """
 
 import inspect
@@ -88,6 +94,7 @@ from pytask import (
 
 from vivarium.dagger.backend.build import TASK_KEY
 from vivarium.dagger.backend.env import resolve_env_bin_path
+from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RUN_REFUSED_KEY, RunLocked, run_lock
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
@@ -208,12 +215,35 @@ class BridgeInterrupted(SystemExit):
 def pytask_execute_build(session: Session) -> bool:
     """Run the build's stale steps as one Jobmon workflow instead of in this process.
 
-    The hook first plans the build with pytask's dry-run protocol, in topological order
-    with the steps of each wave sorted by name, and appends the report of every step
-    that is not stale to ``session.execution_reports``: unchanged, skipped (including
-    steps that a pytask expression or marker expression deselects), persisted, or failed
-    at plan time, such as a step whose input file is missing, together with the steps
-    after it. ``session.config["dry_run"]`` is ``True`` only while planning and is
+    Before anything else, the hook takes the run lock with
+    :func:`~vivarium.dagger.backend.lock.run_lock` on ``<root>/run.lock``
+    (:data:`~vivarium.dagger.backend.lock.RUN_LOCK_NAME` in the build's root, beside
+    ``pytask.lock``), and it holds the lock until it returns or raises, so the lock covers
+    every step described below, from planning to the final state file. Right after it
+    takes the lock, it reads pytask's lockfile and its journal again into
+    ``session.config["lockfile_state"]``, so that it plans from what an earlier build
+    recorded up to the moment that build released the lock, and not from what pytask read
+    when this build started. The lock is released however the hook ends, also when a
+    ``KeyboardInterrupt`` or a ``SystemExit`` passes through it. pytask writes its
+    lockfile from that state in its ``pytask_unconfigure`` hook, a few milliseconds after
+    this hook has released the lock.
+
+    If another process holds the lock, the hook stops at once: it plans nothing, appends
+    no report, binds nothing, creates no run directory and writes no state file. It sets
+    ``session.config["lockfile_state"]`` to ``None``, so that pytask does not rewrite
+    ``pytask.lock`` or delete its journal, both of which belong to the run that holds the
+    lock. It leaves the :class:`~vivarium.dagger.backend.lock.RunLocked` in
+    ``session.config`` under :data:`~vivarium.dagger.backend.lock.RUN_REFUSED_KEY`, prints
+    the exception's message, which names the lock file and the holder's user, pid, host
+    and start time, through pytask's console, and raises (see Raises). The build then
+    ends with ``ExitCode.FAILED`` and no execution reports.
+
+    With the lock held, the hook first plans the build with pytask's dry-run protocol, in
+    topological order with the steps of each wave sorted by name, and appends the report
+    of every step that is not stale to ``session.execution_reports``: unchanged, skipped
+    (including steps that a pytask expression or marker expression deselects), persisted,
+    or failed at plan time, such as a step whose input file is missing, together with the
+    steps after it. ``session.config["dry_run"]`` is ``True`` only while planning and is
     ``False`` again afterwards, even if planning raises. With nothing stale, the hook
     stops there: it creates no run directory and binds no workflow. If pytask asks the
     build to stop during planning, after an interrupt or once plan-time failures reach
@@ -368,7 +398,36 @@ def pytask_execute_build(session: Session) -> bool:
         The run directory, its recipes and the product directories have then already been
         created, but no state file, and no step has run. Each message is printed through
         pytask's console first, so the build fails with that message and no traceback.
+        Also, before any of these checks, if another process holds the run lock on the
+        build's root, with the message of the
+        :class:`~vivarium.dagger.backend.lock.RunLocked`. Nothing has then been planned,
+        created or written, and pytask's lockfile and journal are left as they are.
+    OSError
+        If the run lock file cannot be created or opened for reading and writing, or if
+        ``flock`` fails on it for a reason other than a held lock, such as ``ENOLCK``, as
+        :func:`~vivarium.dagger.backend.lock.run_lock` raises it. pytask's lockfile state
+        is detached first, as for a refusal, so ``pytask.lock`` and its journal are left
+        as they are. pytask then fails the build with a traceback.
     """
+    held = False
+    try:
+        with run_lock(Path(session.config["root"]) / RUN_LOCK_NAME):
+            held = True
+            _reload_lockfile_state(session)
+            return _execute(session)
+    # Nothing inside the block takes a run lock, so a RunLocked here is the refusal.
+    except RunLocked as error:
+        raise _refuse(session, error) from error
+    except BaseException:
+        # Another run may hold the lock, so pytask_unconfigure must not flush the state
+        # that pytask read at parse time over that run's pytask.lock and journal.
+        if not held:
+            session.config["lockfile_state"] = None
+        raise
+
+
+def _execute(session: Session) -> bool:
+    """Plan, run, record and settle the build as the hook describes; return True."""
     stale = _plan(session)
     # pytask's own loop also stops once max_failures is reached or a task is interrupted.
     if not stale or session.should_stop:
@@ -407,6 +466,29 @@ def pytask_execute_build(session: Session) -> bool:
     write_run_state(final)
     session.config[RUN_STATE_KEY] = final
     return True
+
+
+def _reload_lockfile_state(session: Session) -> None:
+    """Replace pytask's lockfile state with a fresh read of the files, unless it is None."""
+    state = session.config.get("lockfile_state")
+    if state is None:
+        return
+    # pytask read the files when it parsed its configuration, before this build held the
+    # lock, so an earlier build may have recorded steps since. The state's own class is
+    # used because pytask does not export it.
+    session.config["lockfile_state"] = type(state).from_path(state.path, state.root)
+
+
+def _refuse(session: Session, error: RunLocked) -> ExecutionError:
+    """Detach the lockfile state, keep ``error`` in the config, and print it.
+
+    Return a new ExecutionError for the caller to raise.
+    """
+    # Without this, pytask_unconfigure would rewrite the holder's pytask.lock from this
+    # build's stale state and delete the holder's journal.
+    session.config["lockfile_state"] = None
+    session.config[RUN_REFUSED_KEY] = error
+    return _failure(str(error))
 
 
 def _plan(session: Session) -> list[PTask]:

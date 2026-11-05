@@ -42,6 +42,18 @@ compute node with ``/opt/slurm/bin`` on ``PATH``, because Jobmon's Slurm plugin 
 ``scontrol``, ``squeue`` and ``scancel`` from that host. The bridge needs the ``cluster``
 extra: ``pip install "vivarium-dagger[cluster]"``.
 
+Only one build with ``jobmon=True`` works on a root at a time. Such a build holds the run
+lock on ``<root>/run.lock`` (see :mod:`~vivarium.dagger.backend.lock`) from before it
+plans until it has recorded and settled its run. A second such build on the same root,
+from another process, fails at once with pytask's ``ExitCode.FAILED`` and a message that
+names the run that holds the lock; it does not wait, and it leaves that run's lockfile and
+journal as they are. The lock file is created writable by its group, so a build by
+another account in that group is refused in the same way. A refused build leaves the
+:class:`~vivarium.dagger.backend.lock.RunLocked` in its configuration under
+``bridge_refused``. A build without Jobmon, a preview, and a build in one of the
+:data:`LOCAL_ONLY_MODES` take no lock, so they can run beside a bridge build on the same
+root, and their lockfile writes can then interleave with its writes.
+
 The build records the steps' results in pytask's lockfile only after the workflow stops.
 When the build's process gets SIGTERM, as Slurm sends at the end of a job's time limit
 before it kills the job, the build stops waiting for the workflow, records the steps
