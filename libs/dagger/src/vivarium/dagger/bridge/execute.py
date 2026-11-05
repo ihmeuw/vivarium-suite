@@ -78,9 +78,7 @@ from vivarium.dagger.bridge.runner import (
     read_result,
     runner_command,
 )
-
-RUNS_DIR = Path(".pytask", "jobmon")
-"""The directory, relative to a build's root, that holds one directory per bridge run."""
+from vivarium.dagger.bridge.state import RUNS_DIR
 
 PAYLOAD_SUFFIX = ".payload.json"
 """The suffix of a step's recipe file in a run directory. The name before it is the
