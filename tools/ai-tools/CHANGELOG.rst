@@ -1,3 +1,10 @@
+**0.32.0 - 11/05/26**
+
+- ``environments``: add a first section for repos with a committed ``uv.lock``, which use
+  the checkout's ``.venv`` through ``environment.sh`` or ``uv sync --locked``
+- ``make-commands``, ``framework-clis`` and ``model-development``: describe how uv repos
+  build and activate their environment
+
 **0.31.1 - 10/29/26**
 
 - ``model-development`` and ``_vv_writer``: describe the verification checks as built on
