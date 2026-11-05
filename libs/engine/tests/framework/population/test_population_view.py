@@ -34,7 +34,6 @@ from vivarium.engine.framework.population import (
     PopulationManager,
     PopulationView,
 )
-from vivarium.engine.framework.population.exceptions import ColumnDtypeError
 from vivarium.engine.testing_utilities import TestPopulation
 
 ##########################
@@ -1138,10 +1137,8 @@ def test_population_view_update_values_the_dtype_cannot_hold_raise(
         PopulationError,
         match="Component 'pie_component' is corrupting the population table by modifying "
         rf"the dtype of a column it updates \(extra from {original.dtype} to ",
-    ) as exc_info:
+    ):
         pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
-
-    assert isinstance(exc_info.value.__cause__, ColumnDtypeError)
 
 
 def test_population_view_update_during_a_creation_pass_raises(
