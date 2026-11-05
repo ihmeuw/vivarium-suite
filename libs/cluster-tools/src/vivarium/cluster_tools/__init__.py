@@ -3,7 +3,7 @@
 Vivarium Cluster Tools
 ======================
 
-Tools for working with :mod:`vivarium.engine` on compute clusters.
+Shared cluster, Jobmon, logging and notification helpers for Vivarium tools.
 """
 from importlib.metadata import PackageNotFoundError, version
 

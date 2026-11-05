@@ -164,7 +164,7 @@ def test_get_skip_post_processor_deprecation(
     )
     pv = pies_and_cubes_pop_mgr.get_view(PieComponent())
     full_idx = pd.RangeIndex(0, len(PIE_RECORDS))
-    with pytest.warns(DeprecationWarning, match="skip_post_processor"):
+    with pytest.warns(FutureWarning, match="skip_post_processor"):
         pv.get(full_idx, "pie", skip_post_processor=True)
 
 
