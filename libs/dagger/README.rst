@@ -22,7 +22,8 @@ running a notebook as a step, a check of each location's delivered primary data,
 and verbs that run or preview a whole pipeline by step name), a bridge that runs
 a build's stale steps on compute nodes as one Jobmon workflow, and a test
 harness for staleness scenarios. The bridge needs the ``cluster`` extra: ``pip
-install "vivarium-dagger[cluster]"``.
+install "vivarium-dagger[cluster]"``. ``dagger`` also runs, previews, or forces
+the steps of a pipeline definition.
 
 **Supported Python versions: 3.11, 3.12, 3.13**
 
