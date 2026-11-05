@@ -8,7 +8,6 @@ pipeline {
         // Branch and PR builds install with the uv cache, which keeps every wheel version it
         // has seen, so `uv cache prune` does not shrink it. Clean it fully once a week.
         UV_CACHE_CLEAN_DAY = 'Sunday'
-        UV_VERSION = '0.13.6'
         // Builds keep their pip and uv caches here (see reusable_pipeline.groovy).
         XDG_CACHE_HOME = '/svc-simsci/pip-cache'
     }
@@ -267,7 +266,9 @@ def manageUvCache() {
         if [ "${cleanToday}" != "true" ]; then
             exit 0
         fi
-        /svc-simsci/miniconda3/bin/python -m pip install --quiet --target "${uvDir}" uv==${env.UV_VERSION}
+        # Unpinned, like the builds that fill the cache, so the cleaner is never older
+        # than they are and always sees when they are using it.
+        /svc-simsci/miniconda3/bin/python -m pip install --quiet --target "${uvDir}" uv
         # uv waits for builds that are using the cache, so cap the wait: the node stages
         # run in turn, and one stuck stage would hold up the rest.
         timeout 30m "${uvDir}/bin/uv" cache clean --cache-dir "\$cache_dir"
