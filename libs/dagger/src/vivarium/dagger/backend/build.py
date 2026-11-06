@@ -3,6 +3,7 @@
 import inspect
 import keyword
 import os
+import socket
 import subprocess
 from collections.abc import Iterable
 from pathlib import Path
@@ -70,12 +71,25 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
 
     Raises
     ------
+    FileNotFoundError
+        If the env's own ``bin`` directory, the first in ``bin_path``, does not exist on
+        this host, as when the env was resolved on a controller whose paths a compute node
+        does not have. The command is then not run, so it cannot fall back to a program of
+        the same name later on ``PATH``.
     subprocess.CalledProcessError
         If the command exits with a non-zero status.
     """
     if bin_path is None:
         subprocess.run(command, shell=True, check=True)
         return
+    env_bin = bin_path.split(":")[0]
+    if not os.path.isdir(env_bin):
+        raise FileNotFoundError(
+            f"The env's bin directory {env_bin} does not exist on host "
+            f"{socket.gethostname()}, so the command was not run. A step's env must be at "
+            "the same path on the host that plans the build and on every host that runs "
+            "its steps."
+        )
     parts = [*bin_path.split(":"), os.environ.get("PATH", "")]
     path = ":".join(part for part in parts if part)
     subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
