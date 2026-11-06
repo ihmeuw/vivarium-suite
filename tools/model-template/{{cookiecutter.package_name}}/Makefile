@@ -139,6 +139,10 @@ endif
 
 .PHONY: build-env
 build-env: # Create a new environment with installed packages
+	@command -v uv > /dev/null || { \
+		echo "Error: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2; \
+		exit 1; \
+	}
 #	Validate arguments - exit if unsupported arguments are passed
 	$(call validate_make_args,build-env,type name path lfs py include_timestamp force keep_env artifactory_access)
 	
@@ -223,7 +227,7 @@ build-env: # Create a new environment with installed packages
 _build-env:
 	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install vivarium-build-utils
+	conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS.
 	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) \
 		$(if $(filter no,$(artifactory_access)),IHME_PYPI=)
@@ -234,7 +238,7 @@ _build-env:
 		conda run --no-capture-output $(CONDA_ENV_FLAG) git lfs install; \
 	fi
 # 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
-	@conda run --no-capture-output $(CONDA_ENV_FLAG) pip list --editable --format=freeze | grep -q . \
+	@conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into $(if $(path),$(path),$(name)) from $(CURDIR)." >&2; exit 1; }
 
 # Default shared environment directory (set by Jenkins nightly builds)
@@ -313,7 +317,7 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 
 #	Install local package in editable mode (no-deps since shared env has dependencies)
 	@echo "Installing local package in editable mode (--no-deps)"
-	$(venv_path)/bin/pip install -e . --no-deps
+	uv pip install --python $(venv_path)/bin/python -e . --no-deps
 
 	@echo
 	@echo "Finished creating venv"

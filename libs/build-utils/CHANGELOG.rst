@@ -11,6 +11,12 @@
   and point to ``environment.sh``
 - Drop ``ln -F`` from ``make deploy-docs``, which newer ``ln`` versions reject
 - Describe uv environments in the README
+- Install uv in Jenkins with Astral's install script instead of pip, through a new
+  ``install_uv`` step. Conda builds get uv in the environment's ``bin``
+- Make ``make install`` require ``uv`` on ``PATH`` instead of installing it with pip
+- Build with ``uv build`` and upload to Artifactory with ``uv publish``, in place of
+  ``build`` and ``twine``
+- Run conda-pack with ``uvx`` in the shared environment job
 
 **4.13.0 - 11/04/26**
 

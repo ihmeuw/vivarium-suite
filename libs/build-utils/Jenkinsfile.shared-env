@@ -302,8 +302,8 @@ def snapshotLockFiles(String envPath, String envName) {
 /**
  * Archive the current environment using conda-pack, then remove it.
  *
- * conda-pack is installed into the base conda environment and invoked with --prefix
- * so that the archive is a faithful snapshot of the environment as it was running.
+ * conda-pack runs with uvx, so it is never installed into any conda environment, and
+ * with --prefix so that the archive is a faithful snapshot of the environment as it was running.
  * The --ignore-editable-packages flag handles the editable install of the model
  * package, which is irrelevant in the shared env (the venv overlay re-installs
  * from the user's checkout).
@@ -328,14 +328,12 @@ def archiveEnvironment(String currentPath, String archiveDir, String envName) {
     sh "mkdir -p '${archiveDir}' && chmod 755 '${archiveDir}'"
 
     try {
+        String uvDir = "${env.WORKSPACE}@tmp/uv"
+        install_uv(uvDir)
         sh """
             ${env.ACTIVATE_BASE}
 
-            # Install conda-pack into the base env (not the target) to avoid polluting the archive
-            pip install conda-pack
-
-            # Pack the environment
-            conda-pack \
+            '${uvDir}/uvx' --no-cache conda-pack \
                 --prefix '${currentPath}' \
                 --ignore-editable-packages \
                 --output '${archiveFile}' \

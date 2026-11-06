@@ -1,10 +1,11 @@
 """Tests for the ``uv.lock`` guard on the ``install`` target in ``base.mk``.
 
-A stub ``pip`` comes first on ``PATH``, so a run that gets past the guard stops at its
-first ``pip`` call and installs nothing.
+A stub ``uv`` comes first on ``PATH``, so a run that gets past the guard stops at its
+first ``uv`` call and installs nothing.
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,18 +14,20 @@ import pytest
 from vivarium.build_utils.resources import get_makefiles_path
 
 BASE_MK = Path(get_makefiles_path()) / "base.mk"
-STUB_MARKER = "STUB PIP CALLED"
+# By full path, so a test can leave make's directory off PATH.
+MAKE = shutil.which("make") or "make"
+STUB_MARKER = "STUB UV CALLED"
 GUARD_MESSAGE = "builds its environment from uv.lock"
 
 
 @pytest.fixture
 def stub_env(tmp_path: Path) -> dict[str, str]:
-    """Return an environment with a failing stub ``pip`` and no ``JENKINS_URL``."""
+    """Return an environment with a failing stub ``uv`` and no ``JENKINS_URL``."""
     bin_dir = tmp_path / "stub-bin"
     bin_dir.mkdir()
-    pip = bin_dir / "pip"
-    pip.write_text(f'#!/bin/sh\necho "{STUB_MARKER}"\nexit 3\n')
-    pip.chmod(0o755)
+    uv = bin_dir / "uv"
+    uv.write_text(f'#!/bin/sh\necho "{STUB_MARKER}"\nexit 3\n')
+    uv.chmod(0o755)
     env = {k: v for k, v in os.environ.items() if k != "JENKINS_URL"}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     return env
@@ -38,7 +41,7 @@ def _make_install(
     if with_lock:
         (directory / "uv.lock").write_text("version = 1\n")
     return subprocess.run(
-        ["make", "-f", str(BASE_MK), "install"],
+        [MAKE, "-f", str(BASE_MK), "install"],
         cwd=directory,
         env=env,
         capture_output=True,
@@ -76,5 +79,15 @@ def test_installs_otherwise(
         stub_env["JENKINS_URL"] = jenkins_url
     result = _make_install(tmp_path / subdir, stub_env, with_lock)
     assert GUARD_MESSAGE not in result.stdout
-    # Reaching the stub pip shows the guard let the install run.
+    # Reaching the stub uv shows the guard let the install run.
     assert STUB_MARKER in result.stdout
+
+
+def test_fails_clearly_without_uv(tmp_path: Path) -> None:
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+    env = {k: v for k, v in os.environ.items() if k != "JENKINS_URL"}
+    env["PATH"] = str(empty_bin)
+    result = _make_install(tmp_path / "repo", env, with_lock=False)
+    assert result.returncode != 0
+    assert "uv is not on PATH" in result.stdout
