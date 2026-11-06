@@ -74,7 +74,8 @@ CI uses [uv](https://docs.astral.sh/uv/) as the package manager.
 
 ## Releasing
 
-Releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`. A release can
+Final releases are triggered automatically when a `CHANGELOG.rst` is updated on `main`, and betas
+when one is updated on a `beta/**` branch (see `CONTRIBUTING.rst`). A release can
 also be triggered manually via `workflow_dispatch` on `.github/workflows/release.yml` (useful for
 recovery or retries). See that file for details. The two Claude Code plugins under `tools/` release
 the same way through `.github/workflows/release-ai-tools-public.yml` and `release-ai-tools.yml`.
