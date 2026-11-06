@@ -1,3 +1,19 @@
+**4.14.0 - 11/05/26**
+
+- Add a ``uv_lock`` option to ``reusable_pipeline`` that builds each Python version's
+  environment from the repo's ``uv.lock`` with ``uv sync --locked --no-editable``, using
+  a pinned uv and a uv-managed Python. It cannot be combined with ``deployable``
+- Add a ``uv_git_credentials_id`` option to ``reusable_pipeline``, so ``uv_lock`` builds
+  can clone git sources from private repos
+- Make ``get_vbu_version`` load the build-utils version that a standalone repo's
+  ``uv.lock`` pins, as a release or a commit
+- Make ``make install`` refuse in a standalone repo with a ``uv.lock`` outside Jenkins,
+  and point to ``environment.sh``
+- Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
+  point to ``make list`` for a repo's own targets
+- Drop ``ln -F`` from ``make deploy-docs``, which newer ``ln`` versions reject
+- Describe uv environments in the README
+
 **4.13.0 - 11/04/26**
 
 - Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on

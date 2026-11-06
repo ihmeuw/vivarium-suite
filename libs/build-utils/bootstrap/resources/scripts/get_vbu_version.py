@@ -6,10 +6,12 @@ The intent is that this script will be called by Jenkins via the `get_vbu_versio
 bootstrap script in the /bootstrap/vars/ directory.
 
 This script:
-1. Reads python_versions.json to get the maximum supported Python version
-2. Runs pip with --dry-run to resolve dependencies
-3. Extracts the vivarium-build-utils version from the output
-4. Returns the monorepo per-lib tag form (``vivarium-build-utils-v<X.Y.Z>``)
+1. For a standalone repo whose uv.lock pins vivarium-build-utils, returns that pin
+2. Otherwise reads python_versions.json to get the maximum supported Python version
+3. Runs pip with --dry-run to resolve dependencies
+4. Extracts the vivarium-build-utils version from the output
+5. Returns the monorepo per-lib tag form (``vivarium-build-utils-v<X.Y.Z>``), or a
+   commit SHA for a git pin
 
 """
 
@@ -18,6 +20,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import Optional
 
 MINICONDA_DIR = "/svc-simsci/vbu_bootstrap_envs/miniconda3"
 IHME_PYPI = "https://artifactory.ihme.washington.edu/artifactory/api/pypi/pypi-shared/"
@@ -38,6 +41,65 @@ def _get_package_subdir() -> str:
     if i + 1 >= len(parts):
         return ""
     return f"{parts[i]}/{parts[i + 1]}"
+
+
+def _get_locked_vbu_version(lock_path: str = "uv.lock") -> Optional[str]:
+    """Return the vivarium-build-utils pin in ``lock_path``, or None if it has none.
+
+    Parameters
+    ----------
+    lock_path
+        The path to the uv lock file, relative to the working directory.
+
+    Returns
+    -------
+        ``vivarium-build-utils-v<X.Y.Z>`` for a registry pin, or the full commit SHA
+        for a git pin, matching the forms that ``_extract_vbu_version`` returns.
+        None when there is no lock, the lock has no vivarium-build-utils entry, or
+        the entry has another source (such as a local path) that Jenkins cannot load.
+
+    Notes
+    -----
+    The lock is scanned line by line rather than parsed with ``tomllib``, because
+    the bootstrap ``python3`` may be older than 3.11. A uv lock entry looks like:
+        [[package]]
+        name = "vivarium-build-utils"
+        version = "4.11.2"
+        source = { registry = "https://pypi.org/simple" }
+    or, for a git source:
+        source = { git = "https://github.com/ihmeuw/vivarium-suite.git?subdirectory=libs%2Fbuild-utils&rev=047f6b632#047f6b6322436c129750689618ff365ec21f82cf" }
+    """
+    if not os.path.exists(lock_path):
+        return None
+    with open(lock_path, "r") as f:
+        lines = [line.strip() for line in f]
+
+    for i, line in enumerate(lines):
+        if line != 'name = "vivarium-build-utils"' or lines[i - 1] != "[[package]]":
+            continue
+        version = None
+        source = None
+        # The entry's keys run until the next table header.
+        for entry_line in lines[i + 1 :]:
+            if entry_line.startswith("["):
+                break
+            if entry_line.startswith("version = "):
+                version = entry_line.split('"')[1]
+            elif entry_line.startswith("source = "):
+                source = entry_line
+        if source is not None:
+            git_match = re.search(r'git = "[^"]*#([0-9a-f]{40})"', source)
+            if git_match:
+                return git_match.group(1)
+            if "registry = " in source and version is not None:
+                return f"vivarium-build-utils-v{version}"
+        print(
+            f"WARNING: {lock_path} pins vivarium-build-utils with a source Jenkins "
+            f"cannot load ({source}); resolving the version instead",
+            file=sys.stderr,
+        )
+        return None
+    return None
 
 
 def _get_max_python_version() -> str:
@@ -164,9 +226,15 @@ def main() -> str:
     subdir = _get_package_subdir()
     if subdir:
         os.chdir(subdir)
-    python_version = _get_max_python_version()
-    dry_run_output = _run_pip_dry_run(python_version)
-    vbu_version = _extract_vbu_version(dry_run_output)
+        vbu_version = None
+    else:
+        # A standalone repo with a uv.lock must load the vbu its lock installs, so
+        # that the pipeline code and base.mk match the vbu in its environment.
+        vbu_version = _get_locked_vbu_version()
+    if vbu_version is None:
+        python_version = _get_max_python_version()
+        dry_run_output = _run_pip_dry_run(python_version)
+        vbu_version = _extract_vbu_version(dry_run_output)
 
     # NOTE: We must print the vbu_version for Jenkins to capture it!
     print(vbu_version)

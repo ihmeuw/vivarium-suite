@@ -85,6 +85,33 @@ credential used at deploy time for pushing the release tag. When omitted, the
 deploy stage falls back to the credential configured on the Multibranch
 Pipeline's branch source, which is the right default for most repos.
 
+Building from uv.lock
+---------------------
+
+A standalone repo with a committed ``uv.lock`` can pass ``uv_lock: true``. Jenkins
+then builds each Python version's environment with ``uv sync --locked`` instead of
+a conda environment and ``make install``, so CI installs exactly what the lock pins
+and fails if the lock is out of date. Lint, tests, and docs run in that venv as
+before.
+
+- ``env_reqs`` names the extras to sync, separated by commas. Unlike the conda
+  path, leaving it empty means no extras. A ``dev`` dependency group is still
+  installed, because ``uv sync`` includes it by default.
+- The project is installed as a regular package, not an editable one.
+- Jenkins installs uv at a pinned version and a uv-managed Python. The Python goes
+  in a persistent directory, on the shared filesystem for Slurm builds.
+- If ``uv.lock`` has git sources from private repos, pass
+  ``uv_git_credentials_id: '<jenkins-credential-id>'`` with a credential that can
+  read them. ``uv sync`` then runs with that credential.
+- ``uv_lock`` cannot be combined with ``deployable``, and monorepo libs cannot use it.
+- Jenkins loads the build-utils version that ``uv.lock`` pins, not the newest release.
+  So a build-utils release that changes CI reaches a repo with a ``uv.lock`` only when
+  that repo bumps build-utils and relocks.
+
+In a standalone repo with a ``uv.lock``, ``make install`` outside Jenkins refuses
+and points to ``source environment.sh`` (or ``uv sync``), because it would install
+outside the lock.
+
 Tag prefix
 ----------
 

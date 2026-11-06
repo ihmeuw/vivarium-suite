@@ -68,12 +68,15 @@ It includes:
   ``pytest-vivarium``, and where baked-in coverage output lands.
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
-  ``update_gbd_round``) available in a standard model-repo env.
+  ``update_gbd_round``) available in a standard model-repo env, including a uv
+  ``.venv``.
 - ``environments`` — discovery-first guidance for picking up the right Python
-  environment in a vivarium repo.
+  environment in a vivarium repo. In a repo with a ``uv.lock``, it points to the
+  checkout's ``.venv``.
 - ``make-commands`` — reference for the shared ``make`` targets centralized in
   ``vivarium.build_utils``'s ``base.mk`` / ``test.mk``, plus the per-repo
-  ``build-env`` target and its fail-fast / ``keep_env`` behavior.
+  ``build-env`` target and its fail-fast / ``keep_env`` behavior, and how both
+  differ in a repo with a ``uv.lock``.
 - ``vivarium-research`` — connector for the Vivarium Research
   documentation (https://vivarium-research.readthedocs.io). Discovers
   the docs nav tree on demand and searches modelling-strategy content

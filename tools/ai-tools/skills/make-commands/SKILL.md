@@ -16,7 +16,7 @@ include $(MAKE_INCLUDES)/test.mk
 
 Both files live at `vivarium/build_utils/resources/makefiles/`. That means **the same set of `make` targets is available in essentially every vivarium library**. When you see `make <target>` in a vivarium context, look here.
 
-The only target that lives in the *downstream* `Makefile` itself is `build-env` (plus its private `_build-env` helper), because it has to bootstrap `vivarium_build_utils` into a fresh conda env before the shared `base.mk` can be loaded. Under Jenkins (`$JENKINS_URL` set), the makefiles are pulled from the workspace instead of from an installed package.
+The only target that lives in the *downstream* `Makefile` itself is `build-env` (plus its private `_build-env` helper), because it has to bootstrap `vivarium_build_utils` into a fresh conda env before the shared `base.mk` can be loaded. In a repo with a committed `uv.lock`, the downstream `Makefile` differs: `build-env` syncs `.venv` from the lock instead of building a conda env, the shared makefiles come from the `vivarium.build_utils` installed in `.venv`, and the repo may add its own targets such as `lock-versions` and `upgrade-versions`. Read that `Makefile` for the details. Under Jenkins (`$JENKINS_URL` set), the makefiles are pulled from the workspace instead of from an installed package.
 
 `PACKAGE_NAME` is automatically set to the current directory's basename, so the targets reorient themselves correctly per-repo.
 
@@ -30,6 +30,7 @@ The only target that lives in the *downstream* `Makefile` itself is `build-env` 
 
 - **`lint` doesn't fix anything.** It checks. To actually format, run `format`.
 - **`make` with no args runs `list`**, not `help`. `.DEFAULT_GOAL := list` is set in `base.mk`.
+- **`make install` refuses in a standalone repo with a `uv.lock`**, outside Jenkins. It would install outside the lock, so it points to `source environment.sh` (or `uv sync`) instead. Monorepo libs and Jenkins builds are not affected.
 - **`make install` re-runs `setup-slack` every time.** Idempotent, but expect to see Slack bot config output.
 - **`build-env` deletes the env if any step fails.** It runs the create/bootstrap/install steps through the `_build-env` sub-make, then `conda env remove`s the env on failure, so a broken dependency pin leaves you with no env rather than one that activates with nothing installed. Pass `keep_env=yes` to keep the partial env for inspection.
 - **`build-env` on a name that already exists silently wipes that env.** `conda create` installs into an existing prefix instead of erroring, clearing its pip- and conda-installed packages before the rebuild starts. Pre-existing behavior, not something the fail-fast change introduced — but worth knowing before you re-run `build-env` to "refresh" an env you've added anything to by hand. The model-template refuses unless `force=yes`.

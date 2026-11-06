@@ -1,13 +1,13 @@
 ---
 name: framework-clis
-description: Reference for the vivarium-ecosystem console scripts that a standard model-repo conda env puts on PATH — `simulate`, `psimulate`, `vipin`, the per-repo `make_artifacts`, and `update_gbd_round`. Use whenever the task involves running, restarting, expanding, or smoke-testing a vivarium simulation; launching one on the cluster; building or rebuilding a model's data artifact; extracting psimulate worker performance; or exporting a GBD round.
+description: Reference for the vivarium-ecosystem console scripts that a standard model-repo environment puts on PATH — `simulate`, `psimulate`, `vipin`, the per-repo `make_artifacts`, and `update_gbd_round`. Use whenever the task involves running, restarting, expanding, or smoke-testing a vivarium simulation; launching one on the cluster; building or rebuilding a model's data artifact; extracting psimulate worker performance; or exporting a GBD round.
 ---
 
 # Vivarium framework CLIs
 
 ## What this skill covers
 
-The vivarium-ecosystem console scripts that a standard model-repo conda env (the one `make build-env type=simulation` produces in a `vivarium_gates_*` or similar repo) puts on PATH.
+The vivarium-ecosystem console scripts that a standard model-repo environment puts on PATH. That is a conda env from `make build-env` in most `vivarium_gates_*` and similar repos, or the checkout's `.venv` in a repo with a committed `uv.lock`.
 
 | CLI | Ships in | Entry point | What it does |
 |---|---|---|---|
@@ -30,3 +30,7 @@ If a user asks about a vivarium-shipped CLI that isn't in the table above, treat
 ### `make_artifacts` is per-repo
 
 There is no single shared `make_artifacts` command. **Every model repo ships its own**, registered as `console_scripts:make_artifacts = <that_repo_pkg>.tools.cli:make_artifacts`. Whichever model package's env is active is the one whose `make_artifacts` is on PATH.
+
+### Running from a uv `.venv`
+
+In a repo with a `uv.lock`, run these from the repo root with `.venv` active. `psimulate`'s workers run the `python` on the launching shell's `PATH`, so activate `.venv` first rather than calling `.venv/bin/psimulate` from another env. In a dagger workflow, `environment: ./.venv` (or `.venv`) names the checkout's venv, and cluster-tools resolves it against the current directory, so run dagger from the repo root.
