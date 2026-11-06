@@ -115,6 +115,11 @@ A CHANGELOG entry of ``**X.Y.ZbN - MM/DD/YY**`` releases a beta, for example
 
 A beta is not released after its final.
 
+In ``vivarium-suite``, betas release from ``beta/**`` branches and finals release
+from ``main``. A hotfix of the last final (``1.2.0 -> 1.2.1``) can release from
+``main`` while ``1.3.0`` is in beta, and the next beta and the final still pass the
+step check.
+
 The Jenkins deploy runs ``make validate-tag`` before ``make tag-version``. Jenkins
 sets no release tag, so the target checks the tag ``tag-version`` would create,
 ``${TAG_PREFIX}v${PACKAGE_VERSION}``. This also applies the one-step rule to final

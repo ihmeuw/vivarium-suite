@@ -2,11 +2,13 @@
 # for a beta. The version patterns below must match RELEASE_VERSION_PATTERN in
 # vivarium.build_utils.release_version.
 # Both the detect job (version parsing) and the release job (date validation) depend on this.
+# A push to main releases final versions. A push to a beta/** branch releases betas, so
+# betas stay off main and a hotfix released from main does not ship unreleased beta code.
 name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'beta/**']
     paths: ['libs/*/CHANGELOG.rst']
   workflow_dispatch:
     inputs:
@@ -92,11 +94,17 @@ jobs:
 
             echo "${PACKAGE} ${VERSION}" >> package_versions.txt
           else
-            # Push to main. Detect all changed CHANGELOG.rst files and parse versions.
+            # Push to main or a beta branch. Detect all changed CHANGELOG.rst files and parse versions.
+            BRANCH="${{ github.ref_name }}"
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              BEFORE=$(git rev-list --max-parents=0 HEAD)
+              if [[ "$BRANCH" == beta/* ]]; then
+                # A new beta branch: only consider changes made since it left main
+                BEFORE=$(git merge-base origin/main "$AFTER")
+              else
+                BEFORE=$(git rev-list --max-parents=0 HEAD)
+              fi
             fi
 
             CHANGED_CHANGELOGS=$(git diff --name-only "$BEFORE" "$AFTER" | grep '^libs/.*/CHANGELOG\.rst$' || true)
@@ -116,6 +124,15 @@ jobs:
               if git tag -l "$TAG" | grep -q .; then
                 echo "Tag $TAG already exists, skipping"
                 continue
+              fi
+
+              if [[ "$BRANCH" == beta/* && "$VERSION" != *b* ]]; then
+                echo "${LIB} ${VERSION} is a final version. Finals release from main, not ${BRANCH}."
+                exit 1
+              fi
+              if [[ "$BRANCH" != beta/* && "$VERSION" == *b* ]]; then
+                echo "${LIB} ${VERSION} is a beta. Betas release from a beta/** branch, not ${BRANCH}."
+                exit 1
               fi
 
               echo "${LIB} ${VERSION}" >> package_versions.txt

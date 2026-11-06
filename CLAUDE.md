@@ -55,7 +55,7 @@ Before any externally-facing action (pushing, opening a PR, tagging a release), 
 
 ## Release model
 
-Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main`. The workflow:
+Releases (`.github/workflows/release.yml`) fire when a `libs/<pkg>/CHANGELOG.rst` is touched on `main` (final versions) or on a `beta/**` branch (betas). Betas never release from `main` and finals never release from a beta branch, so a hotfix released from `main` does not ship unreleased beta code. Feature work for a beta merges into the beta branch, and the beta branch merges to `main` with the final CHANGELOG entry. The workflow:
 
 1. Parses the version from the first CHANGELOG line - format is `**X.Y.Z - MM/DD/YY**`, or `**X.Y.ZbN - MM/DD/YY**` for a beta (2-digit year, Pacific date matching the push day). Beta is the only supported pre-release.
 2. Creates and pushes a `<dist>-v<X.Y.Z>` tag (`<dist>-v<X.Y.ZbN>` for a beta), where `<dist>` is the package's `[project].name` (`vivarium-<pkg>` for all libs except `pytest-vivarium`). The tag prefix is derived from `pyproject.toml`, not assumed to be `vivarium-<pkg>`.
