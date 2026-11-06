@@ -1,7 +1,7 @@
-"""Tests for the ``uv.lock`` guard on the ``install`` target in ``base.mk``.
+"""Tests for the targets in ``base.mk`` that change in a repo with ``uv.lock``.
 
-A stub ``pip`` comes first on ``PATH``, so a run that gets past the guard stops at its
-first ``pip`` call and installs nothing.
+In the ``install`` tests, a stub ``pip`` comes first on ``PATH``, so a run that gets
+past the guard stops at its first ``pip`` call and installs nothing.
 """
 
 import os
@@ -78,3 +78,32 @@ def test_installs_otherwise(
     assert GUARD_MESSAGE not in result.stdout
     # Reaching the stub pip shows the guard let the install run.
     assert STUB_MARKER in result.stdout
+
+
+@pytest.mark.parametrize(
+    "subdir, with_lock, uv_steps",
+    [
+        ("repo", True, True),
+        ("repo", False, False),
+        ("libs/engine", True, False),
+    ],
+    ids=["uv-repo", "conda-repo", "monorepo-lib"],
+)
+def test_help_lists_the_build_steps_for_the_repo(
+    tmp_path: Path, subdir: str, with_lock: bool, uv_steps: bool
+) -> None:
+    """``make help`` gives the uv steps only in a standalone repo with ``uv.lock``."""
+    directory = tmp_path / subdir
+    directory.mkdir(parents=True)
+    if with_lock:
+        (directory / "uv.lock").write_text("version = 1\n")
+    result = subprocess.run(
+        ["make", "-s", "-f", str(BASE_MK), "help"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert ("uv sync --locked" in result.stdout) is uv_steps
+    assert ("create-env" in result.stdout) is not uv_steps
+    assert "including this repo's own" in result.stdout

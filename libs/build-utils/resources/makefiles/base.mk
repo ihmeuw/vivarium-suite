@@ -11,6 +11,10 @@ LOCATIONS=src tests
 # the directory is what's meant and DIST_NAME_FROM_PROJECT where the package is.
 PACKAGE_DIR := $(notdir $(CURDIR))
 
+# "yes" in a standalone repo that builds its environment from a committed uv.lock.
+# Monorepo libs never do, even if a stray uv.lock is in libs/<pkg>.
+USES_UV_LOCK := $(if $(wildcard uv.lock),$(if $(findstring /libs/$(PACKAGE_DIR),$(CURDIR)),,yes),)
+
 # The PyPI distribution name, read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
@@ -85,7 +89,7 @@ help: # Curated help message
 	echo "Diagnostic targets"; \
 	echo "=================="; \
 	echo; \
-	echo "list       Print available Make targets"; \
+	echo "list       Print available Make targets, including this repo's own"; \
 	echo "debug      Print debug information"; \
 	echo; \
 	echo "=============="; \
@@ -106,6 +110,17 @@ help: # Curated help message
 	echo "====================="; \
 	echo; \
 	echo "Run the following targets (in order) to mimic a Jenkins build:"; \
+	if [ "$(USES_UV_LOCK)" = "yes" ]; then \
+	echo "  1. uv sync --locked                 Build .venv from uv.lock"; \
+	echo "                                      (or 'source environment.sh')"; \
+	echo "  2. lint                             Check for formatting errors"; \
+	echo "  3. mypy                             (optional) Check for type hinting errors"; \
+	echo "  4. test-<test-type>                 Run specific tests unit, integration,"; \
+	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
+	echo "  5. build-docs                       Build documentation"; \
+	echo "  6. test-docs                        Test documentation examples"; \
+	echo "  7. clean                            Clean build artifacts and temporary files"; \
+	else \
 	echo "  1. create-env                       Create a new conda environment"; \
 	echo "  2. install                          Install package and dependencies"; \
 	echo "  3. lint                             Check for formatting errors"; \
@@ -120,6 +135,7 @@ help: # Curated help message
 	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
 	echo "  9. deploy-docs                      Deploy documentation to shared server"; \
 	echo " 10. clean                            Clean build artifacts and temporary files"; \
+	fi; \
 	echo) | less
 
 ######################
@@ -177,7 +193,7 @@ install: # Install package and dependencies
 # outside the lock and use whatever pip is on PATH, since uv venvs have none. Jenkins
 # and monorepo libs are exempt, so a repo that has not opted in to the uv pipeline,
 # or a stray lock in libs/<pkg>, still builds.
-	@if [ -f uv.lock ] && [ -z "$${JENKINS_URL}" ] && [ -z "$(findstring /libs/$(PACKAGE_DIR),$(CURDIR))" ]; then \
+	@if [ "$(USES_UV_LOCK)" = "yes" ] && [ -z "$${JENKINS_URL}" ]; then \
 		echo "ERROR: this repo builds its environment from uv.lock, so 'make install' is disabled."; \
 		echo "Run 'source environment.sh' (or 'uv sync') instead."; \
 		exit 1; \

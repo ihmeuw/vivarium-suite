@@ -9,6 +9,8 @@
   ``uv.lock`` pins, as a release or a commit
 - Make ``make install`` refuse in a standalone repo with a ``uv.lock`` outside Jenkins,
   and point to ``environment.sh``
+- Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
+  point to ``make list`` for a repo's own targets
 - Drop ``ln -F`` from ``make deploy-docs``, which newer ``ln`` versions reject
 - Describe uv environments in the README
 
