@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -54,7 +55,13 @@ from vivarium.dagger.bridge._jobmon_adapter import (
     JobmonRun,
     PlanEntry,
 )
-from vivarium.dagger.bridge.execute import PAYLOAD_SUFFIX, RUNS_DIR, _new_run_directory, _plan
+from vivarium.dagger.bridge.execute import (
+    PAYLOAD_SUFFIX,
+    RUNS_DIR,
+    RemoteTaskFailed,
+    _new_run_directory,
+    _plan,
+)
 from vivarium.dagger.bridge.payload import payload_for
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, read_result, runner_command
 from vivarium.dagger.frontend.python_step import python_step
@@ -1067,6 +1074,47 @@ def test_a_command_step_without_env_finds_this_envs_executables_first_on_the_nod
 
     assert bound_names(fake_jobmon) == [["which_python"]]
     assert Path(product.read_text().strip()).resolve() == Path(sys.prefix).resolve()
+
+
+@dataclass
+class _EnvGoneOnTheNode(FakeJobmon):
+    """Stand in for Jobmon on a node that cannot see a step's env: remove it, then run."""
+
+    env: Path | None = None
+    """The env prefix to remove before the run, as the node does not have it."""
+
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
+        """Remove the env, then run the entries as FakeJobmon does."""
+        assert self.env is not None
+        shutil.rmtree(self.env)
+        super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
+
+
+def test_a_command_step_whose_env_is_missing_on_the_node_fails_naming_the_env(
+    tmp_path: Path,
+) -> None:
+    """A command step whose env resolves when the build plans, but is gone when its runner runs, as on a node that cannot see the env, is FAIL with a FileNotFoundError naming the env's bin directory, and its command did not run."""
+    env = make_dir(tmp_path / "env" / "bin").parent
+    (env / "bin" / "python").symlink_to(sys.executable)
+    ran = tmp_path / "ran.txt"
+    task = Task(
+        name="in_env",
+        run=f"touch {shlex.quote(str(ran))}",
+        inputs={},
+        outputs={"ran": file_node(ran)},
+        resources={},
+        env=str(env),
+    )
+
+    with _EnvGoneOnTheNode(env=env):
+        session = build([task], tmp_path / "state", jobmon=True)
+
+    error = failure_of(report_for(session, "in_env"))
+    assert isinstance(error, RemoteTaskFailed)
+    assert error.exc_type == "FileNotFoundError"
+    assert str(env / "bin") in str(error.exc_message)
+    assert not ran.exists()
+    assert session.exit_code == ExitCode.FAILED
 
 
 def test_entries_carry_each_steps_name_and_resources(

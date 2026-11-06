@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import socket
 import subprocess
 from pathlib import Path
 
@@ -194,6 +195,20 @@ def test_run_command_with_bin_path_does_not_require_bin_python(tmp_path: Path) -
 
     assert not (bin_dir / "python").exists()
     assert log.read_text() == "ran\n"
+
+
+def test_run_command_with_bin_path_refuses_an_env_bin_directory_missing_on_this_host(
+    tmp_path: Path,
+) -> None:
+    """When the first directory of bin_path does not exist, as on a node that cannot see an env the controller resolved, the command does not run and FileNotFoundError names the directory and this host."""
+    missing, ran = tmp_path / "gone" / "bin", tmp_path / "ran"
+
+    with pytest.raises(FileNotFoundError) as info:
+        run_command_with_bin_path(f"touch {ran}", f"{missing}:{tmp_path}")
+
+    assert not ran.exists()
+    assert str(missing) in str(info.value)
+    assert socket.gethostname() in str(info.value)
 
 
 def test_build_runs_a_command_task_under_its_declared_env(tmp_path: Path) -> None:
