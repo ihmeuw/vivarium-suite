@@ -69,7 +69,11 @@ and skips any other recorded step whose inputs and code identity are unchanged. 
 the default code identity no step counts as unchanged, so every step runs again.
 If the process is killed outright, for example once Slurm's grace period after SIGTERM
 is over, no step is recorded and the next build runs every step again, including the
-steps that had finished. Give that process more time than the whole workflow needs.
+steps that had finished. Give that process more time than the whole workflow needs. The
+build gets Slurm's SIGTERM only if it is the job's own process: in a batch script, start
+it with ``exec`` (for example ``exec python build.py``). Without ``exec``, the script's
+shell gets the SIGTERM and exits, Slurm then kills the build at once, and the build
+records nothing, as if it had been killed outright.
 Each run's state file, ``<root>/.pytask/jobmon/<run>/state.json``, gives the run's
 Jobmon workflow id even then (see :mod:`~vivarium.dagger.bridge.state`), and the build
 leaves the run's final state in its configuration under ``bridge_run``. While the
