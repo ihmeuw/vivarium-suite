@@ -124,10 +124,11 @@ build-env: # Create a new environment with installed packages
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
+# 	Without VIRTUAL_ENV, uv targets the conda env that conda run activates, not a stale venv.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	conda run --no-capture-output -n $(name) uv pip install vivarium-build-utils
+	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
-	conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 # 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
-	@conda run --no-capture-output -n $(name) uv pip list --editable --format=freeze | grep -q . \
+	@env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }

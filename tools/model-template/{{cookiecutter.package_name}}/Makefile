@@ -226,10 +226,11 @@ build-env: # Create a new environment with installed packages
 .PHONY: _build-env
 _build-env:
 	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
+# 	Without VIRTUAL_ENV, uv targets the conda env that conda run activates, not a stale venv.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip install vivarium-build-utils
+	env -u VIRTUAL_ENV conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS.
-	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) \
+	env -u VIRTUAL_ENV conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) \
 		$(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 # 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
 	@if [ "$(lfs)" = "yes" ]; then \
@@ -238,7 +239,7 @@ _build-env:
 		conda run --no-capture-output $(CONDA_ENV_FLAG) git lfs install; \
 	fi
 # 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
-	@conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip list --editable --format=freeze | grep -q . \
+	@env -u VIRTUAL_ENV conda run --no-capture-output $(CONDA_ENV_FLAG) uv pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into $(if $(path),$(path),$(name)) from $(CURDIR)." >&2; exit 1; }
 
 # Default shared environment directory (set by Jenkins nightly builds)
@@ -246,6 +247,10 @@ SHARED_ENV_DIR ?= /mnt/team/simulation_science/priv/engineering/jenkins/shared_e
 
 .PHONY: build-shared-env
 build-shared-env: # Create a lightweight venv overlay on top of a shared conda environment
+	@command -v uv > /dev/null || { \
+		echo "Error: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2; \
+		exit 1; \
+	}
 #	Validate arguments - exit if unsupported arguments are passed
 	$(call validate_make_args,build-shared-env,type venv_dir venv_name shared_env_dir force)
 
