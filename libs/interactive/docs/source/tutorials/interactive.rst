@@ -305,6 +305,15 @@ your model's components define, is changed through the ``configuration``
 parameter or on the simulation's configuration before setup, as below. The
 result is the same either way.
 
+.. testcode::
+
+    # Setting attributes ensures you are updating existing keys, rather than
+    # creating new ones
+    sim.configuration.population.population_size = 1_000
+    # .update can be a more concise alternative -- but note that this will not
+    # warn you if you are adding new keys, e.g. due to a typo!
+    # sim.configuration.update({'population': {'population_size': 1_000}})
+
 To find a key's path, pass part of it to
 :meth:`~vivarium.interactive.simulation.Simulation.find_configuration`. It
 returns the matching keys, and in IPython or Jupyter the list displays each one
@@ -333,15 +342,6 @@ so that part needs brackets when you set it:
     sim.configuration[
         "disease_state.infected_with_lower_respiratory_infections"
     ].data_sources.excess_mortality_rate = 0.01
-
-.. testcode::
-
-    # Setting attributes ensures you are updating existing keys, rather than
-    # creating new ones
-    sim.configuration.population.population_size = 1_000
-    # .update can be a more concise alternative -- but note that this will not
-    # warn you if you are adding new keys, e.g. due to a typo!
-    # sim.configuration.update({'population': {'population_size': 1_000}})
 
 We then need to call the
 :meth:`~vivarium.interactive.simulation.Simulation.setup` method on the
