@@ -17,6 +17,7 @@ BASE_MK = Path(get_makefiles_path()) / "base.mk"
 # By full path, so a test can leave make's directory off PATH.
 MAKE = shutil.which("make") or "make"
 STUB_MARKER = "STUB UV CALLED"
+PIP_MARKER = "STUB PIP CALLED"
 GUARD_MESSAGE = "builds its environment from uv.lock"
 
 
@@ -28,6 +29,10 @@ def stub_env(tmp_path: Path) -> dict[str, str]:
     uv = bin_dir / "uv"
     uv.write_text(f'#!/bin/sh\necho "{STUB_MARKER}"\nexit 3\n')
     uv.chmod(0o755)
+    # make install must not call pip, so a pip call fails before the stub uv is reached.
+    pip = bin_dir / "pip"
+    pip.write_text(f'#!/bin/sh\necho "{PIP_MARKER}"\nexit 4\n')
+    pip.chmod(0o755)
     env = {k: v for k, v in os.environ.items() if k != "JENKINS_URL"}
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
     return env
@@ -81,6 +86,7 @@ def test_installs_otherwise(
     assert GUARD_MESSAGE not in result.stdout
     # Reaching the stub uv shows the guard let the install run.
     assert STUB_MARKER in result.stdout
+    assert PIP_MARKER not in result.stdout
 
 
 def test_fails_clearly_without_uv(tmp_path: Path) -> None:
