@@ -231,11 +231,17 @@ def buildEnvironment(String model, String envType) {
             // Load shared makefiles from Jenkins shared library
             load_shared_files()
 
+            // build-env and make install need uv on PATH.
+            String uvDir = "${env.WORKSPACE}@tmp/uv"
+            install_uv(uvDir)
+
             // Build the environment directly at the _current path.
-            sh """
-                ${env.ACTIVATE_BASE}
-                make build-env type=${envType} name=${currentName} path=${currentPath}
-            """
+            withEnv(["PATH+UV=${uvDir}"]) {
+                sh """
+                    ${env.ACTIVATE_BASE}
+                    make build-env type=${envType} name=${currentName} path=${currentPath}
+                """
+            }
         }
 
         // Set permissions - readable by all, writable only by Jenkins
