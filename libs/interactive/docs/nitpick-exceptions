@@ -29,14 +29,15 @@ py:class loguru.Logger
 # the ``[Resource]`` parameter, so the unresolved target is always ``nx.DiGraph``.
 py:class nx.DiGraph
 
-# vivarium-config-tree: type annotations in source use the bare name
-# ``ConfigTree`` (via ``from vivarium.config_tree import ConfigTree``), which
-# autodoc-typehints renders as a bare ``:class:`ConfigTree``` cross-ref that
-# Sphinx can't match against the qualified intersphinx target. Fully-qualified
-# references (e.g. ``:class:`~vivarium.config_tree.main.ConfigTree``` in
-# docstrings/rst) resolve correctly via intersphinx; only the autodoc-derived
-# bare form needs suppression.
+# vivarium-config-tree: type annotations in source use the bare names
+# ``ConfigTree`` and ``ConfigNode`` (via ``from vivarium.config_tree.main import
+# ConfigNode, ConfigTree``), which autodoc-typehints renders as bare
+# ``:class:`ConfigTree``` cross-refs that Sphinx can't match against the
+# qualified intersphinx target. Fully-qualified references (e.g.
+# ``:class:`~vivarium.config_tree.main.ConfigTree``` in docstrings/rst) resolve
+# correctly via intersphinx; only the autodoc-derived bare form needs suppression.
 py:class ConfigTree
+py:class ConfigNode
 
 # Special methods that Sphinx can't resolve
 py:meth __init__

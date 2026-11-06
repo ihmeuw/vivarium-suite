@@ -92,6 +92,9 @@ To see what methods are available, use
 .. testoutput::
    :options: +ELLIPSIS, +NORMALIZE_WHITESPACE
 
+   Find configuration
+       find_configuration()   Find configuration keys whose path matches a pattern.
+
    Run the simulation
        setup()   Set up the simulation and create the initial population.
        step()    Advance the simulation one step.

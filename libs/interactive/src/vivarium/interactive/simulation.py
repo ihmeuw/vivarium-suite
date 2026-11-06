@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     import networkx as nx
-    from vivarium.config_tree.main import ConfigTree
+    from vivarium.config_tree.main import ConfigNode, ConfigTree
     from vivarium.engine import Component
     from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -72,6 +72,7 @@ _WORD_SEPARATORS = frozenset({".", "_"})
 """Characters :meth:`Simulation.find_resources` treats as word boundaries."""
 
 _HELP_SECTIONS = (
+    ("Find configuration", ("find_configuration",)),
     (
         "Run the simulation",
         ("setup", "step", "take_steps", "run_for", "run_until", "run", "current_time"),
@@ -305,6 +306,50 @@ class Simulation(BaseSimulation):
                 lines.append(f"    {label:<{width}}  {summary}")
             sections.append("\n".join(lines))
         print("\n\n".join(sections))
+
+    ######################
+    # Find configuration #
+    ######################
+
+    def find_configuration(
+        self, pattern: str = "", *, regex: bool = False
+    ) -> list[ConfigNode]:
+        """Find configuration keys whose path matches a pattern.
+
+        Use this to locate a key when you know roughly what it is called but not
+        where it sits in the configuration. IPython displays each result as its
+        dotted path from ``sim.configuration``, so a key found as
+        ``time.step_size`` is set with ``sim.configuration.time.step_size = ...``
+        before setup.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against each key's
+            dotted path from ``sim.configuration``. It may appear anywhere in the
+            path. An empty pattern, the default, matches every key.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a path copied out of an earlier result always
+            finds itself even when it contains characters a regular expression
+            would read as syntax.
+
+        Returns
+        -------
+            The matching keys' nodes, in the order the keys were added to the
+            configuration.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+        """
+        matcher = _compile_pattern(pattern, regex)
+        return [
+            node
+            for node in self.configuration.leaves()
+            if node.path is not None and matcher.search(node.path)
+        ]
 
     ######################
     # Run the simulation #
@@ -695,13 +740,7 @@ class Simulation(BaseSimulation):
         The resource graph holds no combiners or post-processors, so this cannot
         find those; printing a pipeline you have already found reports them.
         """
-        try:
-            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
-        except re.error as error:
-            raise ValueError(
-                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
-                " search for this text literally."
-            ) from error
+        matcher = _compile_pattern(pattern, regex)
 
         rows: list[_ResourceRow] = []
         for resource in self._resource.get_graph().nodes:
@@ -1192,6 +1231,17 @@ class _ResourceRow(NamedTuple):
     name: str
     resource_type: str
     component: str
+
+
+def _compile_pattern(pattern: str, regex: bool) -> re.Pattern[str]:
+    """Compile a case-insensitive search pattern, matched literally unless ``regex``."""
+    try:
+        return re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+    except re.error as error:
+        raise ValueError(
+            f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+            " search for this text literally."
+        ) from error
 
 
 def _match_rank(matcher: re.Pattern[str], name: str) -> int:
