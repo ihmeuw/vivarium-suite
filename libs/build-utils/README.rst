@@ -118,10 +118,7 @@ A beta is not released after its final.
 In ``vivarium-suite``, betas release from ``beta/**`` branches and finals release
 from ``main``. A hotfix of the last final (``1.2.0 -> 1.2.1``) can release from
 ``main`` while ``1.3.0`` is in beta, and the next beta and the final still pass the
-step check. After the hotfix, bring ``main`` into the beta branch through a PR, the
-same way as for other long-lived branches, and keep the beta entries at the top of the
-CHANGELOG. The hotfix version is already tagged, so the push to the beta branch
-releases nothing.
+step check.
 
 The Jenkins deploy runs ``make validate-tag`` before ``make tag-version``. Jenkins
 sets no release tag, so the target checks the tag ``tag-version`` would create,
