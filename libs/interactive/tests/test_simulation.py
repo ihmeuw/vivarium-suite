@@ -945,8 +945,8 @@ class TestFindConfiguration:
         return Simulation(components=[ConfiguredRisk()])
 
     @staticmethod
-    def paths(nodes: list[ConfigNode]) -> list[str | None]:
-        return [node.path for node in nodes]
+    def paths(nodes: list[ConfigNode]) -> list[str]:
+        return [node.path for node in nodes if node.path is not None]
 
     def test_returns_the_configuration_nodes(self, sim: Simulation) -> None:
         """Returning the nodes themselves is what lets a researcher act on a result."""
@@ -959,7 +959,7 @@ class TestFindConfiguration:
         the ``configuration`` key the tree sits under in the model specification."""
         paths = self.paths(sim.find_configuration())
         assert "risk.child_wasting.distribution_type" in paths
-        assert not [path for path in paths if path and path.startswith("configuration.")]
+        assert not [path for path in paths if path.startswith("configuration.")]
 
     def test_only_leaves_are_returned(self, sim: Simulation) -> None:
         assert self.paths(sim.find_configuration("exposure_bounds")) == [
@@ -987,7 +987,7 @@ class TestFindConfiguration:
         """Results are not ranked, so they follow the order keys were added."""
         every_path = self.paths(sim.configuration.leaves())
         found = self.paths(sim.find_configuration("e"))
-        assert found == [path for path in every_path if path and "e" in path]
+        assert found == [path for path in every_path if "e" in path]
 
     def test_no_pattern_lists_every_key(self, sim: Simulation) -> None:
         every_path = self.paths(sim.configuration.leaves())
