@@ -113,7 +113,9 @@ A CHANGELOG entry of ``**X.Y.ZbN - MM/DD/YY**`` releases a beta, for example
 - beta to beta: the next beta of the same version (``1.3.0b1 -> 1.3.0b2``).
 - beta to final: the final of that version (``1.3.0b2 -> 1.3.0``).
 
-A beta is not released after its final.
+A beta is not released after its final, and not for a version below the newest
+final. If ``main`` releases ``2.0.0`` while ``1.3.0`` is in beta, the next beta is
+``2.1.0b1``, not ``1.3.0b2``.
 
 In ``vivarium-suite``, betas release from ``beta/**`` branches and finals release
 from ``main``. A hotfix of the last final (``1.2.0 -> 1.2.1``) can release from
