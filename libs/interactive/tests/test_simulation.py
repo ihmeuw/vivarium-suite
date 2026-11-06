@@ -14,7 +14,7 @@ import pytest
 import yaml
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
-from vivarium.config_tree import ConfigTree
+from vivarium.config_tree import ConfigNode, ConfigTree
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import BaseSimulation, Builder
 from vivarium.engine.framework.event import Event
@@ -31,6 +31,7 @@ from tests.helpers import (
     AttributePipelineCreator,
     ColumnCreator,
     ColumnCreatorAndRequirer,
+    ConfiguredRisk,
     DiamondAttributeCreator,
     Hogwarts,
     HogwartsResultsStratifier,
@@ -934,6 +935,88 @@ class TestFindResources:
     ) -> None:
         """Literal matching cannot raise, whatever the text contains."""
         assert sim.find_resources("test_column_[").empty
+
+
+class TestFindConfiguration:
+    """Tests for locating configuration keys by path."""
+
+    @pytest.fixture(scope="class")
+    def sim(self) -> Simulation:
+        return Simulation(components=[ConfiguredRisk()])
+
+    @staticmethod
+    def paths(nodes: list[ConfigNode]) -> list[str | None]:
+        return [node.path for node in nodes]
+
+    def test_returns_the_configuration_nodes(self, sim: Simulation) -> None:
+        """Returning the nodes themselves is what lets a researcher act on a result."""
+        found = sim.find_configuration("time.step_size")
+        assert self.paths(found) == ["time.step_size"]
+        assert found[0] is sim.configuration.time._children["step_size"]
+
+    def test_paths_start_from_the_simulation_configuration(self, sim: Simulation) -> None:
+        """A path reads as what follows ``sim.configuration.``, so it never carries
+        the ``configuration`` key the tree sits under in the model specification."""
+        paths = self.paths(sim.find_configuration())
+        assert "risk.child_wasting.distribution_type" in paths
+        assert not [path for path in paths if path and path.startswith("configuration.")]
+
+    def test_only_leaves_are_returned(self, sim: Simulation) -> None:
+        assert self.paths(sim.find_configuration("exposure_bounds")) == [
+            "risk.child_wasting.exposure_bounds.lower",
+            "risk.child_wasting.exposure_bounds.upper",
+        ]
+
+    def test_a_fragment_need_not_be_the_whole_path(self, sim: Simulation) -> None:
+        assert self.paths(sim.find_configuration("wasting.dist")) == [
+            "risk.child_wasting.distribution_type"
+        ]
+
+    def test_matching_is_case_insensitive(self, sim: Simulation) -> None:
+        assert self.paths(sim.find_configuration("TIME.STEP_SIZE")) == ["time.step_size"]
+
+    def test_the_pattern_is_literal_by_default(self, sim: Simulation) -> None:
+        assert sim.find_configuration("risk.child.wasting") == []
+
+    def test_regex_matching_is_opt_in(self, sim: Simulation) -> None:
+        assert self.paths(sim.find_configuration("^time\\.step", regex=True)) == [
+            "time.step_size"
+        ]
+
+    def test_results_keep_configuration_order(self, sim: Simulation) -> None:
+        """Results are not ranked, so they follow the order keys were added."""
+        every_path = self.paths(sim.configuration.leaves())
+        found = self.paths(sim.find_configuration("e"))
+        assert found == [path for path in every_path if path and "e" in path]
+
+    def test_no_pattern_lists_every_key(self, sim: Simulation) -> None:
+        every_path = self.paths(sim.configuration.leaves())
+        assert self.paths(sim.find_configuration()) == every_path
+        assert self.paths(sim.find_configuration("")) == every_path
+
+    def test_no_match_returns_an_empty_list(self, sim: Simulation) -> None:
+        assert sim.find_configuration("no_such_key") == []
+
+    def test_an_invalid_regex_raises_a_useful_error(self, sim: Simulation) -> None:
+        with pytest.raises(ValueError, match="Invalid regular expression 'time\\['"):
+            sim.find_configuration("time[", regex=True)
+
+    def test_searching_does_not_mark_keys_used(self) -> None:
+        """The unused-key warning at the end of a run must not count a search as a use."""
+        sim = Simulation(components=[ConfiguredRisk()], setup=False)
+        unused = sim.configuration.unused_keys()
+        sim.find_configuration()
+        assert sim.configuration.unused_keys() == unused
+
+    def test_a_found_path_sets_the_key_before_setup(self) -> None:
+        sim = Simulation(components=[ConfiguredRisk()], setup=False)
+        [found] = sim.find_configuration("distribution_type")
+        assert found.path == "risk.child_wasting.distribution_type"
+
+        sim.configuration["risk.child_wasting"].distribution_type = "dichotomous"
+        sim.setup()
+
+        assert found.get_value() == "dichotomous"
 
 
 class TestPrintDependencies:

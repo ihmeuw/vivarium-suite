@@ -305,6 +305,35 @@ your model's components define, is changed through the ``configuration``
 parameter or on the simulation's configuration before setup, as below. The
 result is the same either way.
 
+To find a key's path, pass part of it to
+:meth:`~vivarium.interactive.simulation.Simulation.find_configuration`. It
+returns the matching keys, and in IPython or Jupyter the list displays each one
+as its path from ``sim.configuration``, here
+``[population.population_size, population.age_start, population.age_end]``.
+Like :meth:`~vivarium.interactive.simulation.Simulation.find_resources`, it
+matches the text literally and ignores case, takes ``regex=True`` for a regular
+expression, and lists every key when called with no pattern.
+
+.. testcode::
+
+    found = sim.find_configuration("population")
+    print([key.path for key in found])
+
+.. testoutput::
+
+    ['population.population_size', 'population.age_start', 'population.age_end']
+
+A component's name can contain dots, and its keys sit under that whole name. The
+path ``disease_state.infected_with_lower_respiratory_infections.data_sources.excess_mortality_rate``
+starts with the single key ``disease_state.infected_with_lower_respiratory_infections``,
+so that part needs brackets when you set it:
+
+.. code-block:: python
+
+    sim.configuration[
+        "disease_state.infected_with_lower_respiratory_infections"
+    ].data_sources.excess_mortality_rate = 0.01
+
 .. testcode::
 
     # Setting attributes ensures you are updating existing keys, rather than
