@@ -77,7 +77,10 @@ To release a beta of a package under ``libs/``, add ``bN`` to the version, for e
 ``**4.2.0b1 - 05/04/26**``, on a ``beta/**`` branch such as ``beta/engine-v4.2.0``. Merge
 feature branches into the beta branch, and each CHANGELOG update pushed to it releases the next
 beta. When the version is ready, add the final entry and merge the beta branch into ``main``.
-Betas do not release from ``main``, and finals do not release from a beta branch. This keeps
+Betas do not release from ``main``, and finals do not release from a beta branch. A manual
+``workflow_dispatch`` release is not restricted this way, so it can be used for recovery.
+After a hotfix releases from ``main``, merge ``main`` into the beta branch with a merge commit
+and keep the beta entries at the top of the CHANGELOG. This keeps
 beta code off ``main``, so a hotfix of the last final can still release from ``main``. See
 "Beta releases" in ``libs/build-utils/README.rst`` for the allowed version steps. The Claude Code plugins do not support betas: their workflows read only
 ``X.Y.Z``, so a plugin heading of ``**0.2.0b1 - ...**`` would be released as ``0.2.0``.

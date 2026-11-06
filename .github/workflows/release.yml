@@ -46,6 +46,8 @@ jobs:
         env:
           PACKAGE: ${{ github.event.inputs.package }}
           VERSION: ${{ github.event.inputs.version }}
+          # Passed through env, not inlined, because ref names can contain shell metacharacters
+          BRANCH: ${{ github.ref_name }}
         run: |
           rm -f package_versions.txt
           touch package_versions.txt
@@ -95,7 +97,6 @@ jobs:
             echo "${PACKAGE} ${VERSION}" >> package_versions.txt
           else
             # Push to main or a beta branch. Detect all changed CHANGELOG.rst files and parse versions.
-            BRANCH="${{ github.ref_name }}"
             BEFORE="${{ github.event.before }}"
             AFTER="${{ github.event.after }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
@@ -126,6 +127,8 @@ jobs:
                 continue
               fi
 
+              # Pushes only. workflow_dispatch and release events stay unrestricted as recovery
+              # paths, for example a hotfix released from a branch cut at an old release tag.
               if [[ "$BRANCH" == beta/* && "$VERSION" != *b* ]]; then
                 echo "${LIB} ${VERSION} is a final version. Finals release from main, not ${BRANCH}."
                 exit 1
