@@ -46,13 +46,15 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependency-graph requirements
-        run: pip install packaging
+      - name: Set up uv
+        # The dependency_graph CLI runs from in-tree source, so each call brings its own
+        # runtime dependency with `uv run --with packaging`.
+        uses: astral-sh/setup-uv@v4
 
       - name: Collect declared candidates
         id: detect
         run: |
-          MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+          MATRIX=$(PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph \
             build-candidate-matrix)
           echo "Candidate matrix: ${MATRIX}"
           echo "matrix=${MATRIX}" >> $GITHUB_OUTPUT
