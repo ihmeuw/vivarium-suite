@@ -116,7 +116,7 @@ help: # Curated help message
 	echo "  7. test-docs                        Test documentation examples"; \
 	echo "  8. Deploy the package (Artifactory only)"; \
 	echo "     a. tag-version                   Tag current version and push to git"; \
-	echo "     b. build-package                 Build pip wheel package"; \
+	echo "     b. build-package                 Build the sdist and wheel with uv"; \
 	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
 	echo "  9. deploy-docs                      Deploy documentation to shared server"; \
 	echo " 10. clean                            Clean build artifacts and temporary files"; \
@@ -294,7 +294,7 @@ check-release-tag: # Fail if this version was already released from another comm
 	fi
 
 .PHONY: build-package
-build-package: # Build pip wheel package
+build-package: # Build the sdist and wheel with uv
 	uv build
 
 .PHONY: deploy-package-artifactory
