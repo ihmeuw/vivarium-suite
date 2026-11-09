@@ -1904,6 +1904,31 @@ def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apa
     assert not (tmp_path / "out").exists()
 
 
+@pytest.mark.parametrize(
+    "command",
+    ["run --until", "preview --until", "force"],
+    ids=["run", "preview", "force"],
+)
+def test_two_steps_with_one_name_and_an_unknown_step_report_the_shared_name_as_a_definition_problem(
+    tmp_path: Path, command: str
+) -> None:
+    """With two steps named 'population' and an unknown step 'bb' given to --until or force, the command exits 2 with "Error: Two steps are named 'population'; ..." and no usage line or "Invalid value"."""
+    path = _write_definition(tmp_path, _SHARED_NAME)
+    verb, *option = command.split()
+
+    result = _invoke(verb, str(path), *option, "bb")
+
+    assert result.exit_code == 2, _describe(result)
+    expected = (
+        "Error: Two steps are named 'population'; pass name= to python_step or "
+        "notebook_step to tell them apart."
+    )
+    assert expected in result.stderr, result.stderr
+    assert "Usage:" not in result.stderr, result.stderr
+    assert "Invalid value" not in result.stderr, result.stderr
+    assert not (tmp_path / "state").exists()
+
+
 # A definition that does not parse (MIC-7785)
 
 _UNPARSABLE = "import sys\n\n\ndef pipeline(:\n    pass\n"

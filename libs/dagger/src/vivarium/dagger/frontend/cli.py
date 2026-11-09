@@ -232,7 +232,10 @@ def _pipeline_error(
     """Return the click error for a PipelineError that is not a step failure."""
     message = str(error)
     steps = {task.name for task in pipeline.tasks}
-    if any(name not in steps for name in requested):
+    # The verbs report a shared step name before an unknown one, so with a shared name
+    # the error is about the definition even when a requested step is also unknown.
+    unique = len(steps) == len(pipeline.tasks)
+    if unique and any(name not in steps for name in requested):
         return click.BadParameter(message, param_hint=param_hint)
     code = _stop_code(error)
     if code is not None:

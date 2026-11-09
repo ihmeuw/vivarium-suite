@@ -209,7 +209,8 @@ Each of these exits with status 2 before any step runs:
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
 - Two steps have the same name. ``dagger`` names it and says to pass ``name=`` to
-  ``python_step`` or ``notebook_step`` to tell the steps apart.
+  ``python_step`` or ``notebook_step`` to tell the steps apart. This is reported first,
+  even when ``--until`` or ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
   the reason.
