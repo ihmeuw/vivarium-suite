@@ -1,4 +1,4 @@
-**4.14.0 - 11/06/26**
+**4.14.0 - 11/09/26**
 
 - Reject a beta of a version below the newest final release, so a beta line that a later
   final overtook is renumbered rather than continued
