@@ -467,8 +467,9 @@ def test_runner_records_system_exit_and_keyboard_interrupt_from_a_step_as_failur
 def test_runner_reports_on_stderr_when_the_result_directory_does_not_exist(
     tmp_path: Path,
 ) -> None:
-    """A result path in a missing directory gives exit status 1, no result file, and a message on the process's stderr."""
-    recipe = _command_payload("quiet_step", tmp_path, "true")
+    """A result path in a missing directory gives exit status 1, runs nothing, writes no result, and says on stderr that the directory does not exist on this host and must be on a filesystem every node can see."""
+    marker = tmp_path / "ran"
+    recipe = _command_payload("quiet_step", tmp_path, f"touch {shlex.quote(str(marker))}")
     payload = _write_payload(tmp_path / "step.payload.json", recipe)
     result_path = tmp_path / "missing_dir" / _RESULT_NAME
 
@@ -476,7 +477,9 @@ def test_runner_reports_on_stderr_when_the_result_directory_does_not_exist(
 
     assert process.returncode == 1
     assert not result_path.exists()
-    assert "missing_dir" in process.stderr
+    assert not marker.exists()
+    assert f"{result_path.parent} does not exist on {socket.gethostname()}" in process.stderr
+    assert "every node can see" in process.stderr
 
 
 def test_runner_exits_with_status_two_on_a_usage_error(tmp_path: Path) -> None:

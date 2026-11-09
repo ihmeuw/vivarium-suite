@@ -176,10 +176,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns
     -------
-        0 if the step succeeded and its result was written; 1 if the step failed, an
-        earlier result could not be removed, or the capture files or the result could not
-        be written, in which case the reason goes to standard error. A usage error exits
-        with status 2.
+        0 if the step succeeded and its result was written; 1 if the step failed, the
+        result's directory does not exist on this node, an earlier result could not be
+        removed, or the capture files or the result could not be written, in which case the
+        reason goes to standard error. A missing directory runs nothing, and its message
+        names this host and says that the build's state directory must be on a
+        filesystem that every node can see. A usage error exits with status 2.
     """
     parser = argparse.ArgumentParser(
         prog=f"python -m {_MODULE}",
@@ -190,6 +192,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     payload_path: Path = args.payload
     result_path: Path = args.result
+    if not result_path.parent.exists():
+        print(
+            f"{_MODULE}: the result's directory {result_path.parent} does not exist on "
+            f"{socket.gethostname()}. A bridged build's state directory must be on a "
+            "filesystem that every node can see, not on a node's own disk such as /tmp.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
     try:
         _remove_earlier_result(result_path)
     except OSError as remove_error:
