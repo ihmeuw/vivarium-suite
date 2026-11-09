@@ -27,6 +27,32 @@ SELECTED_MARKER = "dagger_selected"
 """Marker :func:`build` attaches to each task named in its ``selected`` argument."""
 
 
+class TaskExited(SystemExit):
+    """A task raised :class:`SystemExit`, as ``sys.exit`` does, while :func:`build` ran it.
+
+    pytask records a task's ``Exception`` or ``KeyboardInterrupt`` but lets a
+    ``SystemExit`` end the build, so this error names the task. It keeps the task's exit
+    code, so unless it is caught it ends the process as the task's own ``SystemExit``
+    would have, and it is chained from that ``SystemExit``. Only a task that pytask runs
+    in this process through :func:`to_pytask_task` raises it; the Jobmon bridge's node
+    runner runs a step's body itself and does not.
+
+    Parameters
+    ----------
+    task
+        The name of the task that exited.
+    code
+        The task's exit code, as its ``SystemExit`` held it.
+    """
+
+    task: str
+    """The name of the task that exited."""
+
+    def __init__(self, task: str, code: str | int | None) -> None:
+        super().__init__(code)
+        self.task = task
+
+
 def run_command(command: str, env: str | None) -> None:
     """Run ``command`` in a shell with ``env``'s ``bin`` directories first on ``PATH``.
 
@@ -118,7 +144,8 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     and on a command-string ``run`` under ``COMMAND_KEY``. It produces ``task.outputs``
     and keeps ``task`` in its attributes under ``TASK_KEY``. Running it calls a callable
     ``run`` with each loaded input and output by name, or runs a command-string ``run``
-    through :func:`run_command` under the task's ``env``.
+    through :func:`run_command` under the task's ``env``. A ``SystemExit`` from either
+    is raised again as :class:`TaskExited`.
 
     Parameters
     ----------
@@ -146,16 +173,17 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     if shared:
         raise ValueError(f"Task '{task.name}': names {shared} are both inputs and outputs.")
 
-    # frontend.pipeline._exiting_step reads `task` from this closure's frame to name a
-    # step that raised SystemExit, which pytask does not record. Renaming either breaks it.
     def _run(**kwargs: Any) -> None:
-        """Run ``task`` with its loaded inputs and outputs."""
+        """Run ``task`` with its loaded inputs and outputs; raise TaskExited on SystemExit."""
         __tracebackhide__ = True
         kwargs.pop(CODE_ID_KEY, None)
-        if isinstance(task.run, str):
-            run_command(task.run, task.env)
-        else:
-            task.run(**kwargs)
+        try:
+            if isinstance(task.run, str):
+                run_command(task.run, task.env)
+            else:
+                task.run(**kwargs)
+        except SystemExit as error:
+            raise TaskExited(task.name, error.code) from error
 
     if callable(task.run):
         for key in task.outputs:
@@ -227,6 +255,8 @@ def build(
         resolve, or ``selected`` names a task that is not in ``tasks``. Envs are checked
         before any task runs. The error has one line per env that does not resolve,
         naming that env once, the tasks that declare it, and why.
+    TaskExited
+        If a task raises ``SystemExit``, which stops the build.
     """
     tasks = list(tasks)
     check_unique_task_names(tasks)

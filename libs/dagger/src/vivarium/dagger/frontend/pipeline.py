@@ -25,6 +25,7 @@ from pytask import ExitCode, PathNode, Session, TaskOutcome
 
 from vivarium.dagger.backend.build import (
     COMMAND_KEY,
+    TaskExited,
     build,
     describe_exit,
     failure_message,
@@ -239,8 +240,9 @@ def run(
         :class:`StepFailed` describes it by default.
     StepExited
         If a step raises ``SystemExit``, for example by calling ``sys.exit``. It names
-        the step, keeps the step's exit code, and is chained from the step's
-        ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is re-raised as itself.
+        the step, keeps the step's exit code, and is chained from the backend's
+        :class:`~vivarium.dagger.backend.build.TaskExited`, which is chained from the
+        step's own ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is re-raised as itself.
         Either is raised instead of :class:`StepFailed`.
     """
     _check_unique_steps(pipeline)
@@ -253,20 +255,13 @@ def run(
         session = build(pipeline.tasks, pipeline.root, selected=selected, **build_kwargs)
     except ValueError as error:
         raise PipelineError(str(error)) from error
-    except SystemExit as error:
-        # pytask records only Exception and KeyboardInterrupt, so a step's SystemExit
-        # leaves pytask.build unrecorded and the step is found from its traceback.
-        step = _exiting_step(error)
-        if step is None:
-            raise
-        raise StepExited(step, error.code) from error
+    except TaskExited as error:
+        raise StepExited(error.task, error.code) from error
     result = outcomes(session)
     failures = _failures(session)
-    for step, failure in failures.items():
+    for failure in failures.values():
         if isinstance(failure, KeyboardInterrupt):
             raise failure
-        if isinstance(failure, SystemExit):
-            raise StepExited(step, failure.code) from failure
     if failures:
         tasks = {task.name: task for task in pipeline.tasks}
         descriptions = {
@@ -384,23 +379,6 @@ def _failures(session: Session) -> dict[str, BaseException]:
         if report.outcome == TaskOutcome.FAIL and error is not None:
             failures[report.task.name] = _trimmed(error)
     return failures
-
-
-def _exiting_step(error: SystemExit) -> str | None:
-    """Return the step that raised ``error``, from ``task`` in a build ``_run`` frame."""
-    step: str | None = None
-    entry = error.__traceback__
-    while entry is not None:
-        frame = entry.tb_frame
-        task = frame.f_locals.get("task")
-        if (
-            frame.f_globals.get("__name__") == build.__module__
-            and frame.f_code.co_name == "_run"
-            and isinstance(task, Task)
-        ):
-            step = task.name
-        entry = entry.tb_next
-    return step
 
 
 def _trimmed(error: BaseException) -> BaseException:
