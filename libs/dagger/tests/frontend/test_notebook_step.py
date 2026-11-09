@@ -19,6 +19,7 @@ from tests.frontend.notebooks import (
     broken_env,
     code_cell,
     error_output,
+    isolated_jupyter_dirs,
     recorded_errors,
     write_notebook,
     write_source_notebook,
@@ -70,9 +71,6 @@ _DECOY_SPEC: dict[str, Any] = {
 """A user kernelspec that starts a missing python."""
 
 _DECOY_NAMES = ("python3", KERNEL_NAME)
-
-_JUPYTER_DIR_VARIABLES = ("IPYTHONDIR", "JUPYTER_CONFIG_DIR", "JUPYTER_DATA_DIR")
-"""The variables that move IPython's and Jupyter's own directories out of HOME."""
 
 _MARKER = "vivarium-dagger notebook ran"
 
@@ -285,18 +283,6 @@ def _reversed(mapping: Mapping[str, _V]) -> dict[str, _V]:
     return dict(reversed(list(mapping.items())))
 
 
-def _code_cell(cell_id: str, source: str, tags: list[str]) -> dict[str, Any]:
-    """Return an nbformat 4.5 code cell that has not been run."""
-    return {
-        "cell_type": "code",
-        "execution_count": None,
-        "id": cell_id,
-        "metadata": {"tags": tags} if tags else {},
-        "outputs": [],
-        "source": source,
-    }
-
-
 def _write_notebook(
     path: Path,
     parameters: str = "",
@@ -304,18 +290,8 @@ def _write_notebook(
     metadata: Mapping[str, Any] = _MISSING_KERNEL_METADATA,
 ) -> Path:
     """Write a parameters cell and a body cell as a notebook with ``metadata``."""
-    notebook = {
-        "cells": [
-            _code_cell("parameters", parameters, ["parameters"]),
-            _code_cell("body", body, []),
-        ],
-        "metadata": dict(metadata),
-        "nbformat": 4,
-        "nbformat_minor": 5,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(notebook, indent=1), encoding="utf-8")
-    return path
+    cells = [code_cell(parameters, tags=["parameters"]), code_cell(body)]
+    return write_notebook(path, cells, metadata)
 
 
 def _outputs(notebook: Path) -> list[dict[str, Any]]:
@@ -332,15 +308,6 @@ def _stream_text(notebook: Path) -> str:
         if output.get("output_type") == "stream"
     ]
     return "".join(text if isinstance(text, str) else "".join(text) for text in texts)
-
-
-def _errors(notebook: Path) -> list[tuple[str, str]]:
-    """Return the name and value of each error output in the notebook at ``notebook``."""
-    return [
-        (str(output.get("ename")), str(output.get("evalue")))
-        for output in _outputs(notebook)
-        if output.get("output_type") == "error"
-    ]
 
 
 def _registry(tmp_path: Path) -> ArtifactRegistry:
@@ -420,14 +387,9 @@ def _recording_step(tmp_path: Path, registry: ArtifactRegistry, log: Path) -> Ta
 
 
 @pytest.fixture(scope="module", autouse=True)
-def isolated_jupyter_dirs(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+def module_jupyter_dirs(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
     """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
-    base = tmp_path_factory.mktemp("jupyter_dirs")
-    with pytest.MonkeyPatch.context() as patch:
-        for variable in _JUPYTER_DIR_VARIABLES:
-            directory = base / variable.lower()
-            directory.mkdir()
-            patch.setenv(variable, str(directory))
+    with isolated_jupyter_dirs(tmp_path_factory.mktemp("jupyter_dirs")):
         yield
 
 
@@ -1001,7 +963,7 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
     }
     executed = registry.path_for("executed/fails.ipynb")
     assert executed.is_file()
-    assert ("RuntimeError", _FAILURE) in _errors(executed)
+    assert ("RuntimeError", _FAILURE) in recorded_errors(executed)
     assert sorted(tmpdir.iterdir()) == []
 
 

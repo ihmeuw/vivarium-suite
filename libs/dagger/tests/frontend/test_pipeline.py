@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 import traceback
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -13,12 +13,7 @@ import pytest
 from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
 import vivarium.dagger.frontend.pipeline
-from tests.frontend.notebooks import (
-    broken_env,
-    isolated_jupyter_dirs,
-    recorded_errors,
-    write_source_notebook,
-)
+from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.build import TaskExited
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
@@ -804,13 +799,6 @@ _EXECUTED_KEY = "executed/summarize.ipynb"
 
 _REPORT = "its output is in pytask's report for the step."
 """The end of the description of a failed shell command."""
-
-
-@pytest.fixture
-def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
-    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
-    with isolated_jupyter_dirs(tmp_path / "jupyter"):
-        yield
 
 
 def _notebook_pipeline(

@@ -16,12 +16,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner, Result
 
-from tests.frontend.notebooks import (
-    broken_env,
-    isolated_jupyter_dirs,
-    recorded_errors,
-    write_source_notebook,
-)
+from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
 
@@ -1633,13 +1628,6 @@ _RAISES_KEY_ERROR = "{}['no_such_column']"
 
 _WRITES_SUMMARY = "from pathlib import Path\nPath(summary_path).write_text('n\\n1\\n')"
 """A notebook body that writes the summary product."""
-
-
-@pytest.fixture
-def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
-    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
-    with isolated_jupyter_dirs(tmp_path / "jupyter"):
-        yield
 
 
 def _notebook_definition(directory: Path, body: str, env: Path | None = None) -> Path:
