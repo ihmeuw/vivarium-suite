@@ -5,8 +5,12 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
-from vivarium.dagger.frontend import handoff_inputs, handoff_key, python_step
+from vivarium.dagger.frontend import (
+    ArtifactRegistry,
+    handoff_inputs,
+    handoff_key,
+    python_step,
+)
 
 HANDOFF_ROOT = Path(__file__).parent / "handoff"
 LOCATIONS = ["example_location"]

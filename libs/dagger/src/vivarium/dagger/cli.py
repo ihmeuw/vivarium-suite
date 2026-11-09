@@ -19,7 +19,6 @@ or forced as :doc:`/python_pipelines` describes; it runs only in this process, w
 """
 
 from pathlib import Path
-from typing import cast
 
 import click
 from click.core import ParameterSource
@@ -52,8 +51,10 @@ def _resolve_config(ctx: click.Context, param: click.Parameter, value: str) -> P
     """Return a workflow YAML file as its full path, checked to exist; leave a definition as given."""
     if _is_yaml(value):
         path_type = click.Path(exists=True, dir_okay=False, path_type=Path)
-        # path_type=Path makes convert return a Path; click's stubs type it more widely.
-        return cast(Path, path_type.convert(value, param, ctx)).resolve()
+        converted = path_type.convert(value, param, ctx)
+        # path_type=Path makes convert return a Path; older click stubs type it more widely.
+        assert isinstance(converted, Path)
+        return converted.resolve()
     return value
 
 

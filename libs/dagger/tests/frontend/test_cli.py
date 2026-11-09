@@ -1,5 +1,6 @@
 """Tests for the ``dagger`` command (``frontend.cli``)."""
 
+import ast
 import importlib.metadata
 import os
 import re
@@ -15,6 +16,12 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner, Result
 
+from tests.frontend.notebooks import (
+    broken_env,
+    isolated_jupyter_dirs,
+    recorded_errors,
+    write_source_notebook,
+)
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
 
@@ -787,18 +794,24 @@ def test_the_failure_summary_names_the_failed_step_and_the_steps_not_run(
     assert _product(tmp_path, "side").exists()
 
 
-def test_a_failing_command_step_exits_one_and_names_the_called_process_error(
+def test_a_failing_command_step_exits_one_and_gives_the_exit_status_not_the_command(
     tmp_path: Path,
 ) -> None:
-    """A command step that exits non-zero makes 'dagger run' exit 1 and dagger's summary names the step and CalledProcessError."""
+    """A command step running 'exit 3' makes 'dagger run' exit 1; stderr has "Step 'shout' failed: the command exited with status 3; its output is in pytask's report for the step." and neither 'exit 3' nor 'CalledProcessError', and no 'Not run because' line; pytask's report on stdout still shows CalledProcessError."""
     path = _write_definition(tmp_path, _COMMAND_FAILS)
 
     result = _invoke("run", str(path))
 
     assert result.exit_code == 1, _describe(result)
-    assert "Step 'shout' failed: CalledProcessError" in result.stderr
-    assert "exit 3" in result.stderr
-    assert "Not run because" not in result.stderr
+    errors = result.stderr
+    assert (
+        "Step 'shout' failed: the command exited with status 3; its output is in pytask's "
+        "report for the step."
+    ) in errors, errors
+    assert "exit 3" not in errors
+    assert "CalledProcessError" not in errors
+    assert "Not run because" not in errors
+    assert "CalledProcessError" in result.stdout, result.stdout
 
 
 def test_an_interrupted_run_exits_130_and_says_rerunning_continues(tmp_path: Path) -> None:
@@ -1573,3 +1586,443 @@ def test_importing_the_cli_does_not_import_jobmon() -> None:
 
     assert completed.returncode == 0, completed.stderr
     assert completed.stdout.strip() == "False"
+
+
+# A failing notebook step (MIC-7785)
+
+_NOTEBOOK_PIPELINE = """\
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, notebook_step, python_step
+
+HERE = Path(__file__).resolve().parent
+ENV = __ENV__
+
+
+def read_summary(summary):
+    return pd.read_csv(summary)
+
+
+def pipeline():
+    registry = ArtifactRegistry(HERE / "out", "run1")
+    summarize = notebook_step(
+        HERE / "summarize.ipynb",
+        executed="executed/summarize.ipynb",
+        registry=registry,
+        env=ENV,
+        produces={"summary_path": "summary.csv"},
+        name="summarize",
+    )
+    report = python_step(
+        read_summary,
+        inputs={"summary": "summary.csv"},
+        produces="report.parquet",
+        registry=registry,
+        name="report",
+    )
+    return Pipeline([summarize, report], HERE / "state", registry)
+"""
+"""A definition of the notebook step 'summarize', which runs summarize.ipynb next to the
+definition under ENV and writes 'summary.csv', and the python step 'report' that reads it."""
+
+_RAISES_KEY_ERROR = "{}['no_such_column']"
+"""A notebook body that raises KeyError('no_such_column')."""
+
+_WRITES_SUMMARY = "from pathlib import Path\nPath(summary_path).write_text('n\\n1\\n')"
+"""A notebook body that writes the summary product."""
+
+
+@pytest.fixture
+def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
+    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
+    with isolated_jupyter_dirs(tmp_path / "jupyter"):
+        yield
+
+
+def _notebook_definition(directory: Path, body: str, env: Path | None = None) -> Path:
+    """Write summarize.ipynb running ``body`` and a definition running it under ``env``.
+
+    ``None`` runs the notebook in this process's environment.
+    """
+    write_source_notebook(directory / "summarize.ipynb", "summary_path = 'unset'", body)
+    declared = "sys.prefix" if env is None else repr(str(env))
+    return _write_definition(directory, _NOTEBOOK_PIPELINE.replace("__ENV__", declared))
+
+
+def _executed(directory: Path) -> Path:
+    """Return the executed notebook's absolute path for a definition in ``directory``."""
+    return (directory / "out" / "run1" / "executed" / "summarize.ipynb").resolve()
+
+
+def _key_error_line(directory: Path) -> str:
+    """Return the summary line for the notebook in ``directory`` that raised KeyError."""
+    return (
+        "Step 'summarize' failed: notebook summarize.ipynb raised KeyError: "
+        "'no_such_column' in cell In [3]. The executed notebook, with the error, is at "
+        f"{_executed(directory)}."
+    )
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebook_exits_one_naming_the_step_notebook_cell_error_and_executed_path(
+    tmp_path: Path,
+) -> None:
+    """A definition whose notebook step 'summarize' raises KeyError('no_such_column') in its body cell makes 'dagger run -c def.py --local' exit 1; stderr has "Step 'summarize' failed: notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The executed notebook, with the error, is at <path>." with the executed notebook's absolute path, and that file holds the error."""
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    assert _key_error_line(tmp_path) in result.stderr, result.stderr
+    assert ("KeyError", "'no_such_column'") in recorded_errors(_executed(tmp_path))
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebooks_generated_command_is_in_pytasks_report_not_in_daggers_summary(
+    tmp_path: Path,
+) -> None:
+    """For a failing notebook step, stderr contains neither 'papermill', 'ipykernel' nor 'mkdir -p', while stdout, pytask's report, still contains the papermill command."""
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    for text in ("papermill", "ipykernel", "mkdir -p"):
+        assert text not in result.stderr, result.stderr
+    assert "papermill" in result.stdout, result.stdout
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebook_lists_its_downstream_step_as_not_run(tmp_path: Path) -> None:
+    """A python step that reads the failing notebook's product is listed on stderr as not run because an upstream step failed."""
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    assert "Not run because an upstream step failed: 'report'." in result.stderr
+    assert not _product(tmp_path, "report").exists()
+
+
+def test_a_notebook_that_fails_before_it_runs_exits_one_with_the_exit_status(
+    tmp_path: Path,
+) -> None:
+    """A notebook step whose env's python exits 1 before papermill starts makes 'dagger run' exit 1; stderr names the step and the notebook, says it left no error in an executed notebook at its path, gives 'the command exited with status 1', and does not contain the generated command."""
+    env = broken_env(tmp_path / "broken_env")
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR, env=env)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    expected = (
+        "Step 'summarize' failed: notebook summarize.ipynb left no error in an executed "
+        f"notebook at {_executed(tmp_path)}, and the command exited with status 1; its "
+        "output is in pytask's report for the step."
+    )
+    assert expected in result.stderr, result.stderr
+    assert "papermill" not in result.stderr
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_the_installed_dagger_script_reports_a_failing_notebook_end_to_end(
+    tmp_path: Path,
+) -> None:
+    """End to end: the installed dagger script, run in a subprocess on a definition whose notebook raises KeyError, exits 1; its stderr has the one-line summary naming the step, the notebook, 'In [3]', the KeyError and the executed path, and no 'papermill'; its stdout has pytask's report with the notebook's traceback; the summary line is under 300 characters apart from the executed path."""
+    script = Path(sys.executable).parent / "dagger"
+    assert script.is_file(), f"No dagger console script next to {sys.executable}."
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
+
+    completed = subprocess.run(
+        [str(script), "run", "-c", str(path), "--local"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+
+    output = completed.stdout + completed.stderr
+    assert completed.returncode == 1, output
+    lines = completed.stderr.splitlines()
+    [summary] = [line for line in lines if "Step 'summarize' failed:" in line]
+    assert summary.endswith(_key_error_line(tmp_path)), completed.stderr
+    assert len(summary) - len(str(_executed(tmp_path))) < 300, summary
+    assert "papermill" not in completed.stderr, completed.stderr
+    assert "KeyError" in completed.stdout, completed.stdout
+    assert "no_such_column" in completed.stdout, completed.stdout
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_an_operator_fixes_the_notebook_named_in_the_message_and_reruns(
+    tmp_path: Path,
+) -> None:
+    """Use case: after 'dagger run' reports a notebook's KeyError, editing that notebook to stop raising and running the same command again exits 0, and the notebook step and its downstream step both run and write their products."""
+    path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
+    failed = _invoke("run", str(path))
+    assert failed.exit_code == 1, _describe(failed)
+    assert _key_error_line(tmp_path) in failed.stderr, failed.stderr
+    assert not _product(tmp_path, "report").exists()
+
+    write_source_notebook(
+        tmp_path / "summarize.ipynb", "summary_path = 'unset'", _WRITES_SUMMARY
+    )
+    fixed = _invoke("run", str(path))
+
+    assert fixed.exit_code == 0, _describe(fixed)
+    assert recorded_errors(_executed(tmp_path)) == []
+    assert (tmp_path / "out" / "run1" / "summary.csv").read_text() == "n\n1\n"
+    assert _product(tmp_path, "report").exists()
+
+
+# Other errors in step terms (MIC-7785)
+
+_NOTEBOOK_MISTYPED = (
+    _HEADER
+    + """
+from vivarium.dagger.frontend import notebook_step
+
+NOTEBOOK = HERE / "summarize.ipynb"
+ENV = sys.prefix
+INPUTS = {"population_path": "populaton.parquet"}
+
+
+def pipeline():
+    reg = ArtifactRegistry(HERE / "out", "run1")
+    a = step(frame, "population", reg)
+    nb = notebook_step(NOTEBOOK, executed="run.ipynb", registry=reg, env=ENV, inputs=INPUTS)
+    return Pipeline([a, nb], HERE / "state", reg)
+"""
+)
+"""A definition whose notebook step, named by default 'run.ipynb', reads a mistyped key,
+'populaton.parquet'."""
+
+_UNLIKE_EVERY_KEY = (
+    _HEADER
+    + """
+
+BAD = {"path": "zzz"}
+
+
+def pipeline():
+    reg = ArtifactRegistry(HERE / "out", "run1")
+    tasks = [
+        step(frame, "population", reg),
+        step(plus_one, "adults", reg, path="population"),
+        python_step(plus_one, inputs=BAD, produces="s.csv", registry=reg, name="s"),
+    ]
+    return Pipeline(tasks, HERE / "state", reg)
+"""
+)
+"""A definition whose step 's' reads the key 'zzz', which is unlike every registered key."""
+
+_SHARED_NAME = (
+    _HEADER
+    + """
+
+NAME = "population"
+
+
+def pipeline():
+    reg = ArtifactRegistry(HERE / "out", "run1")
+    tasks = [
+        python_step(frame, inputs={}, produces="a.parquet", registry=reg, name=NAME),
+        python_step(frame, inputs={}, produces="b.parquet", registry=reg, name=NAME),
+    ]
+    return Pipeline(tasks, HERE / "state", reg)
+"""
+)
+"""A definition of two steps with different products that are both named 'population'."""
+
+
+def test_a_step_that_calls_sys_exit_is_named_in_the_message(tmp_path: Path) -> None:
+    """A step 'leave' that calls sys.exit(0) makes 'dagger run' exit 1 with "Step 'leave' exited with code 0 before the build finished." on stderr."""
+    path = _write_definition(tmp_path, _EXITS)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    expected = "Step 'leave' exited with code 0 before the build finished."
+    assert expected in result.stderr, result.stderr
+
+
+def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
+    tmp_path: Path,
+) -> None:
+    """A definition whose notebook_step reads a mistyped key exits 2; stderr has "Step '<name>': input '<key>' is unresolved" with the did-you-mean, the definition's notebook_step(...) line, and no notebook_step.py or wiring.py frame."""
+    write_source_notebook(tmp_path / "summarize.ipynb", "population_path = 'unset'")
+    path = _write_definition(tmp_path, _NOTEBOOK_MISTYPED)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert "Step 'run.ipynb': input 'populaton.parquet' is unresolved" in errors, errors
+    assert "Did you mean 'population.parquet'" in errors
+    assert "nb = notebook_step(NOTEBOOK" in errors
+    assert "notebook_step.py" not in errors
+    assert "wiring.py" not in errors
+
+
+def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
+    tmp_path: Path,
+) -> None:
+    """A step reading a key unlike every registered key exits 2; stderr names the step and the key and lists the registered keys in sorted order, and has no did-you-mean."""
+    path = _write_definition(tmp_path, _UNLIKE_EVERY_KEY)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    expected = (
+        "Step 's': input 'zzz' is unresolved: no registered producer and no root input. "
+        "The registered keys are 'adults.parquet', 'population.parquet'."
+    )
+    assert expected in errors, errors
+    assert "Did you mean" not in errors
+
+
+def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apart(
+    tmp_path: Path,
+) -> None:
+    """Two steps with different products and the same name make 'dagger run' and 'dagger preview' exit 2 with "Two steps are named 'population'; pass name= to python_step or notebook_step to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
+    path = _write_definition(tmp_path, _SHARED_NAME)
+    expected = (
+        "Two steps are named 'population'; pass name= to python_step or notebook_step to "
+        "tell them apart."
+    )
+
+    for verb in ("run", "preview"):
+        result = _invoke(verb, str(path))
+
+        assert result.exit_code == 2, f"{verb}\n{_describe(result)}"
+        assert expected in result.stderr, result.stderr
+        assert "Task names must be unique" not in result.output, result.output
+        assert "['" not in result.output, result.output
+    assert not (tmp_path / "state").exists()
+    assert not (tmp_path / "out").exists()
+
+
+# A definition that does not parse (MIC-7785)
+
+_UNPARSABLE = "import sys\n\n\ndef pipeline(:\n    pass\n"
+"""A definition whose fourth line, 'def pipeline(:', is a syntax error."""
+
+_BADLY_INDENTED = "def pipeline():\nreturn None\n"
+"""A definition whose second line, 'return None', is not indented."""
+
+
+def _assert_short_report(
+    result: Result, path: Path, line: int, source: str, kind: str, caret: bool = True
+) -> None:
+    """Assert that ``result`` shows only where ``path`` failed to parse, then dagger's line."""
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    lines = errors.splitlines()
+    [where] = [index for index, text in enumerate(lines) if text.startswith('  File "')]
+    assert path.name in lines[where], errors
+    assert lines[where].endswith(f", line {line}"), errors
+    assert lines[where + 1].strip() == source, errors
+    if caret:
+        carets = lines[where + 2]
+        assert "^" in carets and set(carets) <= {" ", "~", "^"}, errors
+    assert _in_order(
+        errors, lines[where], source, f"\n{kind}: ", "Could not load the definition"
+    ), errors
+    assert "Traceback (most recent call last)" not in errors, errors
+    assert not re.search(r"frames? hidden", errors), errors
+    for fragment in ("vivarium/dagger", "definition.py", "importlib"):
+        assert fragment not in errors, errors
+
+
+def test_a_syntax_error_in_the_definition_shows_only_the_file_line_caret_and_error(
+    tmp_path: Path,
+) -> None:
+    """A definition file with 'def pipeline(:' exits 2; stderr shows the definition's path and line number, the source line, a caret line, and 'SyntaxError: ...', then the 'Could not load the definition' line, with no 'Traceback (most recent call last)', no 'frames hidden' line, and no vivarium/dagger, definition.py or importlib frame."""
+    path = _write_definition(tmp_path, _UNPARSABLE)
+
+    result = _invoke("run", str(path))
+
+    _assert_short_report(result, path, 4, "def pipeline(:", "SyntaxError")
+
+
+def test_an_indentation_error_in_the_definition_is_shown_the_same_way(tmp_path: Path) -> None:
+    """A definition file with a badly indented line exits 2 and shows only its path, line, source line and 'IndentationError: ...', with no traceback."""
+    path = _write_definition(tmp_path, _BADLY_INDENTED)
+
+    result = _invoke("run", str(path))
+
+    _assert_short_report(result, path, 2, "return None", "IndentationError", caret=False)
+
+
+def test_a_syntax_error_in_a_module_the_definition_imports_keeps_the_import_line(
+    tmp_path: Path,
+) -> None:
+    """A definition that imports a sibling module with a syntax error exits 2; stderr shows the definition's import line, a 'frames hidden' line, and the sibling's path, line and 'SyntaxError: ...'."""
+    sibling = f"sibling_{uuid.uuid4().hex[:12]}"
+    (tmp_path / f"{sibling}.py").write_text("x = 1\ndef broken(:\n    pass\n")
+    path = _write_definition(tmp_path, f"import {sibling}\n\n\ndef pipeline():\n    pass\n")
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert _in_order(
+        errors,
+        f"import {sibling}",
+        "framework frame",
+        f'{sibling}.py", line 2',
+        "def broken(:",
+        "SyntaxError: ",
+        "Could not load the definition",
+    ), errors
+    assert re.search(r"\[\d+ framework frames? hidden\]", errors), errors
+
+
+def test_a_syntax_error_with_preview_and_force_is_shown_the_same_way(tmp_path: Path) -> None:
+    """'dagger preview' and 'dagger force' on a definition with a syntax error exit 2 with the same short report as 'dagger run'."""
+    path = _write_definition(tmp_path, _UNPARSABLE)
+    ran = _invoke("run", str(path))
+    _assert_short_report(ran, path, 4, "def pipeline(:", "SyntaxError")
+
+    cases: list[tuple[str, list[str]]] = [("preview", []), ("force", ["a"])]
+    for verb, steps in cases:
+        result = _invoke(verb, str(path), *steps)
+
+        _assert_short_report(result, path, 4, "def pipeline(:", "SyntaxError")
+        assert result.stderr == ran.stderr, verb
+
+
+# Definitions import from the frontend (MIC-7785)
+
+
+def _imported_modules(definition: Path) -> dict[str, set[str]]:
+    """Map each module ``definition`` imports from to the names it imports from it."""
+    imported: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(definition.read_text())):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported.setdefault(node.module, set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                imported.setdefault(alias.name, set())
+    return imported
+
+
+def test_the_example_definitions_import_the_registry_from_the_frontend() -> None:
+    """tests/frontend/pipeline_example/pipeline.py imports nothing from vivarium.dagger.backend, and neither example definition imports from vivarium.dagger.backend.wiring."""
+    here = Path(__file__).parent
+    examples = {
+        name: _imported_modules(here / name / "pipeline.py")
+        for name in ("pipeline_example", "handoff_example")
+    }
+
+    backend = [
+        module
+        for module in examples["pipeline_example"]
+        if f"{module}.".startswith("vivarium.dagger.backend.")
+    ]
+    assert backend == []
+    for name, imported in examples.items():
+        assert "vivarium.dagger.backend.wiring" not in imported, name
+        assert "ArtifactRegistry" in imported.get("vivarium.dagger.frontend", set()), name

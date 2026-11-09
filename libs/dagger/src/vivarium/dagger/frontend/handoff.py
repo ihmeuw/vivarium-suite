@@ -9,6 +9,7 @@ keyed for an :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`'s
 returns as an input, and the step's function receives the file's path.
 """
 
+import difflib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 
@@ -16,10 +17,13 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from vivarium.dagger.backend.wiring import ArtifactKey, WiringError
+from vivarium.dagger.backend.wiring import ArtifactKey, WiringError, _quoted_list
 
 PRIMARY_DIR = "primary"
 """Subdirectory of each location's directory that holds its primary data."""
+
+_LISTED_COLUMNS = 10
+"""How many of a file's present columns a missing-columns problem lists."""
 
 
 class HandoffError(WiringError):
@@ -116,13 +120,36 @@ def _problem(location: str, path: Path, columns: Sequence[str]) -> str | None:
         present = _COLUMN_READERS[path.suffix](path)
     except (ValueError, OSError, pa.ArrowException) as error:
         return _unreadable(location, path, error)
-    missing = [column for column in columns if column not in present]
+    present_set = set(present)
+    missing = [column for column in columns if column not in present_set]
     if missing:
+        hints = _close_matches(missing, present, columns)
         return (
             f"{location}: {path.name} at {path} is missing required columns "
-            f"{_names(missing)}; its columns are {_names(present)}."
+            f"{_names(missing)}; {_present_columns(present)}.{hints}"
         )
     return None
+
+
+def _present_columns(present: Sequence[str]) -> str:
+    """Name up to ``_LISTED_COLUMNS`` present columns in file order and count the rest."""
+    if not present:
+        return "it has no columns"
+    return f"its columns are {_quoted_list(present, _LISTED_COLUMNS)}"
+
+
+def _close_matches(
+    missing: Sequence[str], present: Sequence[str], required: Sequence[str]
+) -> str:
+    """Return a sentence pairing each missing column with a close unrequired present one."""
+    required_set = set(required)
+    candidates = [column for column in present if column not in required_set]
+    hints = [
+        f"{column!r} may be {match[0]!r}"
+        for column in missing
+        if (match := difflib.get_close_matches(column, candidates, n=1))
+    ]
+    return f" {'; '.join(hints)}." if hints else ""
 
 
 def handoff_inputs(
@@ -159,8 +186,11 @@ def handoff_inputs(
         If any declared file is missing, cannot be read (including when a directory
         on its path cannot be searched or the reader rejects the file), or lacks a
         required column. One error lists every problem found, grouped by location,
-        and names each file's expected path; a missing-columns problem lists the
-        missing columns and then the columns present, each quoted.
+        and names each file's expected path. A missing-columns problem lists the
+        missing columns, then the first ten columns present in file order followed by
+        ``, and <N> more`` for the rest, each quoted. It ends by naming a present,
+        unrequired column that closely matches a missing one, as in ``'year' may be
+        'year_id'``.
     ValueError
         Before any file is read, if ``locations`` is a bare string, a location or
         file name is not a single path component, a file's suffix is not ``.csv`` or

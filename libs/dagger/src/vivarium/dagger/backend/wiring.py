@@ -19,7 +19,7 @@ claiming one product) is left to pytask, which fails safe.
 """
 
 import difflib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from pytask import PathNode
@@ -28,6 +28,9 @@ from vivarium.dagger.backend.nodes import file_node
 
 ArtifactKey = str
 """A logical artifact name, resolved to a file node under the run's output directory."""
+
+_LISTED_KEYS = 10
+"""How many registered keys an unresolved input's message lists when no key is close."""
 
 
 class WiringError(Exception):
@@ -143,8 +146,15 @@ class ArtifactRegistry:
         Raises
         ------
         WiringError
-            If ``key`` has no registered producer and no root-input file on disk. An
-            unknown key carries a did-you-mean suggestion from the registered keys.
+            If ``key`` has no registered producer and no root-input file on disk. The
+            message for a key that is neither produced nor a root input reads
+            ``input '<key>' is unresolved: no registered producer and no root input.``
+            and ends with a did-you-mean suggestion, ``Did you mean '<close key>'?``,
+            when a registered key is close. When none is close, it ends with the
+            registered keys instead, produced keys and root-input keys together in
+            sorted order: ``The registered keys are 'a.csv', 'b.csv'.``, or the first
+            ten followed by ``, and <N> more.`` when there are more than ten, or ``No
+            keys are registered.`` when there are none.
         """
         produced = self._producers.get(key)
         if produced is not None:
@@ -157,10 +167,24 @@ class ArtifactRegistry:
                     f"at {source}."
                 )
             return file_node(source)
-        known = list(self._producers) + list(self._root_inputs)
+        known = sorted({*self._producers, *self._root_inputs})
         hint = difflib.get_close_matches(key, known, n=1)
-        suffix = f" Did you mean {hint[0]!r}?" if hint else ""
+        suffix = f"Did you mean {hint[0]!r}?" if hint else _registered_keys(known)
         raise WiringError(
-            f"input {key!r} is unresolved: no registered producer and no root input."
+            f"input {key!r} is unresolved: no registered producer and no root input. "
             f"{suffix}"
         )
+
+
+def _registered_keys(keys: list[ArtifactKey]) -> str:
+    """Return the sentence listing up to ``_LISTED_KEYS`` of the sorted ``keys``."""
+    if not keys:
+        return "No keys are registered."
+    return f"The registered keys are {_quoted_list(keys, _LISTED_KEYS)}."
+
+
+def _quoted_list(names: Sequence[str], limit: int) -> str:
+    """Quote and join the first ``limit`` names, then count the rest as ``and N more``."""
+    listed = ", ".join(repr(name) for name in names[:limit])
+    rest = len(names) - limit
+    return f"{listed}, and {rest} more" if rest > 0 else listed

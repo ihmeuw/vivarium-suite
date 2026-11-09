@@ -212,3 +212,113 @@ def test_key_for_returns_none_for_an_unregistered_path(tmp_path: Path) -> None:
     assert reg.key_for(tmp_path / "elsewhere.csv") is None
     assert reg.key_for(reg.path_for("y.csv")) is None
     assert reg.key_for(reg.path_for("x.csv").parent) is None
+
+
+# An unresolved input names the keys that exist (MIC-7785)
+
+
+def test_unresolved_input_with_no_close_key_lists_the_registered_keys_in_sorted_order(
+    tmp_path: Path,
+) -> None:
+    """An input key with no close match ends its message with 'The registered keys are ...', listing the produced keys and the root-input keys together in sorted order, and has no did-you-mean."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"c": tmp_path / "c.csv"})
+    reg.register_output("m.csv")
+    reg.register_output("a.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("zzz")
+
+    message = str(excinfo.value)
+    assert message == (
+        "input 'zzz' is unresolved: no registered producer and no root input. "
+        "The registered keys are 'a.csv', 'c', 'm.csv'."
+    )
+    assert "Did you mean" not in message
+
+
+def _registry_with_keys(tmp_path: Path, count: int) -> ArtifactRegistry:
+    """Return a registry of ``count`` keys 'key_00.csv', ..., half of them root inputs."""
+    keys = [f"key_{index:02d}.csv" for index in range(count)]
+    root_inputs = {key: tmp_path / "sources" / key for key in keys[::2]}
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+    for key in reversed(keys[1::2]):
+        reg.register_output(key)
+    return reg
+
+
+def test_unresolved_input_lists_the_first_ten_keys_and_counts_the_rest(
+    tmp_path: Path,
+) -> None:
+    """With more than ten registered keys and none close, the message lists the first ten in sorted order, followed by ', and N more.' where N is the number left out."""
+    reg = _registry_with_keys(tmp_path, 13)
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("zzz")
+
+    listed = ", ".join(f"'key_{index:02d}.csv'" for index in range(10))
+    message = str(excinfo.value)
+    assert message.endswith(f" The registered keys are {listed}, and 3 more.")
+    assert "key_10.csv" not in message
+    assert "Did you mean" not in message
+
+
+def test_unresolved_input_with_exactly_ten_keys_lists_all_of_them(tmp_path: Path) -> None:
+    """With exactly ten registered keys and none close, the message lists all ten and gives no 'more' count."""
+    reg = _registry_with_keys(tmp_path, 10)
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("zzz")
+
+    listed = ", ".join(f"'key_{index:02d}.csv'" for index in range(10))
+    message = str(excinfo.value)
+    assert message.endswith(f" The registered keys are {listed}.")
+    assert "more" not in message
+
+
+def test_unresolved_input_with_no_registered_keys_says_none_are_registered(
+    tmp_path: Path,
+) -> None:
+    """An input key resolved against an empty registry ends its message with 'No keys are registered.'"""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("zzz")
+
+    assert str(excinfo.value) == (
+        "input 'zzz' is unresolved: no registered producer and no root input. "
+        "No keys are registered."
+    )
+
+
+def test_unresolved_input_with_a_close_key_keeps_the_did_you_mean_and_lists_no_keys(
+    tmp_path: Path,
+) -> None:
+    """A mistyped key with a close match still ends with 'Did you mean '<key>'?', and the message does not list the registered keys."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_output("caps/ethiopia.csv")
+    reg.register_output("zzz_other.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("caps/ethiopa.csv")
+
+    message = str(excinfo.value)
+    assert message.endswith(" Did you mean 'caps/ethiopia.csv'?")
+    assert "registered keys" not in message
+    assert "zzz_other.csv" not in message
+
+
+def test_declared_root_input_without_a_file_keeps_its_message_and_lists_no_keys(
+    tmp_path: Path,
+) -> None:
+    """A declared root input whose file is absent is reported with 'no file at <path>', not with a list of registered keys."""
+    gone = tmp_path / "gone.csv"
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"bop": gone})
+    reg.register_output("other.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input("bop")
+
+    message = str(excinfo.value)
+    assert f"no file at {gone.resolve()}" in message
+    assert "registered keys" not in message
+    assert "other.csv" not in message

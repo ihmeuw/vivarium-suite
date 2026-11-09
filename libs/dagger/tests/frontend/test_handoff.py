@@ -35,6 +35,8 @@ _FILE_ACCESS: list[tuple[object, str]] = [
     (pq, "read_schema"),
 ]
 _UNSUPPORTED = "unsupported Parquet feature"
+_WIDE_COLUMNS = ["location_id", "year", *(f"draw_{draw}" for draw in range(1000))]
+_WIDE_MORE = f", and {len(_WIDE_COLUMNS) - 10} more"
 
 
 def _primary(root: Path, location: str) -> Path:
@@ -52,6 +54,12 @@ def _deliver(root: Path, location: str, name: str, frame: pd.DataFrame = _COVERA
     else:
         frame.to_csv(path, index=False)
     return path
+
+
+def _deliver_wide(root: Path, name: str) -> None:
+    """Write ethiopia's file ``name`` with the columns of a wide draw extract."""
+    frame = pd.DataFrame({column: [0] for column in _WIDE_COLUMNS})
+    _deliver(root, "ethiopia", name, frame)
 
 
 def _handoff_error(root: Path, locations: list[str], files: dict[str, list[str]]) -> str:
@@ -514,3 +522,40 @@ def test_found_hint_ignores_case_and_quotes_names(tmp_path: Path) -> None:
     _deliver(tmp_path, "ethiopia", "Coverage.CSV")
 
     assert "'Coverage.CSV'" in _handoff_error(tmp_path, ["ethiopia"], _FILES)
+
+
+@pytest.mark.parametrize("name", ["ifa.csv", "ifa.parquet"])
+def test_wide_file_lists_ten_columns_and_names_the_close_column(
+    tmp_path: Path, name: str
+) -> None:
+    """A wide CSV or Parquet file lacking year_id lists only its first ten columns, in file order, then ', and N more', and ends with "'year_id' may be 'year'."."""
+    _deliver_wide(tmp_path, name)
+
+    message = _handoff_error(tmp_path, ["ethiopia"], {name: ["location_id", "year_id"]})
+
+    line = _problem_line(message, f"<root>/ethiopia/primary/{name}")
+    listed = [line.index(repr(column)) for column in _WIDE_COLUMNS[:10]]
+    assert listed == sorted(listed)
+    assert line.count("'draw_") == sum(c.startswith("draw_") for c in _WIDE_COLUMNS[:10])
+    assert _WIDE_MORE in line
+    assert listed[-1] < line.index(_WIDE_MORE)
+    assert line.endswith("'year_id' may be 'year'.")
+
+
+@pytest.mark.parametrize("name", ["ifa.csv", "ifa.parquet"])
+@pytest.mark.parametrize(
+    "required",
+    [["location_id", "coverage"], ["location_id", "year", "year_id"]],
+    ids=["no-close-column", "close-column-is-required"],
+)
+def test_wide_file_gives_no_hint_without_an_unrequired_close_column(
+    tmp_path: Path, name: str, required: list[str]
+) -> None:
+    """A wide file missing a column that no present column resembles, or whose only close column is itself required, gets the capped list and no 'may be' hint."""
+    _deliver_wide(tmp_path, name)
+
+    message = _handoff_error(tmp_path, ["ethiopia"], {name: required})
+
+    line = _problem_line(message, f"<root>/ethiopia/primary/{name}")
+    assert _WIDE_MORE in line
+    assert "may be" not in line

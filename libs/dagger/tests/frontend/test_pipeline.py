@@ -3,14 +3,22 @@
 import dataclasses
 import re
 import subprocess
+import sys
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pandas as pd
 import pytest
 from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
+import vivarium.dagger.frontend.pipeline
+from tests.frontend.notebooks import (
+    broken_env,
+    isolated_jupyter_dirs,
+    recorded_errors,
+    write_source_notebook,
+)
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
@@ -18,7 +26,9 @@ from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.frontend import (
     Pipeline,
     PipelineError,
+    StepExited,
     StepFailed,
+    notebook_step,
     preview,
     python_step,
     run,
@@ -780,3 +790,453 @@ def test_step_failed_exit_code_is_failed(tmp_path: Path) -> None:
         run(_failing_pipeline(tmp_path))
 
     assert info.value.exit_code == ExitCode.FAILED
+
+
+# A failed step's message, in step terms (MIC-7785)
+
+_RAISES_KEY_ERROR = "{}['no_such_column']"
+"""A notebook body that raises KeyError('no_such_column')."""
+
+_SUMMARY_KEY = "tables/summary.csv"
+
+_EXECUTED_KEY = "executed/summarize.ipynb"
+
+_REPORT = "its output is in pytask's report for the step."
+"""The end of the description of a failed shell command."""
+
+
+@pytest.fixture
+def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
+    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
+    with isolated_jupyter_dirs(tmp_path / "jupyter"):
+        yield
+
+
+def _notebook_pipeline(
+    tmp_path: Path, body: str = _RAISES_KEY_ERROR, env: str = sys.prefix
+) -> Pipeline:
+    """Return a pipeline of the notebook step 'summarize', which runs ``body``."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    source = write_source_notebook(
+        tmp_path / "notebooks" / "summarize.ipynb", "summary_path = 'unset'", body
+    )
+    task = notebook_step(
+        source,
+        executed=_EXECUTED_KEY,
+        registry=registry,
+        env=env,
+        produces={"summary_path": _SUMMARY_KEY},
+        name="summarize",
+    )
+    return Pipeline([task], tmp_path / "state", registry)
+
+
+def _executed(pipeline: Pipeline) -> Path:
+    """Return the path of the notebook step's executed notebook."""
+    assert pipeline.registry is not None
+    return pipeline.registry.path_for(_EXECUTED_KEY)
+
+
+def _key_error_line(pipeline: Pipeline) -> str:
+    """Return the StepFailed line for the notebook step that raised KeyError."""
+    return (
+        "Step 'summarize' failed: notebook summarize.ipynb raised KeyError: "
+        "'no_such_column' in cell In [3]. The executed notebook, with the error, is at "
+        f"{_executed(pipeline)}."
+    )
+
+
+def _fallback_line(pipeline: Pipeline) -> str:
+    """Return the StepFailed line for the notebook step whose command exited 1 early."""
+    return (
+        "Step 'summarize' failed: notebook summarize.ipynb left no error in an executed "
+        f"notebook at {_executed(pipeline)}, and the command exited with status 1; "
+        f"{_REPORT}"
+    )
+
+
+def _step_failed(pipeline: Pipeline) -> StepFailed:
+    """Run ``pipeline`` and return the StepFailed it raises."""
+    with pytest.raises(StepFailed) as info:
+        run(pipeline)
+    return info.value
+
+
+def _command_step(tmp_path: Path, name: str, command: str) -> Task:
+    """Return a hand-built command step ``name`` that runs ``command``."""
+    return Task(
+        name=name,
+        run=command,
+        inputs={},
+        outputs={"out": file_node(tmp_path / f"{name}.txt")},
+        resources={},
+        env=None,
+    )
+
+
+def _run_own_command() -> pd.DataFrame:
+    """Raise CalledProcessError, as a step body whose own command failed."""
+    raise subprocess.CalledProcessError(2, ["my-tool", "--input", "data.csv"])
+
+
+def _missing_column() -> pd.DataFrame:
+    """Raise KeyError, as a step body that reads a column that is not there."""
+    raise KeyError("no_such_column")
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebook_step_message_names_the_step_notebook_cell_error_and_executed_path(
+    tmp_path: Path,
+) -> None:
+    """A notebook step named 'summarize' whose body cell raises KeyError('no_such_column') makes run() raise StepFailed whose message line is "Step 'summarize' failed: notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The executed notebook, with the error, is at <path>.", and the executed notebook at that path holds the error."""
+    pipeline = _notebook_pipeline(tmp_path)
+
+    error = _step_failed(pipeline)
+
+    assert str(error) == _key_error_line(pipeline)
+    assert _executed(pipeline).is_absolute()
+    assert ("KeyError", "'no_such_column'") in recorded_errors(_executed(pipeline))
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebook_step_message_does_not_contain_the_generated_command(
+    tmp_path: Path,
+) -> None:
+    """The StepFailed message for a failing notebook step contains neither 'papermill', 'ipykernel', 'mkdir' nor 'CalledProcessError'."""
+    message = str(_step_failed(_notebook_pipeline(tmp_path)))
+
+    for text in ("papermill", "ipykernel", "mkdir", "CalledProcessError"):
+        assert text not in message, message
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_failing_notebook_step_keeps_its_called_process_error_as_failure_and_cause(
+    tmp_path: Path,
+) -> None:
+    """For a failing notebook step, StepFailed.failures holds the step's CalledProcessError, which is also the cause, and its cmd is the step's command."""
+    pipeline = _notebook_pipeline(tmp_path)
+
+    error = _step_failed(pipeline)
+
+    [task] = pipeline.tasks
+    failure = error.failures["summarize"]
+    assert isinstance(failure, subprocess.CalledProcessError)
+    assert error.__cause__ is failure
+    assert failure.cmd == task.run
+    assert failure.returncode != 0
+
+
+def test_a_notebook_step_that_fails_before_papermill_runs_gives_the_exit_status(
+    tmp_path: Path,
+) -> None:
+    """A notebook step whose env's python exits 1 before papermill writes anything makes StepFailed's line name the step and the notebook, say it left no error in an executed notebook at its path, and give 'the command exited with status 1', without the generated command."""
+    env = broken_env(tmp_path / "broken_env")
+    pipeline = _notebook_pipeline(tmp_path, env=str(env))
+
+    error = _step_failed(pipeline)
+
+    message = str(error)
+    assert message == _fallback_line(pipeline)
+    assert not _executed(pipeline).exists()
+    assert "papermill" not in message
+    assert isinstance(error.failures["summarize"], subprocess.CalledProcessError)
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_an_error_left_by_an_earlier_run_is_not_reported_as_this_runs(tmp_path: Path) -> None:
+    """After a run in which the notebook raised KeyError, a second run whose env fails before papermill starts reports the exit-status fallback, not the earlier KeyError."""
+    first = _notebook_pipeline(tmp_path)
+    assert str(_step_failed(first)) == _key_error_line(first)
+    assert recorded_errors(_executed(first))
+
+    env = broken_env(tmp_path / "broken_env")
+    second = _notebook_pipeline(tmp_path, env=str(env))
+    message = str(_step_failed(second))
+
+    assert _executed(second) == _executed(first)
+    assert message == _fallback_line(second)
+    assert "KeyError" not in message
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_a_notebook_step_that_does_not_write_a_product_keeps_the_generic_description(
+    tmp_path: Path,
+) -> None:
+    """A notebook that finishes without writing a declared product makes StepFailed's line give pytask's NodeNotFoundError type and message, as before."""
+    pipeline = _notebook_pipeline(tmp_path, body="pass")
+
+    error = _step_failed(pipeline)
+
+    failure = error.failures["summarize"]
+    assert isinstance(failure, NodeNotFoundError)
+    assert str(error) == f"Step 'summarize' failed: NodeNotFoundError: {failure}"
+    assert recorded_errors(_executed(pipeline)) == []
+
+
+def test_a_failing_command_step_message_gives_the_exit_status_and_not_the_command(
+    tmp_path: Path,
+) -> None:
+    """A hand-built command step 'shout' running 'exit 3' makes StepFailed's message exactly "Step 'shout' failed: the command exited with status 3; its output is in pytask's report for the step.", while its cause is still the CalledProcessError naming the command."""
+    task = _command_step(tmp_path, "shout", "exit 3")
+
+    error = _step_failed(Pipeline([task], tmp_path / "state"))
+
+    assert str(error) == f"Step 'shout' failed: the command exited with status 3; {_REPORT}"
+    cause = error.__cause__
+    assert isinstance(cause, subprocess.CalledProcessError)
+    assert cause is error.failures["shout"]
+    assert cause.cmd == "exit 3"
+
+
+def test_a_command_step_stopped_by_a_signal_is_described_by_the_signal(
+    tmp_path: Path,
+) -> None:
+    """A command step whose shell is killed with SIGKILL makes StepFailed's line say 'the command was stopped by signal SIGKILL'."""
+    task = _command_step(tmp_path, "killed", "kill -9 $$")
+
+    error = _step_failed(Pipeline([task], tmp_path / "state"))
+
+    assert str(error) == (
+        f"Step 'killed' failed: the command was stopped by signal SIGKILL; {_REPORT}"
+    )
+
+
+def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_message(
+    tmp_path: Path,
+) -> None:
+    """A python_step whose own code raises CalledProcessError is described as 'CalledProcessError: <its message>', with its command, since that command is the user's own."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    task = python_step(
+        _run_own_command, inputs={}, produces="tool.parquet", registry=registry
+    )
+
+    error = _step_failed(Pipeline([task], tmp_path / "state", registry))
+
+    failure = error.failures["tool.parquet"]
+    assert isinstance(failure, subprocess.CalledProcessError)
+    assert str(error) == f"Step 'tool.parquet' failed: CalledProcessError: {failure}"
+    assert "my-tool" in str(error)
+    assert "the command exited with status" not in str(error)
+
+
+def test_a_python_step_failure_is_still_described_by_type_and_message(tmp_path: Path) -> None:
+    """A python_step that raises KeyError('no_such_column') is still described as "KeyError: 'no_such_column'"."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    task = python_step(_missing_column, inputs={}, produces="read.parquet", registry=registry)
+
+    error = _step_failed(Pipeline([task], tmp_path / "state", registry))
+
+    assert str(error) == "Step 'read.parquet' failed: KeyError: 'no_such_column'"
+
+
+def test_step_failed_uses_the_given_descriptions_and_defaults_the_rest() -> None:
+    """StepFailed(failures, outcomes, descriptions={'a': 'text'}) gives "Step 'a' failed: text" and describes a step missing from descriptions by its error's type and message, or by exc_type and exc_message."""
+    failures: dict[str, BaseException] = {
+        "a": ValueError("a broke"),
+        "b": ValueError("b broke"),
+        "remote": _ReportedError("ZeroDivisionError", "worker divided by zero"),
+    }
+    outcomes = dict.fromkeys(failures, TaskOutcome.FAIL)
+
+    error = StepFailed(failures, outcomes, descriptions={"a": "text"})
+
+    assert str(error).splitlines() == [
+        "Step 'a' failed: text",
+        "Step 'b' failed: ValueError: b broke",
+        "Step 'remote' failed: ZeroDivisionError: worker divided by zero",
+    ]
+    assert error.failures == failures
+    assert error.outcomes == outcomes
+    assert error.exit_code == ExitCode.FAILED
+
+
+def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> None:
+    """A run in which a command step and a python step both fail gives one line per step, each described its own way, in pytask's report order."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    tasks = [
+        _command_step(tmp_path, "shout", "exit 3"),
+        python_step(_explode, inputs={}, produces="broken.parquet", registry=registry),
+    ]
+    expected = {
+        "shout": f"Step 'shout' failed: the command exited with status 3; {_REPORT}",
+        "broken.parquet": "Step 'broken.parquet' failed: ValueError: the step broke",
+    }
+
+    error = _step_failed(Pipeline(tasks, tmp_path / "state", registry))
+
+    assert set(error.failures) == set(expected)
+    failed_in_order = [
+        name for name, outcome in error.outcomes.items() if outcome == TaskOutcome.FAIL
+    ]
+    assert list(error.failures) == failed_in_order
+    assert str(error).splitlines() == [expected[step] for step in failed_in_order]
+
+
+# Two steps with one name (MIC-7785)
+
+
+def _named(tmp_path: Path, *names: str) -> Pipeline:
+    """Return a pipeline of command steps with ``names``, each writing its own file."""
+    tasks = [
+        Task(
+            name=name,
+            run="true",
+            inputs={},
+            outputs={"out": file_node(tmp_path / f"out_{index}.txt")},
+            resources={},
+            env=None,
+        )
+        for index, name in enumerate(names)
+    ]
+    return Pipeline(tasks, tmp_path / "state")
+
+
+def _shared(name: str, count: str = "Two") -> str:
+    """Return the line for ``count`` steps that share ``name``."""
+    return (
+        f"{count} steps are named {name!r}; pass name= to python_step or notebook_step "
+        "to tell them apart."
+    )
+
+
+def test_two_steps_with_one_name_make_run_raise_a_pipeline_error_naming_it(
+    tmp_path: Path,
+) -> None:
+    """Two steps named 'dup' make run() raise PipelineError, not StepFailed, whose message is exactly "Two steps are named 'dup'; pass name= to python_step or notebook_step to tell them apart.", with exit_code None, chained from the backend's ValueError, and nothing written under the root."""
+    with pytest.raises(PipelineError) as info:
+        run(_named(tmp_path, "dup", "dup"))
+
+    error = info.value
+    assert not isinstance(error, StepFailed)
+    assert str(error) == _shared("dup")
+    assert error.exit_code is None
+    cause = error.__cause__
+    assert isinstance(cause, ValueError)
+    assert "Task names must be unique" in str(cause)
+    assert not (tmp_path / "state").exists()
+
+
+def test_two_steps_with_one_name_make_preview_raise_the_same_pipeline_error(
+    tmp_path: Path,
+) -> None:
+    """preview() on a pipeline with two steps named 'dup' raises the same PipelineError message as run()."""
+    errors = _errors_from_run_and_preview(_named(tmp_path, "dup", "dup"))
+
+    assert str(errors["preview"]) == str(errors["run"]) == _shared("dup")
+    assert errors["preview"].exit_code is None
+    assert isinstance(errors["preview"].__cause__, ValueError)
+
+
+def test_three_steps_with_one_name_are_counted_with_a_digit(tmp_path: Path) -> None:
+    """Three steps named 'dup' are reported as "3 steps are named 'dup'; pass name= ..."."""
+    with pytest.raises(PipelineError) as info:
+        run(_named(tmp_path, "dup", "dup", "dup"))
+
+    assert str(info.value) == _shared("dup", count="3")
+
+
+def test_each_shared_name_gets_its_own_line_in_sorted_order(tmp_path: Path) -> None:
+    """Two pairs of steps sharing the names 'b' and 'a' give two lines, the one for 'a' first, and the message has no Python list."""
+    with pytest.raises(PipelineError) as info:
+        run(_named(tmp_path, "b", "b", "a", "a", "c"))
+
+    message = str(info.value)
+    assert message.splitlines() == [_shared("a"), _shared("b")]
+    assert "[" not in message
+
+
+def test_a_shared_name_is_reported_before_an_unknown_step(tmp_path: Path) -> None:
+    """run() with only= naming an unknown step on a pipeline with a shared name reports the shared name."""
+    with pytest.raises(PipelineError) as info:
+        run(_named(tmp_path, "dup", "dup"), only="no_such_step")
+
+    assert str(info.value) == _shared("dup")
+
+
+def test_a_shared_name_is_reported_before_force_touches_the_lockfile(tmp_path: Path) -> None:
+    """run() with force= on a pipeline with a shared name raises before pytask.lock under the root is read or changed."""
+    lock = tmp_path / "state" / "pytask.lock"
+    lock.parent.mkdir()
+    lock.write_text("this is not toml [\n")
+    before = lock.read_bytes()
+
+    with pytest.raises(PipelineError) as info:
+        run(_named(tmp_path, "dup", "dup"), force="dup")
+
+    assert str(info.value) == _shared("dup")
+    assert isinstance(info.value.__cause__, ValueError)
+    assert lock.read_bytes() == before
+
+
+# A step that exits (MIC-7785)
+
+
+def _leave() -> pd.DataFrame:
+    """End the process with code 0, as a step body that calls sys.exit does."""
+    sys.exit(0)
+
+
+def _leave_with_a_message() -> pd.DataFrame:
+    """End the process with the code 'bye'."""
+    sys.exit("bye")
+
+
+def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> Pipeline:
+    """Return a pipeline of one python step 'leave' that runs ``target``."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    task = python_step(
+        target, inputs={}, produces="leave.parquet", registry=registry, name="leave"
+    )
+    return Pipeline([task], tmp_path / "state", registry)
+
+
+def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
+    tmp_path: Path,
+) -> None:
+    """A step 'leave' that calls sys.exit(0) makes run() raise StepExited, which is a SystemExit whose step is 'leave' and whose code is 0, chained from the step's SystemExit."""
+    with pytest.raises(StepExited) as info:
+        run(_exiting(tmp_path, _leave))
+
+    exited = info.value
+    assert isinstance(exited, SystemExit)
+    assert exited.step == "leave"
+    assert exited.code == 0
+    cause = exited.__cause__
+    assert isinstance(cause, SystemExit)
+    assert not isinstance(cause, StepExited)
+    assert cause.code == 0
+
+
+def test_step_exited_keeps_a_non_integer_exit_code(tmp_path: Path) -> None:
+    """A step that calls sys.exit('bye') makes run() raise StepExited whose code is 'bye'."""
+    with pytest.raises(StepExited) as info:
+        run(_exiting(tmp_path, _leave_with_a_message))
+
+    assert info.value.step == "leave"
+    assert info.value.code == "bye"
+
+
+def test_step_exited_is_caught_by_an_except_system_exit_clause(tmp_path: Path) -> None:
+    """Code that calls run() inside 'except SystemExit' catches a step's exit, as it did before StepExited existed."""
+    pipeline = _exiting(tmp_path, _leave)
+    caught: SystemExit | None = None
+
+    try:
+        run(pipeline)
+    except SystemExit as error:
+        caught = error
+
+    assert caught is not None
+    assert caught.code == 0
+
+
+# The frontend's exports (MIC-7785)
+
+
+def test_artifact_registry_and_step_exited_are_exported_from_the_frontend() -> None:
+    """vivarium.dagger.frontend.ArtifactRegistry is the backend's ArtifactRegistry, and 'ArtifactRegistry' and 'StepExited' are in vivarium.dagger.frontend.__all__."""
+    frontend = vivarium.dagger.frontend
+
+    assert frontend.ArtifactRegistry is ArtifactRegistry
+    assert frontend.StepExited is vivarium.dagger.frontend.pipeline.StepExited
+    assert {"ArtifactRegistry", "StepExited"} <= set(frontend.__all__)
