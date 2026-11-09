@@ -1,4 +1,4 @@
-**5.3.0 - 11/06/26**
+**5.3.0 - 11/09/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes and sets each one's
   dotted path from that tree on the new ``ConfigNode.path``
