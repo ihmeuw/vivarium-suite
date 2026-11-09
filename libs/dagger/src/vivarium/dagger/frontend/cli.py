@@ -32,7 +32,7 @@ import pytask
 from vivarium.dagger.backend.preview import StepPreview
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
 from vivarium.dagger.frontend.handoff import HandoffError
-from vivarium.dagger.frontend.pipeline import Pipeline, PipelineError, StepFailed
+from vivarium.dagger.frontend.pipeline import Pipeline, PipelineError, StepExited, StepFailed
 from vivarium.dagger.frontend.pipeline import preview as preview_pipeline
 from vivarium.dagger.frontend.pipeline import run as run_pipeline
 
@@ -187,7 +187,12 @@ def _check_root(root: Path) -> None:
 def _verb_errors(
     pipeline: Pipeline, requested: tuple[str, ...], param_hint: str
 ) -> Iterator[None]:
-    """Report an error raised by a verb as a click error with the command's exit status."""
+    """Report an error raised by a verb as a click error with the command's exit status.
+
+    A :class:`~vivarium.dagger.frontend.pipeline.StepExited` is reported as ``Step
+    '<name>' exited with code <code> before the build finished.``, with the code as
+    ``repr`` gives it, and exits with status 1.
+    """
     try:
         yield
     except StepFailed as error:
@@ -197,6 +202,10 @@ def _verb_errors(
     except OSError as error:
         raise click.ClickException(
             f"Could not read or write the pipeline's state under {pipeline.root}: {error}"
+        ) from None
+    except StepExited as error:
+        raise click.ClickException(
+            f"Step {error.step!r} exited with code {error.code!r} before the build finished."
         ) from None
     except SystemExit as error:
         raise click.ClickException(
@@ -290,9 +299,15 @@ def _quoted(names: list[str]) -> str:
 def _user_traceback(error: BaseException) -> str:
     """Format ``error`` and its chain as Python does, without framework frames.
 
-    If no frame of ``error`` itself is left, return its full traceback instead.
+    If no frame of ``error`` itself is left, return its full traceback instead. A
+    :class:`SyntaxError` with no frame left, as when the definition file itself does not
+    parse, is the exception: it is formatted as
+    :func:`traceback.format_exception_only` formats it, which shows the file, the line
+    number, the source line with a caret, and the error.
     """
     if all(_is_framework(frame) for frame, _ in traceback.walk_tb(error.__traceback__)):
+        if isinstance(error, SyntaxError):
+            return "".join(traceback.format_exception_only(error))
         return "".join(traceback.format_exception(error))
     blocks: list[str] = []
     seen: set[int] = set()

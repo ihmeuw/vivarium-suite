@@ -57,7 +57,9 @@ Building it from the definition file's own location, as the example below does, 
 the state next to the definition.
 
 This example has three steps in a chain. The ``population`` step writes a table,
-``adults`` reads it, and ``summary`` reads the output of ``adults``:
+``adults`` reads it, and ``summary`` reads the output of ``adults``. Everything a
+definition needs, including the ``ArtifactRegistry`` that wires the steps together, is
+imported from ``vivarium.dagger.frontend``:
 
 .. literalinclude:: ../../tests/frontend/pipeline_example/pipeline.py
    :language: python
@@ -138,6 +140,25 @@ line per failed step, with its error's type and message, and lists the steps tha
 not run because a step they depend on failed. The traceback is shown only once. Steps
 that do not depend on a failed step still run.
 
+For a notebook step whose notebook raised an error, the line names the notebook, the
+error, the cell it was raised in, numbered as papermill and Jupyter number it, and the
+path of the executed notebook, which keeps the outputs of every cell that ran and the
+error's traceback. For example:
+
+.. code-block:: text
+
+   Step 'summarize' failed: notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The executed notebook, with the error, is at /home/user/model/output/run1/executed/summarize.ipynb.
+
+When the error's message has more than one line, the line gives only the first one that
+is not blank. The executed notebook has the whole message.
+
+If the notebook stopped before it recorded an error, for example because its environment
+does not have papermill, the line says so and gives the exit status of the step's
+command, or the signal that stopped it (for example SIGKILL). For any other step that
+runs a shell command, the line gives the command's exit status, or the signal that
+stopped it. In both cases the command itself and its output are in pytask's report for
+the step, not in ``dagger``'s line.
+
 If pytask stops the build for another reason, for example because its configuration
 file or lockfile under the root cannot be read or a pytask plugin failed, pytask's
 output shows the cause and ``dagger`` names pytask's exit code. (``dagger force`` reads the
@@ -146,8 +167,8 @@ with status 2.) If reading or writing pytask's state under the root fails, for e
 because the disk is full or ``dagger force`` cannot open the lockfile, ``dagger`` names the
 root and the error. Each of these exits with status 1, even when it happens before any
 step has run. If a step ends the Python
-process, for example by calling ``sys.exit``, the build stops there and ``dagger`` says
-that a step exited.
+process, for example by calling ``sys.exit``, the build stops there and ``dagger`` names
+the step that exited and its exit code.
 
 If you interrupt a run (Ctrl-C), ``dagger`` says that it was interrupted. The steps that
 finished before the interrupt are recorded, so running the same command again
@@ -179,15 +200,18 @@ Each of these exits with status 2 before any step runs:
 - The definition's code raises an error, or calls ``sys.exit``, while it is imported
   or while its function runs. ``dagger`` prints the traceback as described below. For a
   step that reads an artifact that no step produces and that is not a root input, the
-  error names the step and the artifact key, with the closest key that does exist.
+  error names the step and the artifact key, with the closest key that does exist. If
+  no key is close, it lists the keys that are registered instead.
 - Two steps produce the same artifact. ``dagger`` names the artifact key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
-- The pipeline cannot be built as defined, for example because two steps share a name,
-  a step declares an environment that does not exist, or pytask cannot order the
-  steps. ``dagger`` prints the reason.
+- Two steps have the same name. ``dagger`` names it and says to pass ``name=`` to
+  ``python_step`` or ``notebook_step`` to tell the steps apart.
+- The pipeline cannot be built as defined, for example because a step declares an
+  environment that does not exist or pytask cannot order the steps. ``dagger`` prints
+  the reason.
 - The pipeline's root cannot be created or written, for example because it is an
   existing file or a directory above it is not writable. ``dagger`` checks this before
   pytask starts, without creating anything, and names the root and the reason.
@@ -196,6 +220,8 @@ For an error raised by the definition's own code, ``dagger`` prints the tracebac
 the frames of ``vivarium.dagger``, pytask, pluggy, click, and Python's import
 machinery removed, followed by a line such as ``[3 framework frames hidden]``. The
 traceback then starts in the definition file. If no frame would be left, ``dagger`` prints
-the whole traceback.
+the whole traceback, except for a syntax error in the definition file itself: then it
+prints only the file, the line number, the line with a caret under the error, and the
+``SyntaxError``, as Python does.
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.

@@ -3,6 +3,7 @@
 import inspect
 import keyword
 import os
+import signal
 import socket
 import subprocess
 from collections.abc import Iterable
@@ -98,6 +99,40 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
     subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
 
 
+def describe_exit(returncode: int) -> str:
+    """Return how a failed command's exit reads in a step's failure message.
+
+    Parameters
+    ----------
+    returncode
+        The return code of a command that failed, as
+        :class:`subprocess.CalledProcessError` holds it: not zero, and negative when a
+        signal stopped the command.
+
+    Returns
+    -------
+        ``"the command exited with status <N>"`` for a positive code, or ``"the command
+        was stopped by signal <NAME>"`` for a negative one, where ``<NAME>`` is the
+        signal's name, such as ``SIGKILL``, or its number when Python has no name for it.
+        A positive code ``128 + n``, which a shell gives when signal ``n`` stopped its
+        child, also names the signal when Python has a name for it, as in ``"the command
+        exited with status 137 (signal SIGKILL)"``.
+    """
+    if returncode >= 0:
+        shell_signal = _signal_name(returncode - 128) if returncode > 128 else None
+        named = f" (signal {shell_signal})" if shell_signal is not None else ""
+        return f"the command exited with status {returncode}{named}"
+    return f"the command was stopped by signal {_signal_name(-returncode) or -returncode}"
+
+
+def _signal_name(number: int) -> str | None:
+    """Return the name of signal ``number``, or None when Python has no name for it."""
+    try:
+        return signal.Signals(number).name
+    except ValueError:
+        return None
+
+
 def _check_envs(tasks: Iterable[Task]) -> None:
     """Resolve each distinct declared env once; raise one ValueError listing the bad ones."""
     declarers: dict[str, list[str]] = {}
@@ -152,6 +187,8 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     if shared:
         raise ValueError(f"Task '{task.name}': names {shared} are both inputs and outputs.")
 
+    # frontend.pipeline._exiting_step reads `task` from this closure's frame to name a
+    # step that raised SystemExit, which pytask does not record. Renaming either breaks it.
     def _run(**kwargs: Any) -> None:
         """Run ``task`` with its loaded inputs and outputs."""
         __tracebackhide__ = True
