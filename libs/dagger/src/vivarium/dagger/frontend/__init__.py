@@ -1,11 +1,17 @@
-"""The frontend: write steps, check their primary data, and run or preview them."""
+"""The frontend: write steps, check their primary data, and run or preview them.
 
+:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` is importable from here, so a
+pipeline definition needs no import from the backend.
+"""
+
+from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
 from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.pipeline import (
     Pipeline,
     PipelineError,
+    StepExited,
     StepFailed,
     preview,
     run,
@@ -13,10 +19,12 @@ from vivarium.dagger.frontend.pipeline import (
 from vivarium.dagger.frontend.python_step import python_step
 
 __all__ = [
+    "ArtifactRegistry",
     "DefinitionError",
     "HandoffError",
     "Pipeline",
     "PipelineError",
+    "StepExited",
     "StepFailed",
     "handoff_inputs",
     "handoff_key",

@@ -8,7 +8,10 @@ notebook is a declared input file. The executed notebook, written to its own pat
 the data files named in ``produces`` are the step's products, registered through the
 shared :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` so downstream steps
 get real edges to them. If the notebook raises, the step fails and the executed notebook,
-with the error in it, stays at its path.
+with the error in it, stays at its path. The command removes an executed notebook left by
+an earlier run before the notebook runs, so an executed notebook found after a failure is
+always this run's. :func:`describe_notebook_failure` reads the error back from it for the
+step's failure message.
 
 Papermill injects parameters into the notebook's cell tagged ``parameters``. Each input
 and product reaches the notebook as its resolved path, as a ``str``, under its parameter
@@ -33,14 +36,17 @@ import json
 import keyword
 import numbers
 import shlex
+import subprocess
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
+from pytask import PathNode
+
+from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY, describe_exit
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry
+from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
 
 NotebookParameter = str | int | float | bool | None
 """A scalar notebook parameter, which reaches the notebook with this Python type.
@@ -131,7 +137,9 @@ def notebook_step(
         If an input key resolves to no producer and no root input, or ``executed`` or a
         ``produces`` key is a declared root input or resolves to the path of a different
         key that is already registered (another step's output) or of a root input. The
-        same key claimed by two steps is left for the build to reject.
+        message starts with ``Step '<name>':``, followed by the registry's message, which
+        names the artifact key. The same key claimed by two steps is left for the build
+        to reject.
     ValueError
         If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``produces`` or
         ``parameters`` is not a valid Python identifier, is a keyword, appears in more
@@ -160,9 +168,16 @@ def notebook_step(
     _check_paths(task_name, source, executed)
     _check_collisions(task_name, source, executed, product_keys, registry)
 
-    dependencies = {param: registry.resolve_input(key) for param, key in input_keys.items()}
-    executed_node = registry.register_output(executed)
-    products = {param: registry.register_output(key) for param, key in product_keys.items()}
+    try:
+        dependencies = {
+            param: registry.resolve_input(key) for param, key in input_keys.items()
+        }
+        executed_node = registry.register_output(executed)
+        products = {
+            param: registry.register_output(key) for param, key in product_keys.items()
+        }
+    except WiringError as error:
+        raise WiringError(f"Step {task_name!r}: {error}") from None
     values: dict[str, NotebookParameter] = {
         param: str(node.path) for param, node in (*dependencies.items(), *products.items())
     }
@@ -183,6 +198,114 @@ def notebook_step(
         resources={} if resources is None else resources,
         env=env,
     )
+
+
+def describe_notebook_failure(task: Task, error: BaseException) -> str | None:
+    """Describe why a notebook step failed, from its executed notebook on disk.
+
+    The executed notebook is read as JSON with the standard library, so the pipeline's
+    own environment needs neither papermill nor nbformat.
+    :func:`~vivarium.dagger.frontend.pipeline.run` uses this description in the message
+    of :class:`~vivarium.dagger.frontend.pipeline.StepFailed`.
+
+    Parameters
+    ----------
+    task
+        A task that failed. Only a task built by :func:`notebook_step` is described.
+    error
+        The exception the task failed with.
+
+    Returns
+    -------
+        For a notebook step whose executed notebook records an error output, the first
+        one in cell order, whatever the type of ``error``::
+
+            notebook <file> raised <ename>: <evalue> in cell In [<n>]. The executed
+            notebook, with the error, is at <path>.
+
+        on one line, where ``<file>`` is the source notebook's file name, ``<ename>``
+        is the error output's name, ``<evalue>`` is the first line of its value that is
+        not blank, without the whitespace around it, ``<n>`` is the failing cell's
+        execution count, and ``<path>`` is the executed notebook's absolute path. The
+        rest of a value that has more than one line is only in the executed notebook.
+        ``: <evalue>`` is left out when the value has no line that is not blank, and
+        `` in cell In [<n>]`` when the cell has no execution count.
+
+        For a notebook step whose executed notebook is missing, cannot be read or
+        parsed, or records no error, when ``error`` is a
+        :class:`subprocess.CalledProcessError`::
+
+            notebook <file> left no error in an executed notebook at <path>, and <exit>;
+            its output is in pytask's report for the step.
+
+        on one line, where ``<exit>`` is
+        :func:`~vivarium.dagger.backend.build.describe_exit` of the error's return code.
+
+        ``None`` for a task that is not a notebook step, and for a notebook step whose
+        executed notebook records no error when ``error`` is not a
+        ``CalledProcessError``, as when the notebook finished but did not write a
+        declared product.
+    """
+    if not isinstance(task.run, str):
+        return None
+    source = _node_path(task.inputs.get(_NOTEBOOK_INPUT))
+    executed = _node_path(task.outputs.get(_EXECUTED_OUTPUT))
+    if source is None or executed is None:
+        return None
+    recorded = _first_error(executed)
+    if recorded is not None:
+        ename, evalue, count = recorded
+        line = _first_line(evalue)
+        raised = f"{ename}: {line}" if line else ename
+        cell = "" if count is None else f" in cell In [{count}]"
+        return (
+            f"notebook {source.name} raised {raised}{cell}. The executed notebook, with "
+            f"the error, is at {executed}."
+        )
+    if isinstance(error, subprocess.CalledProcessError):
+        return (
+            f"notebook {source.name} left no error in an executed notebook at {executed}, "
+            f"and {describe_exit(error.returncode)}; its output is in pytask's report for "
+            "the step."
+        )
+    return None
+
+
+def _node_path(node: object) -> Path | None:
+    """Return ``node``'s path if it is a PathNode on a :class:`pathlib.Path`."""
+    if isinstance(node, PathNode) and isinstance(node.path, Path):
+        return node.path
+    return None
+
+
+def _first_error(executed: Path) -> tuple[str, str, int | None] | None:
+    """Return the first error output's name, value and cell execution count, if any."""
+    try:
+        notebook = json.loads(executed.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return None
+    cells = notebook.get("cells") if isinstance(notebook, dict) else None
+    if not isinstance(cells, list):
+        return None
+    for cell in cells:
+        outputs = cell.get("outputs") if isinstance(cell, dict) else None
+        if not isinstance(outputs, list):
+            continue
+        for output in outputs:
+            if isinstance(output, dict) and output.get("output_type") == "error":
+                count = cell.get("execution_count")
+                has_count = isinstance(count, int) and not isinstance(count, bool)
+                return (
+                    str(output.get("ename") or "an error"),
+                    str(output.get("evalue") or ""),
+                    count if has_count else None,
+                )
+    return None
+
+
+def _first_line(text: str) -> str:
+    """Return the first line of ``text`` that is not blank, stripped, or ``""``."""
+    return next((line.strip() for line in text.splitlines() if line.strip()), "")
 
 
 def _check_names(task_name: str, groups: Mapping[str, Iterable[str]]) -> None:
@@ -295,7 +418,8 @@ def _papermill_command(
     products: Iterable[Path],
     values: Mapping[str, NotebookParameter],
 ) -> str:
-    """Return the command that makes output dirs and runs papermill on a temporary kernel."""
+    """Return the command that makes output dirs, removes a previous executed notebook,
+    and runs papermill on a temporary kernel."""
     directories = sorted({str(path.parent) for path in (executed, *products)})
     flags = [arg for name in sorted(values) for arg in _parameter_flag(name, values[name])]
     papermill = shlex.join(
@@ -310,6 +434,7 @@ def _papermill_command(
     return " && ".join(
         [
             f"mkdir -p {shlex.join(directories)}",
+            f"rm -f {shlex.quote(str(executed))}",
             "tmp=$(mktemp -d)",
             "trap 'rm -rf \"$tmp\"' EXIT",
             'export JUPYTER_PATH="$tmp/share/jupyter"',

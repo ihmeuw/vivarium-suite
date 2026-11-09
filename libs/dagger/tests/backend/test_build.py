@@ -1,4 +1,5 @@
 import re
+import signal
 import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -12,6 +13,7 @@ from vivarium.dagger.backend.build import (
     COMMAND_KEY,
     TASK_KEY,
     build,
+    describe_exit,
     failure_message,
     outcomes,
     to_pytask_task,
@@ -382,3 +384,82 @@ def test_failure_message_of_a_failed_step_is_the_exit_code_name(tmp_path: Path) 
 
     assert session.exit_code == ExitCode.FAILED
     assert failure_message(session) == session.exit_code.name
+
+
+# How a failed command's exit reads (MIC-7785)
+
+
+def test_describe_exit_gives_a_positive_return_code_as_an_exit_status() -> None:
+    """describe_exit(3) is 'the command exited with status 3'."""
+    assert describe_exit(3) == "the command exited with status 3"
+    assert describe_exit(1) == "the command exited with status 1"
+
+
+def test_describe_exit_names_the_signal_for_a_negative_return_code() -> None:
+    """describe_exit(-9) is 'the command was stopped by signal SIGKILL', and describe_exit(-15) names SIGTERM."""
+    assert describe_exit(-9) == "the command was stopped by signal SIGKILL"
+    assert describe_exit(-15) == "the command was stopped by signal SIGTERM"
+
+
+def test_describe_exit_gives_the_number_of_a_signal_python_has_no_name_for() -> None:
+    """describe_exit with a negative code that no signal Python knows has, such as -200, is 'the command was stopped by signal 200'."""
+    with pytest.raises(ValueError):
+        signal.Signals(200)
+
+    assert describe_exit(-200) == "the command was stopped by signal 200"
+
+
+def test_a_command_killed_by_a_signal_has_a_negative_return_code_that_describe_exit_names(
+    tmp_path: Path,
+) -> None:
+    """A command task that kills its own shell with SIGKILL fails with a CalledProcessError whose return code describe_exit words as stopped by signal SIGKILL."""
+    tasks = [_task("killed", "kill -9 $$", outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert outcomes(session) == {"killed": TaskOutcome.FAIL}
+    [report] = session.execution_reports
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert error.returncode == -signal.SIGKILL
+    assert describe_exit(error.returncode) == "the command was stopped by signal SIGKILL"
+
+
+@pytest.mark.parametrize(
+    "returncode, name",
+    [(137, "SIGKILL"), (143, "SIGTERM"), (128, None), (255, None), (2, None)],
+)
+def test_describe_exit_names_the_signal_of_a_shell_status_above_128(
+    returncode: int, name: str | None
+) -> None:
+    """describe_exit of a positive code 128+n names signal n (137 SIGKILL, 143 SIGTERM) after the exit status; 128, 255 (signal 127 has no name) and 2 are the exit status alone."""
+    with pytest.raises(ValueError):
+        signal.Signals(127)
+    exited = f"the command exited with status {returncode}"
+
+    description = describe_exit(returncode)
+
+    if name is None:
+        assert description == exited
+    else:
+        assert description.startswith(exited)
+        assert name in description
+
+
+def test_a_shell_whose_child_is_killed_exits_137_and_describe_exit_names_sigkill(
+    tmp_path: Path,
+) -> None:
+    """A command whose child shell is killed with SIGKILL fails with return code 137, which describe_exit words with SIGKILL."""
+    command = "sh -c 'kill -9 $$'; exit $?"
+    tasks = [_task("child_killed", command, outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert outcomes(session) == {"child_killed": TaskOutcome.FAIL}
+    [report] = session.execution_reports
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert error.returncode == 128 + signal.SIGKILL
+    assert "SIGKILL" in describe_exit(error.returncode)
