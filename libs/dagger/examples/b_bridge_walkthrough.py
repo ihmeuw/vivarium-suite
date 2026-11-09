@@ -6,17 +6,22 @@
 # the same ID and in the same order. Run it top to bottom: every outcome, host name and
 # timing below comes from your own run of the `vivarium.dagger` code on this branch.
 #
-# Sections marked "fake" build through the harness's `FakeJobmon`, which runs each step
-# with the real node runner in a child process, so they run anywhere. Sections marked
-# "cluster" build through real Jobmon on Slurm and skip themselves outside a Slurm
-# allocation. B10 and B11 are about the test suite, so the review doc shows them.
+# Every criterion is shown by builds through real Jobmon on Slurm, so run it in a Slurm
+# allocation; outside one, those cells skip themselves. The test suite cannot reach
+# Slurm, so it builds through the harness's `FakeJobmon` instead. The last section,
+# beside B10 and B11 (which the review doc shows), checks that stand-in against the real
+# builds of B1 to B3. B9's plan time also uses a fake, to stop a build right after it
+# binds.
 #
 # Run it from `libs/dagger` with an env that has the `cluster` extra and Jupyter, as a
 # notebook or with `python examples/b_bridge_walkthrough.py`. On the cluster, start it in
 # an allocation on a compute node (`srun -A proj_simscience -p i.q -c 2 --mem 8G -t 3:00:00
 # --pty bash`), set `BRIDGE_WALKTHROUGH_DIR` to a new directory on the shared filesystem,
 # because steps write their products from other nodes, and set `BRIDGE_WALKTHROUGH_ENV` to
-# a conda env that exists at the same path on every node (B5).
+# a conda env that exists at the same path on every node (B5). In a notebook, set them
+# with `%env` in a cell above the next one: a kernel does not see an `export` made after
+# its Jupyter server started. In a Slurm allocation the next cell refuses to run without
+# a workspace on the shared filesystem.
 
 # %%
 import json
@@ -57,9 +62,20 @@ os.environ["PYTHONPATH"] = os.pathsep.join(
 sys.path.insert(0, str(EXAMPLES))
 import bridge_walkthrough_lib as lib  # noqa: E402
 
-WORK = Path(os.environ.get("BRIDGE_WALKTHROUGH_DIR") or tempfile.mkdtemp(prefix="bridge_"))
-WORK.mkdir(parents=True, exist_ok=True)
 ON_SLURM = "SLURM_JOB_ID" in os.environ and shutil.which("sbatch") is not None
+GIVEN_DIR = os.environ.get("BRIDGE_WALKTHROUGH_DIR")
+# Each step's node reads and writes the build's state under WORK, so on Slurm WORK must
+# not be this node's own temporary directory.
+NODE_TMP = Path(tempfile.gettempdir()).resolve()
+if ON_SLURM and (not GIVEN_DIR or Path(GIVEN_DIR).resolve().is_relative_to(NODE_TMP)):
+    raise RuntimeError(
+        f"The workspace {GIVEN_DIR or 'default'} would be on this node's own disk "
+        f"({NODE_TMP}), where other nodes cannot see it. Set BRIDGE_WALKTHROUGH_DIR to a "
+        "new directory on the shared filesystem (in a notebook, with %env in a cell above "
+        "this one) and run this cell again."
+    )
+WORK = Path(GIVEN_DIR or tempfile.mkdtemp(prefix="bridge_")).resolve()
+WORK.mkdir(parents=True, exist_ok=True)
 SLURM = {"jobmon_cluster": "slurm", "jobmon_resources": lib.SLURM_RESOURCES}
 CONTROLLER = os.uname().nodename
 print(f"workspace: {WORK}")
@@ -96,86 +112,75 @@ def skipped(reason="not in a Slurm allocation"):
 
 
 # %% [markdown]
-# ## B1 — A failed step blocks its descendants, and their bodies never run (fake)
+# ## B1 — A failed step blocks its descendants, and their bodies never run
 #
-# b raises on its node. a and d succeed, b is FAIL with the node's exception, and c, which
-# depends on b, is SKIP_PREVIOUS_FAILED. c has no product, so its body ran nowhere, and
-# each step that ran recorded a process id that is not this notebook's.
+# The chain a -> b -> c plus an independent d, built through Jobmon on Slurm. b raises on
+# its node. a and d succeed, b is FAIL with the node's exception, and c, which depends on
+# b, is SKIP_PREVIOUS_FAILED: Jobmon did not start c, so c has no product and its body
+# ran nowhere. Each step that ran recorded a compute node that is not the controller.
 
 # %%
-base = WORK / "b1_b3"
+# Each B1 to B3 build's outcomes, which the last section compares with FakeJobmon's.
+REAL = {}
+base = WORK / "b1_b4"
 tasks, registry = lib.chain(base, switch="fail")
-with FakeJobmon(workflow_id=101) as fake:
-    session = build(tasks, base / "state", jobmon=True)
-lib.show(session)
-print("\nwhere each step ran:", lib.ran_where(registry, ["a", "b", "c", "d"]))
-print(f"this notebook's pid: {os.getpid()}")
-
-# %% [markdown]
-# ## B2 — After the cause is fixed, the next build re-runs exactly the failed cone (fake)
-#
-# The switch now says `ok`. a and d, which succeeded, are SKIP_UNCHANGED, and the one
-# plan bound holds exactly b and c.
-
-# %%
-(base / "switch.txt").write_text("ok\n")
-with FakeJobmon(workflow_id=102) as fake:
-    session = build(tasks, base / "state", jobmon=True)
-lib.show(session)
-print("plans bound:", bound(fake))
-
-# %% [markdown]
-# ## B3 — A second build with nothing changed runs nothing and binds no workflow (fake)
-#
-# Every step is SKIP_UNCHANGED and no plan is bound. The bridged builds wrote the same
-# lockfile entries a local build writes, so a local build afterwards also skips every
-# step.
-
-# %%
-with FakeJobmon(workflow_id=103) as fake:
-    session = build(tasks, base / "state", jobmon=True)
-lib.show(session)
-print("plans bound:", bound(fake))
-print("a local build afterwards:", lib.outcome_names(build(tasks, base / "state")))
-
-# %% [markdown]
-# ## B4 — On Slurm, a pipeline runs end to end through Jobmon, and its record is read over NFS (cluster)
-#
-# The same chain, through real Jobmon on Slurm. b fails first, so this also shows B1
-# for real: c is SKIP_PREVIOUS_FAILED. After the fix, only b and c run again (B2), each
-# on a compute node that is not the controller. Then a build with nothing changed binds
-# no workflow (B3), and a build from another node, in its own allocation, reads the same
-# record over NFS and also skips every step.
-
-# %%
 if ON_SLURM:
-    base = WORK / "b4"
-    tasks, registry = lib.chain(base, switch="fail")
     session = build(tasks, base / "state", jobmon=True, **SLURM)
     lib.show(session)
+    REAL["b fails"] = lib.outcome_names(session)
     state = session.config[RUN_STATE_KEY]
     print(f"\nJobmon workflow {state.workflow_id}, status {state.workflow_status}")
     print("where each step ran:", lib.ran_where(registry, ["a", "b", "c", "d"]))
+    print(f"controller: {CONTROLLER}, pid {os.getpid()}")
 else:
     skipped()
+
+# %% [markdown]
+# ## B2 — After the cause is fixed, the next build re-runs exactly the failed cone
+#
+# The switch now says `ok`. a and d, which succeeded, are SKIP_UNCHANGED and keep the
+# rows they recorded in B1; only b and c run, each on a compute node.
 
 # %%
 if ON_SLURM:
     (base / "switch.txt").write_text("ok\n")
     started = time.time()
     session = build(tasks, base / "state", jobmon=True, **SLURM)
-    b4_wall = time.time() - started
+    b2_wall = time.time() - started
     lib.show(session)
+    REAL["b fixed"] = lib.outcome_names(session)
     state = session.config[RUN_STATE_KEY]
     print(f"\nJobmon workflow {state.workflow_id}, status {state.workflow_status}")
     print("where each step ran:", lib.ran_where(registry, ["a", "b", "c", "d"]))
-    print(f"controller: {CONTROLLER}; wall time of this build: {b4_wall:.0f} s")
-    before = len(state_files(base / "state"))
-    again = build(tasks, base / "state", jobmon=True, **SLURM)
-    print("\nnothing changed:", lib.outcome_names(again))
-    print("new run directories:", len(state_files(base / "state")) - before)
+    print(f"wall time of this build: {b2_wall:.0f} s")
 else:
     skipped()
+
+# %% [markdown]
+# ## B3 — A second build with nothing changed runs nothing and binds no workflow
+#
+# Every step is SKIP_UNCHANGED, and the build starts no Jobmon workflow, so it leaves no
+# new run directory. The bridged builds wrote the same lockfile entries a local build
+# writes, so a local build afterwards also skips every step.
+
+# %%
+if ON_SLURM:
+    before = len(state_files(base / "state"))
+    session = build(tasks, base / "state", jobmon=True, **SLURM)
+    lib.show(session)
+    REAL["nothing changed"] = lib.outcome_names(session)
+    print("new run directories:", len(state_files(base / "state")) - before)
+    print("a local build afterwards:", lib.outcome_names(build(tasks, base / "state")))
+else:
+    skipped()
+
+# %% [markdown]
+# ## B4 — On Slurm, a pipeline runs end to end through Jobmon, and its record is read over NFS
+#
+# B1 to B3 ran the chain end to end through Jobmon, each step on a compute node. What
+# B4 adds is the record: a build from another node, in its own allocation, reads the
+# record those builds left over NFS and also skips every step without binding a
+# workflow.
 
 # %%
 if ON_SLURM:
@@ -212,7 +217,7 @@ else:
     skipped()
 
 # %% [markdown]
-# ## B5 — Each step runs in its declared env, and a Python step is sent by its import path (cluster)
+# ## B5 — Each step runs in its declared env, and a Python step is sent by its import path
 #
 # Three steps on compute nodes: a command step that declares the env in
 # `BRIDGE_WALKTHROUGH_ENV`, a command step with no env, and a Python step. Each command
@@ -317,25 +322,7 @@ else:
 # %% [markdown]
 # ## B6 — An interrupted build settles what it can, keeps the workflow id, and the next build resumes
 #
-# Fake: the fake stops the run with SIGTERM after two steps. The build records the two
-# results, reports every other step, writes an "interrupted" state with the workflow id,
-# and returns. The next build runs exactly the steps that were not recorded.
-
-# %%
-base = WORK / "b6_fake"
-tasks, registry = lib.chain(base)
-with FakeJobmon(workflow_id=601, interrupt_after=2) as fake:
-    session = build(tasks, base / "state", jobmon=True)
-lib.show(session)
-state = session.config[RUN_STATE_KEY]
-print(f"\nstate: {state.status}, workflow {state.workflow_id}, pending {state.pending}")
-with FakeJobmon(workflow_id=602) as fake:
-    session = build(tasks, base / "state", jobmon=True)
-lib.show(session)
-print("plans bound:", bound(fake))
-
-# %% [markdown]
-# Cluster: the controller runs as its own Slurm job, building a -> b -> c where b and c
+# The controller runs as its own Slurm job, building a -> b -> c where b and c
 # each take two minutes. Once a has finished, `scancel` cancels the controller's job, so
 # Slurm sends SIGTERM and, after its `KillWait` grace period, SIGKILL.
 #
@@ -478,7 +465,7 @@ else:
     skipped()
 
 # %% [markdown]
-# ## B7 — A step that runs out of memory is retried by Jobmon with more memory (cluster)
+# ## B7 — A step that runs out of memory is retried by Jobmon with more memory
 #
 # The step touches 1.5 GB with a 1 GB limit, so Slurm kills its first attempt. Jobmon
 # classifies that as a resource error and retries it with memory scaled up, and the
@@ -533,11 +520,11 @@ else:
 # %% [markdown]
 # ## B8 — A second bridged build on the same root is refused, and the record is left as it is
 #
-# Fake: a child process holds the run lock, as a running bridged build does. The build
-# is refused at once with a message naming the holder, runs nothing, and leaves
-# `pytask.lock` byte for byte as it was. On the cluster the holder runs on another node,
-# which shows the lock across hosts on NFS. The two-user drill (a second account) is
-# pending; the review doc says so.
+# A chain is built through Jobmon, and then a process on another node holds the run lock
+# on the same root, as a running bridged build does, so the lock is shown across hosts on
+# NFS. The next build is refused at once with a message naming the holder, reports no
+# step, binds no workflow (no new run directory), and leaves `pytask.lock` byte for byte
+# as it was. The two-user drill (a second account) is pending; the review doc says so.
 
 # %%
 def hold_lock(root, *srun):
@@ -558,31 +545,12 @@ def hold_lock(root, *srun):
     return holder
 
 
-base = WORK / "b8"
-tasks, registry = lib.chain(base)
-with FakeJobmon(workflow_id=801):
-    build(tasks, base / "state", jobmon=True)
-record = (base / "state" / "pytask.lock").read_bytes()
-holder = hold_lock(base / "state")
-try:
-    with FakeJobmon(workflow_id=802) as fake:
-        session = build(tasks, base / "state", jobmon=True)
-finally:
-    holder.kill()
-print(
-    "exit code:",
-    session.exit_code.name,
-    "| reports:",
-    len(session.execution_reports),
-    "| plans bound:",
-    bound(fake),
-)
-print("refusal:", session.config.get(RUN_REFUSED_KEY))
-print("pytask.lock unchanged:", (base / "state" / "pytask.lock").read_bytes() == record)
-
-# %%
 if ON_SLURM:
-    clean = {k: v for k, v in os.environ.items() if not k.startswith("SLURM_")}
+    base = WORK / "b8"
+    tasks, registry = lib.chain(base)
+    lib.show(build(tasks, base / "state", jobmon=True, **SLURM))
+    record = (base / "state" / "pytask.lock").read_bytes()
+    before = len(state_files(base / "state"))
     holder = hold_lock(
         base / "state",
         "srun",
@@ -603,8 +571,12 @@ if ON_SLURM:
         session = build(tasks, base / "state", jobmon=True, **SLURM)
     finally:
         holder.kill()
-    print("exit code:", session.exit_code.name, "| reports:", len(session.execution_reports))
+    print(
+        "\nexit code:", session.exit_code.name, "| reports:", len(session.execution_reports)
+    )
+    print("new run directories:", len(state_files(base / "state")) - before)
     print("refusal:", session.config.get(RUN_REFUSED_KEY))
+    print("pytask.lock unchanged:", (base / "state" / "pytask.lock").read_bytes() == record)
 else:
     skipped()
 
@@ -681,6 +653,44 @@ if ON_SLURM:
     print("gap from one step's end to the next step's start, per hop (s):", gaps.round(1))
 else:
     skipped()
+
+# %% [markdown]
+# ## B10 and B11 — the test suite, and its stand-in for Jobmon
+#
+# B10 and B11 are about the test suite, so the review doc shows them. The suite runs in
+# CI, which has no Slurm, so its bridged builds go through the harness's `FakeJobmon`. The
+# fake replaces only the bridge's three Jobmon calls (check the environment, bind the
+# workflow, run it) and runs each step with the real node runner in a child process, so
+# everything else in a test is the bridge's own code. Two things are the fake's own,
+# though: it runs the steps one at a time, and it decides by itself that a step whose
+# upstream did not finish is not run (Jobmon's status `G`). On Slurm, Jobmon makes that
+# decision. So a test of B1 passes or fails partly on the fake's copy of Jobmon's rule.
+#
+# This cell builds B1 to B3's chain again under `FakeJobmon`, in a new directory, and
+# compares each build's outcomes with what real Jobmon gave above. Equal outcomes mean the
+# fake reproduces Jobmon's behavior for these three cases, which the suite's tests of
+# them rely on.
+
+# %%
+base = WORK / "fake_parity"
+tasks, registry = lib.chain(base, switch="fail")
+FAKE = {}
+with FakeJobmon(workflow_id=1001):
+    FAKE["b fails"] = lib.outcome_names(build(tasks, base / "state", jobmon=True))
+(base / "switch.txt").write_text("ok\n")
+with FakeJobmon(workflow_id=1002):
+    FAKE["b fixed"] = lib.outcome_names(build(tasks, base / "state", jobmon=True))
+with FakeJobmon(workflow_id=1003) as fake:
+    FAKE["nothing changed"] = lib.outcome_names(build(tasks, base / "state", jobmon=True))
+print("plans bound by the last build:", bound(fake))
+for case, outcomes_under_fake in FAKE.items():
+    print(f"\n{case}:")
+    print("  FakeJobmon: ", outcomes_under_fake)
+    if case in REAL:
+        print("  real Jobmon:", REAL[case])
+        print("  the same:   ", outcomes_under_fake == REAL[case])
+    else:
+        print("  real Jobmon: not run (not in a Slurm allocation)")
 
 # %% [markdown]
 # ## PLAY
