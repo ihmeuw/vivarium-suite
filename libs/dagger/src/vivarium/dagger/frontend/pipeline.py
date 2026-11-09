@@ -6,11 +6,15 @@ returns one, and the verbs here take one. :func:`run` builds the pipeline, or on
 named steps and their ancestors, and can force named steps to run even when they are
 current. :func:`preview` returns the plan without running anything, with each reason
 naming, where it can, an artifact key or a step instead of a file path or a pytask node
-name.
+name. :func:`run` describes a failed command or notebook step without its generated
+command and names a step that calls ``sys.exit``; both verbs report two steps that
+share a name with what to change.
 """
 
 import difflib
-from collections.abc import Iterable, Sequence
+import subprocess
+from collections import Counter
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import TracebackType
@@ -19,11 +23,18 @@ from typing import Any
 from _pytask.lockfile import LockfileError, LockfileState
 from pytask import ExitCode, PathNode, Session, TaskOutcome
 
-from vivarium.dagger.backend.build import COMMAND_KEY, build, failure_message, outcomes
+from vivarium.dagger.backend.build import (
+    COMMAND_KEY,
+    build,
+    describe_exit,
+    failure_message,
+    outcomes,
+)
 from vivarium.dagger.backend.preview import PlanFailed, StepPreview
 from vivarium.dagger.backend.preview import preview as backend_preview
-from vivarium.dagger.backend.task import Task
+from vivarium.dagger.backend.task import Task, check_unique_task_names
 from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.notebook_step import describe_notebook_failure
 
 # TODO(MIC-7541): once iterate() fans a step out over coordinates, map each task name
 # back to its step and coordinates; until then every task name is a step name.
@@ -94,10 +105,12 @@ class PipelineError(Exception):
 class StepFailed(PipelineError):
     """One or more steps failed during :func:`run`.
 
-    The message names each failed step with its error's type and message. An error that
-    carries ``exc_type`` and ``exc_message`` attributes, as a failure reported from
-    another process does, is described by those attributes instead of its own type and
-    message.
+    The message has one entry per failed step, ``Step '<name>' failed: <description>``,
+    each starting on a new line. A step's description is the one ``descriptions`` gives
+    for it; otherwise it is its error's type and message, which takes more than one line
+    when the message does. An error that carries ``exc_type`` and ``exc_message``
+    attributes, as a failure reported from another process does, is then described by
+    those attributes instead of its own type and message.
 
     Parameters
     ----------
@@ -105,6 +118,9 @@ class StepFailed(PipelineError):
         Each failed step's exception, keyed by step name, in pytask's report order.
     outcomes
         Every step's outcome from the run, keyed by step name, in pytask's report order.
+    descriptions
+        Text that replaces the error's type and message in the line of each step it
+        names, keyed by step name. :func:`run` gives one for every failed step.
     """
 
     failures: dict[str, BaseException]
@@ -113,14 +129,42 @@ class StepFailed(PipelineError):
     """Every step's outcome from the run, keyed by step name, in pytask's report order."""
 
     def __init__(
-        self, failures: dict[str, BaseException], outcomes: dict[str, TaskOutcome]
+        self,
+        failures: dict[str, BaseException],
+        outcomes: dict[str, TaskOutcome],
+        *,
+        descriptions: Mapping[str, str] | None = None,
     ) -> None:
         self.failures = failures
         self.outcomes = outcomes
+        given: Mapping[str, str] = {} if descriptions is None else descriptions
         lines = (
-            f"Step {step!r} failed: {_describe(error)}" for step, error in failures.items()
+            f"Step {step!r} failed: {given[step] if step in given else _describe(error)}"
+            for step, error in failures.items()
         )
         super().__init__("\n".join(lines), exit_code=ExitCode.FAILED)
+
+
+class StepExited(SystemExit):
+    """A step raised :class:`SystemExit`, as ``sys.exit`` does, and stopped the build.
+
+    It is a ``SystemExit`` with the step's exit code, so unless it is caught it ends the
+    process with that code, as the step's own ``SystemExit`` would have.
+
+    Parameters
+    ----------
+    step
+        The name of the step that exited.
+    code
+        The step's exit code, as its ``SystemExit`` held it.
+    """
+
+    step: str
+    """The name of the step that exited."""
+
+    def __init__(self, step: str, code: str | int | None) -> None:
+        super().__init__(code)
+        self.step = step
 
 
 def run(
@@ -160,13 +204,17 @@ def run(
     Raises
     ------
     PipelineError
-        If ``only`` or ``force`` names a step that is not in the pipeline, ``force`` is
-        given and ``pytask.lock`` is not a lockfile pytask accepts, the backend rejects
-        the tasks (for example, two steps share a name or a declared env does not
-        resolve), or pytask stops before any step fails. An unknown step is reported
-        before anything is built or written, with the valid step names and the closest
-        match. A rejection by the backend is chained from its ``ValueError``, and an
-        invalid lockfile from pytask's lockfile error.
+        If two steps share a name, ``only`` or ``force`` names a step that is not in the
+        pipeline, ``force`` is given and ``pytask.lock`` is not a lockfile pytask
+        accepts, the backend rejects the tasks (for example, a declared env does not
+        resolve), or pytask stops before any step fails. A shared name and an unknown
+        step are reported before anything is built or written. A shared name gives one
+        line per name, in sorted order, such as ``Two steps are named 'population';
+        pass name= to python_step or notebook_step to tell them apart.`` (with the count
+        as a digit, as in ``3 steps are named``, for more than two), and is chained from
+        the backend's ``ValueError``. An unknown step is reported with the valid step
+        names and the closest match. A rejection by the backend is chained from its
+        ``ValueError``, and an invalid lockfile from pytask's lockfile error.
         When pytask stops, the message is
         :func:`~vivarium.dagger.backend.build.failure_message`'s; for a cause pytask
         does not record, such as an error in a pytask plugin, that is only the exit
@@ -176,10 +224,26 @@ def run(
         If one or more steps fail. Each failure's traceback starts at its first frame
         outside pytask and pluggy that is not marked with ``__tracebackhide__``, which
         for a step body is the first frame of the step's own code; when no frame
-        qualifies, the full traceback is kept. The first failure in report order is the
-        cause. A ``KeyboardInterrupt`` or ``SystemExit`` raised in a step is re-raised
-        as itself instead.
+        qualifies, the full traceback is kept. ``failures`` holds each step's own
+        exception, and the first failure in report order is the cause. Each step's entry
+        in the message describes its failure in step terms. A notebook step is
+        described by
+        :func:`~vivarium.dagger.frontend.notebook_step.describe_notebook_failure` when
+        that returns a description. Any other step whose ``run`` is a shell command and
+        that failed with :class:`subprocess.CalledProcessError` is described as
+        ``<exit>; its output is in pytask's report for the step.``, where ``<exit>`` is
+        :func:`~vivarium.dagger.backend.build.describe_exit` of the return code, so the
+        generated command stays out of the message; it is still in the cause and in
+        pytask's report. Every other failure, including a ``CalledProcessError`` that a
+        python step's own code raised, is described by its type and message, as
+        :class:`StepFailed` describes it by default.
+    StepExited
+        If a step raises ``SystemExit``, for example by calling ``sys.exit``. It names
+        the step, keeps the step's exit code, and is chained from the step's
+        ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is re-raised as itself.
+        Either is raised instead of :class:`StepFailed`.
     """
+    _check_unique_steps(pipeline)
     selected = None if only is None else _resolve(pipeline, only)
     forced: set[str] = set() if force is None else _resolve(pipeline, force)
     if selected is not None:
@@ -189,13 +253,28 @@ def run(
         session = build(pipeline.tasks, pipeline.root, selected=selected, **build_kwargs)
     except ValueError as error:
         raise PipelineError(str(error)) from error
+    except SystemExit as error:
+        # pytask records only Exception and KeyboardInterrupt, so a step's SystemExit
+        # leaves pytask.build unrecorded and the step is found from its traceback.
+        step = _exiting_step(error)
+        if step is None:
+            raise
+        raise StepExited(step, error.code) from error
     result = outcomes(session)
     failures = _failures(session)
-    for failure in failures.values():
-        if isinstance(failure, (KeyboardInterrupt, SystemExit)):
+    for step, failure in failures.items():
+        if isinstance(failure, KeyboardInterrupt):
             raise failure
+        if isinstance(failure, SystemExit):
+            raise StepExited(step, failure.code) from failure
     if failures:
-        raise StepFailed(failures, result) from next(iter(failures.values()))
+        tasks = {task.name: task for task in pipeline.tasks}
+        descriptions = {
+            step: _step_description(tasks[step], error) for step, error in failures.items()
+        }
+        raise StepFailed(failures, result, descriptions=descriptions) from next(
+            iter(failures.values())
+        )
     if session.exit_code != ExitCode.OK:
         raise PipelineError(failure_message(session), exit_code=session.exit_code)
     return result
@@ -229,11 +308,13 @@ def preview(
     Raises
     ------
     PipelineError
-        If ``only`` names a step that is not in the pipeline, the backend rejects the
-        tasks, or pytask cannot collect or plan them, as for :func:`run`. When the
+        If two steps share a name, ``only`` names a step that is not in the pipeline,
+        the backend rejects the tasks, or pytask cannot collect or plan them, as for
+        :func:`run`. When the
         backend raises :class:`~vivarium.dagger.backend.preview.PlanFailed`, the
         error's ``exit_code`` is that error's; otherwise it is ``None``.
     """
+    _check_unique_steps(pipeline)
     selected = None if only is None else _resolve(pipeline, only)
     try:
         plan = backend_preview(pipeline.tasks, pipeline.root, selected=selected)
@@ -247,6 +328,21 @@ def preview(
             for reason in step.reasons
         ]
     return plan
+
+
+def _check_unique_steps(pipeline: Pipeline) -> None:
+    """Raise PipelineError, chained from the backend's ValueError, if steps share a name."""
+    try:
+        check_unique_task_names(pipeline.tasks)
+    except ValueError as error:
+        counts = Counter(task.name for task in pipeline.tasks)
+        lines = [
+            f"{'Two' if count == 2 else count} steps are named {name!r}; pass name= to "
+            "python_step or notebook_step to tell them apart."
+            for name, count in sorted(counts.items())
+            if count > 1
+        ]
+        raise PipelineError("\n".join(lines)) from error
 
 
 def _resolve(pipeline: Pipeline, steps: str | Iterable[str]) -> set[str]:
@@ -290,6 +386,23 @@ def _failures(session: Session) -> dict[str, BaseException]:
     return failures
 
 
+def _exiting_step(error: SystemExit) -> str | None:
+    """Return the step that raised ``error``, from ``task`` in a build ``_run`` frame."""
+    step: str | None = None
+    entry = error.__traceback__
+    while entry is not None:
+        frame = entry.tb_frame
+        task = frame.f_locals.get("task")
+        if (
+            frame.f_globals.get("__name__") == build.__module__
+            and frame.f_code.co_name == "_run"
+            and isinstance(task, Task)
+        ):
+            step = task.name
+        entry = entry.tb_next
+    return step
+
+
 def _trimmed(error: BaseException) -> BaseException:
     """Return ``error`` with its traceback starting at its first frame that is not hidden."""
     full = error.__traceback__
@@ -306,6 +419,20 @@ def _is_hidden(entry: TracebackType) -> bool:
         return True
     module = str(frame.f_globals.get("__name__", ""))
     return module.partition(".")[0] in _INTERNAL_PACKAGES
+
+
+def _step_description(task: Task, error: BaseException) -> str:
+    """Return the text after ``Step '<name>' failed:`` for ``task``'s ``error``."""
+    if isinstance(task.run, str):
+        notebook = describe_notebook_failure(task, error)
+        if notebook is not None:
+            return notebook
+        if isinstance(error, subprocess.CalledProcessError):
+            return (
+                f"{describe_exit(error.returncode)}; its output is in pytask's report for "
+                "the step."
+            )
+    return _describe(error)
 
 
 def _describe(error: BaseException) -> str:

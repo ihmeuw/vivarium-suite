@@ -1,6 +1,7 @@
 """Acceptance tests for the notebook_step frontend (``frontend.notebook_step``)."""
 
 import json
+import subprocess
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping
@@ -11,9 +12,17 @@ from typing import Any, TypeVar, cast
 import numpy as np
 import pandas as pd
 import pytest
-from pytask import PathNode, PNode, TaskOutcome
+from pytask import NodeNotFoundError, PathNode, PNode, TaskOutcome
 
 import vivarium.dagger
+from tests.frontend.notebooks import (
+    broken_env,
+    code_cell,
+    error_output,
+    recorded_errors,
+    write_notebook,
+    write_source_notebook,
+)
 from vivarium.dagger.backend.build import build, outcomes, run_command
 from vivarium.dagger.backend.preview import Reason, preview
 from vivarium.dagger.backend.task import Task
@@ -21,6 +30,7 @@ from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
 from vivarium.dagger.frontend.notebook_step import (
     KERNEL_NAME,
     NotebookParameter,
+    describe_notebook_failure,
     notebook_step,
 )
 from vivarium.dagger.frontend.python_step import python_step
@@ -1277,3 +1287,481 @@ def test_executed_or_product_key_that_is_a_root_input_raises_wiring_error(
 
     assert _ROOT_NOTEBOOK_KEY in str(executed_info.value)
     assert _ROOT_TABLE_KEY in str(product_info.value)
+
+
+# Wiring errors name the step (MIC-7785)
+
+
+def test_unknown_input_key_error_names_the_step(tmp_path: Path) -> None:
+    """A mistyped input key raises WiringError whose message starts with "Step '<name>': ", names the key, and keeps the did-you-mean, as python_step's does."""
+    registry = _registry(tmp_path)
+    registry.register_output("tables/summary.csv")
+
+    with pytest.raises(WiringError) as info:
+        notebook_step(
+            _source(tmp_path),
+            executed=_EXECUTED_KEY,
+            registry=registry,
+            env=_ENV,
+            inputs={"summary_path": "tables/sumary.csv"},
+            name="summarize",
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'summarize': "), message
+    assert "'tables/sumary.csv'" in message
+    assert message.endswith("Did you mean 'tables/summary.csv'?"), message
+
+
+def test_unknown_input_key_error_names_the_default_step_name(tmp_path: Path) -> None:
+    """Without name=, the WiringError for a mistyped input key starts with "Step '<executed key>': "."""
+    registry = _registry(tmp_path)
+    registry.register_output("tables/summary.csv")
+
+    with pytest.raises(WiringError) as info:
+        notebook_step(
+            _source(tmp_path),
+            executed=_EXECUTED_KEY,
+            registry=registry,
+            env=_ENV,
+            inputs={"summary_path": "tables/sumary.csv"},
+        )
+
+    message = str(info.value)
+    assert message.startswith(f"Step {_EXECUTED_KEY!r}: "), message
+    assert "'tables/sumary.csv'" in message
+
+
+def test_output_on_a_root_input_error_names_the_step(tmp_path: Path) -> None:
+    """A produces key that is a declared root input raises WiringError whose message starts with "Step '<name>': " and names the key."""
+    with pytest.raises(WiringError) as info:
+        notebook_step(
+            _source(tmp_path),
+            executed=_EXECUTED_KEY,
+            registry=_root_input_registry(tmp_path),
+            env=_ENV,
+            produces={"table_path": _ROOT_TABLE_KEY},
+            name="summarize",
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'summarize': "), message
+    assert _ROOT_TABLE_KEY in message
+
+
+# The executed notebook is this run's (MIC-7785)
+
+
+def test_an_executed_notebook_left_by_an_earlier_run_is_removed_before_the_notebook_runs(
+    tmp_path: Path,
+) -> None:
+    """When an executed notebook from an earlier run is at the executed path and the step's env fails before papermill starts, the step fails and no executed notebook is left at that path."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    source = write_source_notebook(tmp_path / "notebooks" / "stale.ipynb", "table_path = 1")
+    task = notebook_step(
+        source,
+        executed="executed/stale.ipynb",
+        registry=registry,
+        env=str(broken_env(tmp_path / "broken_env")),
+        produces={"table_path": _TABLE_KEY},
+        name="stale",
+    )
+    executed = registry.path_for("executed/stale.ipynb")
+    earlier = code_cell("x", execution_count=3, outputs=[error_output("KeyError", "'old'")])
+    write_notebook(executed, [earlier])
+
+    assert outcomes(build([task], tmp_path / "state")) == {"stale": TaskOutcome.FAIL}
+    assert not executed.exists()
+
+
+def test_the_command_still_runs_and_succeeds_when_no_executed_notebook_exists(
+    tmp_path: Path,
+) -> None:
+    """A notebook step whose executed notebook has never been written runs and succeeds, so removing a previous one does not fail when there is none."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    source = write_source_notebook(
+        tmp_path / "notebooks" / "fresh.ipynb",
+        "table_path = 'unset'",
+        "from pathlib import Path\nPath(table_path).write_text('n\\n1\\n')",
+    )
+    task = notebook_step(
+        source,
+        executed="executed/fresh.ipynb",
+        registry=registry,
+        env=sys.prefix,
+        produces={"table_path": _TABLE_KEY},
+        name="fresh",
+    )
+    executed = registry.path_for("executed/fresh.ipynb")
+    assert not executed.exists()
+
+    assert outcomes(build([task], tmp_path / "state")) == {"fresh": TaskOutcome.SUCCESS}
+    assert executed.is_file()
+    assert registry.path_for(_TABLE_KEY).read_text() == "n\n1\n"
+
+
+# describe_notebook_failure (MIC-7785)
+
+_KEY_ERROR = error_output("KeyError", "'no_such_column'")
+"""The error output Jupyter saves for ``{}['no_such_column']``."""
+
+
+class _RemoteFailure(Exception):
+    """Stand in for a failure reported from another process, which names the remote error."""
+
+    def __init__(self, exc_type: str, exc_message: str) -> None:
+        super().__init__("a step failed in another process")
+        self.exc_type = exc_type
+        self.exc_message = exc_message
+
+
+@dataclass
+class _FailedStep:
+    """A notebook step 'summarize' that is compiled but never built, and its files."""
+
+    task: Task
+    source: Path
+    executed: Path
+
+    @property
+    def command(self) -> str:
+        """Return the step's generated command."""
+        assert isinstance(self.task.run, str)
+        return self.task.run
+
+    @property
+    def called(self) -> subprocess.CalledProcessError:
+        """Return the error the step's command fails with when it exits 1."""
+        return subprocess.CalledProcessError(1, self.command)
+
+    def described(self, error: BaseException | None = None) -> str | None:
+        """Describe the step's failure with ``error``, by default ``called``."""
+        return describe_notebook_failure(self.task, self.called if error is None else error)
+
+    def raised(self, error: str, cell: str = " in cell In [3]") -> str:
+        """Return the description of ``error`` raised in ``cell``."""
+        return (
+            f"notebook {self.source.name} raised {error}{cell}. The executed notebook, "
+            f"with the error, is at {self.executed}."
+        )
+
+    def fallback(self, returncode: int = 1) -> str:
+        """Return the description of an exit with ``returncode`` and no recorded error."""
+        return (
+            f"notebook {self.source.name} left no error in an executed notebook at "
+            f"{self.executed}, and the command exited with status {returncode}; its output "
+            "is in pytask's report for the step."
+        )
+
+
+def _failed_step(tmp_path: Path) -> _FailedStep:
+    """Compile a notebook step 'summarize' whose executed notebook is not yet written."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    source = write_source_notebook(
+        tmp_path / "notebooks" / "summarize.ipynb", "table_path = 'unset'"
+    )
+    task = notebook_step(
+        source,
+        executed="executed/summarize.ipynb",
+        registry=registry,
+        env=_ENV,
+        produces={"table_path": _TABLE_KEY},
+        name="summarize",
+    )
+    return _FailedStep(task, source, registry.path_for("executed/summarize.ipynb"))
+
+
+def _executed_cells(*error_cells: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return a parameters cell, an injected-parameters cell, then ``error_cells``."""
+    return [
+        code_cell("table_path = 'unset'", tags=["parameters"], execution_count=1),
+        code_cell("table_path = '/x'", tags=["injected-parameters"], execution_count=2),
+        *error_cells,
+    ]
+
+
+def test_describe_notebook_failure_names_the_notebook_error_cell_and_executed_path(
+    tmp_path: Path,
+) -> None:
+    """For a notebook step whose executed notebook has a KeyError output in a cell with execution count 3, the description is exactly "notebook <source name> raised KeyError: 'no_such_column' in cell In [3]. The executed notebook, with the error, is at <absolute executed path>."."""
+    step = _failed_step(tmp_path)
+    failing = code_cell("{}['no_such_column']", execution_count=3, outputs=[_KEY_ERROR])
+    write_notebook(step.executed, _executed_cells(failing))
+
+    description = step.described()
+
+    assert step.executed.is_absolute()
+    assert description == (
+        "notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The "
+        f"executed notebook, with the error, is at {step.executed}."
+    )
+
+
+def test_describe_notebook_failure_reads_the_notebook_whatever_the_error_type(
+    tmp_path: Path,
+) -> None:
+    """The description from an executed notebook with an error output is the same whether the error passed is a CalledProcessError, a RuntimeError, or an object carrying exc_type and exc_message as a remote failure does."""
+    step = _failed_step(tmp_path)
+    failing = code_cell("{}['no_such_column']", execution_count=3, outputs=[_KEY_ERROR])
+    write_notebook(step.executed, _executed_cells(failing))
+    errors: list[BaseException] = [
+        step.called,
+        RuntimeError("the worker failed"),
+        _RemoteFailure("CalledProcessError", "Command 'python -m papermill' failed."),
+    ]
+
+    descriptions = [step.described(error) for error in errors]
+
+    expected = step.raised("KeyError: 'no_such_column'")
+    assert descriptions == [expected] * len(errors)
+
+
+def test_describe_notebook_failure_leaves_out_an_empty_error_value(tmp_path: Path) -> None:
+    """An error output whose evalue is empty is described as 'raised <ename> in cell In [<n>].', with no colon after the name."""
+    step = _failed_step(tmp_path)
+    failing = code_cell(
+        "raise StopIteration", execution_count=3, outputs=[error_output("StopIteration", "")]
+    )
+    write_notebook(step.executed, _executed_cells(failing))
+
+    description = step.described()
+
+    assert description == step.raised("StopIteration")
+    assert description is not None and "StopIteration:" not in description
+
+
+def test_describe_notebook_failure_gives_only_the_first_non_blank_line_of_a_multi_line_error_value(
+    tmp_path: Path,
+) -> None:
+    """An evalue with a blank first line and several more lines is described by its first non-blank line, stripped, and the description has no newline."""
+    step = _failed_step(tmp_path)
+    value = " \t\n\n  column 'deaths' is missing  \n  from the table\nsee the docs\n"
+    failing = code_cell(
+        "check(table)", execution_count=3, outputs=[error_output("ValueError", value)]
+    )
+    write_notebook(step.executed, _executed_cells(failing))
+
+    description = step.described()
+
+    assert description == step.raised("ValueError: column 'deaths' is missing")
+    assert description is not None and "\n" not in description
+
+
+def test_describe_notebook_failure_leaves_out_an_error_value_with_only_blank_lines(
+    tmp_path: Path,
+) -> None:
+    """An evalue whose lines are all blank is left out, as an empty one is."""
+    step = _failed_step(tmp_path)
+    failing = code_cell(
+        "raise StopIteration",
+        execution_count=3,
+        outputs=[error_output("StopIteration", " \n\t\n")],
+    )
+    write_notebook(step.executed, _executed_cells(failing))
+
+    description = step.described()
+
+    assert description == step.raised("StopIteration")
+    assert description is not None and "StopIteration:" not in description
+
+
+def test_describe_notebook_failure_leaves_out_the_cell_when_it_has_no_execution_count(
+    tmp_path: Path,
+) -> None:
+    """An error output in a cell whose execution_count is null is described without ' in cell In [...]'."""
+    step = _failed_step(tmp_path)
+    failing = code_cell("{}['no_such_column']", execution_count=None, outputs=[_KEY_ERROR])
+    write_notebook(step.executed, _executed_cells(failing))
+
+    description = step.described()
+
+    assert description == step.raised("KeyError: 'no_such_column'", cell="")
+    assert description is not None and "In [" not in description
+
+
+def test_describe_notebook_failure_reports_the_first_error_in_cell_order(
+    tmp_path: Path,
+) -> None:
+    """When two cells hold error outputs, the description names the first cell's error and execution count."""
+    step = _failed_step(tmp_path)
+    # The first cell in order ran last, so cell order and execution order disagree.
+    first = code_cell(
+        "raise ValueError('first')",
+        execution_count=5,
+        outputs=[error_output("ValueError", "first")],
+    )
+    second = code_cell(
+        "raise TypeError('second')",
+        execution_count=4,
+        outputs=[error_output("TypeError", "second")],
+    )
+    write_notebook(step.executed, _executed_cells(first, second))
+
+    assert step.described() == step.raised("ValueError: first", cell=" in cell In [5]")
+
+
+def test_describe_notebook_failure_ignores_stream_and_display_outputs(tmp_path: Path) -> None:
+    """Stream and display outputs before the failing cell do not change the description, which names only the error output."""
+    step = _failed_step(tmp_path)
+    stream: dict[str, Any] = {"output_type": "stream", "name": "stdout", "text": ["rows\n"]}
+    display: dict[str, Any] = {
+        "output_type": "display_data",
+        "data": {"text/plain": ["42"]},
+        "metadata": {},
+    }
+    shown: dict[str, Any] = {
+        "output_type": "execute_result",
+        "execution_count": 3,
+        "data": {"text/plain": ["7"]},
+        "metadata": {},
+    }
+    printing = code_cell("print('3 rows')\n7", execution_count=3, outputs=[stream, shown])
+    failing = code_cell(
+        "{}['no_such_column']", execution_count=4, outputs=[display, stream, _KEY_ERROR]
+    )
+    write_notebook(step.executed, _executed_cells(printing, failing))
+
+    description = step.described()
+
+    assert description == step.raised("KeyError: 'no_such_column'", cell=" in cell In [4]")
+
+
+def test_describe_notebook_failure_falls_back_to_the_exit_status_without_an_executed_notebook(
+    tmp_path: Path,
+) -> None:
+    """With no file at the executed path and a CalledProcessError with return code 1, the description is exactly "notebook <source name> left no error in an executed notebook at <path>, and the command exited with status 1; its output is in pytask's report for the step."."""
+    step = _failed_step(tmp_path)
+    assert not step.executed.exists()
+
+    description = step.described()
+
+    assert description == (
+        "notebook summarize.ipynb left no error in an executed notebook at "
+        f"{step.executed}, and the command exited with status 1; its output is in "
+        "pytask's report for the step."
+    )
+
+
+def test_describe_notebook_failure_falls_back_when_the_executed_notebook_is_not_json(
+    tmp_path: Path,
+) -> None:
+    """An executed notebook that is truncated or not JSON gives the exit-status fallback, not an exception."""
+    step = _failed_step(tmp_path)
+    write_notebook(step.executed, _executed_cells())
+    complete = step.executed.read_text(encoding="utf-8")
+    contents = [complete[: len(complete) // 2], "this is not JSON", ""]
+
+    for content in contents:
+        step.executed.write_text(content, encoding="utf-8")
+        assert step.described() == step.fallback(), content
+
+
+def test_describe_notebook_failure_falls_back_for_json_that_is_not_a_notebook(
+    tmp_path: Path,
+) -> None:
+    """Valid JSON that is not a notebook, such as a list or a notebook whose cells lack outputs, gives the exit-status fallback, not an exception."""
+    step = _failed_step(tmp_path)
+    contents: list[object] = [
+        [],
+        {},
+        "a notebook",
+        {"cells": [{"cell_type": "code", "source": "x", "execution_count": 3}]},
+        {"cells": [{"cell_type": "markdown", "source": "# Summary"}]},
+    ]
+
+    for content in contents:
+        step.executed.parent.mkdir(parents=True, exist_ok=True)
+        step.executed.write_text(json.dumps(content), encoding="utf-8")
+        assert step.described() == step.fallback(), content
+
+
+def test_describe_notebook_failure_falls_back_when_the_executed_notebook_records_no_error(
+    tmp_path: Path,
+) -> None:
+    """An executed notebook without an error output and a CalledProcessError give the exit-status fallback."""
+    step = _failed_step(tmp_path)
+    stream: dict[str, Any] = {"output_type": "stream", "name": "stdout", "text": ["done\n"]}
+    body = code_cell("print('done')", execution_count=3, outputs=[stream])
+    write_notebook(step.executed, _executed_cells(body))
+
+    assert step.described(subprocess.CalledProcessError(2, step.command)) == step.fallback(2)
+
+
+def test_describe_notebook_failure_fallback_does_not_contain_the_generated_command(
+    tmp_path: Path,
+) -> None:
+    """The fallback for a CalledProcessError whose cmd is the step's papermill command contains neither 'papermill' nor the command text."""
+    step = _failed_step(tmp_path)
+    assert "papermill" in step.command
+
+    description = step.described()
+
+    assert description == step.fallback()
+    assert description is not None
+    assert "papermill" not in description
+    assert step.command not in description
+
+
+def test_describe_notebook_failure_is_none_for_a_task_that_is_not_a_notebook_step(
+    tmp_path: Path,
+) -> None:
+    """A python_step task and a hand-built command task, each with a CalledProcessError, are described as None."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    python_task = python_step(
+        _offset_table, inputs={}, produces="offset.parquet", registry=registry
+    )
+    command_task = Task(
+        name="shout",
+        run="exit 1",
+        inputs={},
+        outputs={"out": registry.register_output("shout.txt")},
+        resources={},
+        env=None,
+    )
+
+    for task in (python_task, command_task):
+        error = subprocess.CalledProcessError(1, "exit 1")
+        assert describe_notebook_failure(task, error) is None, task.name
+
+
+def test_describe_notebook_failure_is_none_without_a_recorded_error_or_a_called_process_error(
+    tmp_path: Path,
+) -> None:
+    """A notebook step whose executed notebook records no error, failing with NodeNotFoundError as when a product was not written, is described as None."""
+    step = _failed_step(tmp_path)
+    write_notebook(step.executed, _executed_cells(code_cell("pass", execution_count=3)))
+    error = NodeNotFoundError(f"{step.task.name}: a declared product was not written.")
+
+    assert step.described(error) is None
+
+
+def test_describe_notebook_failure_reads_a_real_failing_notebook(tmp_path: Path) -> None:
+    """After a build in which a notebook's body cell raises KeyError, describe_notebook_failure with the step's CalledProcessError names the source notebook, 'KeyError', the cell's execution count as papermill numbered it, and the executed notebook's path."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    source = write_source_notebook(
+        tmp_path / "notebooks" / "summarize.ipynb",
+        "table_path = 'unset'",
+        "{}['no_such_column']",
+    )
+    task = notebook_step(
+        source,
+        executed="executed/summarize.ipynb",
+        registry=registry,
+        env=sys.prefix,
+        produces={"table_path": _TABLE_KEY},
+        name="summarize",
+    )
+    executed = registry.path_for("executed/summarize.ipynb")
+
+    session = build([task], tmp_path / "state")
+
+    [report] = session.execution_reports
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert ("KeyError", "'no_such_column'") in recorded_errors(executed)
+    # Papermill numbers the parameters cell 1 and the cell it injects 2, so the body is 3.
+    assert describe_notebook_failure(task, error) == (
+        "notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The "
+        f"executed notebook, with the error, is at {executed}."
+    )
