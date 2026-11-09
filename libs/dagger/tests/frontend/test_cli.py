@@ -1835,6 +1835,23 @@ def test_a_step_that_calls_sys_exit_is_named_in_the_message(tmp_path: Path) -> N
     assert expected in result.stderr, result.stderr
 
 
+def test_a_system_exit_from_outside_any_step_names_the_build_not_a_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A SystemExit that no step raised (here from the run verb itself) makes 'dagger run' exit 1 with "The build exited with code 5 before it finished." and no mention of a step."""
+    path = _write_definition(tmp_path, _CHAIN)
+
+    def exits(*args: object, **kwargs: object) -> None:
+        raise SystemExit(5)
+
+    monkeypatch.setattr("vivarium.dagger.frontend.cli.run_pipeline", exits)
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    assert "The build exited with code 5 before it finished." in result.stderr, result.stderr
+    assert "step" not in result.stderr.lower(), result.stderr
+
+
 def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
     tmp_path: Path,
 ) -> None:

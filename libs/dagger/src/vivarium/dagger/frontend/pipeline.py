@@ -242,8 +242,8 @@ def run(
         If a step raises ``SystemExit``, for example by calling ``sys.exit``. It names
         the step, keeps the step's exit code, and is chained from the backend's
         :class:`~vivarium.dagger.backend.build.TaskExited`, which is chained from the
-        step's own ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is re-raised as itself.
-        Either is raised instead of :class:`StepFailed`.
+        step's own ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is
+        re-raised as itself. Either is raised instead of :class:`StepFailed`.
     """
     _check_unique_steps(pipeline)
     selected = None if only is None else _resolve(pipeline, only)

@@ -208,8 +208,9 @@ def _verb_errors(
             f"Step {error.step!r} exited with code {error.code!r} before the build finished."
         ) from None
     except SystemExit as error:
+        # A step's own exit arrives as StepExited, so this one came from pytask itself.
         raise click.ClickException(
-            f"A step exited with code {error.code!r} before the build finished."
+            f"The build exited with code {error.code!r} before it finished."
         ) from None
 
 

@@ -303,7 +303,7 @@ def test_unresolved_input_with_a_close_key_keeps_the_did_you_mean_and_lists_no_k
 
     message = str(excinfo.value)
     assert message.endswith(" Did you mean 'caps/ethiopia.csv'?")
-    assert "registered keys" not in message
+    assert "registered so far" not in message
     assert "zzz_other.csv" not in message
 
 
@@ -320,7 +320,7 @@ def test_declared_root_input_without_a_file_keeps_its_message_and_lists_no_keys(
 
     message = str(excinfo.value)
     assert f"no file at {gone.resolve()}" in message
-    assert "registered keys" not in message
+    assert "registered so far" not in message
     assert "other.csv" not in message
 
 
