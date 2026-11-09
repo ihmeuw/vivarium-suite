@@ -524,7 +524,7 @@ else:
 # on the same root, as a running bridged build does, so the lock is shown across hosts on
 # NFS. The next build is refused at once with a message naming the holder, reports no
 # step, binds no workflow (no new run directory), and leaves `pytask.lock` byte for byte
-# as it was. The two-user drill (a second account) is pending; the review doc says so.
+# as it was.
 
 # %%
 def hold_lock(root, *srun):
