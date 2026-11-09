@@ -356,15 +356,40 @@ def _suggestion(tmp_path: Path, key: str, registered: list[str]) -> str:
             "Did you mean 'Nigeria/primary/ifa_coverage.csv'?",
         ),
         (
+            "Nigeria/primary/fertility.parquet",
+            ["Nigeria/primary/adults.parquet", "Nigeria/primary/population.parquet"],
+            "The keys registered so far are 'Nigeria/primary/adults.parquet', "
+            "'Nigeria/primary/population.parquet'.",
+        ),
+        (
+            "outputs/fertility.parquet",
+            ["outputs/adults.parquet", "outputs/population.parquet"],
+            "The keys registered so far are 'outputs/adults.parquet', "
+            "'outputs/population.parquet'.",
+        ),
+        (
+            "Nigeria/primry/anc.csv",
+            ["Nigeria/primary/anc.csv", "Nigeria/primary/ifa_coverage.csv"],
+            "Did you mean 'Nigeria/primary/anc.csv'?",
+        ),
+        (
             "adults.parqet",
             ["adults.parquet", "population.parquet"],
             "Did you mean 'adults.parquet'?",
         ),
     ],
-    ids=["unrelated-same-suffix", "close-stem", "close-nested-stem", "mistyped-suffix"],
+    ids=[
+        "unrelated-same-suffix",
+        "close-stem",
+        "close-nested-stem",
+        "unrelated-nested-same-suffix",
+        "unrelated-other-directory-same-suffix",
+        "mistyped-directory",
+        "mistyped-suffix",
+    ],
 )
 def test_did_you_mean_judges_closeness_without_a_shared_suffix(
     tmp_path: Path, key: str, registered: list[str], expected: str
 ) -> None:
-    """A key is compared without its suffix to the keys that share that suffix, so a shared '.parquet' alone suggests nothing; with no key sharing the suffix, whole keys are compared."""
+    """A key's stem is compared to the stems of the keys in its directory with its suffix, so a shared directory and '.parquet' alone suggest nothing; with no key sharing both, whole keys are compared."""
     assert _suggestion(tmp_path, key, registered) == expected
