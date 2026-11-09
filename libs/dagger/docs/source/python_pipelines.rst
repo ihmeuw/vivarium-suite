@@ -201,7 +201,8 @@ Each of these exits with status 2 before any step runs:
   or while its function runs. ``dagger`` prints the traceback as described below. For a
   step that reads an artifact that no step produces and that is not a root input, the
   error names the step and the artifact key, with the closest key that does exist. If
-  no key is close, it lists the keys that are registered instead.
+  no key is close, it lists the keys registered so far instead, which are the root
+  inputs and the products of the steps defined before the one that reads the key.
 - Two steps produce the same artifact. ``dagger`` names the artifact key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.

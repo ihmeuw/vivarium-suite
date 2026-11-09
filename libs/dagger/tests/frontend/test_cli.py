@@ -1868,7 +1868,7 @@ def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
 def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
     tmp_path: Path,
 ) -> None:
-    """A step reading a key unlike every registered key exits 2; stderr names the step and the key and lists the registered keys in sorted order, and has no did-you-mean."""
+    """A step reading a key unlike every registered key exits 2; stderr names the step and the key and lists the keys registered so far in sorted order, and has no did-you-mean."""
     path = _write_definition(tmp_path, _UNLIKE_EVERY_KEY)
 
     result = _invoke("run", str(path))
@@ -1877,7 +1877,7 @@ def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
     errors = result.stderr
     expected = (
         "Step 's': input 'zzz' is unresolved: no registered producer and no root input. "
-        "The registered keys are 'adults.parquet', 'population.parquet'."
+        "The keys registered so far are 'adults.parquet', 'population.parquet'."
     )
     assert expected in errors, errors
     assert "Did you mean" not in errors

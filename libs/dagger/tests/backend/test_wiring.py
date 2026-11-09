@@ -220,7 +220,7 @@ def test_key_for_returns_none_for_an_unregistered_path(tmp_path: Path) -> None:
 def test_unresolved_input_with_no_close_key_lists_the_registered_keys_in_sorted_order(
     tmp_path: Path,
 ) -> None:
-    """An input key with no close match ends its message with 'The registered keys are ...', listing the produced keys and the root-input keys together in sorted order, and has no did-you-mean."""
+    """An input key with no close match ends its message with 'The keys registered so far are ...', listing the produced keys and the root-input keys together in sorted order, and has no did-you-mean."""
     reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"c": tmp_path / "c.csv"})
     reg.register_output("m.csv")
     reg.register_output("a.csv")
@@ -231,7 +231,7 @@ def test_unresolved_input_with_no_close_key_lists_the_registered_keys_in_sorted_
     message = str(excinfo.value)
     assert message == (
         "input 'zzz' is unresolved: no registered producer and no root input. "
-        "The registered keys are 'a.csv', 'c', 'm.csv'."
+        "The keys registered so far are 'a.csv', 'c', 'm.csv'."
     )
     assert "Did you mean" not in message
 
@@ -257,7 +257,7 @@ def test_unresolved_input_lists_the_first_ten_keys_and_counts_the_rest(
 
     listed = ", ".join(f"'key_{index:02d}.csv'" for index in range(10))
     message = str(excinfo.value)
-    assert message.endswith(f" The registered keys are {listed}, and 3 more.")
+    assert message.endswith(f" The keys registered so far are {listed}, and 3 more.")
     assert "key_10.csv" not in message
     assert "Did you mean" not in message
 
@@ -271,14 +271,14 @@ def test_unresolved_input_with_exactly_ten_keys_lists_all_of_them(tmp_path: Path
 
     listed = ", ".join(f"'key_{index:02d}.csv'" for index in range(10))
     message = str(excinfo.value)
-    assert message.endswith(f" The registered keys are {listed}.")
+    assert message.endswith(f" The keys registered so far are {listed}.")
     assert "more" not in message
 
 
 def test_unresolved_input_with_no_registered_keys_says_none_are_registered(
     tmp_path: Path,
 ) -> None:
-    """An input key resolved against an empty registry ends its message with 'No keys are registered.'"""
+    """An input key resolved against an empty registry ends its message with 'No keys are registered so far.'"""
     reg = ArtifactRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(WiringError) as excinfo:
@@ -286,7 +286,7 @@ def test_unresolved_input_with_no_registered_keys_says_none_are_registered(
 
     assert str(excinfo.value) == (
         "input 'zzz' is unresolved: no registered producer and no root input. "
-        "No keys are registered."
+        "No keys are registered so far."
     )
 
 
@@ -322,3 +322,49 @@ def test_declared_root_input_without_a_file_keeps_its_message_and_lists_no_keys(
     assert f"no file at {gone.resolve()}" in message
     assert "registered keys" not in message
     assert "other.csv" not in message
+
+
+# A did-you-mean ignores a shared suffix (MIC-7785)
+
+
+def _suggestion(tmp_path: Path, key: str, registered: list[str]) -> str:
+    """Return the sentence after 'no root input. ' when ``key`` is resolved among ``registered``."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    for name in registered:
+        reg.register_output(name)
+    with pytest.raises(WiringError) as excinfo:
+        reg.resolve_input(key)
+    return str(excinfo.value).partition("no root input. ")[2]
+
+
+@pytest.mark.parametrize(
+    "key, registered, expected",
+    [
+        (
+            "fertility.parquet",
+            ["adults.parquet", "population.parquet"],
+            "The keys registered so far are 'adults.parquet', 'population.parquet'.",
+        ),
+        (
+            "adult.parquet",
+            ["adults.parquet", "population.parquet"],
+            "Did you mean 'adults.parquet'?",
+        ),
+        (
+            "Nigeria/primary/ifa_coverge.csv",
+            ["Nigeria/primary/ifa_coverage.csv", "Nigeria/primary/anc.csv"],
+            "Did you mean 'Nigeria/primary/ifa_coverage.csv'?",
+        ),
+        (
+            "adults.parqet",
+            ["adults.parquet", "population.parquet"],
+            "Did you mean 'adults.parquet'?",
+        ),
+    ],
+    ids=["unrelated-same-suffix", "close-stem", "close-nested-stem", "mistyped-suffix"],
+)
+def test_did_you_mean_judges_closeness_without_a_shared_suffix(
+    tmp_path: Path, key: str, registered: list[str], expected: str
+) -> None:
+    """A key is compared without its suffix to the keys that share that suffix, so a shared '.parquet' alone suggests nothing; with no key sharing the suffix, whole keys are compared."""
+    assert _suggestion(tmp_path, key, registered) == expected
