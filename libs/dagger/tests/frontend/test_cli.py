@@ -21,7 +21,6 @@ from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
 
 _HEADER = """\
-import dataclasses
 import sys
 from pathlib import Path
 
@@ -31,7 +30,7 @@ from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.frontend import Pipeline, handoff_inputs, python_step
-from vivarium.dagger.harness import stable_code_id
+from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
 
@@ -57,7 +56,7 @@ def step(target, name, registry, **sources):
 
 
 def stable(tasks):
-    return [dataclasses.replace(t, code_id=stable_code_id(f"{t.name}::code")) for t in tasks]
+    return [with_stable_code_id(t) for t in tasks]
 """
 """The start of every definition. ``log`` records that a step body ran, ``step`` wires step
 '<name>' to produce '<name>.parquet' from its sources' products, and ``stable`` gives each

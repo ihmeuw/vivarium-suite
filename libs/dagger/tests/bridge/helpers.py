@@ -8,7 +8,6 @@ import json
 import re
 import tomllib
 from collections.abc import Collection, Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +22,7 @@ from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE, RunState, read_run_state
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, stable_code_id
+from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 LOCKFILE = "pytask.lock"
 """The name of pytask's lockfile in a build's root."""
@@ -67,15 +66,7 @@ def make_dir(path: Path) -> Path:
 
 def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
     """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
-    return [
-        replace(
-            task,
-            code_id=stable_code_id(
-                f"{task.name}::code", "2" if task.name in changed else "1"
-            ),
-        )
-        for task in tasks
-    ]
+    return [with_stable_code_id(task, "2" if task.name in changed else "1") for task in tasks]
 
 
 def chain_and_independent(
