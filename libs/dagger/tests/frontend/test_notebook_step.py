@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
@@ -35,7 +35,7 @@ from vivarium.dagger.frontend.notebook_step import (
     notebook_step,
 )
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import Perturbed, stable_code_id
+from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _V = TypeVar("_V")
 
@@ -530,7 +530,7 @@ class _Converged:
             parameters={"location": location, "draws": 3},
             name=_STALE_STEP,
         )
-        return [replace(task, code_id=stable_code_id(f"{task.name}::code"))]
+        return [with_stable_code_id(task)]
 
 
 @pytest.fixture(scope="module")

@@ -25,6 +25,7 @@ from vivarium.dagger.harness import (
     build_fixture,
     run,
     stable_code_id,
+    with_stable_code_id,
     would_run,
 )
 
@@ -40,10 +41,7 @@ _BIND_OPTIONS: dict[str, Any] = {
 
 def _with_code_version(fx: Fixture, version: str) -> Fixture:
     """Return ``fx`` with every task given a stable code identity at ``version``."""
-    tasks = [
-        replace(task, code_id=stable_code_id(f"{task.name}::code", version))
-        for task in fx.tasks
-    ]
+    tasks = [with_stable_code_id(task, version) for task in fx.tasks]
     return replace(fx, tasks=tasks)
 
 
@@ -162,6 +160,24 @@ def test_changing_the_stable_code_id_version_reruns_the_step(tmp_path: Path) -> 
     assert run(_with_code_version(fx, "1")) == ran
     assert run(_with_code_version(fx, "2")) == ran
     assert run(_with_code_version(fx, "2")) == skipped
+
+
+def test_with_stable_code_id_copies_the_task_with_its_own_versioned_code_identity(
+    tmp_path: Path,
+) -> None:
+    """with_stable_code_id returns a copy whose code_id is named '<task>::code' and reports the given version, and leaves the original task unchanged."""
+    task = build_fixture(tmp_path).tasks[0]
+    original = task.code_id
+
+    copy = with_stable_code_id(task, "3")
+
+    assert copy is not task and task.code_id is original
+    assert (copy.name, copy.inputs, copy.outputs) == (task.name, task.inputs, task.outputs)
+    assert copy.code_id is not None
+    assert copy.code_id.name == f"{task.name}::code"
+    assert copy.code_id.state() == stable_code_id(f"{task.name}::code", "3").state()
+    default = with_stable_code_id(task).code_id
+    assert default is not None and default.state() != copy.code_id.state()
 
 
 def test_stable_code_id_state_is_identical_in_another_process() -> None:

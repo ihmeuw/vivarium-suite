@@ -29,7 +29,12 @@ from vivarium.dagger.frontend import (
     python_step,
     run,
 )
-from vivarium.dagger.harness import Fixture, build_fixture, stable_code_id
+from vivarium.dagger.harness import (
+    Fixture,
+    build_fixture,
+    stable_code_id,
+    with_stable_code_id,
+)
 
 _SAME_OUTPUT = "There are some tasks which produce the same output"
 """The start of pytask's message when two tasks claim one product."""
@@ -74,10 +79,7 @@ def _pipeline(fixture: Fixture, *extra: Task, stable: bool = False) -> Pipeline:
     """Return the fixture's steps and ``extra`` as a pipeline; ``stable`` fixes code ids."""
     tasks = [*fixture.tasks, *extra]
     if stable:
-        tasks = [
-            dataclasses.replace(task, code_id=stable_code_id(f"{task.name}::code"))
-            for task in tasks
-        ]
+        tasks = [with_stable_code_id(task) for task in tasks]
     return Pipeline(tasks, fixture.state, fixture.registry)
 
 

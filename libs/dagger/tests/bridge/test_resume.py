@@ -8,7 +8,7 @@ import math
 import os
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +52,7 @@ from vivarium.dagger.bridge.state import (
     read_run_state,
 )
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, stable_code_id
+from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +79,7 @@ def _signature(session: Session, name: str) -> str:
 
 def _at_version(task: Task, version: str) -> Task:
     """Return ``task`` with a stable code identity at ``version``."""
-    return replace(task, code_id=stable_code_id(f"{task.name}::code", version))
+    return with_stable_code_id(task, version)
 
 
 def _jobmon_for(stop: str) -> FakeJobmon:

@@ -13,7 +13,6 @@ import importlib.util
 import os
 import re
 from collections.abc import Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +24,7 @@ from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import build_fixture, stable_code_id
+from vivarium.dagger.harness import build_fixture, with_stable_code_id
 
 LIVE_ENV_VAR = "VIVARIUM_DAGGER_JOBMON_LIVE"
 """The environment variable that must be ``1`` for this module's tests to run."""
@@ -89,7 +88,7 @@ def test_a_three_step_chain_is_recorded_and_a_second_build_submits_nothing(
         registry=fx.registry,
     )
     chain = [*fx.tasks, last]
-    tasks = [replace(task, code_id=stable_code_id(f"{task.name}::code")) for task in chain]
+    tasks = [with_stable_code_id(task) for task in chain]
     names = [task.name for task in tasks]
     bound: list[JobmonRun] = []
     adapter_bind = _jobmon_adapter.bind
