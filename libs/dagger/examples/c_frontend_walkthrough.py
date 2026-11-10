@@ -6,11 +6,13 @@
 # and in the same order. Run it top to bottom: every outcome and timing below comes from
 # your own run of the installed `dagger` command on this branch.
 #
-# Every section drives `dagger` as a modeler would, as a separate process on a definition
+# Most sections drive `dagger` as a modeler would, as a separate process on a definition
 # file in `c_walkthrough_defs/`. Sections marked "local" run anywhere in under a minute.
-# The section marked "cluster" runs MNCNH's own loaders and V&V notebook. It needs the
-# MNCNH environments described there and skips itself when `C_WALKTHROUGH_MNCNH` is not
-# set. C14 and C15 are about the test suite, so the review doc shows them.
+# Two sections are marked "cluster". C1-real runs MNCNH's own loaders and V&V notebook; it
+# needs the MNCNH environments described there and skips itself when
+# `C_WALKTHROUGH_MNCNH` is not set. C16 runs a definition through Jobmon with the Python
+# API; it skips itself outside a Slurm allocation or without Jobmon. C14 and C15 are about
+# the test suite, so the review doc shows them.
 #
 # Run it from `libs/dagger` with an env that has the `test` extra (papermill and
 # ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`.
@@ -722,6 +724,110 @@ else:
     renamed = dagger("preview", "-c", f"{column}:stable", cwd=MNCNH)
     assert renamed.returncode == 2 and "'year_id' may be 'year'" in renamed.stderr
     assert len(renamed.stderr) < 1500, len(renamed.stderr)
+
+# %% [markdown]
+# ## C16 — A definition runs through Jobmon from the Python API (cluster)
+#
+# Track B's bridge is in the same tree, so `run(pipeline, jobmon=True)` sends a definition's
+# stale steps to Slurm as one Jobmon workflow. The `dagger` command still refuses a
+# definition without `--local` until MIC-7752 wires it (C3), so this section calls the verb
+# from Python. It loads the walkthrough's definition in this process and runs it through
+# real Jobmon, runs it again, and then runs a copy in which a python step and the notebook
+# both fail. A node imports each step's function by its module name, so each copy gets a
+# module name of its own and its folder goes on `PYTHONPATH`, which Slurm passes to every
+# node. The section skips itself outside a Slurm allocation or without Jobmon.
+
+# %%
+import importlib.util
+
+from vivarium.dagger.frontend import StepFailed, load_pipeline, run
+
+ON_SLURM = (
+    "SLURM_JOB_ID" in os.environ
+    and shutil.which("sbatch") is not None
+    and importlib.util.find_spec("jobmon") is not None
+)
+SLURM = {
+    "jobmon_cluster": "slurm",
+    "jobmon_resources": {
+        "project": "proj_simscience",
+        "queue": "all.q",
+        "memory": 1,
+        "runtime": 600,
+        "cores": 1,
+    },
+}
+
+
+def jobmon_defs(name, edits=(), report_edits=()):
+    """Copy the definitions as `make_defs` does, under a module name of their own."""
+    folder = make_defs(name, edits=edits, report_edits=report_edits)
+    (folder / "pipeline.py").rename(folder / f"{name}.py")
+    return folder
+
+
+def bridged_runs(pipe):
+    """Return the bridge's run directories under the pipeline's root."""
+    runs = pipe.root / ".pytask" / "jobmon"
+    return sorted(runs.iterdir()) if runs.exists() else []
+
+
+def jobmon_run(folder):
+    """Run the folder's definition through Jobmon in this process and print what happened."""
+    os.environ["PYTHONPATH"] = str(folder)
+    pipe = load_pipeline(f"{folder / (folder.name + '.py')}:stable")
+    before = set(bridged_runs(pipe))
+    start = time.perf_counter()
+    try:
+        outcomes, failed = run(pipe, jobmon=True, **SLURM), None
+    except StepFailed as error:
+        outcomes, failed = error.outcomes, error
+    print(f"run(pipeline, jobmon=True) took {time.perf_counter() - start:.0f} s")
+    for step, outcome in outcomes.items():
+        print(f"  {step}: {outcome.name}")
+    new = [r for r in bridged_runs(pipe) if r not in before]
+    for r in new:
+        state = json.loads((r / "state.json").read_text())
+        print(
+            f"Jobmon workflow {state['workflow_id']}, status {state['workflow_status']} "
+            f"({state['status']}), run directory {r.name}"
+        )
+    if not new:
+        print("No Jobmon workflow was bound.")
+    if failed is not None:
+        print("StepFailed:\n" + str(failed))
+    print()
+    return outcomes, new, failed
+
+
+if not ON_SLURM:
+    print("skipped: not in a Slurm allocation, or Jobmon is not installed")
+else:
+    from pytask import console
+
+    console.quiet = True
+    try:
+        GOOD_JOBMON = jobmon_defs("jobmon_good")
+        first, first_runs, _ = jobmon_run(GOOD_JOBMON)
+        assert len(first_runs) == 1
+        assert all(o.name == "SUCCESS" for o in first.values()), first
+        print("products:", products(GOOD_JOBMON))
+        second, second_runs, _ = jobmon_run(GOOD_JOBMON)
+        assert not second_runs
+        assert all(o.name == "SKIP_UNCHANGED" for o in second.values()), second
+        BROKEN_JOBMON = jobmon_defs(
+            "jobmon_broken",
+            edits=[('pd.read_csv(coverage)["coverage"]', 'pd.read_csv(coverage)["coverag"]')],
+            report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
+        )
+        third, _, failed = jobmon_run(BROKEN_JOBMON)
+        assert failed is not None
+        assert {s for s, o in third.items() if o.name == "FAIL"} >= {
+            "coverage_kenya",
+            "report",
+        }
+    finally:
+        console.quiet = False
 
 # %% [markdown]
 # ## PLAY
