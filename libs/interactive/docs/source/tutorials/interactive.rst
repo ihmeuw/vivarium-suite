@@ -291,20 +291,6 @@ This function returns a simulation object that has not been setup yet so we can
 alter the configuration programmatically, if we wish. Let's alter the
 population size to be smaller so the simulation takes less time to run.
 
-Common configuration settings have keyword arguments on
-:class:`~vivarium.interactive.simulation.Simulation`: ``population_size``,
-``seed``, ``draw``, ``artifact_path``, ``start_time``, and ``end_time``. Each
-one overrides the model specification's value:
-
-.. code-block:: python
-
-   sim = Simulation(p, population_size=1_000, setup=False)
-
-Only keys that the framework owns have a keyword. Any other key, including keys
-your model's components define, is changed through the ``configuration``
-parameter or on the simulation's configuration before setup, as below. The
-result is the same either way.
-
 .. testcode::
 
     # Setting attributes ensures you are updating existing keys, rather than
