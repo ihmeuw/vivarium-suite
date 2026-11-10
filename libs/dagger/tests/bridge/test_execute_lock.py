@@ -768,12 +768,13 @@ def test_a_dry_run_or_explanation_with_jobmon_takes_no_lock(
     tasks = chain_and_independent(registry(tmp_path))
     root = build_root(tmp_path)
     jobmon = FakeJobmon()
+    flags: dict[str, Any] = {mode: True}
 
     with jobmon:
-        first = build(tasks, root, jobmon=True, **{mode: True})
+        first = build(tasks, root, jobmon=True, **flags)
         created = lock.exists()
         with held_lock(lock):
-            second = build(tasks, root, jobmon=True, **{mode: True})
+            second = build(tasks, root, jobmon=True, **flags)
 
     assert first.exit_code == ExitCode.OK
     assert not created
