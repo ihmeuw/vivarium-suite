@@ -522,7 +522,7 @@ show_error(
     names=["pipeline.py", "SyntaxError", "Could not load"],
     user_frames_only=True,
 )
-show_error(
+_ = show_error(
     "C1 a definition run without --local",
     args=("run", "-c", "pipeline.py:stable"),
     exit_code=2,
@@ -614,7 +614,8 @@ assert docs.returncode == 0
 # It needs the GBD database, `/snfs1`, and two venvs over the Jenkins
 # `vivarium_gates_mncnh_artifact_current` shared env in an MNCNH checkout:
 # `.venv/vivarium_gates_mncnh_artifact` for the notebook, and the env running this
-# walkthrough, which must import `vivarium_gates_mncnh` and this branch's dagger. Set
+# walkthrough, which must import `vivarium_gates_mncnh` and this branch's dagger;
+# `c_walkthrough_defs/build_mncnh_envs.sh` builds both on a compute node. Set
 # `C_WALKTHROUGH_MNCNH` to the checkout and `DAGGER_SLICE_ROOT` to a new directory, and
 # run on a compute node. The model's notebook has no `parameters` cell, so the demo copy
 # adds one; that change is what a modeler makes to adopt `notebook_step` (MIC-7755).
