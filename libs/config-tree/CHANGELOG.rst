@@ -1,4 +1,4 @@
-**5.3.0 - 11/09/26**
+**5.3.0b1 - 11/09/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaves as ``ConfigLeaf`` records
   that hold each node and its key path from that tree
