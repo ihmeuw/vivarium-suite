@@ -1,4 +1,4 @@
-**0.31.2 - 11/09/26**
+**0.31.2 - 11/10/26**
 
 - ``team-conventions`` and ``brainstorming``: write a ticket's acceptance criteria only
   from the user, or from a settled design with an explicit yes on the criteria, and
