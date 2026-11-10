@@ -87,11 +87,21 @@ class ConfigNode:
         self._values: dict[str, tuple[str | None, Any]] = {}
         self._frozen = False
         self._accessed = False
+        self._path: str | None = None
 
     @property
     def name(self) -> str:
         """The name of this configuration value."""
         return self._name
+
+    @property
+    def path(self) -> str | None:
+        """The dotted path to this node from the tree that last listed it.
+
+        :meth:`ConfigTree.leaves` sets this, so it is None until a tree lists the
+        node, and it changes if a different tree lists the node later.
+        """
+        return self._path
 
     @property
     def accessed(self) -> bool:
@@ -250,6 +260,10 @@ class ConfigNode:
         layer, _, value = self.metadata[-1].values()
         return f"{layer}: {value}"
 
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Display the node in IPython as its path, or as its repr if it has none."""
+        printer.text(self._path if self._path is not None else repr(self))
+
 
 class ConfigIterator:
     """An iterator over the keys of a :class:`ConfigTree`."""
@@ -356,6 +370,23 @@ class ConfigTree:
                 for grandchild_name in child.unused_keys():
                     unused.append(f"{name}.{grandchild_name}")
         return unused
+
+    def leaves(self) -> list[ConfigNode]:
+        """List every leaf node in the ``ConfigTree``, in the order they were added.
+
+        Each node's :attr:`ConfigNode.path` is set to its dotted path from this
+        tree. Listing does not mark a node as accessed.
+        """
+        leaves = []
+        for name, child in self.items():
+            if isinstance(child, ConfigNode):
+                child._path = name
+                leaves.append(child)
+            else:
+                for leaf in child.leaves():
+                    leaf._path = f"{name}.{leaf._path}"
+                    leaves.append(leaf)
+        return leaves
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the ``ConfigTree`` to a nested dictionary.
