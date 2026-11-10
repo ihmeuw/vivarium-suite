@@ -29,6 +29,7 @@ import errno
 import fcntl
 import os
 import pwd
+import re
 import socket
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -48,15 +49,26 @@ LOCK_FILE_MODE = 0o664
 
 _OPEN_ATTEMPTS = 3
 
+_HOLDER_PATTERN = re.compile(
+    r"user (?P<user>.+?), pid (?P<pid>\d+) on host (?P<host>[^\s,]+)"
+)
+"""Matches the start of a holder line that :func:`run_lock` wrote."""
+
 
 class RunLocked(RuntimeError):
     """Raised when another process holds the run lock on a pipeline record.
 
     Its message names the lock file and the holder, for example "Another run holds the
-    lock on this pipeline record (user jdoe, pid 4242 on host node-17, since
-    2026-10-28T10:02:04-07:00). Lock file /path/to/root/run.lock. Wait for that run to
-    finish, then run again." When ``holder`` is empty, the parentheses say "holder
+    lock on this pipeline record (user jdoe, pid 4242 on host node-17 in Slurm job 123,
+    since 2026-10-28T10:02:04-07:00). Lock file /path/to/root/run.lock. Wait for that run
+    to finish, then run again." When ``holder`` is empty, the parentheses say "holder
     unknown" instead.
+
+    When the holder line names a user, a pid and a host, the message then says how to
+    stop that run. If the holder's user is the account that runs this process, it gives
+    the command, ``kill <pid>`` on the same host or ``ssh <host> kill <pid>`` on another,
+    and says that the run then records the steps that finished, because ``kill`` sends
+    SIGTERM, which a bridged build handles. Otherwise it says to ask that user.
 
     Parameters
     ----------
@@ -70,13 +82,14 @@ class RunLocked(RuntimeError):
     """The lock file."""
     holder: str
     """The holder line read from the lock file, as "user <name>, pid <pid> on host
-    <host>, since <time>", or an empty string when the holder had not written it yet."""
+    <host>, since <time>", with " in Slurm job <id>" after the host when the holder ran
+    in a Slurm job, or an empty string when the holder had not written it yet."""
 
     def __init__(self, path: Path, holder: str) -> None:
         super().__init__(
             "Another run holds the lock on this pipeline record "
             f"({holder or 'holder unknown'}). Lock file {path}. Wait for that run to "
-            "finish, then run again."
+            f"finish, then run again.{_stop_hint(holder)}"
         )
         self.path = path
         self.holder = holder
@@ -96,8 +109,10 @@ def run_lock(path: Path) -> Iterator[None]:
     line for this process, "user <name>, pid <pid> on host <host>, since <time>", where
     the name is that of the account that runs the process (its user id when the account
     has no name), the host is :func:`socket.gethostname`, and the time is the local time
-    with its UTC offset in ISO 8601 format, to the second. The line is flushed to the file system before the block
-    starts, so a process on another host that is refused can read it.
+    with its UTC offset in ISO 8601 format, to the second. In a Slurm job (when
+    ``SLURM_JOB_ID`` is set), " in Slurm job <id>" follows the host. The line is flushed
+    to the file system before the block starts, so a process on another host that is
+    refused can read it.
 
     The lock is taken without waiting. A process that is refused reads the holder line
     but does not change the file. The lock is released when the block ends, however it
@@ -178,11 +193,32 @@ def _read_holder(fd: int) -> str:
 
 
 def _holder_line() -> str:
-    """Return "user <name>, pid <pid> on host <host>, since <time>" for this process."""
+    """Return this process's holder line, naming its Slurm job when it runs in one."""
+    job = os.environ.get("SLURM_JOB_ID")
+    where = f"{socket.gethostname()} in Slurm job {job}" if job else socket.gethostname()
+    since = datetime.now().astimezone().isoformat(timespec="seconds")
+    return f"user {_user()}, pid {os.getpid()} on host {where}, since {since}"
+
+
+def _user() -> str:
+    """Return the name of the account that runs this process, or its user id."""
     uid = os.getuid()
     try:
-        user = pwd.getpwuid(uid).pw_name
+        return pwd.getpwuid(uid).pw_name
     except KeyError:
-        user = str(uid)
-    since = datetime.now().astimezone().isoformat(timespec="seconds")
-    return f"user {user}, pid {os.getpid()} on host {socket.gethostname()}, since {since}"
+        return str(uid)
+
+
+def _stop_hint(holder: str) -> str:
+    """Return the sentence that says how to stop the holder, or '' if the line has no pid."""
+    match = _HOLDER_PATTERN.match(holder)
+    if match is None:
+        return ""
+    user, pid, host = match["user"], match["pid"], match["host"]
+    if user != _user():
+        return f" To stop it instead, ask {user}, who started it."
+    command = f"kill {pid}" if host == socket.gethostname() else f"ssh {host} kill {pid}"
+    return (
+        f' To stop it instead, run "{command}": kill sends SIGTERM, and a bridged run '
+        "then records the steps that finished before it exits."
+    )
