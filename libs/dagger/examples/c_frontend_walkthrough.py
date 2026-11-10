@@ -178,9 +178,11 @@ assert "exit 0 jobmon imported: False" in out.stdout
 # %% [markdown]
 # ## C3 — Exit status: 0 success, 1 a failed step, 2 a wrong definition or command (local)
 #
-# A definition runs only with `--local` until MIC-7752 routes it through Jobmon; without
-# it, `dagger` says so and exits 2. A failed step exits 1, so the status can gate the next
-# command in a shell. The failing definition here is C9's.
+# The `dagger` command runs a definition only with `--local` until MIC-7752 wires it to
+# the bridge; without it, `dagger` says so and exits 2. The Python API can already run a
+# definition through Jobmon, with `run(pipeline, jobmon=True)`; this walkthrough does not.
+# A failed step exits 1, so the status can gate the next command in a shell. The failing
+# definition here is C9's.
 
 # %%
 no_local = dagger("run", "-c", "pipeline.py:stable", cwd=GOOD)
