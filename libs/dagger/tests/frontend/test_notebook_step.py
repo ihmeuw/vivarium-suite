@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar, cast
@@ -204,6 +204,24 @@ _DECLARED_VALUES: dict[str, Any] = {
 _SOURCE_ALIAS_KEY = "notebooks/./source.ipynb"
 """A key spelled unlike _SOURCE_KEY that path_for resolves to the same path."""
 
+_SOURCE_NAMES = (
+    "draws",
+    "figure_path",
+    "location",
+    "lookup_path",
+    "raw_path",
+    "record_path",
+    "scale",
+    "seed",
+    "summary_path",
+    "table_path",
+    "verbose",
+)
+"""The names _source's parameters cell assigns: every name a test passes over it."""
+
+_BASE_PARAMETERS = "raw_path = None\ntable_path = None\nlocation = None"
+"""A parameters cell assigning each name the base call of the definition-error tests passes."""
+
 
 @dataclass
 class _Collision:
@@ -294,6 +312,11 @@ def _write_notebook(
     return write_notebook(path, cells, metadata)
 
 
+def _assigning(names: Iterable[str]) -> str:
+    """Return parameters cell source that assigns None to each of ``names``."""
+    return "".join(f"{name} = None\n" for name in names)
+
+
 def _outputs(notebook: Path) -> list[dict[str, Any]]:
     """Return every cell output saved in the notebook file at ``notebook``."""
     content = json.loads(notebook.read_text(encoding="utf-8"))
@@ -334,8 +357,9 @@ def _root_input_registry(tmp_path: Path) -> ArtifactRegistry:
 
 
 def _source(tmp_path: Path) -> Path:
-    """Write a minimal source notebook under ``tmp_path`` and return its path."""
-    return _write_notebook(tmp_path / "notebooks" / "report.ipynb", "location = 'unset'")
+    """Write a source notebook whose parameters cell assigns every name in _SOURCE_NAMES."""
+    defaults = "\n".join(f"{name} = 'unset'" for name in _SOURCE_NAMES)
+    return _write_notebook(tmp_path / "notebooks" / "report.ipynb", defaults)
 
 
 def _command(tmp_path: Path, parameters: Mapping[str, NotebookParameter]) -> str:
@@ -1074,7 +1098,8 @@ def test_invalid_parameter_names_are_rejected(
             **_declaring(bad_name, where),
         )
 
-    assert bad_name in str(info.value)
+    message = str(info.value)
+    assert f"parameter name {bad_name!r} in {where}" in message, message
 
 
 @pytest.mark.parametrize(
@@ -1154,23 +1179,40 @@ def test_unknown_input_key_raises_wiring_error(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("override", list(_REJECTED.values()), ids=list(_REJECTED))
-def test_definition_errors_register_nothing(
-    tmp_path: Path,
-    override: dict[str, Any],
-) -> None:
-    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered."""
-    registry = _registry(tmp_path)
-    call: dict[str, Any] = {
-        "notebook": _write_notebook(registry.path_for(_SOURCE_KEY)),
+def _base_call(registry: ArtifactRegistry, notebook: Path) -> dict[str, Any]:
+    """Return the keyword arguments of the valid call the definition-error tests override."""
+    return {
+        "notebook": notebook,
         "executed": _EXECUTED_KEY,
         "registry": registry,
         "env": _ENV,
         "inputs": {"raw_path": "raw"},
         "produces": {"table_path": "tables/out.csv"},
         "parameters": {"location": "179"},
-        **override,
     }
+
+
+def test_the_base_call_of_the_definition_error_tests_builds(tmp_path: Path) -> None:
+    """The base call of test_definition_errors_register_nothing, with no override, returns a Task, so each override's ValueError comes from the override."""
+    registry = _registry(tmp_path)
+    notebook = _write_notebook(registry.path_for(_SOURCE_KEY), _BASE_PARAMETERS)
+
+    task = notebook_step(**_base_call(registry, notebook))
+
+    assert isinstance(task, Task)
+
+
+@pytest.mark.parametrize("case", list(_REJECTED))
+def test_definition_errors_register_nothing(tmp_path: Path, case: str) -> None:
+    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered."""
+    override = _REJECTED[case]
+    registry = _registry(tmp_path)
+    # The cell assigns every produced name, so a collision case can raise only through the
+    # collision check.
+    produced: Mapping[str, str] = override.get("produces", {})
+    cell = f"{_BASE_PARAMETERS}\n{_assigning(produced)}"
+    notebook = _write_notebook(registry.path_for(_SOURCE_KEY), cell)
+    call: dict[str, Any] = {**_base_call(registry, notebook), **override}
 
     executed: str = call["executed"]
 
@@ -1205,7 +1247,7 @@ def test_numpy_bool_parameter_is_rejected_with_a_conversion_hint(tmp_path: Path)
 def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collision) -> None:
     """A produces key equal to the executed key, two produces parameters naming the same key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming the step and both colliding items."""
     registry = _registry(tmp_path)
-    source = _write_notebook(registry.path_for(_SOURCE_KEY))
+    source = _write_notebook(registry.path_for(_SOURCE_KEY), _assigning(collision.produces))
 
     with pytest.raises(ValueError) as info:
         notebook_step(
