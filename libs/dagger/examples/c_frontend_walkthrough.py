@@ -670,7 +670,9 @@ else:
             print(
                 lines[-1],
                 "->",
-                "".join(o.get("data", {}).get("text/plain", "") for o in cell["outputs"]),
+                "".join(
+                    "".join(o.get("data", {}).get("text/plain", "")) for o in cell["outputs"]
+                ),
             )
 
 # %% [markdown]
