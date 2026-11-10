@@ -805,6 +805,13 @@ if not ON_SLURM:
 else:
     from pytask import console
 
+    # A venv layered over a shared env, as build_mncnh_envs.sh makes, has Jobmon's console
+    # scripts only in the shared env's bin. jobmon_slurm looks for its worker script on
+    # PATH or next to this Python, so the shared env's bin goes at the end of PATH.
+    BASE_BIN = str(Path(sys.base_prefix) / "bin")
+    if shutil.which("worker_node_entry_point") is None:
+        os.environ["PATH"] = os.environ["PATH"] + os.pathsep + BASE_BIN
+        print(f"Jobmon's worker script is not on PATH; added {BASE_BIN}")
     console.quiet = True
     try:
         GOOD_JOBMON = jobmon_defs("jobmon_good")
