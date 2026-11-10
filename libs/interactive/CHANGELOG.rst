@@ -1,7 +1,7 @@
 **1.1.0b2 - 11/09/26**
 
 - Add ``Simulation.find_configuration``, which finds configuration keys whose path matches a pattern
-- Require ``vivarium-config-tree`` 5.3.0
+- Require ``vivarium-config-tree`` 5.3.0b1
 
 **1.1.0b1 - 11/03/26**
 
