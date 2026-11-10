@@ -1,3 +1,9 @@
+**0.31.2 - 11/10/26**
+
+- ``team-conventions`` and ``brainstorming``: write a ticket's acceptance criteria only
+  from the user, or from a settled design with an explicit yes on the criteria, and
+  otherwise leave a human TODO line in their place
+
 **0.31.1 - 10/29/26**
 
 - ``model-development`` and ``_vv_writer``: describe the verification checks as built on
