@@ -11,6 +11,7 @@ NFS ``flock`` locks do not conflict within one process. Helpers are in
 import errno
 import json
 import os
+import re
 import signal
 import socket
 import stat
@@ -326,7 +327,10 @@ def test_a_bridged_build_leaves_run_lock_beside_pytask_lock(tmp_path: Path) -> N
     assert (root / LOCKFILE).exists()
     assert stat.S_IMODE(lock.stat().st_mode) == LOCK_FILE_MODE == 0o664
     holder = lock.read_text(encoding="utf-8")
-    assert f"pid {os.getpid()} on host {socket.gethostname()}," in holder, holder
+    expected = (
+        rf"pid {os.getpid()} on host {re.escape(socket.gethostname())}(,| in Slurm job )"
+    )
+    assert re.search(expected, holder), holder
 
 
 def test_the_lock_is_held_from_before_planning(
