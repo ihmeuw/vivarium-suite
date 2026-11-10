@@ -20,7 +20,7 @@ claiming one product) is left to pytask, which fails safe.
 
 import difflib
 from collections.abc import Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from pytask import PathNode
 
@@ -150,11 +150,17 @@ class ArtifactRegistry:
             message for a key that is neither produced nor a root input reads
             ``input '<key>' is unresolved: no registered producer and no root input.``
             and ends with a did-you-mean suggestion, ``Did you mean '<close key>'?``,
-            when a registered key is close. When none is close, it ends with the
-            registered keys instead, produced keys and root-input keys together in
-            sorted order: ``The registered keys are 'a.csv', 'b.csv'.``, or the first
-            ten followed by ``, and <N> more.`` when there are more than ten, or ``No
-            keys are registered.`` when there are none.
+            when a registered key is close. Closeness is judged on the file name
+            without its suffix, among the registered keys in the same directory with
+            the same suffix, so a shared directory and ``.parquet`` alone make no key
+            close; when no registered key shares both, or ``key`` has no suffix, whole
+            keys are compared. When no key is close,
+            the message ends with the keys registered so far instead, produced keys
+            and root-input keys together in sorted order: ``The keys registered so far
+            are 'a.csv', 'b.csv'.``, or the first ten followed by ``, and <N> more.``
+            when there are more than ten, or ``No keys are registered so far.`` when
+            there are none. A step's producers are registered before the step, so the
+            list holds only the keys of root inputs and of steps declared before it.
         """
         produced = self._producers.get(key)
         if produced is not None:
@@ -168,19 +174,37 @@ class ArtifactRegistry:
                 )
             return file_node(source)
         known = sorted({*self._producers, *self._root_inputs})
-        hint = difflib.get_close_matches(key, known, n=1)
-        suffix = f"Did you mean {hint[0]!r}?" if hint else _registered_keys(known)
+        hint = _closest_key(key, known)
+        ending = f"Did you mean {hint!r}?" if hint is not None else _registered_keys(known)
         raise WiringError(
             f"input {key!r} is unresolved: no registered producer and no root input. "
-            f"{suffix}"
+            f"{ending}"
         )
+
+
+def _closest_key(key: ArtifactKey, known: list[ArtifactKey]) -> ArtifactKey | None:
+    """Return the key in ``known`` closest to ``key``, comparing stems among its siblings."""
+    path = PurePosixPath(key)
+    # Filtering on parent and suffix makes each stem name exactly one key.
+    by_stem = {
+        PurePosixPath(name).stem: name
+        for name in known
+        if path.suffix
+        and PurePosixPath(name).suffix == path.suffix
+        and PurePosixPath(name).parent == path.parent
+    }
+    if by_stem:
+        match = difflib.get_close_matches(path.stem, list(by_stem), n=1)
+        return by_stem[match[0]] if match else None
+    match = difflib.get_close_matches(key, known, n=1)
+    return match[0] if match else None
 
 
 def _registered_keys(keys: list[ArtifactKey]) -> str:
     """Return the sentence listing up to ``_LISTED_KEYS`` of the sorted ``keys``."""
     if not keys:
-        return "No keys are registered."
-    return f"The registered keys are {_quoted_list(keys, _LISTED_KEYS)}."
+        return "No keys are registered so far."
+    return f"The keys registered so far are {_quoted_list(keys, _LISTED_KEYS)}."
 
 
 def _quoted_list(names: Sequence[str], limit: int) -> str:
