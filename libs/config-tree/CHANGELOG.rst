@@ -1,9 +1,3 @@
-**5.3.0 - 11/09/26**
-
-- Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes and sets each one's
-  dotted path from that tree on the new ``ConfigNode.path``
-- Display a listed ``ConfigNode`` as its path in IPython
-
 **5.2.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
