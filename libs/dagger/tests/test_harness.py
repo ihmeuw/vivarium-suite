@@ -1,15 +1,25 @@
 """Tests for the shared staleness test harness (``harness``)."""
 
+import os
+import shlex
+import signal
 import subprocess
 import sys
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from types import FrameType
+from typing import Any
 
 import pandas as pd
 import pytest
 from pytask import TaskOutcome
 
+from vivarium.dagger.bridge import _jobmon_adapter
+from vivarium.dagger.bridge._jobmon_adapter import PlanEntry
 from vivarium.dagger.harness import (
+    FakeJobmon,
     Fixture,
     Perturbed,
     build_fixture,
@@ -17,6 +27,15 @@ from vivarium.dagger.harness import (
     stable_code_id,
     would_run,
 )
+
+_BIND_OPTIONS: dict[str, Any] = {
+    "cluster": "slurm",
+    "default_resources": {},
+    "max_attempts": 2,
+    "resource_scales": None,
+    "workflow_name": "fake_workflow",
+}
+"""Options for a bind whose values a test does not inspect."""
 
 
 def _with_code_version(fx: Fixture, version: str) -> Fixture:
@@ -26,6 +45,55 @@ def _with_code_version(fx: Fixture, version: str) -> Fixture:
         for task in fx.tasks
     ]
     return replace(fx, tasks=tasks)
+
+
+def _entry(name: str, command: str, *upstreams: str) -> PlanEntry:
+    """Return a plan entry for step ``name`` that runs ``command`` after ``upstreams``."""
+    return PlanEntry(
+        signature=f"sig-{name}",
+        name=name,
+        command=command,
+        upstreams=tuple(f"sig-{upstream}" for upstream in upstreams),
+        resources={},
+    )
+
+
+def _appends(name: str, log: Path) -> str:
+    """Return a shell command that appends ``name`` to ``log`` as a line."""
+    return f"echo {name} >> {shlex.quote(str(log))}"
+
+
+def _adapter_functions() -> tuple[object, object, object]:
+    """Return the adapter's check_environment, bind and run, as the bridge looks them up."""
+    return _jobmon_adapter.check_environment, _jobmon_adapter.bind, _jobmon_adapter.run
+
+
+class _Stopped(Exception):
+    """The error that a test's SIGTERM handler raises."""
+
+
+def _recording_handler(
+    calls: list[int], *, raises: bool = False
+) -> Callable[[int, FrameType | None], None]:
+    """Return a SIGTERM handler that appends each signal to ``calls``, then may raise."""
+
+    def handler(signum: int, frame: FrameType | None) -> None:
+        """Note the signal, and raise _Stopped if asked to."""
+        calls.append(signum)
+        if raises:
+            raise _Stopped
+
+    return handler
+
+
+@contextmanager
+def _sigterm_handler(handler: Callable[[int, FrameType | None], Any]) -> Iterator[None]:
+    """Install ``handler`` for SIGTERM in the block, and restore the earlier one after."""
+    previous = signal.signal(signal.SIGTERM, handler)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def test_build_fixture_runs_and_writes_its_products(tmp_path: Path) -> None:
@@ -112,3 +180,316 @@ def test_stable_code_id_state_is_identical_in_another_process() -> None:
 
     assert local is not None
     assert result.stdout == local
+
+
+# FakeJobmon
+
+
+def test_fake_jobmon_replaces_the_adapter_functions_only_inside_its_block() -> None:
+    """Inside the block the adapter's check_environment, bind and run are the fake's; after the block, also when the block raises, they are the adapter's own again."""
+    own = _adapter_functions()
+
+    with FakeJobmon() as jobmon:
+        inside = _adapter_functions()
+    after_block = _adapter_functions()
+    with pytest.raises(RuntimeError, match="boom"):
+        with FakeJobmon():
+            raise RuntimeError("boom")
+    after_raise = _adapter_functions()
+
+    assert inside == (jobmon.check_environment, jobmon.bind, jobmon.run)
+    assert after_block == own
+    assert after_raise == own
+
+
+def test_fake_jobmon_check_environment_accepts_any_cluster(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inside the block the adapter's check_environment returns None for 'slurm' and for 'multiprocess', with no jobmon and no scontrol."""
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    with FakeJobmon():
+        _jobmon_adapter.check_environment("slurm")
+        _jobmon_adapter.check_environment("multiprocess")
+
+
+def test_fake_jobmon_records_each_bound_plan_and_its_options() -> None:
+    """Two binds inside one block leave two plans in bind order and two options dicts holding cluster, default_resources, max_attempts, resource_scales and workflow_name as passed."""
+    first = [_entry("a", "true")]
+    second = [_entry("b", "true"), _entry("c", "true", "b")]
+    second_options: dict[str, Any] = {
+        "cluster": "multiprocess",
+        "default_resources": {"queue": "null.q"},
+        "max_attempts": 4,
+        "resource_scales": {"memory": 0.25},
+        "workflow_name": "second_workflow",
+    }
+
+    with FakeJobmon() as jobmon:
+        _jobmon_adapter.bind(first, **_BIND_OPTIONS)
+        _jobmon_adapter.bind(second, **second_options)
+
+    assert jobmon.plans == [first, second]
+    assert jobmon.options == [_BIND_OPTIONS, second_options]
+
+
+def test_fake_jobmon_bind_returns_a_run_of_the_plan_with_no_workflow_id() -> None:
+    """bind returns a JobmonRun whose plan is the bound entries, whose workflow_id is None, and whose status is None."""
+    plan = [_entry("a", "true"), _entry("b", "true", "a")]
+
+    with FakeJobmon():
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+
+    assert jobmon_run.plan == tuple(plan)
+    assert jobmon_run.workflow_id is None
+    assert jobmon_run.status is None
+
+
+def test_fake_jobmon_bind_refuses_an_upstream_that_is_not_an_earlier_entry() -> None:
+    """bind raises KeyError when an entry names as upstream a signature that only a later entry has, and records no plan."""
+    plan = [_entry("b", "true", "a"), _entry("a", "true")]
+
+    with FakeJobmon() as jobmon:
+        with pytest.raises(KeyError):
+            _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+
+    assert jobmon.plans == []
+
+
+def test_fake_jobmon_runs_each_command_in_plan_order(tmp_path: Path) -> None:
+    """run runs each entry's shell command once, in plan order (each appends its name to one file), and sets every task status and the run's status to 'D'."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("zeta", _appends("zeta", log)),
+        _entry("alpha", _appends("alpha", log), "zeta"),
+        _entry("mid", _appends("mid", log)),
+    ]
+
+    with FakeJobmon():
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    assert log.read_text().splitlines() == ["zeta", "alpha", "mid"]
+    assert jobmon_run.task_statuses == {"sig-zeta": "D", "sig-alpha": "D", "sig-mid": "D"}
+    assert jobmon_run.status == "D"
+
+
+def test_fake_jobmon_withholds_an_entry_whose_upstream_failed(tmp_path: Path) -> None:
+    """When an entry's command exits 1, its task status is 'F', the entry that waits for it is not run and is 'G', an independent entry still runs and is 'D', and the run's status is 'E'."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("fails", "exit 1"),
+        _entry("after", _appends("after", log), "fails"),
+        _entry("independent", _appends("independent", log)),
+    ]
+
+    with FakeJobmon():
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    expected = {"sig-fails": "F", "sig-after": "G", "sig-independent": "D"}
+    assert log.read_text().splitlines() == ["independent"]
+    assert jobmon_run.task_statuses == expected
+    assert jobmon_run.status == "E"
+
+
+def test_fake_jobmon_runs_commands_in_child_processes(tmp_path: Path) -> None:
+    """An entry whose command writes its shell's own process id ($$) shows a process other than the test's own."""
+    pid_file = tmp_path / "pid.txt"
+    plan = [_entry("pid", f"echo $$ > {shlex.quote(str(pid_file))}")]
+
+    with FakeJobmon():
+        _jobmon_adapter.run(_jobmon_adapter.bind(plan, **_BIND_OPTIONS))
+
+    assert int(pid_file.read_text()) != os.getpid()
+
+
+def test_fake_jobmon_keeps_each_run_that_bind_returns() -> None:
+    """Two binds inside one block leave in runs, in bind order, the same two JobmonRun objects that bind returned."""
+    with FakeJobmon() as jobmon:
+        first = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        second = _jobmon_adapter.bind([_entry("b", "true")], **_BIND_OPTIONS)
+
+    assert len(jobmon.runs) == 2
+    assert jobmon.runs[0] is first
+    assert jobmon.runs[1] is second
+
+
+def test_fake_jobmon_run_leaves_the_runs_error_none_without_error_after(
+    tmp_path: Path,
+) -> None:
+    """Without error_after, run of a plan whose commands all exit 0 sets the run's status to 'D' and leaves its error None."""
+    log = tmp_path / "ran.log"
+    plan = [_entry("a", _appends("a", log)), _entry("b", _appends("b", log), "a")]
+
+    with FakeJobmon():
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    assert log.read_text().splitlines() == ["a", "b"]
+    assert jobmon_run.status == "D"
+    assert jobmon_run.error is None
+
+
+def test_fake_jobmon_error_after_stops_the_run_with_a_runtime_error(tmp_path: Path) -> None:
+    """With error_after=1, run of a three-entry plan runs only the first entry's command, sets every task status to None as the real adapter does after a run error, leaves the run's status None, sets its error to a RuntimeError, and returns normally."""
+    log = tmp_path / "ran.log"
+    plan = [_entry(name, _appends(name, log)) for name in ("first", "second", "third")]
+
+    with FakeJobmon(error_after=1):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    expected = dict.fromkeys(["sig-first", "sig-second", "sig-third"], None)
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.task_statuses == expected
+    assert jobmon_run.status is None
+    assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
+
+
+def test_fake_jobmon_error_after_counts_an_entry_that_it_withholds(tmp_path: Path) -> None:
+    """With error_after=2, when the first entry exits 1 and the second waits for it, the withheld second entry counts toward the two, so the third entry's command does not run, and every task status is None."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("fails", "exit 1"),
+        _entry("after", _appends("after", log), "fails"),
+        _entry("third", _appends("third", log)),
+    ]
+
+    with FakeJobmon(error_after=2):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        _jobmon_adapter.run(jobmon_run)
+
+    expected = dict.fromkeys(["sig-fails", "sig-after", "sig-third"], None)
+    assert not log.exists()
+    assert jobmon_run.task_statuses == expected
+    assert isinstance(jobmon_run.error, RuntimeError), repr(jobmon_run.error)
+
+
+def test_fake_jobmon_bind_gives_each_run_its_workflow_id() -> None:
+    """FakeJobmon(workflow_id=4242).bind returns a run whose workflow_id is 4242."""
+    with FakeJobmon(workflow_id=4242) as jobmon:
+        first = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        second = _jobmon_adapter.bind([_entry("b", "true")], **_BIND_OPTIONS)
+
+    assert first.workflow_id == 4242
+    assert second.workflow_id == 4242
+    assert [jobmon_run.workflow_id for jobmon_run in jobmon.runs] == [4242, 4242]
+
+
+def test_fake_jobmon_records_the_timeout_and_sigterm_handler_of_each_run(
+    tmp_path: Path,
+) -> None:
+    """Two calls of FakeJobmon.run, with seconds_until_timeout 60 and then without it, leave timeouts [60, None] and sigterm_handlers holding SIGTERM's handler at each call."""
+    plan = [_entry("a", "true")]
+    calls: list[int] = []
+    sentinel = _recording_handler(calls)
+
+    with FakeJobmon() as jobmon:
+        before = signal.getsignal(signal.SIGTERM)
+        _jobmon_adapter.run(
+            _jobmon_adapter.bind(plan, **_BIND_OPTIONS), seconds_until_timeout=60
+        )
+        with _sigterm_handler(sentinel):
+            _jobmon_adapter.run(_jobmon_adapter.bind(plan, **_BIND_OPTIONS))
+
+    assert jobmon.timeouts == [60, None]
+    assert jobmon.sigterm_handlers == [before, sentinel]
+    assert calls == []
+
+
+def test_fake_jobmon_interrupt_after_sends_sigterm_after_that_many_entries(
+    tmp_path: Path,
+) -> None:
+    """With a Python SIGTERM handler that raises a test exception, FakeJobmon(interrupt_after=1).run on a two-entry plan runs the first command only and then lets that exception out; the run's status is None and its task_statuses is empty."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("first", _appends("first", log)),
+        _entry("second", _appends("second", log)),
+    ]
+    calls: list[int] = []
+
+    with _sigterm_handler(_recording_handler(calls, raises=True)):
+        with FakeJobmon(interrupt_after=1):
+            jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+            with pytest.raises(_Stopped):
+                _jobmon_adapter.run(jobmon_run)
+
+    assert calls == [signal.SIGTERM]
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.status is None
+    assert jobmon_run.task_statuses == {}
+
+
+def test_fake_jobmon_refuses_to_send_sigterm_without_a_python_handler(tmp_path: Path) -> None:
+    """With SIGTERM's handler set to SIG_DFL, FakeJobmon(interrupt_after=0).run raises RuntimeError and the test process gets no signal."""
+    # A signal sent here would end the process, so the check runs in a child process.
+    code = (
+        "import signal\n"
+        "from vivarium.dagger.bridge import _jobmon_adapter\n"
+        "from vivarium.dagger.bridge._jobmon_adapter import PlanEntry\n"
+        "from vivarium.dagger.harness import FakeJobmon\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_DFL)\n"
+        "entry = PlanEntry(\n"
+        "    signature='sig-a', name='a', command='true', upstreams=(), resources={}\n"
+        ")\n"
+        "with FakeJobmon(interrupt_after=0):\n"
+        "    jobmon_run = _jobmon_adapter.bind(\n"
+        "        [entry], cluster='slurm', default_resources={}, max_attempts=2,\n"
+        "        resource_scales=None, workflow_name='fake_workflow',\n"
+        "    )\n"
+        "    try:\n"
+        "        _jobmon_adapter.run(jobmon_run)\n"
+        "    except RuntimeError:\n"
+        "        print('refused', end='')\n"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, (result.returncode, result.stderr)
+    assert result.stdout == "refused", result.stderr
+
+
+def test_fake_jobmon_raises_runtime_error_when_the_sigterm_handler_returns(
+    tmp_path: Path,
+) -> None:
+    """With a Python SIGTERM handler that returns without raising, FakeJobmon(interrupt_after=0).run raises RuntimeError."""
+    calls: list[int] = []
+
+    with _sigterm_handler(_recording_handler(calls)), FakeJobmon(interrupt_after=0):
+        jobmon_run = _jobmon_adapter.bind([_entry("a", "true")], **_BIND_OPTIONS)
+        with pytest.raises(RuntimeError):
+            _jobmon_adapter.run(jobmon_run)
+
+    assert calls == [signal.SIGTERM]
+
+
+def test_fake_jobmon_interrupt_with_keyboard_interrupt_raises_it(tmp_path: Path) -> None:
+    """FakeJobmon(interrupt_after=1, interrupt_with='keyboard_interrupt').run on a two-entry plan runs the first command only and raises KeyboardInterrupt, leaving the run's status None and its task_statuses empty."""
+    log = tmp_path / "ran.log"
+    plan = [
+        _entry("first", _appends("first", log)),
+        _entry("second", _appends("second", log)),
+    ]
+
+    with FakeJobmon(interrupt_after=1, interrupt_with="keyboard_interrupt"):
+        jobmon_run = _jobmon_adapter.bind(plan, **_BIND_OPTIONS)
+        with pytest.raises(KeyboardInterrupt):
+            _jobmon_adapter.run(jobmon_run)
+
+    assert log.read_text().splitlines() == ["first"]
+    assert jobmon_run.status is None
+    assert jobmon_run.task_statuses == {}
+
+
+def test_fake_jobmon_refuses_both_error_after_and_interrupt_after() -> None:
+    """FakeJobmon(error_after=1, interrupt_after=1) raises ValueError."""
+    with pytest.raises(ValueError):
+        FakeJobmon(error_after=1, interrupt_after=1)
