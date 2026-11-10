@@ -1,7 +1,13 @@
-**4.13.1 - 11/05/26**
+**4.14.1 - 11/10/26**
 
 - Log the uv cache size on each Jenkins build node every day in the cleanup job, and
   clean the cache fully every Sunday
+
+**4.14.0 - 11/10/26**
+
+- Reject a beta of a version below the newest final release, so a beta line that a later
+  final overtook is renumbered rather than continued
+- Document releasing betas from ``beta/**`` branches and finals from ``main``
 
 **4.13.0 - 11/04/26**
 

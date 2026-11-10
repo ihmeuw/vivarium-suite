@@ -1,19 +1,20 @@
-# Downstream release gate for PRs into main.
+# Downstream release gate for PRs into main and beta/** branches.
 #
 # When a PR bumps a library's version (its CHANGELOG.rst), that library's in-tree
 # dependents are tested against the *pending* version so a release can't break a
 # sibling. The expensive fan-out runs only on demand - add the `run-downstream`
 # label (or run this workflow manually) when the PR is ready to merge.
 #
-# The `downstream-status` job is the required status check on main: every PR into
-# main runs the downstream check before merging. It stays red ("add the
+# The `downstream-status` job is the required status check on main and beta/**
+# branches, since a merge into either can release: every PR into them runs the
+# downstream check before merging. It stays red ("add the
 # run-downstream label") until the check has run for the PR, then reflects the
 # results. A PR with no in-tree dependents passes as a no-op once run.
 name: Downstream Check
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'beta/**']
     types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
