@@ -58,5 +58,6 @@ py:class Timedelta
 # Bare names from type hints and Raises sections that autodoc renders without a
 # module, so Sphinx can't match them.
 py:class Path
+py:class date
 py:class Component
 py:class LookupTable
