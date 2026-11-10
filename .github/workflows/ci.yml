@@ -8,6 +8,7 @@ on:
       - 'release-candidate/**'
       - 'release_candidate/**'
       - 'epic/**'
+      - 'beta/**'
   pull_request:
 
 jobs:
