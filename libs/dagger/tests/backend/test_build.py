@@ -12,6 +12,7 @@ from vivarium.dagger.backend.build import (
     CODE_ID_KEY,
     COMMAND_KEY,
     TASK_KEY,
+    TaskExited,
     build,
     describe_exit,
     failure_message,
@@ -389,16 +390,29 @@ def test_failure_message_of_a_failed_step_is_the_exit_code_name(tmp_path: Path) 
 # How a failed command's exit reads (MIC-7785)
 
 
-def test_describe_exit_gives_a_positive_return_code_as_an_exit_status() -> None:
-    """describe_exit(3) is 'the command exited with status 3'."""
-    assert describe_exit(3) == "the command exited with status 3"
-    assert describe_exit(1) == "the command exited with status 1"
+@pytest.mark.parametrize(
+    "returncode, expected",
+    [
+        (1, "the command exited with status 1"),
+        (2, "the command exited with status 2"),
+        (3, "the command exited with status 3"),
+        (128, "the command exited with status 128"),
+        (137, "the command exited with status 137 (signal SIGKILL)"),
+        (143, "the command exited with status 143 (signal SIGTERM)"),
+        (255, "the command exited with status 255"),
+        (-9, "the command was stopped by signal SIGKILL"),
+        (-15, "the command was stopped by signal SIGTERM"),
+    ],
+)
+def test_describe_exit_wording(returncode: int, expected: str) -> None:
+    """A code of 128+n names signal n after the status when Python has a name for it; a negative code names the signal that stopped the command."""
+    assert describe_exit(returncode) == expected
 
 
-def test_describe_exit_names_the_signal_for_a_negative_return_code() -> None:
-    """describe_exit(-9) is 'the command was stopped by signal SIGKILL', and describe_exit(-15) names SIGTERM."""
-    assert describe_exit(-9) == "the command was stopped by signal SIGKILL"
-    assert describe_exit(-15) == "the command was stopped by signal SIGTERM"
+def test_signal_127_has_no_name_so_status_255_is_the_status_alone() -> None:
+    """Status 255 has no signal suffix because Python names no signal 127."""
+    with pytest.raises(ValueError):
+        signal.Signals(127)
 
 
 def test_describe_exit_gives_the_number_of_a_signal_python_has_no_name_for() -> None:
@@ -426,27 +440,6 @@ def test_a_command_killed_by_a_signal_has_a_negative_return_code_that_describe_e
     assert describe_exit(error.returncode) == "the command was stopped by signal SIGKILL"
 
 
-@pytest.mark.parametrize(
-    "returncode, name",
-    [(137, "SIGKILL"), (143, "SIGTERM"), (128, None), (255, None), (2, None)],
-)
-def test_describe_exit_names_the_signal_of_a_shell_status_above_128(
-    returncode: int, name: str | None
-) -> None:
-    """describe_exit of a positive code 128+n names signal n (137 SIGKILL, 143 SIGTERM) after the exit status; 128, 255 (signal 127 has no name) and 2 are the exit status alone."""
-    with pytest.raises(ValueError):
-        signal.Signals(127)
-    exited = f"the command exited with status {returncode}"
-
-    description = describe_exit(returncode)
-
-    if name is None:
-        assert description == exited
-    else:
-        assert description.startswith(exited)
-        assert name in description
-
-
 def test_a_shell_whose_child_is_killed_exits_137_and_describe_exit_names_sigkill(
     tmp_path: Path,
 ) -> None:
@@ -463,3 +456,29 @@ def test_a_shell_whose_child_is_killed_exits_137_and_describe_exit_names_sigkill
     assert isinstance(error, subprocess.CalledProcessError)
     assert error.returncode == 128 + signal.SIGKILL
     assert "SIGKILL" in describe_exit(error.returncode)
+
+
+# A task that exits (MIC-7785)
+
+
+def _exit_three(**kwargs: Any) -> None:
+    """End the process with code 3, as a task body that calls sys.exit does."""
+    raise SystemExit(3)
+
+
+def test_a_task_that_raises_system_exit_makes_build_raise_task_exited_naming_it(
+    tmp_path: Path,
+) -> None:
+    """A callable task 'leave' that raises SystemExit(3) makes build raise TaskExited, a SystemExit whose task is 'leave' and code is 3, chained from the task's own SystemExit."""
+    tasks = [_task("leave", _exit_three, outputs={"out": file_node(tmp_path / "out")})]
+
+    with pytest.raises(TaskExited) as info:
+        build(tasks, tmp_path / "state")
+
+    exited = info.value
+    assert isinstance(exited, SystemExit)
+    assert exited.task == "leave"
+    assert exited.code == 3
+    cause = exited.__cause__
+    assert type(cause) is SystemExit
+    assert cause.code == 3

@@ -3,7 +3,7 @@ to read back, written as nbformat 4.5 JSON with the standard library."""
 
 import json
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -42,9 +42,16 @@ def error_output(ename: str, evalue: str) -> dict[str, Any]:
     }
 
 
-def write_notebook(path: Path, cells: Sequence[dict[str, Any]]) -> Path:
-    """Write ``cells`` to ``path`` as a notebook without kernel metadata, creating its directory."""
-    notebook = {"cells": list(cells), "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+def write_notebook(
+    path: Path, cells: Sequence[dict[str, Any]], metadata: Mapping[str, Any] | None = None
+) -> Path:
+    """Write ``cells`` to ``path`` as a notebook with ``metadata``, creating its directory."""
+    notebook = {
+        "cells": list(cells),
+        "metadata": dict(metadata or {}),
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(notebook, indent=1), encoding="utf-8")
     return path

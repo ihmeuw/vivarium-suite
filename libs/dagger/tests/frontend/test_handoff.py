@@ -559,3 +559,16 @@ def test_wide_file_gives_no_hint_without_an_unrequired_close_column(
     line = _problem_line(message, f"<root>/ethiopia/primary/{name}")
     assert _WIDE_MORE in line
     assert "may be" not in line
+
+
+def test_zero_column_parquet_says_it_has_no_columns_and_gives_no_hint(
+    tmp_path: Path,
+) -> None:
+    """A Parquet file with no columns, for a declaration that requires year_id, is reported as "is missing required columns 'year_id'; it has no columns." with no 'may be' hint."""
+    pq.write_table(pa.table({}), _primary(tmp_path, "ethiopia") / "empty.parquet")
+
+    message = _handoff_error(tmp_path, ["ethiopia"], {"empty.parquet": ["year_id"]})
+
+    line = _problem_line(message, "<root>/ethiopia/primary/empty.parquet")
+    assert line.endswith("is missing required columns 'year_id'; it has no columns."), line
+    assert "may be" not in line

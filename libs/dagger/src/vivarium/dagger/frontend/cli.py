@@ -208,8 +208,9 @@ def _verb_errors(
             f"Step {error.step!r} exited with code {error.code!r} before the build finished."
         ) from None
     except SystemExit as error:
+        # A step's own exit arrives as StepExited, so this one came from pytask itself.
         raise click.ClickException(
-            f"A step exited with code {error.code!r} before the build finished."
+            f"The build exited with code {error.code!r} before it finished."
         ) from None
 
 
@@ -232,7 +233,10 @@ def _pipeline_error(
     """Return the click error for a PipelineError that is not a step failure."""
     message = str(error)
     steps = {task.name for task in pipeline.tasks}
-    if any(name not in steps for name in requested):
+    # The verbs report a shared step name before an unknown one, so with a shared name
+    # the error is about the definition even when a requested step is also unknown.
+    unique = len(steps) == len(pipeline.tasks)
+    if unique and any(name not in steps for name in requested):
         return click.BadParameter(message, param_hint=param_hint)
     code = _stop_code(error)
     if code is not None:
