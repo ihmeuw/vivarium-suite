@@ -70,6 +70,11 @@ Compose a Jira-wiki-markup comment body with these sections:
 - `h3. Acceptance criteria` — bulleted, testable.
 - `h3. Notes / risks` — anything the implementer should know that doesn't fit above.
 
+Write acceptance criteria only for what the design walk settled with the user. Show them
+as their own list and get an explicit yes on that list. If the brainstorm left them
+open, use the `_TODO (human)...` acceptance-criteria line from `team-conventions` §2.
+Say which of the two it is when you show the comment body.
+
 Show the user the comment body and the target ticket key. On explicit approval, write it.
 
 
@@ -78,6 +83,10 @@ Show the user the comment body and the target ticket key. On explicit approval, 
 Invoke the `team-conventions` skill to format the skill. The team-conventions structure is the spine — *keep the ticket description short and descriptive* per that template. You may optionally append a "Notes" section *inside the description* for extra detail that doesn't fit the main template; only use this if actually necessary.
 
 The `TL;DR` section is the user's to write, not yours. A finished design walk is not permission to summarize it there — leave the `_TODO (human)...` line from `team-conventions` §2 untouched unless the user dictates the exact text.
+
+The acceptance criteria follow the rules in `team-conventions` §2. A finished brainstorm
+can count as a settled design, but only for the criteria that the design walk agreed
+with the user. The user still approves the list on its own.
 
 Show the user the full ticket payload (summary, description, type, labels, project). On explicit approval, create the ticket.
 

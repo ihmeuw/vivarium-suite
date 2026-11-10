@@ -1,3 +1,9 @@
+**4.14.0 - 11/10/26**
+
+- Reject a beta of a version below the newest final release, so a beta line that a later
+  final overtook is renumbered rather than continued
+- Document releasing betas from ``beta/**`` branches and finals from ``main``
+
 **4.13.0 - 11/04/26**
 
 - Add a ``weekly_tests`` option to ``reusable_pipeline`` that passes ``RUNWEEKLY=1`` on

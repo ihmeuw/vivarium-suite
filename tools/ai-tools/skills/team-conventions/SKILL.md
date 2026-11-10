@@ -39,7 +39,7 @@ Pull it via the hub MCP server when the user asks to write a ticket:
 mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 ```
 
-That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before creating the ticket.
+That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria (see the rules below), and the optional fields when they apply. Show the user the draft for review before creating the ticket.
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
@@ -62,6 +62,28 @@ So before calling `create_issue`, read the description you are about to send. It
 still carries the `_TODO (human)...` line verbatim, or it carries content the user
 gave you word for word. Anything else is your writing - put the line back. Say which of
 the two it is when you show the draft and when you report the created key.
+
+The acceptance criteria are the other section you never fill on your own. An engineer
+builds toward them, so a wrong criterion does more harm than a missing one. Each draft
+takes one of three paths. If the request does not make the path clear, ask the user
+before you draft:
+
+- **The user gives the criteria.** Use them. You may fix the format but not the meaning.
+- **You propose the criteria.** Do this only when the design is settled, for example
+  after a brainstorm or from a design doc that the user names. Show the criteria as
+  their own list and get an explicit yes on that list. A yes on the whole draft is not
+  a yes on the criteria. Ask for the yes on the criteria as its own question, before
+  you ask to create the ticket.
+- **The design is not settled.** This is normal for a quick ticket that records an idea
+  or a problem. Do not invent criteria to fill the section. Leave this in its place:
+
+  ```
+  h3. Acceptance criteria
+  _TODO (human): not yet defined - design the work before it starts._
+  ```
+
+Say which path the criteria took when you show the draft and when you report the
+created key.
 
 Once the user approves the draft, create the ticket via the `simsci` plugin's Jira MCP:
 
