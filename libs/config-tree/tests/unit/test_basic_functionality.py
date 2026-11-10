@@ -1,3 +1,4 @@
+import dataclasses
 import pickle
 import re
 import textwrap
@@ -7,6 +8,7 @@ from typing import Any
 import pytest
 
 from vivarium.config_tree import (
+    ConfigLeaf,
     ConfigNode,
     ConfigTree,
     ConfigurationError,
@@ -266,14 +268,14 @@ class _TextPrinter:
         self.output += text
 
 
-def _pretty(node: ConfigNode) -> str:
+def _pretty(leaf: ConfigLeaf) -> str:
     printer = _TextPrinter()
-    node._repr_pretty_(printer, cycle=False)
+    leaf._repr_pretty_(printer, cycle=False)
     return printer.output
 
 
 class TestLeaves:
-    """Tests for listing a tree's leaf nodes and the paths they display."""
+    """Tests for listing a tree's leaves and the paths they display."""
 
     @pytest.fixture
     def tree(self) -> ConfigTree:
@@ -293,15 +295,33 @@ class TestLeaves:
             "seed",
         ]
 
+    def test_a_key_with_a_dot_stays_whole(self, tree: ConfigTree) -> None:
+        assert tree.leaves()[2].key_path == (
+            "risk.child_wasting",
+            "data_sources",
+            "exposure",
+        )
+
     def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
         """A caller can update the configuration through what it gets back."""
         step_size = tree.leaves()[1]
-        assert step_size is tree.time._children["step_size"]
+        assert step_size.node is tree.time._children["step_size"]
 
     def test_paths_are_relative_to_the_tree_listed(self, tree: ConfigTree) -> None:
-        tree.leaves()
         exposure = tree.get_tree("risk.child_wasting").leaves()[0]
         assert exposure.path == "data_sources.exposure"
+
+    def test_listing_a_subtree_leaves_an_earlier_listing_unchanged(
+        self, tree: ConfigTree
+    ) -> None:
+        earlier = tree.leaves()
+        tree.time.leaves()
+        assert earlier[1].path == "time.step_size"
+
+    def test_a_leaf_cannot_be_changed(self, tree: ConfigTree) -> None:
+        leaf = tree.leaves()[0]
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            leaf.key_path = ("other",)  # type: ignore[misc]
 
     def test_listing_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
         tree.leaves()
@@ -319,21 +339,13 @@ class TestLeaves:
         tree.freeze()
         assert len(tree.leaves()) == 4
 
-    def test_a_node_has_no_path_until_listed(self) -> None:
-        assert ConfigNode(["base"], name="test_node").path is None
-
-    def test_a_listed_node_displays_as_its_path(self, tree: ConfigTree) -> None:
+    def test_a_leaf_displays_as_its_path(self, tree: ConfigTree) -> None:
         assert [_pretty(leaf) for leaf in tree.leaves()] == [
             "time.start",
             "time.step_size",
             "risk.child_wasting.data_sources.exposure",
             "seed",
         ]
-
-    def test_an_unlisted_node_displays_as_its_repr(self) -> None:
-        cn = ConfigNode(["base"], name="test_node")
-        cn.update("test_value", layer="base", source="test")
-        assert _pretty(cn) == repr(cn)
 
 
 def test_tree_creation(empty_tree: ConfigTree) -> None:

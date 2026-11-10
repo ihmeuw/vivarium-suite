@@ -30,6 +30,7 @@ For example:
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -87,21 +88,11 @@ class ConfigNode:
         self._values: dict[str, tuple[str | None, Any]] = {}
         self._frozen = False
         self._accessed = False
-        self._path: str | None = None
 
     @property
     def name(self) -> str:
         """The name of this configuration value."""
         return self._name
-
-    @property
-    def path(self) -> str | None:
-        """The dotted path to this node from the tree that last listed it.
-
-        :meth:`ConfigTree.leaves` sets this, so it is None until a tree lists the
-        node, and it changes if a different tree lists the node later.
-        """
-        return self._path
 
     @property
     def accessed(self) -> bool:
@@ -260,9 +251,29 @@ class ConfigNode:
         layer, _, value = self.metadata[-1].values()
         return f"{layer}: {value}"
 
+
+@dataclass(frozen=True)
+class ConfigLeaf:
+    """A leaf node of a :class:`ConfigTree` and its key path from the tree that listed it.
+
+    :meth:`ConfigTree.leaves` builds these, so the path is always relative to the
+    tree it was called on and the node itself is left unchanged.
+    """
+
+    key_path: tuple[str, ...]
+    """The keys from the listing tree down to the node, one element per key, so a
+    key that contains a dot, such as ``risk.child_wasting``, stays whole."""
+    node: ConfigNode
+    """The node the tree holds, not a copy."""
+
+    @property
+    def path(self) -> str:
+        """The dotted path to the node from the tree that listed it."""
+        return ".".join(self.key_path)
+
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Display the node in IPython as its path, or as its repr if it has none."""
-        printer.text(self._path if self._path is not None else repr(self))
+        """Display the leaf in IPython as its dotted path."""
+        printer.text(self.path)
 
 
 class ConfigIterator:
@@ -371,21 +382,19 @@ class ConfigTree:
                     unused.append(f"{name}.{grandchild_name}")
         return unused
 
-    def leaves(self) -> list[ConfigNode]:
-        """List every leaf node in the ``ConfigTree``, in the order they were added.
+    def leaves(self) -> list[ConfigLeaf]:
+        """List every leaf in the ``ConfigTree``, in the order the keys were added.
 
-        Each node's :attr:`ConfigNode.path` is set to its dotted path from this
-        tree. Listing does not mark a node as accessed.
+        Each leaf's path starts at this tree. Listing does not change the nodes or
+        mark them as accessed.
         """
         leaves = []
         for name, child in self.items():
             if isinstance(child, ConfigNode):
-                child._path = name
-                leaves.append(child)
+                leaves.append(ConfigLeaf((name,), child))
             else:
                 for leaf in child.leaves():
-                    leaf._path = f"{name}.{leaf._path}"
-                    leaves.append(leaf)
+                    leaves.append(ConfigLeaf((name, *leaf.key_path), leaf.node))
         return leaves
 
     def to_dict(self) -> dict[str, Any]:

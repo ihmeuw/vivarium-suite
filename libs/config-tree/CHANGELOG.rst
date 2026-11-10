@@ -1,8 +1,8 @@
 **5.3.0 - 11/09/26**
 
-- Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes and sets each one's
-  dotted path from that tree on the new ``ConfigNode.path``
-- Display a listed ``ConfigNode`` as its path in IPython
+- Add ``ConfigTree.leaves()``, which lists a tree's leaves as ``ConfigLeaf`` records
+  that hold each node and its key path from that tree
+- Display a ``ConfigLeaf`` as its dotted path in IPython
 
 **5.2.1 - 09/22/26**
 
