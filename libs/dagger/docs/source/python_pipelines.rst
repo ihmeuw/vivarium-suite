@@ -201,14 +201,16 @@ Each of these exits with status 2 before any step runs:
   or while its function runs. ``dagger`` prints the traceback as described below. For a
   step that reads an artifact that no step produces and that is not a root input, the
   error names the step and the artifact key, with the closest key that does exist. If
-  no key is close, it lists the keys that are registered instead.
+  no key is close, it lists the keys registered so far instead, which are the root
+  inputs and the products of the steps defined before the one that reads the key.
 - Two steps produce the same artifact. ``dagger`` names the artifact key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
 - Two steps have the same name. ``dagger`` names it and says to pass ``name=`` to
-  ``python_step`` or ``notebook_step`` to tell the steps apart.
+  ``python_step`` or ``notebook_step`` to tell the steps apart. This is reported first,
+  even when ``--until`` or ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
   the reason.

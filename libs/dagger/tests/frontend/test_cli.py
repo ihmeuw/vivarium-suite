@@ -16,12 +16,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner, Result
 
-from tests.frontend.notebooks import (
-    broken_env,
-    isolated_jupyter_dirs,
-    recorded_errors,
-    write_source_notebook,
-)
+from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
 
@@ -1635,13 +1630,6 @@ _WRITES_SUMMARY = "from pathlib import Path\nPath(summary_path).write_text('n\\n
 """A notebook body that writes the summary product."""
 
 
-@pytest.fixture
-def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
-    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
-    with isolated_jupyter_dirs(tmp_path / "jupyter"):
-        yield
-
-
 def _notebook_definition(directory: Path, body: str, env: Path | None = None) -> Path:
     """Write summarize.ipynb running ``body`` and a definition running it under ``env``.
 
@@ -1847,6 +1835,23 @@ def test_a_step_that_calls_sys_exit_is_named_in_the_message(tmp_path: Path) -> N
     assert expected in result.stderr, result.stderr
 
 
+def test_a_system_exit_from_outside_any_step_names_the_build_not_a_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A SystemExit that no step raised (here from the run verb itself) makes 'dagger run' exit 1 with "The build exited with code 5 before it finished." and no mention of a step."""
+    path = _write_definition(tmp_path, _CHAIN)
+
+    def exits(*args: object, **kwargs: object) -> None:
+        raise SystemExit(5)
+
+    monkeypatch.setattr("vivarium.dagger.frontend.cli.run_pipeline", exits)
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    assert "The build exited with code 5 before it finished." in result.stderr, result.stderr
+    assert "step" not in result.stderr.lower(), result.stderr
+
+
 def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
     tmp_path: Path,
 ) -> None:
@@ -1868,7 +1873,7 @@ def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
 def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
     tmp_path: Path,
 ) -> None:
-    """A step reading a key unlike every registered key exits 2; stderr names the step and the key and lists the registered keys in sorted order, and has no did-you-mean."""
+    """A step reading a key unlike every registered key exits 2; stderr names the step and the key and lists the keys registered so far in sorted order, and has no did-you-mean."""
     path = _write_definition(tmp_path, _UNLIKE_EVERY_KEY)
 
     result = _invoke("run", str(path))
@@ -1877,7 +1882,7 @@ def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
     errors = result.stderr
     expected = (
         "Step 's': input 'zzz' is unresolved: no registered producer and no root input. "
-        "The registered keys are 'adults.parquet', 'population.parquet'."
+        "The keys registered so far are 'adults.parquet', 'population.parquet'."
     )
     assert expected in errors, errors
     assert "Did you mean" not in errors
@@ -1902,6 +1907,31 @@ def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apa
         assert "['" not in result.output, result.output
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["run --until", "preview --until", "force"],
+    ids=["run", "preview", "force"],
+)
+def test_two_steps_with_one_name_and_an_unknown_step_report_the_shared_name_as_a_definition_problem(
+    tmp_path: Path, command: str
+) -> None:
+    """With two steps named 'population' and an unknown step 'bb' given to --until or force, the command exits 2 with "Error: Two steps are named 'population'; ..." and no usage line or "Invalid value"."""
+    path = _write_definition(tmp_path, _SHARED_NAME)
+    verb, *option = command.split()
+
+    result = _invoke(verb, str(path), *option, "bb")
+
+    assert result.exit_code == 2, _describe(result)
+    expected = (
+        "Error: Two steps are named 'population'; pass name= to python_step or "
+        "notebook_step to tell them apart."
+    )
+    assert expected in result.stderr, result.stderr
+    assert "Usage:" not in result.stderr, result.stderr
+    assert "Invalid value" not in result.stderr, result.stderr
+    assert not (tmp_path / "state").exists()
 
 
 # A definition that does not parse (MIC-7785)

@@ -17,7 +17,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from vivarium.dagger.backend.wiring import ArtifactKey, WiringError, _quoted_list
+from vivarium.dagger.backend.wiring import ArtifactKey, WiringError
 
 PRIMARY_DIR = "primary"
 """Subdirectory of each location's directory that holds its primary data."""
@@ -93,9 +93,12 @@ def _same_stem_files(path: Path) -> list[str]:
     return sorted(p.name for p in siblings if p.name.casefold().startswith(prefix))
 
 
-def _names(names: Iterable[str]) -> str:
-    """Join names, quoted so surrounding spaces show."""
-    return ", ".join(repr(name) for name in names)
+def _names(names: Sequence[str], limit: int | None = None) -> str:
+    """Join the first ``limit`` names, quoted so surrounding spaces show; count the rest."""
+    shown = names if limit is None else names[:limit]
+    listed = ", ".join(repr(name) for name in shown)
+    rest = len(names) - len(shown)
+    return f"{listed}, and {rest} more" if rest > 0 else listed
 
 
 def _unreadable(location: str, path: Path, error: Exception) -> str:
@@ -135,7 +138,7 @@ def _present_columns(present: Sequence[str]) -> str:
     """Name up to ``_LISTED_COLUMNS`` present columns in file order and count the rest."""
     if not present:
         return "it has no columns"
-    return f"its columns are {_quoted_list(present, _LISTED_COLUMNS)}"
+    return f"its columns are {_names(present, _LISTED_COLUMNS)}"
 
 
 def _close_matches(

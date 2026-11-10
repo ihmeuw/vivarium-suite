@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 import traceback
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
 
 import pandas as pd
@@ -13,12 +13,8 @@ import pytest
 from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
 import vivarium.dagger.frontend.pipeline
-from tests.frontend.notebooks import (
-    broken_env,
-    isolated_jupyter_dirs,
-    recorded_errors,
-    write_source_notebook,
-)
+from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
+from vivarium.dagger.backend.build import TaskExited
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
@@ -805,13 +801,6 @@ _REPORT = "its output is in pytask's report for the step."
 """The end of the description of a failed shell command."""
 
 
-@pytest.fixture
-def jupyter_dirs(tmp_path: Path) -> Iterator[None]:
-    """Point IPython and Jupyter at empty directories, so no kernel reads or writes HOME."""
-    with isolated_jupyter_dirs(tmp_path / "jupyter"):
-        yield
-
-
 def _notebook_pipeline(
     tmp_path: Path, body: str = _RAISES_KEY_ERROR, env: str = sys.prefix
 ) -> Pipeline:
@@ -1193,7 +1182,7 @@ def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> Pipeline:
 def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
     tmp_path: Path,
 ) -> None:
-    """A step 'leave' that calls sys.exit(0) makes run() raise StepExited, which is a SystemExit whose step is 'leave' and whose code is 0, chained from the step's SystemExit."""
+    """A step 'leave' that calls sys.exit(0) makes run() raise StepExited, which is a SystemExit whose step is 'leave' and whose code is 0, chained from the backend's TaskExited, which is chained from the step's own SystemExit."""
     with pytest.raises(StepExited) as info:
         run(_exiting(tmp_path, _leave))
 
@@ -1202,9 +1191,11 @@ def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
     assert exited.step == "leave"
     assert exited.code == 0
     cause = exited.__cause__
-    assert isinstance(cause, SystemExit)
-    assert not isinstance(cause, StepExited)
-    assert cause.code == 0
+    assert isinstance(cause, TaskExited)
+    assert cause.task == "leave"
+    original = cause.__cause__
+    assert type(original) is SystemExit
+    assert original.code == 0
 
 
 def test_step_exited_keeps_a_non_integer_exit_code(tmp_path: Path) -> None:
@@ -1228,6 +1219,59 @@ def test_step_exited_is_caught_by_an_except_system_exit_clause(tmp_path: Path) -
 
     assert caught is not None
     assert caught.code == 0
+
+
+def _write_first(first: Path) -> None:
+    """Write the first step's product."""
+    first.write_text("first")
+
+
+def _read_and_leave(first: Path, leave: Path) -> None:
+    """Read the first step's product, then end the process with code 3."""
+    first.read_text()
+    sys.exit(3)
+
+
+def _read_leave(leave: Path, after: Path) -> None:
+    """Read the exiting step's product and write the last product."""
+    after.write_text(leave.read_text())
+
+
+def test_a_middle_step_that_exits_stops_the_build_after_its_upstream_step(
+    tmp_path: Path,
+) -> None:
+    """In a chain first -> leave -> after where 'leave' calls sys.exit(3), run() raises StepExited for 'leave' with code 3; 'first' wrote its product and 'after' did not."""
+    out = tmp_path / "out"
+    first, leave, after = out / "first.txt", out / "leave.txt", out / "after.txt"
+
+    def _step(name: str, run: Callable[..., None], inputs: dict[str, Path]) -> Task:
+        return Task(
+            name=name,
+            run=run,
+            inputs={key: file_node(path) for key, path in inputs.items()},
+            outputs={name: file_node(out / f"{name}.txt")},
+            resources={},
+            env=None,
+            code_id=stable_code_id(f"{name}::code"),
+        )
+
+    out.mkdir()
+    pipeline = Pipeline(
+        [
+            _step("first", _write_first, {}),
+            _step("leave", _read_and_leave, {"first": first}),
+            _step("after", _read_leave, {"leave": leave}),
+        ],
+        tmp_path / "state",
+    )
+
+    with pytest.raises(StepExited) as info:
+        run(pipeline)
+
+    assert info.value.step == "leave"
+    assert info.value.code == 3
+    assert first.read_text() == "first"
+    assert not after.exists()
 
 
 # The frontend's exports (MIC-7785)
