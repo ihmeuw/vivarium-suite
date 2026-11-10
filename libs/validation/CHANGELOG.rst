@@ -1,3 +1,12 @@
+**0.6.0 - 11/04/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
+  dependencies to ``loguru>=0.7.2``, ``matplotlib>=3.9.2``, ``numpy>=2.1.0``,
+  ``pandas>=3.0.0``, ``pandera>=0.31.0``, ``pyarrow>=18.0.0``
+- Get the pandas and pandera floors from ``vivarium-dependencies`` instead of
+  declaring ``pandas>=2.2.0`` and ``pandera>=0.31.0``
+- Call ``stack`` without ``future_stack=True``, which is the default in pandas 3
+
 **0.5.0 - 11/04/26**
 
 - Require ``vivarium-inputs>=9.2.0`` in the ``gbd`` extra and remove its pandas and numpy

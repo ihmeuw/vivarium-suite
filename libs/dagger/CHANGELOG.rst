@@ -1,3 +1,7 @@
+**0.1.1 - 11/04/26**
+
+- Cap ``vivarium-dependencies`` below 3.0.0
+
 **0.1.0 - 11/04/26**
 
 - Initial release: Dagger moved from vivarium-cluster-tools

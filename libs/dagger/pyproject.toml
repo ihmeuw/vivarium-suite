@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[click,loguru,pyyaml]",
+    "vivarium-dependencies[click,loguru,pyyaml]<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-cluster-tools>=5.0.0",
 ]
@@ -47,7 +47,7 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
+docs = ["vivarium-dependencies[docutils,sphinx,sphinx-click]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]"]
 dev = ["vivarium-dagger[test,docs,interactive,lint,cluster,simulation]"]
