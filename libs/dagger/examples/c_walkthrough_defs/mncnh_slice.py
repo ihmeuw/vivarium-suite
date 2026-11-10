@@ -4,15 +4,11 @@ Run ``dagger`` from an MNCNH checkout so ``env="vivarium_gates_mncnh_artifact"``
 that checkout's ``.venv/vivarium_gates_mncnh_artifact``. The pipeline's own env must import
 ``vivarium_gates_mncnh``, because a ``python_step`` runs in the pipeline's process.
 
-Functions for ``-c mncnh_slice.py:<function>``:
-
-- ``pipeline``: the public API only, so every step is always stale (MIC-7760).
-- ``stable``: the same steps with the harness's ``stable_code_id`` stand-in.
-- ``bad_key``: the IFA step names a handoff file that is not declared.
-- ``bad_handoff``: the handoff root whose IFA file has a renamed column.
+``-c mncnh_slice.py`` uses the public API only, so every step is always stale until
+MIC-7760; ``-c mncnh_slice.py:stable`` gives every step the harness's ``stable_code_id``
+stand-in.
 """
 
-import dataclasses
 import os
 from pathlib import Path
 
@@ -30,7 +26,7 @@ from vivarium.dagger.frontend import (
     notebook_step,
     python_step,
 )
-from vivarium.dagger.harness import stable_code_id
+from vivarium.dagger.harness import with_stable_code_id
 
 SLICE_ROOT = Path(
     os.environ.get("DAGGER_SLICE_ROOT", "/ihme/homes/pnast/scratch/dagger-evidence/slice")
@@ -73,14 +69,12 @@ def write_artifact(
     hdf.write(data_keys.IFA_SUPPLEMENTATION.COVERAGE, pd.read_parquet(ifa_coverage))
 
 
-def _tasks(
-    handoff_root: Path, extract_file: str = "ifa_coverage.csv"
-) -> tuple[list[Task], ArtifactRegistry]:
-    """Compile the slice's steps against one handoff root."""
+def _tasks() -> tuple[list[Task], ArtifactRegistry]:
+    """Compile the slice's steps."""
     registry = ArtifactRegistry(
         SLICE_ROOT / "output",
         run_name="nigeria",
-        root_inputs=handoff_inputs(handoff_root, [LOCATION], PRIMARY_DATA),
+        root_inputs=handoff_inputs(SLICE_ROOT / "handoff", [LOCATION], PRIMARY_DATA),
     )
     tasks = [
         python_step(
@@ -99,7 +93,7 @@ def _tasks(
         ),
         python_step(
             ifa_coverage,
-            inputs={"extract": handoff_key(LOCATION, extract_file)},
+            inputs={"extract": handoff_key(LOCATION, "ifa_coverage.csv")},
             produces="ifa_coverage.parquet",
             registry=registry,
             name="ifa_coverage",
@@ -137,24 +131,13 @@ def _tasks(
 
 def pipeline() -> Pipeline:
     """Return the slice built with the public API only."""
-    tasks, registry = _tasks(SLICE_ROOT / "handoff")
+    tasks, registry = _tasks()
     return Pipeline(tasks, SLICE_ROOT / "state", registry)
 
 
 def stable() -> Pipeline:
     """Return the slice with the harness's code-fingerprint stand-in on every step."""
-    tasks, registry = _tasks(SLICE_ROOT / "handoff")
-    tasks = [dataclasses.replace(t, code_id=stable_code_id(f"{t.name}::code")) for t in tasks]
-    return Pipeline(tasks, SLICE_ROOT / "state_stable", registry)
-
-
-def bad_key() -> Pipeline:
-    """Return the slice with the IFA step naming a misspelled handoff file."""
-    tasks, registry = _tasks(SLICE_ROOT / "handoff", extract_file="ifa_coverge.csv")
-    return Pipeline(tasks, SLICE_ROOT / "state_bad", registry)
-
-
-def bad_handoff() -> Pipeline:
-    """Return the slice reading a handoff whose IFA file renamed ``year_id`` to ``year``."""
-    tasks, registry = _tasks(SLICE_ROOT / "handoff_bad")
-    return Pipeline(tasks, SLICE_ROOT / "state_bad", registry)
+    tasks, registry = _tasks()
+    return Pipeline(
+        [with_stable_code_id(t) for t in tasks], SLICE_ROOT / "state_stable", registry
+    )

@@ -241,9 +241,10 @@ assert all(l.startswith("run") for l in plan(public).values())
 # ## C6 — `force S` re-runs S; its descendants run only if its output changed (local)
 #
 # Patrick confirmed this rule on 2026-11-09. Forcing adults, whose output comes out the
-# same, runs adults alone. `pipeline.py:stamped` has a population step that writes the
-# time it ran, so forcing it changes population.parquet: adults runs again, but adults
-# drops that column, so its output is unchanged and summary and later steps stay skipped.
+# same, runs adults alone. A copy of the definition next to it, `stamped.py`, has a
+# population step that also writes the time it ran, so forcing it changes
+# population.parquet: adults runs again, but adults drops that column, so its output is
+# unchanged and summary and later steps stay skipped.
 
 # %%
 FORCE = UNTIL
@@ -259,7 +260,16 @@ digest = {
     p: hashlib.sha256((FORCE / "output" / p).read_bytes()).hexdigest()[:12]
     for p in products(FORCE)
 }
-changed = dagger("force", "-c", "pipeline.py:stamped", "--local", "population", cwd=FORCE)
+# A second definition file next to the first shares its outputs and state.
+stamped = (FORCE / "pipeline.py").read_text()
+for old, new in (
+    ("import shlex\n", "import shlex\nimport time\n"),
+    ('"count": [30, 55, 15]})', '"count": [30, 55, 15]}).assign(made_at=time.time())'),
+):
+    assert stamped.count(old) == 1, old
+    stamped = stamped.replace(old, new)
+(FORCE / "stamped.py").write_text(stamped)
+changed = dagger("force", "-c", "stamped.py:stable", "--local", "population", cwd=FORCE)
 assert changed.returncode == 0
 now = {
     p: hashlib.sha256((FORCE / "output" / p).read_bytes()).hexdigest()[:12]
@@ -619,6 +629,9 @@ assert docs.returncode == 0
 # `C_WALKTHROUGH_MNCNH` to the checkout and `DAGGER_SLICE_ROOT` to a new directory, and
 # run on a compute node. The model's notebook has no `parameters` cell, so the demo copy
 # adds one; that change is what a modeler makes to adopt `notebook_step` (MIC-7755).
+# The section ends with two mistakes on the real slice, each made in a copy of the
+# definition: a misspelled handoff file name, and a handoff whose IFA file renamed
+# `year_id` (1007 columns, as the real extract has).
 #
 # The run and the skip use `mncnh_slice.py:stable`, which carries the `stable_code_id`
 # stand-in. The last two commands run the public API (`mncnh_slice.py`), with its own
@@ -682,6 +695,31 @@ else:
     dagger("run", "-c", DEF, "--local", cwd=MNCNH, stdout=False)
     real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
     assert all(l.startswith("run") for l in plan(real_public).values())
+
+    mistakes = WORK / "slice_mistakes"
+    mistakes.mkdir(exist_ok=True)
+    source = DEF.read_text()
+    typo = 'handoff_key(LOCATION, "ifa_coverage.csv")'
+    assert source.count(typo) == 1
+    key = mistakes / "mncnh_slice_misspelled_key.py"
+    key.write_text(source.replace(typo, 'handoff_key(LOCATION, "ifa_coverge.csv")'))
+    misspelled = dagger("preview", "-c", f"{key}:stable", cwd=MNCNH)
+    assert misspelled.returncode == 2 and "ifa_coverage.csv" in misspelled.stderr
+
+    renamed_csv = SLICE / "handoff_renamed/Nigeria/primary/ifa_coverage.csv"
+    renamed_csv.parent.mkdir(parents=True, exist_ok=True)
+    renamed_csv.write_text(
+        (SLICE / "handoff/Nigeria/primary/ifa_coverage.csv")
+        .read_text()
+        .replace("year_id", "year", 1)
+    )
+    root = 'SLICE_ROOT / "handoff"'
+    assert source.count(root) == 1
+    column = mistakes / "mncnh_slice_renamed_column.py"
+    column.write_text(source.replace(root, 'SLICE_ROOT / "handoff_renamed"'))
+    renamed = dagger("preview", "-c", f"{column}:stable", cwd=MNCNH)
+    assert renamed.returncode == 2 and "'year_id' may be 'year'" in renamed.stderr
+    assert len(renamed.stderr) < 1500, len(renamed.stderr)
 
 # %% [markdown]
 # ## PLAY

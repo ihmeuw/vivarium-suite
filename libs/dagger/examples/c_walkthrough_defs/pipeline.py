@@ -1,15 +1,11 @@
 """Track C walkthrough definition: python steps, a handoff, a notebook step, and a command step.
 
 ``-c pipeline.py`` uses the public API only, so every step is always stale until MIC-7760.
-``-c pipeline.py:stable`` gives every step the harness's ``stable_code_id`` stand-in, and
-``-c pipeline.py:stamped`` is ``stable`` with a population step whose output changes on
-every run.
+``-c pipeline.py:stable`` gives every step the harness's ``stable_code_id`` stand-in.
 """
 
-import dataclasses
 import shlex
 import sys
-import time
 from pathlib import Path
 
 import pandas as pd
@@ -23,7 +19,7 @@ from vivarium.dagger.frontend import (
     notebook_step,
     python_step,
 )
-from vivarium.dagger.harness import stable_code_id
+from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
 LOCATIONS = ["kenya", "nigeria"]
@@ -33,11 +29,6 @@ PRIMARY_DATA = {"coverage.csv": ["location_id", "year_id", "coverage"]}
 def make_population() -> pd.DataFrame:
     """Return a small population table by age group."""
     return pd.DataFrame({"age_group": ["0-14", "15-64", "65+"], "count": [30, 55, 15]})
-
-
-def make_stamped_population() -> pd.DataFrame:
-    """Return the population table with the time it was made, so its bytes always change."""
-    return make_population().assign(made_at=time.time())
 
 
 def select_adults(population: Path) -> pd.DataFrame:
@@ -57,7 +48,7 @@ def mean_coverage(coverage: Path) -> pd.DataFrame:
     return pd.DataFrame({"mean_coverage": [pd.read_csv(coverage)["coverage"].mean()]})
 
 
-def _tasks(stamped: bool = False) -> tuple[list[Task], ArtifactRegistry]:
+def _tasks() -> tuple[list[Task], ArtifactRegistry]:
     """Compile the walkthrough's steps."""
     registry = ArtifactRegistry(
         HERE / "output",
@@ -66,7 +57,7 @@ def _tasks(stamped: bool = False) -> tuple[list[Task], ArtifactRegistry]:
     )
     tasks = [
         python_step(
-            make_stamped_population if stamped else make_population,
+            make_population,
             inputs={},
             produces="population.parquet",
             registry=registry,
@@ -123,11 +114,6 @@ def _tasks(stamped: bool = False) -> tuple[list[Task], ArtifactRegistry]:
     return tasks, registry
 
 
-def _stable(tasks: list[Task]) -> list[Task]:
-    """Give each task the harness's code-fingerprint stand-in."""
-    return [dataclasses.replace(t, code_id=stable_code_id(f"{t.name}::code")) for t in tasks]
-
-
 def pipeline() -> Pipeline:
     """Return the walkthrough pipeline built with the public API only."""
     tasks, registry = _tasks()
@@ -137,10 +123,4 @@ def pipeline() -> Pipeline:
 def stable() -> Pipeline:
     """Return the walkthrough pipeline with the code-fingerprint stand-in on every step."""
     tasks, registry = _tasks()
-    return Pipeline(_stable(tasks), HERE / "state_stable", registry)
-
-
-def stamped() -> Pipeline:
-    """Return ``stable`` with a population step whose output changes on every run."""
-    tasks, registry = _tasks(stamped=True)
-    return Pipeline(_stable(tasks), HERE / "state_stable", registry)
+    return Pipeline([with_stable_code_id(t) for t in tasks], HERE / "state_stable", registry)
