@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     import networkx as nx
-    from vivarium.config_tree.main import ConfigNode, ConfigTree
+    from vivarium.config_tree.main import ConfigLeaf, ConfigTree
     from vivarium.engine import Component
     from vivarium.engine.types import ClockStepSize, ClockTime
 
@@ -313,7 +313,7 @@ class Simulation(BaseSimulation):
 
     def find_configuration(
         self, pattern: str = "", *, regex: bool = False
-    ) -> list[ConfigNode]:
+    ) -> list[ConfigLeaf]:
         """Find configuration keys whose path matches a pattern.
 
         Use this to locate a key when you know roughly what it is called but not
@@ -336,8 +336,9 @@ class Simulation(BaseSimulation):
 
         Returns
         -------
-            The matching keys' nodes, in the order the keys were added to the
-            configuration.
+            The matching keys, in the order they were added to the configuration.
+            Each one holds its path from ``sim.configuration`` and its
+            configuration node.
 
         Raises
         ------
@@ -345,11 +346,7 @@ class Simulation(BaseSimulation):
             If ``regex`` is True and the pattern is not a valid regular expression.
         """
         matcher = _compile_pattern(pattern, regex)
-        return [
-            node
-            for node in self.configuration.leaves()
-            if node.path is not None and matcher.search(node.path)
-        ]
+        return [leaf for leaf in self.configuration.leaves() if matcher.search(leaf.path)]
 
     ######################
     # Run the simulation #

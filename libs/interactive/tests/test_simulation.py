@@ -14,7 +14,7 @@ import pytest
 import yaml
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
-from vivarium.config_tree import ConfigNode, ConfigTree
+from vivarium.config_tree import ConfigLeaf, ConfigTree
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import BaseSimulation, Builder
 from vivarium.engine.framework.event import Event
@@ -945,14 +945,14 @@ class TestFindConfiguration:
         return Simulation(components=[ConfiguredRisk()])
 
     @staticmethod
-    def paths(nodes: list[ConfigNode]) -> list[str]:
-        return [node.path for node in nodes if node.path is not None]
+    def paths(leaves: list[ConfigLeaf]) -> list[str]:
+        return [leaf.path for leaf in leaves]
 
     def test_returns_the_configuration_nodes(self, sim: Simulation) -> None:
         """Returning the nodes themselves is what lets a researcher act on a result."""
         found = sim.find_configuration("time.step_size")
         assert self.paths(found) == ["time.step_size"]
-        assert found[0] is sim.configuration.time._children["step_size"]
+        assert found[0].node is sim.configuration.time._children["step_size"]
 
     def test_paths_start_from_the_simulation_configuration(self, sim: Simulation) -> None:
         """A path reads as what follows ``sim.configuration.``, so it never carries
@@ -1016,7 +1016,7 @@ class TestFindConfiguration:
         sim.configuration["risk.child_wasting"].distribution_type = "dichotomous"
         sim.setup()
 
-        assert found.get_value() == "dichotomous"
+        assert found.node.get_value() == "dichotomous"
 
 
 class TestPrintDependencies:

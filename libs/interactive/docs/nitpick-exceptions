@@ -30,14 +30,14 @@ py:class loguru.Logger
 py:class nx.DiGraph
 
 # vivarium-config-tree: type annotations in source use the bare names
-# ``ConfigTree`` and ``ConfigNode`` (via ``from vivarium.config_tree.main import
-# ConfigNode, ConfigTree``), which autodoc-typehints renders as bare
+# ``ConfigTree`` and ``ConfigLeaf`` (via ``from vivarium.config_tree.main import
+# ConfigLeaf, ConfigTree``), which autodoc-typehints renders as bare
 # ``:class:`ConfigTree``` cross-refs that Sphinx can't match against the
 # qualified intersphinx target. Fully-qualified references (e.g.
 # ``:class:`~vivarium.config_tree.main.ConfigTree``` in docstrings/rst) resolve
 # correctly via intersphinx; only the autodoc-derived bare form needs suppression.
 py:class ConfigTree
-py:class ConfigNode
+py:class ConfigLeaf
 
 # Special methods that Sphinx can't resolve
 py:meth __init__
