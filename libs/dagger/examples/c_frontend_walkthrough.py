@@ -619,6 +619,10 @@ assert docs.returncode == 0
 # `C_WALKTHROUGH_MNCNH` to the checkout and `DAGGER_SLICE_ROOT` to a new directory, and
 # run on a compute node. The model's notebook has no `parameters` cell, so the demo copy
 # adds one; that change is what a modeler makes to adopt `notebook_step` (MIC-7755).
+#
+# The run and the skip use `mncnh_slice.py:stable`, which carries the `stable_code_id`
+# stand-in. The last two commands run the public API (`mncnh_slice.py`), with its own
+# state, and show that every step would run again until MIC-7760.
 
 # %%
 MNCNH = os.environ.get("C_WALKTHROUGH_MNCNH")
@@ -675,6 +679,9 @@ else:
                     "".join(o.get("data", {}).get("text/plain", "")) for o in cell["outputs"]
                 ),
             )
+    dagger("run", "-c", DEF, "--local", cwd=MNCNH, stdout=False)
+    real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
+    assert all(l.startswith("run") for l in plan(real_public).values())
 
 # %% [markdown]
 # ## PLAY
