@@ -14,3 +14,21 @@ def umask_022() -> Iterator[None]:
         yield
     finally:
         os.umask(previous)
+
+
+@pytest.fixture
+def without_bridge_plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the ``pytask`` entry points look as if the bridge's plugin were not registered."""
+    from importlib.metadata import EntryPoint
+
+    import vivarium.dagger.backend.build as build_module
+
+    real = build_module.entry_points
+
+    def without_bridge(group: str) -> list[EntryPoint]:
+        """Return ``group``'s entry points except the bridge's plugin."""
+        return [
+            point for point in real(group=group) if point.value != build_module.BRIDGE_PLUGIN
+        ]
+
+    monkeypatch.setattr(build_module, "entry_points", without_bridge)
