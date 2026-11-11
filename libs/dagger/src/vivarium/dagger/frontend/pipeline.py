@@ -27,6 +27,7 @@ from vivarium.dagger.backend.build import (
     COMMAND_KEY,
     TaskExited,
     build,
+    check_bridge_registered,
     describe_exit,
     failure_message,
     outcomes,
@@ -206,11 +207,12 @@ def run(
     Raises
     ------
     PipelineError
-        If two steps share a name, ``only`` or ``force`` names a step that is not in the
+        If two steps share a name, ``jobmon=True`` is given but the bridge's pytask
+        plugin is not registered, ``only`` or ``force`` names a step that is not in the
         pipeline, ``force`` is given and ``pytask.lock`` is not a lockfile pytask
         accepts, the backend rejects the tasks (for example, a declared env does not
-        resolve), or pytask stops before any step fails. A shared name and an unknown
-        step are reported before anything is built or written. A shared name gives one
+        resolve), or pytask stops before any step fails. A shared name, a missing bridge
+        plugin and an unknown step are reported before anything is built or written. A shared name gives one
         line per name, in sorted order, such as ``Two steps are named 'population';
         pass name= to python_step or notebook_step to tell them apart.`` (with the count
         as a digit, as in ``3 steps are named``, for more than two), and is chained from
@@ -251,6 +253,10 @@ def run(
         re-raised as itself. Either is raised instead of :class:`StepFailed`.
     """
     _check_unique_steps(pipeline)
+    try:
+        check_bridge_registered(build_kwargs)
+    except ValueError as error:
+        raise PipelineError(str(error)) from error
     selected = None if only is None else _resolve(pipeline, only)
     forced: set[str] = set() if force is None else _resolve(pipeline, force)
     if selected is not None:
