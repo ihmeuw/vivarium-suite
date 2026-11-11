@@ -201,6 +201,69 @@ def _compiled(tmp_path: Path, command: str) -> str:
     return task.run
 
 
+_ORDER_COMMAND = "sh {script} {population} > {adults} 2> {log} && touch {a} {b} {c} {d}"
+"""The command of the test that equal mappings in any order compile to one command."""
+
+_ORDER_PRODUCTS = {
+    "adults": "adults.csv",
+    "log": "logs/adults.log",
+    "a": "a/a.txt",
+    "b": "b/b.txt",
+    "c": "c/c.txt",
+    "d": "d/d.txt",
+}
+"""Products in six directories, so that set order is unlikely to agree across hash seeds."""
+
+_HASH_SEED_SCRIPT = """
+import sys
+from pathlib import Path
+
+from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.command_step import command_step
+
+root, population, population_path, script, script_path, command, *pairs = sys.argv[1:]
+registry = ArtifactRegistry(
+    Path(root),
+    "run1",
+    root_inputs={population: Path(population_path), script: Path(script_path)},
+)
+task = command_step(
+    command,
+    inputs={"script": script, "population": population},
+    produces=dict(zip(pairs[::2], pairs[1::2])),
+    registry=registry,
+    name="subset",
+)
+sys.stdout.write(task.run)
+"""
+"""Print the run of the any-order test's step, compiled from the arguments given."""
+
+
+def _compiled_with_hash_seed(tmp_path: Path, seed: str) -> str:
+    """Return the run of the any-order test's step compiled in a process with ``seed``."""
+    supplied = tmp_path / "supplied"
+    pairs = [part for item in reversed(_ORDER_PRODUCTS.items()) for part in item]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _HASH_SEED_SCRIPT,
+            str(tmp_path / "out"),
+            _POPULATION,
+            str(supplied / "population.csv"),
+            _SCRIPT,
+            str(supplied / "tool.sh"),
+            _ORDER_COMMAND,
+            *pairs,
+        ],
+        env={**os.environ, "PYTHONHASHSEED": seed},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
 def _one_step(tmp_path: Path, command: str, **arguments: Any) -> tuple[Pipeline, Path]:
     """Return a pipeline of one step 'step' writing 'out.txt', and that product's path."""
     registry = ArtifactRegistry(tmp_path / "out", "run1")
@@ -498,22 +561,19 @@ def test_a_name_in_both_inputs_and_produces_is_refused(tmp_path: Path) -> None:
     assert "shared_name" in message
 
 
-@pytest.mark.parametrize(
-    "right_key, right_names",
-    [("x.csv", ("right_table",)), ("./x.csv", ("right_table", "./x.csv"))],
-    ids=["same_key", "same_path"],
-)
+@pytest.mark.parametrize("right_key", ["x.csv", "./x.csv"], ids=["same_key", "same_path"])
 def test_two_products_at_one_path_are_refused_naming_both(
-    tmp_path: Path, right_key: str, right_names: tuple[str, ...]
+    tmp_path: Path, right_key: str
 ) -> None:
-    """Two produces entries whose keys resolve to one path (the same key under two names, or "x.csv" and "./x.csv") raise ValueError naming both products, and nothing is registered."""
+    """Two produces entries whose keys resolve to one path (the same key under two names, or "x.csv" and "./x.csv") raise ValueError naming both products and the second key, and nothing is registered."""
     produces = {"left_table": "x.csv", "right_table": right_key}
 
     message = _refused(_registry(tmp_path), produces=produces, name="pair")
 
     assert message.startswith("Step 'pair':"), message
-    assert "left_table" in message
-    assert any(name in message for name in right_names), message
+    assert "'left_table'" in message, message
+    assert "'right_table'" in message, message
+    assert repr(right_key) in message, message
 
 
 def test_the_same_key_as_input_and_product_is_refused_before_any_registry_lookup(
@@ -725,6 +785,30 @@ def test_a_placeholder_with_a_conversion_spec_attribute_or_index_is_refused(
     _assert_hint_last(message, placeholder, *[repr(name) for name in _SORTED_NAMES])
 
 
+@pytest.mark.parametrize(
+    "placeholder",
+    ["{adults:}", "{adults!r:}", "{adults!r}", "{adults:>8}"],
+    ids=[
+        "empty_format_spec",
+        "conversion_and_empty_format_spec",
+        "conversion",
+        "format_spec",
+    ],
+)
+def test_a_placeholder_after_doubled_braces_is_quoted_as_written(
+    tmp_path: Path, placeholder: str
+) -> None:
+    """After a literal '{{}}', each of {adults:}, {adults!r:}, {adults!r} and {adults:>8} raises ValueError that quotes the placeholder exactly as written; {adults!r} and {adults:>8} need the doubled braces counted to find it, and the empty-spec cases check the ':}' fallback."""
+    command = "printf '%s' '{{}}' " + placeholder
+
+    message = _refused(_registry(tmp_path), command=command, **_NAMES)
+
+    assert message.startswith("Step 'subset':"), message
+    assert f"the placeholder {placeholder}, " in message, message
+    _assert_lists_names(message)
+    _assert_hint_last(message, placeholder, *[repr(name) for name in _SORTED_NAMES])
+
+
 def test_a_lone_closing_brace_is_refused_with_the_names_and_the_brace_hint(
     tmp_path: Path,
 ) -> None:
@@ -830,9 +914,9 @@ def test_doubled_braces_reach_the_shell_as_single_braces(tmp_path: Path) -> None
 
 def test_the_command_is_identical_for_equal_mappings_in_any_order(tmp_path: Path) -> None:
     """Two calls whose inputs and produces hold the same entries in a different order give the same run string."""
-    command = "sh {script} {population} > {adults} 2> {log}"
+    command = _ORDER_COMMAND
     inputs = {"population": _POPULATION, "script": _SCRIPT}
-    produces = {"adults": "adults.csv", "log": "logs/adults.log"}
+    produces = _ORDER_PRODUCTS
 
     forward = command_step(
         command,
@@ -851,6 +935,8 @@ def test_the_command_is_identical_for_equal_mappings_in_any_order(tmp_path: Path
 
     assert isinstance(forward.run, str)
     assert forward.run == backward.run
+    # Set order changes with the hash seed, so an unsorted directory list differs here.
+    assert {_compiled_with_hash_seed(tmp_path, seed) for seed in ("0", "1")} == {forward.run}
 
 
 def test_the_command_changes_when_the_command_text_changes(tmp_path: Path) -> None:
