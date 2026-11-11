@@ -36,6 +36,7 @@ from vivarium.dagger.backend.preview import preview as backend_preview
 from vivarium.dagger.backend.task import Task, check_unique_task_names
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.frontend.notebook_step import describe_notebook_failure
+from vivarium.dagger.frontend.simulation_step import describe_simulation_failure
 
 # TODO(MIC-7541): once iterate() fans a step out over coordinates, map each task name
 # back to its step and coordinates; until then every task name is a step name.
@@ -230,7 +231,11 @@ def run(
         in the message describes its failure in step terms. A notebook step is
         described by
         :func:`~vivarium.dagger.frontend.notebook_step.describe_notebook_failure` when
-        that returns a description. Any other step whose ``run`` is a shell command and
+        that returns a description, and a simulation step by
+        :func:`~vivarium.dagger.frontend.simulation_step.describe_simulation_failure`
+        when that returns one, which gives the check's message or says that psimulate
+        did not finish, with where its logs are and whether the previous complete run
+        was kept. Any other step whose ``run`` is a shell command and
         that failed with :class:`subprocess.CalledProcessError` is described as
         ``<exit>; its output is in pytask's report for the step.``, where ``<exit>`` is
         :func:`~vivarium.dagger.backend.build.describe_exit` of the return code, so the
@@ -405,6 +410,9 @@ def _step_description(task: Task, error: BaseException) -> str:
         notebook = describe_notebook_failure(task, error)
         if notebook is not None:
             return notebook
+        simulation = describe_simulation_failure(task, error)
+        if simulation is not None:
+            return simulation
         if isinstance(error, subprocess.CalledProcessError):
             return (
                 f"{describe_exit(error.returncode)}; its output is in pytask's report for "
