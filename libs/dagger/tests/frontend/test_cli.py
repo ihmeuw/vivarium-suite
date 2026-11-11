@@ -1788,6 +1788,32 @@ def pipeline():
 """A definition whose notebook step, named by default 'run.ipynb', reads a mistyped key,
 'populaton.parquet'."""
 
+_NOTEBOOK_MISSPELLED_PARAMETER = (
+    _HEADER
+    + """
+from vivarium.dagger.frontend import notebook_step
+
+NOTEBOOK = HERE / "report.ipynb"
+EXECUTED = "run.ipynb"
+ENV = sys.prefix
+PARAMS = {"loaction": "179"}
+
+
+def make_a():
+    log("a")
+    return frame()
+
+
+def pipeline():
+    reg = ArtifactRegistry(HERE / "out", "run1")
+    a = step(make_a, "a", reg)
+    nb = notebook_step(NOTEBOOK, executed=EXECUTED, registry=reg, env=ENV, parameters=PARAMS)
+    return Pipeline([a, nb], HERE / "state", reg)
+"""
+)
+"""A definition whose notebook step, named by default 'run.ipynb', passes the misspelled
+parameter 'loaction' after a step 'a' that logs when it runs."""
+
 _UNLIKE_EVERY_KEY = (
     _HEADER
     + """
@@ -1870,6 +1896,27 @@ def test_a_notebook_step_with_a_mistyped_input_key_exits_two_naming_the_step(
     assert "nb = notebook_step(NOTEBOOK" in errors
     assert "notebook_step.py" not in errors
     assert "wiring.py" not in errors
+
+
+def test_a_notebook_step_passing_a_misspelled_parameter_exits_two_naming_the_step_and_name(
+    tmp_path: Path,
+) -> None:
+    """A definition whose notebook_step passes parameters={'loaction': ...} over a cell assigning 'location' makes 'dagger run -c' exit 2; stderr has "Step '<name>': the parameters cell of notebook", the quoted notebook path, "'loaction' (parameters; did you mean 'location'?)", the definition's notebook_step(...) line, and no notebook_step.py frame, and nothing runs."""
+    notebook = write_source_notebook(tmp_path / "report.ipynb", "location = 'unset'")
+    path = _write_definition(tmp_path, _NOTEBOOK_MISSPELLED_PARAMETER)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert "Step 'run.ipynb': the parameters cell of notebook " in errors, errors
+    assert repr(str(notebook.resolve())) in errors
+    assert "'loaction' (parameters; did you mean 'location'?)" in errors
+    assert "nb = notebook_step(NOTEBOOK" in errors
+    assert "notebook_step.py" not in errors
+    assert _calls(tmp_path) == []
+    assert not _product(tmp_path, "a").exists()
+    assert not (tmp_path / "state").exists()
 
 
 def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(

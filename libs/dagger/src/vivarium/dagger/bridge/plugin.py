@@ -40,7 +40,11 @@ For example::
 The process that runs the build waits for the whole workflow. On Slurm it must run on a
 compute node with ``/opt/slurm/bin`` on ``PATH``, because Jobmon's Slurm plugin calls
 ``scontrol``, ``squeue`` and ``scancel`` from that host. The bridge needs the ``cluster``
-extra: ``pip install "vivarium-dagger[cluster]"``.
+extra: ``pip install "vivarium-dagger[cluster]"``. If this plugin is not registered, as
+after an editable install made before the bridge existed, a build that sets
+``jobmon=True`` raises ``ValueError`` before it writes anything
+(:func:`~vivarium.dagger.backend.build.check_bridge_registered`), so its steps never run
+in the build's own process by mistake.
 
 Only one bridged build (``jobmon=True``, outside the local-only modes) runs on a root at a
 time. Such a build holds the run lock on ``<root>/run.lock`` (see
