@@ -8,6 +8,7 @@ import pytest
 from pytask import TaskOutcome
 
 from vivarium.dagger.backend.build import build, outcomes
+from vivarium.dagger.backend.nodes import RunDirectoryNode
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
 
@@ -393,3 +394,152 @@ def test_did_you_mean_judges_closeness_without_a_shared_suffix(
 ) -> None:
     """A key's stem is compared to the stems of the keys in its directory with its suffix, so a shared directory and '.parquet' alone suggest nothing; with no key sharing both, whole keys are compared."""
     assert _suggestion(tmp_path, key, registered) == expected
+
+
+# Directory outputs (MIC-7754)
+
+
+_RUN_KEY = "sims/toy"
+"""A directory output's key."""
+
+_RUN_ALIAS = "sims/../sims/toy"
+"""A key spelled unlike _RUN_KEY that path_for resolves to the same path."""
+
+_DONE = "_DONE"
+"""A sentinel file name; the registry takes any name it is given."""
+
+
+def _message(error: pytest.ExceptionInfo[WiringError]) -> str:
+    """Return the message of a raised WiringError."""
+    return str(error.value)
+
+
+def test_register_directory_output_returns_a_run_directory_node_at_the_keys_path(
+    tmp_path: Path,
+) -> None:
+    """register_directory_output returns a RunDirectoryNode whose path is path_for(key) and whose sentinel is the given name."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    node = reg.register_directory_output(_RUN_KEY, _DONE)
+
+    assert isinstance(node, RunDirectoryNode)
+    assert node.path == reg.path_for(_RUN_KEY)
+    assert node.sentinel == _DONE
+
+
+def test_register_directory_output_twice_returns_the_same_node(tmp_path: Path) -> None:
+    """Registering one key as a directory output twice returns the identical node."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    first = reg.register_directory_output(_RUN_KEY, _DONE)
+
+    assert reg.register_directory_output(_RUN_KEY, _DONE) is first
+
+
+def test_resolve_input_of_a_directory_key_returns_the_identical_node(tmp_path: Path) -> None:
+    """resolve_input of a key registered by register_directory_output returns the same node object, so the consumer gets the edge."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    node = reg.register_directory_output(_RUN_KEY, _DONE)
+
+    assert reg.resolve_input(_RUN_KEY) is node
+
+
+def test_key_for_the_run_directory_returns_its_key(tmp_path: Path) -> None:
+    """key_for of the run directory's path, also given relative or through a symlink, returns the directory output's key."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output(_RUN_KEY, _DONE)
+    resolved = reg.path_for(_RUN_KEY)
+    (tmp_path / "out").mkdir()
+    (tmp_path / "link").symlink_to(tmp_path / "out", target_is_directory=True)
+    paths: list[Path | str] = [
+        resolved,
+        str(resolved),
+        os.path.relpath(resolved),
+        tmp_path / "out" / "run1" / "sims" / ".." / "sims" / "toy",
+        tmp_path / "link" / "run1" / "sims" / "toy",
+    ]
+
+    for path in paths:
+        assert reg.key_for(path) == _RUN_KEY, path
+
+
+def test_register_directory_output_refuses_a_root_input_key_with_register_outputs_message(
+    tmp_path: Path,
+) -> None:
+    """A directory output on a declared root input's key raises WiringError with the same message register_output gives for that key."""
+    source = tmp_path / "delivered"
+    as_file = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={_RUN_KEY: source})
+    as_directory = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={_RUN_KEY: source})
+
+    with pytest.raises(WiringError) as file_error:
+        as_file.register_output(_RUN_KEY)
+    with pytest.raises(WiringError) as directory_error:
+        as_directory.register_directory_output(_RUN_KEY, _DONE)
+
+    assert _message(directory_error) == _message(file_error)
+    assert _RUN_KEY in _message(directory_error)
+
+
+@pytest.mark.parametrize(
+    "first_is_directory", [True, False], ids=["after-a-directory", "after-a-file"]
+)
+def test_register_directory_output_refuses_a_second_key_on_one_path(
+    tmp_path: Path, first_is_directory: bool
+) -> None:
+    """A directory output whose key resolves to the path of a different registered key raises WiringError with the same message register_output gives."""
+    as_file = ArtifactRegistry(tmp_path / "out", "run1")
+    as_directory = ArtifactRegistry(tmp_path / "out", "run1")
+    for reg in (as_file, as_directory):
+        if first_is_directory:
+            reg.register_directory_output(_RUN_KEY, _DONE)
+        else:
+            reg.register_output(_RUN_KEY)
+
+    with pytest.raises(WiringError) as file_error:
+        as_file.register_output(_RUN_ALIAS)
+    with pytest.raises(WiringError) as directory_error:
+        as_directory.register_directory_output(_RUN_ALIAS, _DONE)
+
+    assert _message(directory_error) == _message(file_error)
+    assert _RUN_KEY in _message(directory_error)
+    assert _RUN_ALIAS in _message(directory_error)
+    assert "one path" in _message(directory_error)
+
+
+def test_register_directory_output_refuses_a_root_inputs_path(tmp_path: Path) -> None:
+    """A directory output whose path is a declared root input's path raises WiringError with the same message register_output gives, naming the root input's key."""
+    out = tmp_path / "out"
+    root_inputs = {"raw": out / "run1" / _RUN_KEY}
+    as_file = ArtifactRegistry(out, "run1", root_inputs=root_inputs)
+    as_directory = ArtifactRegistry(out, "run1", root_inputs=root_inputs)
+
+    with pytest.raises(WiringError) as file_error:
+        as_file.register_output(_RUN_KEY)
+    with pytest.raises(WiringError) as directory_error:
+        as_directory.register_directory_output(_RUN_KEY, _DONE)
+
+    assert _message(directory_error) == _message(file_error)
+    assert "raw" in _message(directory_error)
+
+
+def test_a_file_output_key_cannot_then_be_a_directory_output(tmp_path: Path) -> None:
+    """register_directory_output of a key already registered by register_output raises WiringError naming the key."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_output(_RUN_KEY)
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_directory_output(_RUN_KEY, _DONE)
+
+    assert _RUN_KEY in _message(excinfo)
+
+
+def test_a_directory_output_key_cannot_then_be_a_file_output(tmp_path: Path) -> None:
+    """register_output of a key already registered by register_directory_output raises WiringError naming the key, instead of returning the run directory node."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output(_RUN_KEY, _DONE)
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_output(_RUN_KEY)
+
+    assert _RUN_KEY in _message(excinfo)
