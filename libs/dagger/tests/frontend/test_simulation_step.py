@@ -1,6 +1,6 @@
 """Tests of ``simulation_step``: the task it returns, its command and options, its
-definition-time errors, and runs through ``run`` and ``preview`` with a stub
-``psimulate`` (see ``tests.frontend.simulations``)."""
+definition-time errors, and runs through ``run``, ``preview`` and the ``dagger`` command
+with a stub ``psimulate`` (see ``tests.frontend.simulations``)."""
 
 import inspect
 import json
@@ -8,13 +8,15 @@ import os
 import shlex
 import subprocess
 import sys
-from collections.abc import Mapping
+import traceback
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import pytest
+from click.testing import CliRunner, Result
 from pytask import PathNode, TaskOutcome
 
 from tests.frontend.notebooks import write_source_notebook
@@ -25,6 +27,7 @@ from tests.frontend.simulations import (
     METRIC,
     RUN_DIRECTORIES_VARIABLE,
     UNFINISHED_VARIABLE,
+    copy_simulation_example,
     deaths_by_draw,
     make_stub_env,
     read_argv_log,
@@ -40,6 +43,7 @@ from vivarium.dagger.backend.nodes import AlwaysStaleNode, RunDirectoryNode, fil
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import (
     Pipeline,
     PipelineError,
@@ -1372,3 +1376,176 @@ def test_forcing_the_simulation_rewrites_the_sentinel_and_reruns_the_consumer(
     assert outcomes == {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
     assert _sentinel(model) != first
     assert len(model.calls()) == 2
+
+
+# The dagger command
+
+
+@dataclass(frozen=True)
+class _Example:
+    """A copy of the example definition whose env is a stub env."""
+
+    definition: Path
+    log: Path
+
+    @property
+    def output(self) -> Path:
+        """Return the directory the copy's registry writes under."""
+        return self.definition.parent / "output" / "example"
+
+    @property
+    def run_dir(self) -> Path:
+        """Return the copy's run directory."""
+        return self.output / _KEY
+
+    @property
+    def scratch(self) -> Path:
+        """Return the copy's scratch directory."""
+        return scratch_for(self.run_dir)
+
+    def kept(self) -> str:
+        """Return the sentence that says the previous complete run was kept."""
+        return f"The previous complete run at {self.run_dir} was kept."
+
+
+@pytest.fixture
+def example(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[_Example]:
+    """Copy the example with a stub env, and drop the definition modules the test loads."""
+    base = tmp_path.resolve()
+    log = base / "psimulate_calls.jsonl"
+    monkeypatch.setenv(LOG_VARIABLE, str(log))
+    for variable in KNOB_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    # Loading a definition file imports it as a module named by its stem, 'pipeline'.
+    monkeypatch.delitem(sys.modules, "pipeline", raising=False)
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    modules = set(sys.modules)
+    definition = copy_simulation_example(base / "example", make_stub_env(base / "env"))
+    yield _Example(definition=definition, log=log)
+    for name in set(sys.modules) - modules:
+        file = getattr(sys.modules.get(name), "__file__", None)
+        if isinstance(file, str) and Path(file).resolve().is_relative_to(base):
+            del sys.modules[name]
+
+
+def _dagger(*args: str) -> Result:
+    """Run ``dagger`` with ``args`` in this process."""
+    return CliRunner().invoke(dagger, list(args))
+
+
+def _shown(result: Result) -> str:
+    """Return ``result``'s output and any exception it caught, for an assert message."""
+    text = result.output
+    if result.exception is not None and not isinstance(result.exception, SystemExit):
+        text += "".join(traceback.format_exception(result.exception))
+    return text
+
+
+def _dagger_run(example: _Example) -> Result:
+    """Run 'dagger run -c <definition> --local' on the example's copy."""
+    return _dagger("run", "-c", str(example.definition), "--local")
+
+
+def _failing_rerun(
+    example: _Example, monkeypatch: pytest.MonkeyPatch, variable: str, value: str
+) -> tuple[Result, dict[str, bytes]]:
+    """Run the copy once, then again with the stub knob ``variable`` set to ``value``.
+
+    Returns the second run's result and the run directory's bytes after the first run.
+    """
+    first = _dagger_run(example)
+    assert first.exit_code == 0, _shown(first)
+    before = snapshot(example.run_dir)
+    monkeypatch.setenv(variable, value)
+    return _dagger_run(example), before
+
+
+def _assert_reported_failure(
+    result: Result, example: _Example, before: dict[str, bytes]
+) -> str:
+    """Assert dagger's common report of a failed simulation step; return its stderr."""
+    errors = result.stderr
+    assert result.exit_code == 1, _shown(result)
+    assert f"Step '{_KEY}' failed: " in errors, errors
+    assert example.kept() in errors, errors
+    assert f"Not run because an upstream step failed: {_CONSUMER!r}." in errors, errors
+    for fragment in _COMMAND_FRAGMENTS:
+        assert fragment not in errors, (fragment, errors)
+    assert snapshot(example.run_dir) == before
+    return errors
+
+
+def test_dagger_run_of_a_copy_of_the_example_succeeds_with_the_stub_env(
+    example: _Example,
+) -> None:
+    """'dagger run -c <copy>/pipeline.py --local' on a copy of the example with its env replaced by the stub env exits 0, and the run directory, the sentinel and summary.csv exist."""
+    result = _dagger_run(example)
+
+    assert result.exit_code == 0, _shown(result)
+    assert len(read_argv_log(example.log)) == 1
+    assert (example.run_dir / _SENTINEL).is_file()
+    assert len(list((example.run_dir / "results" / METRIC).glob("*.parquet"))) == 4
+    summary = pd.read_csv(example.output / "summary.csv")
+    assert summary_values(summary) == deaths_by_draw()
+
+
+def test_dagger_preview_of_a_copy_of_the_example_lists_both_steps(example: _Example) -> None:
+    """'dagger preview -c <copy>/pipeline.py' exits 0 and lists 'sims/toy' and 'summary'."""
+    result = _dagger("preview", "-c", str(example.definition))
+
+    assert result.exit_code == 0, _shown(result)
+    listed = {
+        line.split()[1].rstrip(":")
+        for line in result.stdout.splitlines()
+        if line.startswith(("run ", "skip "))
+    }
+    assert listed == {_KEY, _CONSUMER}
+    assert read_argv_log(example.log) == []
+
+
+def test_dagger_run_with_one_simulation_missing_exits_one_with_the_counts(
+    example: _Example, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a successful 'dagger run', a run with one simulation unfinished exits 1, its output gives the step's line with '3 of 4' and the paths but not the command, and the summary step did not run."""
+    result, before = _failing_rerun(example, monkeypatch, UNFINISHED_VARIABLE, "1")
+
+    errors = _assert_reported_failure(result, example, before)
+    [partial] = _runs_in(example.scratch)
+    assert (
+        f"psimulate finished 3 of 4 simulations; the partial run is at {partial}." in errors
+    ), errors
+
+
+def test_dagger_run_with_a_psimulate_that_exits_non_zero_exits_one_with_its_status(
+    example: _Example, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a successful 'dagger run', a run whose stub exits with status 3 before writing exits 1, and its output gives the step's line with 'status 3' and the scratch directory but not the command."""
+    result, before = _failing_rerun(example, monkeypatch, EXIT_VARIABLE, "3")
+
+    errors = _assert_reported_failure(result, example, before)
+    assert "psimulate did not finish (the command exited with status 3)" in errors, errors
+    assert f"its own logs are under {example.scratch}." in errors, errors
+
+
+def test_dagger_run_with_zero_run_directories_exits_one_naming_the_scratch(
+    example: _Example, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a successful 'dagger run', a run whose stub writes no run directory exits 1, and its output gives the step's line naming the scratch directory but not the command."""
+    result, before = _failing_rerun(example, monkeypatch, RUN_DIRECTORIES_VARIABLE, "0")
+
+    errors = _assert_reported_failure(result, example, before)
+    assert f"psimulate wrote no run directory under {example.scratch}." in errors, errors
+
+
+def test_dagger_run_with_two_run_directories_exits_one_naming_them(
+    example: _Example, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a successful 'dagger run', a run whose stub writes two run directories exits 1, and its output gives the step's line naming both but not the command."""
+    result, before = _failing_rerun(example, monkeypatch, RUN_DIRECTORIES_VARIABLE, "2")
+
+    errors = _assert_reported_failure(result, example, before)
+    runs = _runs_in(example.scratch)
+    assert len(runs) == 2
+    assert f"psimulate wrote 2 run directories under {example.scratch}" in errors, errors
+    for path in runs:
+        assert str(path) in errors, errors

@@ -20,6 +20,7 @@ psimulate's rule: the stem of ``-i`` when given, else the stem of the spec's
 """
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,9 @@ SECOND_METRIC = "ylls"
 
 EXAMPLE_DIR = Path(__file__).resolve().parent / "simulation_example"
 """The example definition's directory, with its toy spec and branches files."""
+
+_ENV_LINE = "ENV = sys.prefix"
+"""The line of the example definition that names the environment psimulate runs in."""
 
 # The stub's own source. __PYTHON__ is replaced by sys.executable, so the stub imports
 # pandas and yaml from the test environment. Its value per simulation is stub_deaths's.
@@ -190,6 +194,23 @@ def write_branches(path: Path, draws: int = 2, seeds: int = 2) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump({"input_draw_count": draws, "random_seed_count": seeds}))
     return path
+
+
+def copy_simulation_example(destination: Path, env: Path) -> Path:
+    """Copy :data:`EXAMPLE_DIR` to ``destination`` with its env set to ``env``; return the definition.
+
+    The copy's one ``ENV = sys.prefix`` line is replaced by ``env``'s path, and the
+    function asserts that it replaced exactly one line.
+    """
+    ignored = shutil.ignore_patterns("__pycache__", "output", "state")
+    shutil.copytree(EXAMPLE_DIR, destination, ignore=ignored)
+    definition = destination / "pipeline.py"
+    lines = definition.read_text().splitlines(keepends=True)
+    matches = [index for index, line in enumerate(lines) if line.rstrip("\n") == _ENV_LINE]
+    assert len(matches) == 1, f"expected one {_ENV_LINE!r} line in {definition}: {matches}"
+    lines[matches[0]] = f"ENV = {str(env)!r}\n"
+    definition.write_text("".join(lines))
+    return definition
 
 
 def stub_deaths(draw: int, seed: int) -> int:
