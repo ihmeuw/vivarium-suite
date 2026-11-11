@@ -1890,11 +1890,10 @@ def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
 def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apart(
     tmp_path: Path,
 ) -> None:
-    """Two steps with different products and the same name make 'dagger run' and 'dagger preview' exit 2 with "Two steps are named 'population'; pass name= to python_step or notebook_step to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
+    """Two steps with different products and the same name make 'dagger run' and 'dagger preview' exit 2 with "Two steps are named 'population'; give each a different name= to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
     path = _write_definition(tmp_path, _SHARED_NAME)
     expected = (
-        "Two steps are named 'population'; pass name= to python_step or notebook_step to "
-        "tell them apart."
+        "Two steps are named 'population'; give each a different name= to tell them apart."
     )
 
     for verb in ("run", "preview"):
@@ -1924,8 +1923,8 @@ def test_two_steps_with_one_name_and_an_unknown_step_report_the_shared_name_as_a
 
     assert result.exit_code == 2, _describe(result)
     expected = (
-        "Error: Two steps are named 'population'; pass name= to python_step or "
-        "notebook_step to tell them apart."
+        "Error: Two steps are named 'population'; give each a different name= to tell "
+        "them apart."
     )
     assert expected in result.stderr, result.stderr
     assert "Usage:" not in result.stderr, result.stderr
