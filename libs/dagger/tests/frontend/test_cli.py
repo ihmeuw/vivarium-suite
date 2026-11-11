@@ -15,10 +15,13 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner, Result
+from pytask import TaskOutcome
 
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
+from vivarium.dagger.frontend import Pipeline, load_pipeline, preview, run
+from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _HEADER = """\
 import sys
@@ -2038,19 +2041,85 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_import_the_registry_from_the_frontend() -> None:
-    """tests/frontend/pipeline_example/pipeline.py imports nothing from vivarium.dagger.backend, and neither example definition imports from vivarium.dagger.backend.wiring."""
+    """tests/frontend/pipeline_example/pipeline.py and tests/frontend/command_example/pipeline.py import nothing from vivarium.dagger.backend, and no example definition imports from vivarium.dagger.backend.wiring."""
     here = Path(__file__).parent
     examples = {
         name: _imported_modules(here / name / "pipeline.py")
-        for name in ("pipeline_example", "handoff_example")
+        for name in ("pipeline_example", "handoff_example", "command_example")
     }
 
-    backend = [
-        module
-        for module in examples["pipeline_example"]
-        if f"{module}.".startswith("vivarium.dagger.backend.")
-    ]
-    assert backend == []
+    for name in ("pipeline_example", "command_example"):
+        backend = [
+            module
+            for module in examples[name]
+            if f"{module}.".startswith("vivarium.dagger.backend.")
+        ]
+        assert backend == [], name
     for name, imported in examples.items():
         assert "vivarium.dagger.backend.wiring" not in imported, name
         assert "ArtifactRegistry" in imported.get("vivarium.dagger.frontend", set()), name
+
+
+# The command step example (MIC-7740)
+
+_COMMAND_EXAMPLE = Path(__file__).parent / "command_example"
+"""The command step example, whose definition the docs page includes."""
+
+_EXAMPLE_STEPS = ["population", "adults", "summary"]
+"""The command example's steps, in dependency order."""
+
+_EXAMPLE_PRODUCTS = ("population.csv", "adults.csv", "summary.csv")
+
+
+def _copy_command_example(directory: Path) -> Path:
+    """Copy the command example's definition and script to ``directory``; return the first."""
+    for name in ("pipeline.py", "select_adults.py"):
+        shutil.copy(_COMMAND_EXAMPLE / name, directory)
+    return directory / "pipeline.py"
+
+
+def _example_product(directory: Path, key: str) -> Path:
+    """Return the path of product ``key`` of the command example copied to ``directory``."""
+    return directory / "output" / "example" / key
+
+
+def test_the_command_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/command_example (pipeline.py and select_adults.py) in tmp_path exits 0, and adults.csv holds the two adult rows and summary.csv the adult total of 70."""
+    definition = _copy_command_example(tmp_path)
+
+    result = _invoke("run", str(definition))
+
+    assert result.exit_code == 0, _describe(result)
+    adults = _example_product(tmp_path, "adults.csv").read_text().splitlines()
+    assert adults == ["age_group,count", "15-64,55", "65+,15"]
+    summary = _example_product(tmp_path, "summary.csv").read_text().splitlines()
+    assert summary == ["adults", "70"]
+
+
+def test_the_command_example_previews_every_step_before_its_first_run(tmp_path: Path) -> None:
+    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/command_example exits 0, lists population, adults and summary as would-run in that order, and writes no product."""
+    definition = _copy_command_example(tmp_path)
+
+    result = _invoke("preview", str(definition))
+
+    assert result.exit_code == 0, _describe(result)
+    assert _would_run(result) == _EXAMPLE_STEPS
+    written = [key for key in _EXAMPLE_PRODUCTS if _example_product(tmp_path, key).exists()]
+    assert written == []
+
+
+def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path) -> None:
+    """With the copy's pipeline loaded by load_pipeline and each step given a stable code identity, after a successful run() an edit to the copied select_adults.py makes preview() report that adults would run with "artifact 'select_adults.py'" among its reasons."""
+    loaded = load_pipeline(str(_copy_command_example(tmp_path)))
+    pipeline = Pipeline(
+        [with_stable_code_id(task) for task in loaded.tasks], loaded.root, loaded.registry
+    )
+    assert run(pipeline) == dict.fromkeys(_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
+
+    with Perturbed(tmp_path / "select_adults.py", b"\n# An edit.\n"):
+        plan = {step.name: step for step in preview(pipeline)}
+
+    adults = plan["adults"]
+    assert adults.would_run
+    nodes = [reason.node for reason in adults.reasons]
+    assert "artifact 'select_adults.py'" in nodes, adults.reasons
