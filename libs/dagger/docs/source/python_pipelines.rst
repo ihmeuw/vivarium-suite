@@ -203,6 +203,9 @@ Each of these exits with status 2 before any step runs:
   error names the step and the artifact key, with the closest key that does exist. If
   no key is close, it lists the keys registered so far instead, which are the root
   inputs and the products of the steps defined before the one that reads the key.
+  A notebook step that passes a name its notebook's ``parameters`` cell does not
+  assign, or passes names to a notebook with no such cell, is rejected with an error
+  that names the step, the notebook and each name.
 - Two steps produce the same artifact. ``dagger`` names the artifact key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.

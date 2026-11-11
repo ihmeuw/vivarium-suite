@@ -1,13 +1,15 @@
 """Acceptance tests for the notebook_step frontend (``frontend.notebook_step``)."""
 
+import ast
 import json
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator, Mapping
+import warnings
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 import numpy as np
 import pandas as pd
@@ -21,6 +23,7 @@ from tests.frontend.notebooks import (
     error_output,
     isolated_jupyter_dirs,
     recorded_errors,
+    text_cell,
     write_notebook,
     write_source_notebook,
 )
@@ -204,6 +207,24 @@ _DECLARED_VALUES: dict[str, Any] = {
 _SOURCE_ALIAS_KEY = "notebooks/./source.ipynb"
 """A key spelled unlike _SOURCE_KEY that path_for resolves to the same path."""
 
+_SOURCE_NAMES = (
+    "draws",
+    "figure_path",
+    "location",
+    "lookup_path",
+    "raw_path",
+    "record_path",
+    "scale",
+    "seed",
+    "summary_path",
+    "table_path",
+    "verbose",
+)
+"""The names _source's parameters cell assigns: every name a test passes over it."""
+
+_BASE_PARAMETERS = "raw_path = None\ntable_path = None\nlocation = None"
+"""A parameters cell assigning each name the base call of the definition-error tests passes."""
+
 
 @dataclass
 class _Collision:
@@ -256,9 +277,83 @@ _REJECTED: dict[str, dict[str, Any]] = {
     "missing_notebook": {"notebook": Path("/nonexistent/vivarium-dagger/missing.ipynb")},
     "executed_not_ipynb": {"executed": "executed/report.html"},
     "executed_is_source": {"executed": _SOURCE_KEY},
+    "unassigned_parameter": {"parameters": {"loaction": "179"}},
     **{case: {"produces": collision.produces} for case, collision in _COLLISIONS.items()},
 }
 """Overrides of a valid notebook_step call that each make it raise ValueError."""
+
+_PARAMETERS_CELL_MESSAGES = (
+    "does not assign",
+    "has no cell tagged",
+    "cannot be read as a notebook",
+    "is not valid Python",
+    "must be a code cell",
+)
+"""A fragment of each message the parameters-cell check raises."""
+
+_NotebookContent = list[dict[str, Any]] | str | bytes
+"""A source notebook file's content: cells for write_notebook, or text or bytes as is."""
+
+
+def _notebook_text(cells: object, ensure_ascii: bool = True) -> str:
+    """Return nbformat 4 JSON text whose top-level 'cells' entry is ``cells``, of any shape."""
+    notebook = {"cells": cells, "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    return json.dumps(notebook, indent=1, ensure_ascii=ensure_ascii)
+
+
+_UNREADABLE_NOTEBOOKS: dict[str, _NotebookContent] = {
+    "not_json": "this is not JSON {",
+    "not_utf8": _notebook_text(
+        [
+            code_cell(_BASE_PARAMETERS, tags=["parameters"]),
+            code_cell("label = 'café'"),
+        ],
+        ensure_ascii=False,
+    ).encode("latin-1"),
+    "top_level_not_an_object": "[]",
+    "nbformat_3_worksheets": json.dumps(
+        {
+            "worksheets": [{"cells": [code_cell(_BASE_PARAMETERS, tags=["parameters"])]}],
+            "metadata": {},
+            "nbformat": 3,
+            "nbformat_minor": 0,
+        }
+    ),
+    "cells_not_a_list": _notebook_text(
+        {"0": code_cell(_BASE_PARAMETERS, tags=["parameters"])}
+    ),
+    "cell_not_an_object": _notebook_text(
+        ["not a cell", code_cell(_BASE_PARAMETERS, tags=["parameters"])]
+    ),
+    "metadata_not_an_object": [
+        {**code_cell("x = 1"), "metadata": ["parameters"]},
+        code_cell(_BASE_PARAMETERS, tags=["parameters"]),
+    ],
+    "tags_not_a_list": [{**code_cell(_BASE_PARAMETERS), "metadata": {"tags": "parameters"}}],
+    "parameters_source_not_text": [{**code_cell("", tags=["parameters"]), "source": 5}],
+}
+"""Source notebook files that cannot be read as a notebook, keyed by case.
+
+Each would hold a parameters cell assigning every name of the base call, if it were read
+leniently.
+"""
+
+_REJECTED_NOTEBOOKS: dict[str, _NotebookContent] = {
+    "no_parameters_cell": [code_cell(_BASE_PARAMETERS)],
+    "parameters_cell_not_python": [
+        code_cell(f"%matplotlib inline\n{_BASE_PARAMETERS}", tags=["parameters"])
+    ],
+    "parameters_cell_is_markdown": [
+        text_cell("markdown", _BASE_PARAMETERS, tags=["parameters"]),
+        code_cell(_BASE_PARAMETERS, tags=["parameters"]),
+    ],
+    "parameters_cell_is_raw": [
+        text_cell("raw", _BASE_PARAMETERS, tags=["parameters"]),
+        code_cell(_BASE_PARAMETERS, tags=["parameters"]),
+    ],
+    **_UNREADABLE_NOTEBOOKS,
+}
+"""Source notebook files that make the base call raise ValueError, keyed by case."""
 
 _ROOT_TABLE_KEY = "supplied/root_table.csv"
 
@@ -292,6 +387,11 @@ def _write_notebook(
     """Write a parameters cell and a body cell as a notebook with ``metadata``."""
     cells = [code_cell(parameters, tags=["parameters"]), code_cell(body)]
     return write_notebook(path, cells, metadata)
+
+
+def _assigning(names: Iterable[str]) -> str:
+    """Return parameters cell source that assigns None to each of ``names``."""
+    return "".join(f"{name} = None\n" for name in names)
 
 
 def _outputs(notebook: Path) -> list[dict[str, Any]]:
@@ -334,8 +434,9 @@ def _root_input_registry(tmp_path: Path) -> ArtifactRegistry:
 
 
 def _source(tmp_path: Path) -> Path:
-    """Write a minimal source notebook under ``tmp_path`` and return its path."""
-    return _write_notebook(tmp_path / "notebooks" / "report.ipynb", "location = 'unset'")
+    """Write a source notebook whose parameters cell assigns every name in _SOURCE_NAMES."""
+    defaults = "\n".join(f"{name} = 'unset'" for name in _SOURCE_NAMES)
+    return _write_notebook(tmp_path / "notebooks" / "report.ipynb", defaults)
 
 
 def _command(tmp_path: Path, parameters: Mapping[str, NotebookParameter]) -> str:
@@ -1074,7 +1175,8 @@ def test_invalid_parameter_names_are_rejected(
             **_declaring(bad_name, where),
         )
 
-    assert bad_name in str(info.value)
+    message = str(info.value)
+    assert f"parameter name {bad_name!r} in {where}" in message, message
 
 
 @pytest.mark.parametrize(
@@ -1154,29 +1256,56 @@ def test_unknown_input_key_raises_wiring_error(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize("override", list(_REJECTED.values()), ids=list(_REJECTED))
-def test_definition_errors_register_nothing(
-    tmp_path: Path,
-    override: dict[str, Any],
-) -> None:
-    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered."""
-    registry = _registry(tmp_path)
-    call: dict[str, Any] = {
-        "notebook": _write_notebook(registry.path_for(_SOURCE_KEY)),
+def _base_call(registry: ArtifactRegistry, notebook: Path) -> dict[str, Any]:
+    """Return the keyword arguments of the valid call the definition-error tests override."""
+    return {
+        "notebook": notebook,
         "executed": _EXECUTED_KEY,
         "registry": registry,
         "env": _ENV,
         "inputs": {"raw_path": "raw"},
         "produces": {"table_path": "tables/out.csv"},
         "parameters": {"location": "179"},
-        **override,
     }
+
+
+def test_the_base_call_of_the_definition_error_tests_builds(tmp_path: Path) -> None:
+    """The base call of test_definition_errors_register_nothing, with no override, returns a Task, so each override's ValueError comes from the override."""
+    registry = _registry(tmp_path)
+    notebook = _write_notebook(registry.path_for(_SOURCE_KEY), _BASE_PARAMETERS)
+
+    task = notebook_step(**_base_call(registry, notebook))
+
+    assert isinstance(task, Task)
+
+
+@pytest.mark.parametrize("case", list(_REJECTED))
+def test_definition_errors_register_nothing(tmp_path: Path, case: str) -> None:
+    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered."""
+    override = _REJECTED[case]
+    registry = _registry(tmp_path)
+    # The cell assigns every produced name, so a collision case can raise only through the
+    # collision check, never through the parameters-cell check.
+    produced: Mapping[str, str] = override.get("produces", {})
+    cell = f"{_BASE_PARAMETERS}\n{_assigning(produced)}"
+    notebook = _write_notebook(registry.path_for(_SOURCE_KEY), cell)
+    call: dict[str, Any] = {**_base_call(registry, notebook), **override}
 
     executed: str = call["executed"]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as info:
         notebook_step(**call)
 
+    message = str(info.value)
+    if case == "unassigned_parameter":
+        assert "does not assign" in message, message
+    else:
+        # Each other override fails a check that runs before the parameters-cell check, even
+        # where the cell does not assign the overridden name or the source is not a notebook.
+        # A parameters-cell message means that check no longer runs first, so this case no
+        # longer tests it.
+        for fragment in _PARAMETERS_CELL_MESSAGES:
+            assert fragment not in message, message
     for key in (executed, "tables/out.csv"):
         with pytest.raises(WiringError):
             registry.resolve_input(key)
@@ -1205,7 +1334,7 @@ def test_numpy_bool_parameter_is_rejected_with_a_conversion_hint(tmp_path: Path)
 def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collision) -> None:
     """A produces key equal to the executed key, two produces parameters naming the same key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming the step and both colliding items."""
     registry = _registry(tmp_path)
-    source = _write_notebook(registry.path_for(_SOURCE_KEY))
+    source = _write_notebook(registry.path_for(_SOURCE_KEY), _assigning(collision.produces))
 
     with pytest.raises(ValueError) as info:
         notebook_step(
@@ -1218,6 +1347,7 @@ def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collisi
         )
 
     message = str(info.value)
+    assert "does not assign" not in message, message
     assert "colliding_report" in message
     unnamed = [
         names for names in collision.names if not any(name in message for name in names)
@@ -1727,3 +1857,648 @@ def test_describe_notebook_failure_reads_a_real_failing_notebook(tmp_path: Path)
         "notebook summarize.ipynb raised KeyError: 'no_such_column' in cell In [3]. The "
         f"executed notebook, with the error, is at {executed}."
     )
+
+
+# The parameters cell check (MIC-7755)
+
+_COUNTED_FORMS: dict[str, str] = {
+    "plain": "location = 1",
+    "chained": "other = location = 1",
+    "tuple_unpacking": "location, other = 1, 2",
+    "nested_unpacking": "(location, other), third = (1, 2), 3",
+    "starred_list_unpacking": "[first, *location] = [1, 2, 3]",
+    "annotated_with_value": "location: int = 1",
+    "annotated_without_value": "location: int",
+}
+"""Parameters cells that each assign 'location' at their top level, keyed by form."""
+
+_INDIRECT_FORMS: dict[str, str] = {
+    "for_target": "for location in range(1):\n    pass",
+    "inside_for": "for _ in range(1):\n    location = 1",
+    "inside_while": "while True:\n    location = 1\n    break",
+    "inside_if": "if True:\n    location = 1",
+    "inside_with": "with context():\n    location = 1",
+    "with_target": "with context() as location:\n    pass",
+    "inside_try": "try:\n    location = 1\nexcept Exception:\n    pass",
+    "inside_function": "def define():\n    location = 1",
+    "inside_class": "class Holder:\n    location = 1",
+    "globals": 'globals()["location"] = 1',
+    "exec": 'exec("location = 1")',
+    "setattr": 'setattr(module, "location", 1)',
+    "augmented": "location += 1",
+    "walrus": "(location := 1)",
+    "import": "import location",
+    "import_from": "from package import location",
+    "function_definition": "def location():\n    pass",
+    "class_definition": "class location:\n    pass",
+    "attribute_target": "config.location = 1",
+    "subscript_target": 'config["location"] = 1',
+    "annotated_attribute_target": "config.location: int = 1",
+}
+"""Parameters cells that bind 'location' only in a way the check does not count, keyed by form."""
+
+_FIFTEEN_NAMES = tuple(f"unknown_{index:02d}" for index in range(15))
+"""Fifteen names in sorted order, none close to a name the tests' parameters cells assign."""
+
+
+def _checked_source(tmp_path: Path, parameters: str) -> Path:
+    """Write a source notebook whose parameters cell holds ``parameters``."""
+    return _write_notebook(tmp_path / "notebooks" / "report.ipynb", parameters)
+
+
+def _cells_source(tmp_path: Path, cells: list[dict[str, Any]]) -> Path:
+    """Write a source notebook holding ``cells``."""
+    return write_notebook(tmp_path / "notebooks" / "report.ipynb", cells)
+
+
+def _written(path: Path, content: _NotebookContent) -> Path:
+    """Write ``content`` at ``path``: cells through write_notebook, text or bytes as is."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(content, bytes):
+        path.write_bytes(content)
+    elif isinstance(content, str):
+        path.write_text(content, encoding="utf-8")
+    else:
+        write_notebook(path, content)
+    return path
+
+
+def _step(tmp_path: Path, source: Path, **arguments: Any) -> Task:
+    """Compile a step over ``source`` with ``arguments``, named _NOTEBOOK_STEP by default."""
+    call: dict[str, Any] = {"name": _NOTEBOOK_STEP, **arguments}
+    return notebook_step(
+        source, executed=_EXECUTED_KEY, registry=_registry(tmp_path), env=_ENV, **call
+    )
+
+
+def _rejection(tmp_path: Path, source: Path, **arguments: Any) -> str:
+    """Return the message of the ValueError that ``_step`` with ``arguments`` raises."""
+    with pytest.raises(ValueError) as info:
+        _step(tmp_path, source, **arguments)
+    return str(info.value)
+
+
+def _syntax_error(text: str) -> SyntaxError:
+    """Return the SyntaxError that parsing ``text`` raises."""
+    try:
+        ast.parse(text)
+    except SyntaxError as error:
+        return error
+    raise AssertionError(f"{text!r} is valid Python")
+
+
+def _mncnh_cells(*first: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return ``first``, then cells shaped like MNCNH's hemorrhage_split_proportions.ipynb."""
+    return [
+        *first,
+        text_cell("markdown", "# Hemorrhage split proportions"),
+        code_cell("from pathlib import Path\n\nimport pandas as pd"),
+        code_cell("model_spec = {'artifact_path': '/model/artifacts'}"),
+        code_cell("artifact = Path(model_spec['artifact_path']) / 'artifact.hdf'"),
+        code_cell("proportions = pd.read_hdf(artifact, 'hemorrhage/split')"),
+    ]
+
+
+# Names the cell does not assign
+
+
+def test_a_misspelled_parameter_name_is_rejected_with_a_did_you_mean(tmp_path: Path) -> None:
+    """parameters={'loaction_id': '179'} over a cell assigning 'location_id' raises ValueError starting "Step '<name>': " and containing repr(str(source)) and "'loaction_id' (parameters; did you mean 'location_id'?)"."""
+    source = _checked_source(tmp_path, "location_id = None")
+
+    message = _rejection(tmp_path, source, parameters={"loaction_id": "179"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "'loaction_id' (parameters; did you mean 'location_id'?)" in message
+
+
+def test_a_misspelled_input_name_is_rejected_with_a_did_you_mean(tmp_path: Path) -> None:
+    """inputs={'raw_pth': 'raw'} over a cell assigning 'raw_path' raises ValueError starting "Step '<name>': " and containing repr(str(source)) and "'raw_pth' (inputs; did you mean 'raw_path'?)"."""
+    source = _checked_source(tmp_path, "raw_path = None")
+
+    message = _rejection(tmp_path, source, inputs={"raw_pth": "raw"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "'raw_pth' (inputs; did you mean 'raw_path'?)" in message
+
+
+def test_a_misspelled_product_name_is_rejected_with_a_did_you_mean(tmp_path: Path) -> None:
+    """produces={'table_pth': 'tables/out.csv'} over a cell assigning 'table_path' raises ValueError starting "Step '<name>': " and containing repr(str(source)) and "'table_pth' (produces; did you mean 'table_path'?)"."""
+    source = _checked_source(tmp_path, "table_path = None")
+
+    message = _rejection(tmp_path, source, produces={"table_pth": "tables/out.csv"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "'table_pth' (produces; did you mean 'table_path'?)" in message
+
+
+def test_the_unassigned_names_message_gives_each_name_its_argument_and_the_fix(
+    tmp_path: Path,
+) -> None:
+    """A step 'report' passing parameters={'loaction_id': '179'} and inputs={'raw_path': 'raw'} over a cell assigning 'location_id' and 'draws' raises ValueError whose message is exactly "Step 'report': the parameters cell of notebook <repr(str(source))> does not assign 'loaction_id' (parameters; did you mean 'location_id'?), 'raw_path' (inputs). papermill would inject each one as a variable the notebook never reads. Fix the name in the step, or assign it in that cell with a plain top-level assignment such as loaction_id = None; assignments in loops, conditions or through globals() are not counted."."""
+    source = _checked_source(tmp_path, "location_id = None\ndraws = None")
+
+    message = _rejection(
+        tmp_path,
+        source,
+        name="report",
+        parameters={"loaction_id": "179"},
+        inputs={"raw_path": "raw"},
+    )
+
+    assert message == (
+        f"Step 'report': the parameters cell of notebook {str(source.resolve())!r} does "
+        "not assign 'loaction_id' (parameters; did you mean 'location_id'?), 'raw_path' "
+        "(inputs). papermill would inject each one as a variable the notebook never reads. "
+        "Fix the name in the step, or assign it in that cell with a plain top-level "
+        "assignment such as loaction_id = None; assignments in loops, conditions or "
+        "through globals() are not counted."
+    )
+
+
+def test_an_unassigned_name_with_no_close_match_has_no_suggestion(tmp_path: Path) -> None:
+    """A passed name unlike every name the cell assigns is listed as "'<name>' (<argument>)" and the message has no "did you mean"."""
+    source = _checked_source(tmp_path, "location = None\ndraws = None")
+
+    message = _rejection(tmp_path, source, parameters={"zzz": 1})
+
+    assert "'zzz' (parameters)" in message, message
+    assert "did you mean" not in message.lower(), message
+
+
+def test_more_than_ten_unassigned_names_list_ten_in_sorted_order_and_count_the_rest(
+    tmp_path: Path,
+) -> None:
+    """Fifteen unassigned names, passed in reverse order, are listed as the first ten in sorted order followed by ", and 5 more", the other five are not named, and the fix hint uses the first sorted name ("such as <first> = None")."""
+    source = _checked_source(tmp_path, "location = None")
+    parameters = {name: 1 for name in reversed(_FIFTEEN_NAMES)}
+
+    message = _rejection(tmp_path, source, parameters=parameters)
+
+    listed = ", ".join(f"'{name}' (parameters)" for name in _FIFTEEN_NAMES[:10])
+    assert f"{listed}, and 5 more" in message, message
+    assert [name for name in _FIFTEEN_NAMES[10:] if f"'{name}'" in message] == []
+    assert f"such as {_FIFTEEN_NAMES[0]} = None" in message, message
+
+
+def test_names_the_cell_assigns_but_the_step_does_not_pass_are_allowed(
+    tmp_path: Path,
+) -> None:
+    """A cell that assigns names the step does not pass, beside every name it does pass, compiles to a Task."""
+    source = _checked_source(tmp_path, "location = None\ndraws = 10\nverbose = False")
+
+    task = _step(tmp_path, source, parameters={"location": "179"})
+
+    assert isinstance(task, Task)
+
+
+def test_a_notebook_whose_cell_assigns_every_passed_name_builds(tmp_path: Path) -> None:
+    """A step passing names in inputs, produces and parameters over a cell that assigns each one compiles to a Task with every input and product wired."""
+    source = _checked_source(tmp_path, _BASE_PARAMETERS)
+
+    task = _step(
+        tmp_path,
+        source,
+        inputs={"raw_path": "raw"},
+        produces={"table_path": "tables/out.csv"},
+        parameters={"location": "179"},
+    )
+
+    assert isinstance(task, Task)
+    assert set(task.inputs) == {"__notebook__", "raw_path"}
+    assert set(task.outputs) == {"__executed__", "table_path"}
+
+
+# A notebook with no parameters cell
+
+
+def test_a_notebook_with_no_parameters_cell_is_rejected_when_the_step_passes_names(
+    tmp_path: Path,
+) -> None:
+    """A step 'split' passing inputs={'artifact': 'raw'} over a notebook with no cell tagged 'parameters' raises ValueError whose message is exactly "Step 'split': notebook <repr(str(source))> has no cell tagged 'parameters', so papermill would inject 'artifact' at the top of the notebook, where a later cell can overwrite what it injects. Add a code cell tagged 'parameters' that assigns each name, such as artifact = None."."""
+    source = _cells_source(tmp_path, [code_cell("print('no parameters here')")])
+
+    message = _rejection(tmp_path, source, name="split", inputs={"artifact": "raw"})
+
+    assert message == (
+        f"Step 'split': notebook {str(source.resolve())!r} has no cell tagged 'parameters', "
+        "so papermill would inject 'artifact' at the top of the notebook, where a later "
+        "cell can overwrite what it injects. Add a code cell tagged 'parameters' that "
+        "assigns each name, such as artifact = None."
+    )
+
+
+def test_more_than_ten_names_to_a_notebook_with_no_parameters_cell_list_ten_and_count_the_rest(
+    tmp_path: Path,
+) -> None:
+    """Fifteen names passed to a notebook with no parameters cell are listed as the first ten in sorted order followed by ", and 5 more", and the fix hint uses the first sorted name."""
+    source = _cells_source(tmp_path, [code_cell("location = None")])
+    parameters = {name: 1 for name in reversed(_FIFTEEN_NAMES)}
+
+    message = _rejection(tmp_path, source, parameters=parameters)
+
+    assert "has no cell tagged 'parameters'" in message, message
+    listed = ", ".join(f"'{name}'" for name in _FIFTEEN_NAMES[:10])
+    assert f"{listed}, and 5 more" in message, message
+    assert [name for name in _FIFTEEN_NAMES[10:] if f"'{name}'" in message] == []
+    assert f"such as {_FIFTEEN_NAMES[0]} = None" in message, message
+
+
+def test_a_notebook_with_no_parameters_cell_builds_when_the_step_passes_no_names(
+    tmp_path: Path,
+) -> None:
+    """A step with no inputs, produces or parameters over a notebook with no cell tagged 'parameters' compiles to a Task."""
+    source = _cells_source(tmp_path, [code_cell("location = None"), code_cell("pass")])
+
+    task = _step(tmp_path, source)
+
+    assert isinstance(task, Task)
+
+
+def test_an_mncnh_shaped_notebook_without_a_parameters_cell_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """A notebook shaped like MNCNH's hemorrhage_split_proportions.ipynb (no parameters cell, a later cell that assigns 'artifact'), passed inputs={'artifact': ...}, raises ValueError with the no-parameters-cell message naming 'artifact'."""
+    source = _cells_source(tmp_path, _mncnh_cells())
+
+    message = _rejection(
+        tmp_path, source, name="split_proportions_notebook", inputs={"artifact": "raw"}
+    )
+
+    assert message.startswith("Step 'split_proportions_notebook': "), message
+    assert repr(str(source.resolve())) in message
+    assert "has no cell tagged 'parameters'" in message, message
+    assert "would inject 'artifact' at the top of the notebook" in message, message
+    assert "such as artifact = None" in message, message
+
+
+def test_the_mncnh_shaped_notebook_with_a_parameters_cell_assigning_artifact_builds(
+    tmp_path: Path,
+) -> None:
+    """The same MNCNH-shaped notebook with a first cell tagged 'parameters' holding 'artifact = None', passed inputs={'artifact': ...}, compiles to a Task."""
+    cells = _mncnh_cells(code_cell("artifact = None", tags=["parameters"]))
+    source = _cells_source(tmp_path, cells)
+
+    task = _step(
+        tmp_path, source, name="split_proportions_notebook", inputs={"artifact": "raw"}
+    )
+
+    assert isinstance(task, Task)
+    assert set(task.inputs) == {"__notebook__", "artifact"}
+
+
+# A step that passes no names does not read the notebook
+
+
+def test_a_step_with_no_names_over_a_file_that_is_not_json_compiles(tmp_path: Path) -> None:
+    """A step with no inputs, produces or parameters over an .ipynb file that is not JSON compiles to a Task."""
+    source = _written(tmp_path / "notebooks" / "report.ipynb", "this is not JSON {")
+
+    task = _step(tmp_path, source)
+
+    assert isinstance(task, Task)
+
+
+def test_a_step_with_no_names_over_json_with_no_cells_list_compiles(tmp_path: Path) -> None:
+    """A step with no inputs, produces or parameters over an .ipynb file holding JSON with no top-level 'cells' list (an nbformat 3 shape) compiles to a Task."""
+    content = _UNREADABLE_NOTEBOOKS["nbformat_3_worksheets"]
+    source = _written(tmp_path / "notebooks" / "report.ipynb", content)
+
+    task = _step(tmp_path, source)
+
+    assert isinstance(task, Task)
+
+
+# Which assignments count
+
+
+@pytest.mark.parametrize("cell", list(_COUNTED_FORMS.values()), ids=list(_COUNTED_FORMS))
+def test_each_counted_assignment_form_assigns_the_name(tmp_path: Path, cell: str) -> None:
+    """A parameters cell that assigns 'location' by a plain, chained, unpacking (tuple, nested, or list with a starred target) or annotated assignment (with or without a value) lets a step pass parameters={'location': '179'}."""
+    source = _checked_source(tmp_path, cell)
+
+    task = _step(tmp_path, source, parameters={"location": "179"})
+
+    assert isinstance(task, Task)
+
+
+@pytest.mark.parametrize("cell", list(_INDIRECT_FORMS.values()), ids=list(_INDIRECT_FORMS))
+def test_each_indirect_binding_is_reported_as_not_assigned(tmp_path: Path, cell: str) -> None:
+    """A parameters cell that binds 'location' only inside a loop, condition, with, try, function or class, through globals(), exec or setattr, by augmented assignment, walrus, import, def or class, or as an attribute or subscript target, makes a step passing parameters={'location': '179'} raise ValueError naming "'location' (parameters".
+
+    The cell is only parsed, never run, so names such as context and module are not defined.
+    """
+    source = _checked_source(tmp_path, cell)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179"})
+
+    assert "'location' (parameters" in message, message
+
+
+@pytest.mark.parametrize("form", ["string", "list"])
+def test_cell_source_may_be_one_string_or_a_list_of_strings(
+    tmp_path: Path, form: str
+) -> None:
+    """A parameters cell whose source is one string, or a list of strings that join with "" into assignments split across entries, lets a step pass the names it assigns."""
+    # Joined with anything but "", these pieces are not valid Python.
+    pieces = ["loca", "tion = None\n", "draws = ", "None"]
+    cell = code_cell("".join(pieces), tags=["parameters"])
+    if form == "list":
+        cell["source"] = pieces
+    source = _cells_source(tmp_path, [cell, code_cell("pass")])
+
+    task = _step(tmp_path, source, parameters={"location": "179", "draws": 3})
+
+    assert isinstance(task, Task)
+
+
+def test_names_assigned_outside_the_parameters_cell_do_not_count(tmp_path: Path) -> None:
+    """A name assigned only in an untagged code cell before or after the parameters cell is reported as not assigned."""
+    cells = [
+        code_cell("before = None"),
+        code_cell("location = None", tags=["parameters"]),
+        code_cell("after = None"),
+    ]
+    source = _cells_source(tmp_path, cells)
+    parameters: dict[str, NotebookParameter] = {"location": "179", "before": 1, "after": 2}
+
+    message = _rejection(tmp_path, source, parameters=parameters)
+
+    assert "'before' (parameters" in message, message
+    assert "'after' (parameters" in message, message
+    assert "'location' (" not in message, message
+
+
+def test_only_the_first_cell_tagged_parameters_counts(tmp_path: Path) -> None:
+    """A name assigned only in a second cell tagged 'parameters' is reported as not assigned, and a name the first tagged cell assigns is accepted."""
+    cells = [
+        code_cell("location = None", tags=["parameters"]),
+        code_cell("draws = None", tags=["parameters"]),
+    ]
+    source = _cells_source(tmp_path, cells)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179", "draws": 3})
+    task = _step(tmp_path, source, parameters={"location": "179"})
+
+    assert "'draws' (parameters" in message, message
+    assert "'location' (" not in message, message
+    assert isinstance(task, Task)
+
+
+def test_a_cell_tagged_injected_parameters_does_not_count(tmp_path: Path) -> None:
+    """In a notebook papermill has already executed, a name assigned only in the cell tagged 'injected-parameters' is reported as not assigned."""
+    # The injected cell comes first, so a tag rule that accepted 'injected-parameters' would
+    # read it as the parameters cell and find 'location' assigned.
+    cells = [
+        code_cell("location = '179'", tags=["injected-parameters"], execution_count=1),
+        code_cell("draws = None", tags=["parameters"], execution_count=2),
+        code_cell("pass", execution_count=3),
+    ]
+    source = _cells_source(tmp_path, cells)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179", "draws": 3})
+
+    assert "'location' (parameters" in message, message
+    assert "'draws' (" not in message, message
+
+
+def test_cells_with_no_metadata_or_no_tags_are_not_the_parameters_cell(
+    tmp_path: Path,
+) -> None:
+    """Cells with no 'metadata' key, or with metadata but no 'tags', before the parameters cell are skipped without error, and the step compiles."""
+    no_metadata = {
+        key: value for key, value in code_cell("first = 1").items() if key != "metadata"
+    }
+    no_tags = {**code_cell("second = 2"), "metadata": {"collapsed": True}}
+    empty_metadata = code_cell("third = 3")
+    assert empty_metadata["metadata"] == {}
+    cells = [
+        no_metadata,
+        no_tags,
+        empty_metadata,
+        code_cell("location = None", tags=["parameters"]),
+    ]
+    source = _cells_source(tmp_path, cells)
+
+    task = _step(tmp_path, source, parameters={"location": "179"})
+
+    assert isinstance(task, Task)
+
+
+@pytest.mark.parametrize("cell_type", ["markdown", "raw"])
+def test_a_first_parameters_cell_that_is_not_code_is_rejected(
+    tmp_path: Path, cell_type: str
+) -> None:
+    """A first cell tagged 'parameters' that is a markdown or raw cell raises ValueError naming the step and repr(str(source)) and saying "must be a code cell", even when a later cell tagged 'parameters' is a code cell assigning every passed name."""
+    kind = cast(Literal["markdown", "raw"], cell_type)
+    cells = [
+        text_cell(kind, "location = None", tags=["parameters"]),
+        code_cell("location = None", tags=["parameters"]),
+    ]
+    source = _cells_source(tmp_path, cells)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "must be a code cell" in message, message
+
+
+@pytest.mark.parametrize(
+    "line", ["%matplotlib inline", "!ls", "location = ("], ids=["magic", "shell", "unclosed"]
+)
+def test_a_parameters_cell_that_is_not_valid_python_is_rejected(
+    tmp_path: Path, line: str
+) -> None:
+    """A parameters cell holding 'location = None' then ``line`` raises ValueError naming the step, repr(str(source)), "is not valid Python", "line 2" and the SyntaxError's message, and saying to keep only plain assignments in that cell."""
+    cell = f"location = None\n{line}"
+    error = _syntax_error(cell)
+    assert error.lineno == 2
+    source = _checked_source(tmp_path, cell)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "is not valid Python" in message, message
+    assert "line 2" in message, message
+    assert error.msg in message, message
+    assert "plain assignments" in message, message
+
+
+def test_a_parameters_cell_with_an_invalid_escape_builds_when_its_warning_is_an_error(
+    tmp_path: Path,
+) -> None:
+    r"""A parameters cell 'location = None' then 'path = "C:\data"', whose invalid escape sequence warns when parsed, lets a step passing location and path compile to a Task while that warning is an error."""
+    cell = 'location = None\npath = "C:\\data"'
+    source = _checked_source(tmp_path, cell)
+
+    with warnings.catch_warnings():
+        # Python 3.11 warns with DeprecationWarning and 3.12 with SyntaxWarning; the message
+        # filter covers both without failing on unrelated warnings.
+        warnings.filterwarnings("error", message="invalid escape sequence")
+        assert "invalid escape sequence" in _syntax_error(cell).msg
+        task = _step(tmp_path, source, parameters={"location": "179", "path": "x"})
+
+    assert isinstance(task, Task)
+
+
+# A notebook that cannot be read
+
+
+@pytest.mark.parametrize(
+    "content", list(_REJECTED_NOTEBOOKS.values()), ids=list(_REJECTED_NOTEBOOKS)
+)
+def test_definition_errors_from_the_notebook_file_register_nothing(
+    tmp_path: Path, content: _NotebookContent
+) -> None:
+    """With ``content`` written at path_for(_SOURCE_KEY) (cells through write_notebook, text or bytes as is), the base call raises ValueError, and then neither the executed key nor 'tables/out.csv' resolves as an input."""
+    registry = _registry(tmp_path)
+    notebook = _written(registry.path_for(_SOURCE_KEY), content)
+
+    with pytest.raises(ValueError):
+        notebook_step(**_base_call(registry, notebook))
+
+    for key in (_EXECUTED_KEY, "tables/out.csv"):
+        with pytest.raises(WiringError):
+            registry.resolve_input(key)
+
+
+@pytest.mark.parametrize(
+    "content", list(_UNREADABLE_NOTEBOOKS.values()), ids=list(_UNREADABLE_NOTEBOOKS)
+)
+def test_a_notebook_that_cannot_be_read_is_rejected_naming_the_step_and_notebook(
+    tmp_path: Path, content: _NotebookContent
+) -> None:
+    """With ``content`` written at the source path, the base call raises ValueError (never KeyError, TypeError, AttributeError or a bare UnicodeDecodeError) whose message holds "Step '<name>': ", repr(str(source)) and "cannot be read as a notebook"."""
+    registry = _registry(tmp_path)
+    notebook = _written(registry.path_for(_SOURCE_KEY), content)
+    call = {**_base_call(registry, notebook), "name": _NOTEBOOK_STEP}
+
+    with pytest.raises(ValueError) as info:
+        notebook_step(**call)
+
+    assert not isinstance(info.value, UnicodeDecodeError), repr(info.value)
+    message = str(info.value)
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(notebook.resolve())) in message, message
+    assert "cannot be read as a notebook" in message, message
+
+
+def test_a_malformed_cell_in_a_notebook_with_no_parameters_cell_is_reported_as_unreadable(
+    tmp_path: Path,
+) -> None:
+    """A notebook with no cell tagged 'parameters' and one cells entry that is not an object raises the "cannot be read as a notebook" ValueError, not the no-parameters-cell one."""
+    registry = _registry(tmp_path)
+    content = _notebook_text([code_cell(_BASE_PARAMETERS), "not a cell", code_cell("pass")])
+    notebook = _written(registry.path_for(_SOURCE_KEY), content)
+
+    with pytest.raises(ValueError) as info:
+        notebook_step(**_base_call(registry, notebook))
+
+    message = str(info.value)
+    assert "cannot be read as a notebook" in message, message
+    assert "has no cell tagged" not in message, message
+
+
+def test_a_cells_entry_that_is_not_an_object_after_the_parameters_cell_is_not_read(
+    tmp_path: Path,
+) -> None:
+    """A valid parameters cell followed by a cells entry that is not an object compiles to a Task."""
+    registry = _registry(tmp_path)
+    parameters = code_cell(_BASE_PARAMETERS, tags=["parameters"])
+    content = _notebook_text([parameters, "not a cell"])
+    notebook = _written(registry.path_for(_SOURCE_KEY), content)
+
+    task = notebook_step(**_base_call(registry, notebook))
+
+    assert isinstance(task, Task)
+
+
+def test_a_code_cell_with_an_int_source_after_the_parameters_cell_is_not_read(
+    tmp_path: Path,
+) -> None:
+    """A valid parameters cell followed by a code cell whose source is an int compiles to a Task."""
+    registry = _registry(tmp_path)
+    cells = [
+        code_cell(_BASE_PARAMETERS, tags=["parameters"]),
+        {**code_cell(""), "source": 5},
+    ]
+    notebook = _written(registry.path_for(_SOURCE_KEY), cells)
+
+    task = notebook_step(**_base_call(registry, notebook))
+
+    assert isinstance(task, Task)
+
+
+# Order, timing and dependencies of the check
+
+
+def test_a_reserved_name_to_a_notebook_with_no_parameters_cell_keeps_the_reserved_name_message(
+    tmp_path: Path,
+) -> None:
+    """A reserved name such as '__command__' passed to a notebook with no parameters cell raises the existing reserved-name ValueError ("is reserved"), not the no-parameters-cell one."""
+    source = _cells_source(tmp_path, [code_cell("pass")])
+
+    message = _rejection(tmp_path, source, parameters={"__command__": 1})
+
+    assert "is reserved" in message, message
+    assert "has no cell tagged" not in message, message
+
+
+def test_a_missing_notebook_passed_names_keeps_the_missing_notebook_message(
+    tmp_path: Path,
+) -> None:
+    """A step passing names over a notebook path that does not exist raises the existing "does not exist or is not a file" ValueError."""
+    missing = tmp_path / "notebooks" / "missing.ipynb"
+
+    message = _rejection(tmp_path, missing, parameters={"location": "179"})
+
+    assert "does not exist or is not a file" in message, message
+
+
+def test_the_check_runs_again_after_the_notebook_is_edited(tmp_path: Path) -> None:
+    """A step that compiles, then its parameters cell edited so it no longer assigns a passed name, then the same call again raises ValueError naming that name."""
+    source = _checked_source(tmp_path, "location = None")
+    assert isinstance(_step(tmp_path, source, parameters={"location": "179"}), Task)
+
+    _checked_source(tmp_path, "region = None")
+    message = _rejection(tmp_path, source, parameters={"location": "179"})
+
+    assert "'location' (parameters" in message, message
+
+
+def test_the_check_imports_neither_papermill_nor_nbformat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With sys.modules['papermill'] and sys.modules['nbformat'] set to None, a step passing names over a valid notebook compiles and one passing an unassigned name raises the new ValueError."""
+    # A None entry in sys.modules makes any import of that name raise ImportError.
+    modules = cast(dict[str, object], sys.modules)
+    monkeypatch.setitem(modules, "papermill", None)
+    monkeypatch.setitem(modules, "nbformat", None)
+    source = _checked_source(tmp_path, "location = None")
+
+    task = _step(tmp_path, source, parameters={"location": "179"})
+    message = _rejection(tmp_path, source, parameters={"loaction": "179"})
+
+    assert isinstance(task, Task)
+    assert "'loaction' (parameters; did you mean 'location'?)" in message, message
+
+
+def test_importing_notebook_step_imports_neither_papermill_nor_nbformat() -> None:
+    """A fresh sys.executable that sets sys.modules['papermill'] and sys.modules['nbformat'] to None and then imports vivarium.dagger.frontend.notebook_step exits 0."""
+    code = (
+        "import sys\n"
+        "sys.modules['papermill'] = None\n"
+        "sys.modules['nbformat'] = None\n"
+        "import vivarium.dagger.frontend.notebook_step\n"
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=120
+    )
+
+    assert completed.returncode == 0, completed.stderr

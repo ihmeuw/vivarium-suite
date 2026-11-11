@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -28,6 +28,18 @@ def code_cell(
         "id": uuid.uuid4().hex[:12],
         "metadata": {"tags": list(tags)} if tags else {},
         "outputs": list(outputs),
+        "source": source,
+    }
+
+
+def text_cell(
+    cell_type: Literal["markdown", "raw"], source: str, *, tags: Sequence[str] = ()
+) -> dict[str, Any]:
+    """Return an nbformat 4.5 markdown or raw cell with ``source`` and ``tags``."""
+    return {
+        "cell_type": cell_type,
+        "id": uuid.uuid4().hex[:12],
+        "metadata": {"tags": list(tags)} if tags else {},
         "source": source,
     }
 
