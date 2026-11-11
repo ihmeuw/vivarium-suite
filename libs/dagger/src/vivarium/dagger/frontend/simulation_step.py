@@ -290,17 +290,21 @@ def describe_simulation_failure(task: Task, error: BaseException) -> str | None:
             psimulate finished 3 of 4 simulations; the partial run is at <run>. The
             previous complete run at <run directory> was kept.
 
-        on one line. Otherwise, for a local ``CalledProcessError``::
+        on one line. Otherwise the description says only that the command failed,
+        since psimulate or the check may have been the part that failed. For a local
+        ``CalledProcessError``::
 
-            psimulate did not finish (<exit>); its output is in pytask's report for the
-            step, and its own logs are under <scratch>. <previous run>
+            the simulation step's command failed (<exit>) before writing a message; its
+            output is in pytask's report for the step, and psimulate's logs are under
+            <scratch>. <previous run>
 
         on one line, where ``<exit>`` is
         :func:`~vivarium.dagger.backend.build.describe_exit` of the return code. For a
         failure reported from a Jobmon node, which carries no return code::
 
-            psimulate did not finish; its output is in the step's report, and its own
-            logs are under <scratch>. <previous run>
+            the simulation step's command failed before writing a message; its output
+            is in the step's report, and psimulate's logs are under <scratch>.
+            <previous run>
 
         on one line. ``<previous run>`` is ``The previous complete run at <run
         directory> was kept.`` when the run directory holds its sentinel, and ``There
@@ -328,12 +332,13 @@ def describe_simulation_failure(task: Task, error: BaseException) -> str | None:
     if isinstance(error, subprocess.CalledProcessError):
         exit_status = describe_exit(error.returncode)
         return (
-            f"psimulate did not finish ({exit_status}); its output is in pytask's report "
-            f"for the step, and its own logs are under {scratch}. {previous}"
+            f"the simulation step's command failed ({exit_status}) before writing a "
+            "message; its output is in pytask's report for the step, and psimulate's "
+            f"logs are under {scratch}. {previous}"
         )
     return (
-        "psimulate did not finish; its output is in the step's report, and its own "
-        f"logs are under {scratch}. {previous}"
+        "the simulation step's command failed before writing a message; its output is "
+        f"in the step's report, and psimulate's logs are under {scratch}. {previous}"
     )
 
 

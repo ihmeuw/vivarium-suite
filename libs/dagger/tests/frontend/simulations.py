@@ -28,6 +28,8 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from vivarium.dagger.frontend import Pipeline
+
 LOG_VARIABLE = "STUB_PSIMULATE_LOG"
 """The file the stub appends its arguments to, as one JSON list per call. Unset, the
 stub logs nothing."""
@@ -69,6 +71,12 @@ SECOND_METRIC = "ylls"
 
 EXAMPLE_DIR = Path(__file__).resolve().parent / "simulation_example"
 """The example definition's directory, with its toy spec and branches files."""
+
+COMMAND_FRAGMENTS = ("psimulate run", "python -I", "mkdir", "rm -rf", "CalledProcessError")
+"""Text from the generated command or its error that a step's failure line must not hold."""
+
+NO_PREVIOUS = "There was no previous run."
+"""The sentence that ends a failure message when the run directory held no complete run."""
 
 _ENV_LINE = "ENV = sys.prefix"
 """The line of the example definition that names the environment psimulate runs in."""
@@ -260,3 +268,12 @@ def snapshot(directory: Path) -> dict[str, bytes]:
         for path in sorted(directory.rglob("*"))
         if path.is_file()
     }
+
+
+def assert_no_command(text: str, pipeline: Pipeline, step: str) -> None:
+    """Assert that ``text`` holds neither the command of ``pipeline``'s ``step`` nor a part of it."""
+    [task] = [task for task in pipeline.tasks if task.name == step]
+    assert isinstance(task.run, str), task.run
+    assert task.run not in text
+    for fragment in COMMAND_FRAGMENTS:
+        assert fragment not in text, (fragment, text)

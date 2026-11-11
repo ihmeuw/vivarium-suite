@@ -20,7 +20,9 @@ from tests.frontend.simulations import (
     KNOB_VARIABLES,
     LOG_VARIABLE,
     METRIC,
+    NO_PREVIOUS,
     UNFINISHED_VARIABLE,
+    assert_no_command,
     deaths_by_draw,
     make_stub_env,
     read_argv_log,
@@ -51,11 +53,6 @@ _OPTIONS: dict[str, str | int | float | bool] = {
     "project": "proj_simscience",
     "no_slack": True,
 }
-
-_COMMAND_FRAGMENTS = ("psimulate run", "python -I", "mkdir", "rm -rf", "CalledProcessError")
-"""Text from the generated command or its error that a step's failure line must not hold."""
-
-_NO_PREVIOUS = "There was no previous run."
 
 _SUCCEEDED = {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
 
@@ -143,15 +140,6 @@ def _failure_line(pipeline: Pipeline) -> str:
     with pytest.raises(StepFailed) as excinfo:
         run(pipeline, jobmon=True)
     return str(excinfo.value)
-
-
-def _assert_no_command(line: str, pipeline: Pipeline) -> None:
-    """Assert that ``line`` holds neither the simulation step's command nor a part of it."""
-    [step] = [task for task in pipeline.tasks if task.name == _KEY]
-    assert isinstance(step.run, str)
-    assert step.run not in line
-    for fragment in _COMMAND_FRAGMENTS:
-        assert fragment not in line, (fragment, line)
 
 
 @dataclass
@@ -248,8 +236,8 @@ def test_one_simulation_missing_under_fake_jobmon_fails_with_the_counts_message(
         f"Step '{_KEY}' failed: psimulate finished 3 of 4 simulations; the partial run is "
         f"at {partial}."
     ), line
-    assert line.endswith(_NO_PREVIOUS), line
-    _assert_no_command(line, pipeline)
+    assert line.endswith(NO_PREVIOUS), line
+    assert_no_command(line, pipeline, _KEY)
     assert not simulation.run_dir.exists()
 
 
@@ -257,17 +245,21 @@ def test_one_simulation_missing_under_fake_jobmon_fails_with_the_counts_message(
 def test_a_psimulate_that_exits_non_zero_under_fake_jobmon_gets_the_bridge_line(
     simulation: _Simulation, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A bridged run whose stub exits non-zero before writing raises StepFailed whose line says psimulate did not finish and names the scratch directory, with no exit status and without the generated command."""
+    """A bridged run whose stub exits non-zero before writing raises StepFailed whose line says the step's command failed before writing a message, without blaming psimulate, and names the scratch directory, with no exit status and without the generated command."""
     pipeline = _pipeline(simulation)
     monkeypatch.setenv(EXIT_VARIABLE, "3")
 
     line = _failure_line(pipeline)
 
-    assert line.startswith(f"Step '{_KEY}' failed: psimulate did not finish;"), line
-    assert f"its own logs are under {simulation.scratch}." in line
-    assert line.endswith(_NO_PREVIOUS), line
+    assert line.startswith(
+        f"Step '{_KEY}' failed: the simulation step's command failed before writing a "
+        "message;"
+    ), line
+    assert "psimulate did not finish" not in line, line
+    assert f"psimulate's logs are under {simulation.scratch}." in line
+    assert line.endswith(NO_PREVIOUS), line
     assert "status" not in line
-    _assert_no_command(line, pipeline)
+    assert_no_command(line, pipeline, _KEY)
     assert len(simulation.calls()) == 1
 
 

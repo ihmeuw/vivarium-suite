@@ -21,12 +21,15 @@ from pytask import PathNode, TaskOutcome
 
 from tests.frontend.notebooks import write_source_notebook
 from tests.frontend.simulations import (
+    COMMAND_FRAGMENTS,
     EXIT_VARIABLE,
     KNOB_VARIABLES,
     LOG_VARIABLE,
     METRIC,
+    NO_PREVIOUS,
     RUN_DIRECTORIES_VARIABLE,
     UNFINISHED_VARIABLE,
+    assert_no_command,
     copy_simulation_example,
     deaths_by_draw,
     make_stub_env,
@@ -91,11 +94,6 @@ _ALLOWED = (
     "slack_tag",
 )
 """The options a step accepts, in sorted order."""
-
-_COMMAND_FRAGMENTS = ("psimulate run", "python -I", "mkdir", "rm -rf", "CalledProcessError")
-"""Text from the generated command or its error that a step's failure line must not hold."""
-
-_NO_PREVIOUS = "There was no previous run."
 
 
 @dataclass(frozen=True)
@@ -264,14 +262,6 @@ def _first_run(model: _Model, pipeline: Pipeline) -> dict[str, bytes]:
     assert run(pipeline) == {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
     assert (model.run_dir / _SENTINEL).is_file()
     return snapshot(model.run_dir)
-
-
-def _assert_no_command(text: str, pipeline: Pipeline) -> None:
-    """Assert that ``text`` holds neither the simulation step's command nor a part of it."""
-    [step] = [task for task in pipeline.tasks if task.name == _KEY]
-    assert _command(step) not in text
-    for fragment in _COMMAND_FRAGMENTS:
-        assert fragment not in text, (fragment, text)
 
 
 def _assert_no_run_in_scratch(model: _Model) -> None:
@@ -1027,7 +1017,7 @@ def test_one_simulation_missing_fails_with_the_counts_and_keeps_the_previous_run
         f"at {partial}."
     ), line
     assert line.endswith(model.kept()), line
-    _assert_no_command(line, pipeline)
+    assert_no_command(line, pipeline, _KEY)
     assert snapshot(model.run_dir) == before
     assert len(list((partial / "results" / METRIC).glob("*.parquet"))) == 3
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
@@ -1036,7 +1026,7 @@ def test_one_simulation_missing_fails_with_the_counts_and_keeps_the_previous_run
 def test_a_psimulate_that_exits_non_zero_fails_with_its_exit_status_and_keeps_the_previous_run(
     model: _Model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """After one successful run, a stub that exits with status 3 before writing anything raises StepFailed whose line says psimulate did not finish, gives 'status 3', names the scratch directory and that the previous run was kept, without the command; the run directory is byte-identical, scratch exists and holds no run, and the consumer is SKIP_PREVIOUS_FAILED."""
+    """After one successful run, a stub that exits with status 3 before writing anything raises StepFailed whose line says the step's command failed before writing a message, without blaming psimulate, gives 'status 3', names the scratch directory and that the previous run was kept, without the command; the run directory is byte-identical, scratch exists and holds no run, and the consumer is SKIP_PREVIOUS_FAILED."""
     pipeline = _pipeline(model)
     before = _first_run(model, pipeline)
     monkeypatch.setenv(EXIT_VARIABLE, "3")
@@ -1045,11 +1035,13 @@ def test_a_psimulate_that_exits_non_zero_fails_with_its_exit_status_and_keeps_th
 
     line = str(error)
     assert line.startswith(
-        f"Step '{_KEY}' failed: psimulate did not finish (the command exited with status 3)"
+        f"Step '{_KEY}' failed: the simulation step's command failed (the command exited "
+        "with status 3) before writing a message;"
     ), line
-    assert f"its own logs are under {model.scratch}." in line
+    assert "psimulate did not finish" not in line, line
+    assert f"psimulate's logs are under {model.scratch}." in line
     assert line.endswith(model.kept()), line
-    _assert_no_command(line, pipeline)
+    assert_no_command(line, pipeline, _KEY)
     assert snapshot(model.run_dir) == before
     _assert_no_run_in_scratch(model)
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
@@ -1070,7 +1062,7 @@ def test_zero_run_directories_fail_naming_the_scratch_and_keep_the_previous_run(
         f"Step '{_KEY}' failed: psimulate wrote no run directory under {model.scratch}."
     ), line
     assert line.endswith(model.kept()), line
-    _assert_no_command(line, pipeline)
+    assert_no_command(line, pipeline, _KEY)
     assert snapshot(model.run_dir) == before
     _assert_no_run_in_scratch(model)
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
@@ -1095,7 +1087,7 @@ def test_two_run_directories_fail_naming_them_and_keep_the_previous_run(
     for path in runs:
         assert str(path) in line
     assert line.endswith(model.kept()), line
-    _assert_no_command(line, pipeline)
+    assert_no_command(line, pipeline, _KEY)
     assert snapshot(model.run_dir) == before
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
 
@@ -1111,8 +1103,8 @@ def test_a_first_run_that_fails_says_there_was_no_previous_run(
 
     line = str(error)
     assert "psimulate finished 3 of 4 simulations" in line
-    assert line.endswith(_NO_PREVIOUS), line
-    _assert_no_command(line, pipeline)
+    assert line.endswith(NO_PREVIOUS), line
+    assert_no_command(line, pipeline, _KEY)
     assert not model.run_dir.exists()
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
 
@@ -1130,7 +1122,7 @@ def test_a_run_directory_without_a_sentinel_does_not_count_as_a_previous_run(
 
     line = str(error)
     assert "psimulate finished 3 of 4 simulations" in line
-    assert line.endswith(_NO_PREVIOUS), line
+    assert line.endswith(NO_PREVIOUS), line
     assert "was kept" not in line
 
 
@@ -1167,7 +1159,7 @@ def test_a_rerun_after_a_failed_run_clears_the_scratch_and_succeeds(
 def test_a_rerun_whose_psimulate_exits_non_zero_does_not_report_the_earlier_message(
     model: _Model, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """After a run that fails with one simulation unfinished and leaves the message file, a second run whose stub exits with status 3 raises StepFailed whose line says psimulate did not finish with 'status 3' and does not hold the earlier '3 of 4' message; the scratch directory holds neither the old message file nor a run."""
+    """After a run that fails with one simulation unfinished and leaves the message file, a second run whose stub exits with status 3 raises StepFailed whose line says the step's command failed with 'status 3' and does not hold the earlier '3 of 4' message; the scratch directory holds neither the old message file nor a run."""
     pipeline = _pipeline(model)
     _fail_with_one_simulation_unfinished(model, pipeline, monkeypatch)
     monkeypatch.setenv(EXIT_VARIABLE, "3")
@@ -1176,11 +1168,12 @@ def test_a_rerun_whose_psimulate_exits_non_zero_does_not_report_the_earlier_mess
 
     line = str(error)
     assert line.startswith(
-        f"Step '{_KEY}' failed: psimulate did not finish (the command exited with status 3)"
+        f"Step '{_KEY}' failed: the simulation step's command failed (the command exited "
+        "with status 3) before writing a message;"
     ), line
     assert "3 of 4" not in line, line
-    assert line.endswith(_NO_PREVIOUS), line
-    _assert_no_command(line, pipeline)
+    assert line.endswith(NO_PREVIOUS), line
+    assert_no_command(line, pipeline, _KEY)
     _assert_no_run_in_scratch(model)
     assert not (model.scratch / _MESSAGE_FILE).exists()
     assert len(model.calls()) == 2
@@ -1257,7 +1250,7 @@ def test_describe_simulation_failure_reads_the_message_file_for_a_remote_command
 def test_describe_simulation_failure_gives_the_bridge_line_without_a_message_file(
     model: _Model,
 ) -> None:
-    """For an error object whose exc_type is 'subprocess.CalledProcessError' and no message file, the description says psimulate did not finish, names the scratch directory and the previous-run state, and gives no exit status."""
+    """For an error object whose exc_type is 'subprocess.CalledProcessError' and no message file, the description says the step's command failed before writing a message, without blaming psimulate, names the scratch directory and the previous-run state, and gives no exit status."""
     task = _step(model, model.registry())
     error = _RemoteFailure("subprocess.CalledProcessError")
 
@@ -1268,11 +1261,14 @@ def test_describe_simulation_failure_gives_the_bridge_line_without_a_message_fil
 
     for described in (first, later):
         assert described is not None
-        assert described.startswith("psimulate did not finish;"), described
-        assert f"its own logs are under {model.scratch}." in described
+        assert described.startswith(
+            "the simulation step's command failed before writing a message;"
+        ), described
+        assert "psimulate did not finish" not in described
+        assert f"psimulate's logs are under {model.scratch}." in described
         assert "status" not in described
         assert "psimulate run" not in described
-    assert first is not None and first.endswith(_NO_PREVIOUS), first
+    assert first is not None and first.endswith(NO_PREVIOUS), first
     assert later is not None and later.endswith(model.kept()), later
 
 
@@ -1469,7 +1465,7 @@ def _assert_reported_failure(
     assert f"Step '{_KEY}' failed: " in errors, errors
     assert example.kept() in errors, errors
     assert f"Not run because an upstream step failed: {_CONSUMER!r}." in errors, errors
-    for fragment in _COMMAND_FRAGMENTS:
+    for fragment in COMMAND_FRAGMENTS:
         assert fragment not in errors, (fragment, errors)
     assert snapshot(example.run_dir) == before
     return errors
@@ -1523,8 +1519,11 @@ def test_dagger_run_with_a_psimulate_that_exits_non_zero_exits_one_with_its_stat
     result, before = _failing_rerun(example, monkeypatch, EXIT_VARIABLE, "3")
 
     errors = _assert_reported_failure(result, example, before)
-    assert "psimulate did not finish (the command exited with status 3)" in errors, errors
-    assert f"its own logs are under {example.scratch}." in errors, errors
+    assert (
+        "the simulation step's command failed (the command exited with status 3) before "
+        "writing a message;" in errors
+    ), errors
+    assert f"psimulate's logs are under {example.scratch}." in errors, errors
 
 
 def test_dagger_run_with_zero_run_directories_exits_one_naming_the_scratch(

@@ -12,10 +12,10 @@ psimulate writes one run to ``<scratch>/<model name>/<timestamp>/``. The run is 
 when every simulation that psimulate recorded under ``metadata/`` wrote its file under
 every metric directory in ``results/``. A complete run is moved to ``destination`` and a
 sentinel file is written into it last, so the destination's sentinel exists only for a
-complete run. Any failure writes the reason to a message file in ``scratch``. It
-also leaves ``destination`` as it was and keeps the run under ``scratch`` for
-inspection, unless undoing a failed move also fails, in which case the message says
-where each run is.
+complete run. Any failure writes the reason to a message file in ``scratch``, and so
+does an unexpected error in the check itself. A failed check also leaves
+``destination`` as it was and keeps the run under ``scratch`` for inspection, unless
+undoing a failed move also fails, in which case the message says where each run is.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import json
 import os
 import shutil
 import sys
+import traceback
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
@@ -211,17 +212,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns
     -------
         0 when :func:`collect_run` succeeds. 1 when it raises :class:`CollectFailed`,
-        after the message is printed to standard error. 2, after a usage line on
-        standard error, when ``argv`` does not hold exactly two arguments.
+        after the message is printed to standard error. 1 also when it raises any
+        other :class:`Exception`, after the traceback and then ``psimulate finished, but
+        the check that collects its run failed: <type>: <error>. psimulate's output is
+        under <scratch>.`` and the previous-run sentence are printed to standard error;
+        that message is also written to the scratch directory's message file. 2, after
+        a usage line on standard error, when ``argv`` does not hold exactly two
+        arguments.
     """
     args = sys.argv[1:] if argv is None else list(argv)
     if len(args) != 2:
         print("usage: python -I -c <source> <scratch> <destination>", file=sys.stderr)
         return 2
+    scratch, destination = Path(args[0]), Path(args[1])
     try:
-        collect_run(Path(args[0]), Path(args[1]))
+        collect_run(scratch, destination)
     except CollectFailed as error:
         print(error, file=sys.stderr)
+        return 1
+    except Exception as error:
+        # Without a message file, the step's line could only say that the command failed.
+        traceback.print_exc()
+        message = (
+            "psimulate finished, but the check that collects its run failed: "
+            f"{type(error).__name__}: {error}. psimulate's output is under {scratch}."
+        )
+        try:
+            had_previous = has_complete_run(destination)
+            message += " " + previous_run_sentence(destination, had_previous)
+        except Exception:
+            # The previous-run check can fail the same way; the message stands without it.
+            pass
+        failed = _failed(scratch, message)
+        print(failed, file=sys.stderr)
         return 1
     return 0
 

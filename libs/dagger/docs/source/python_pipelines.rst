@@ -230,8 +230,11 @@ example:
 
    Step 'sims/toy' failed: psimulate finished 3 of 4 simulations; the partial run is at /home/user/model/output/example/sims/toy.psimulate/toy_model/2026_11_10_09_30_00. The previous complete run at /home/user/model/output/example/sims/toy was kept.
 
-If psimulate itself failed, the line gives its exit status, says where its logs are, and
-whether the previous complete run was kept.
+If the step's command failed before the check wrote a message, for example because
+psimulate itself failed, the line says only that the command failed, with its exit
+status, where psimulate's logs are, and whether the previous complete run was kept. If
+the check itself failed with an unexpected error, the line names the check and the
+error.
 
 If pytask stops the build for another reason, for example because its configuration
 file or lockfile under the root cannot be read or a pytask plugin failed, pytask's

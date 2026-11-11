@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.frontend.simulations import snapshot
+from tests.frontend.simulations import NO_PREVIOUS, snapshot
 from vivarium.dagger.frontend import _collect_simulation
 from vivarium.dagger.frontend._collect_simulation import (
     _MESSAGE_FILE,
@@ -33,8 +33,6 @@ _STAMP = "2025_01_01_00_00_00"
 
 _LATER_STAMP = "2025_01_01_00_00_01"
 """The timestamp directory of a second run under the scratch directory."""
-
-_NO_PREVIOUS = "There was no previous run."
 
 
 @dataclass(frozen=True)
@@ -405,8 +403,8 @@ def test_a_failure_without_a_destination_says_there_was_no_previous_run(
     message = _failure(paths)
 
     assert not has_complete_run(paths.destination)
-    assert previous_run_sentence(paths.destination, False) == _NO_PREVIOUS
-    assert message.rstrip().endswith(_NO_PREVIOUS), message
+    assert previous_run_sentence(paths.destination, False) == NO_PREVIOUS
+    assert message.rstrip().endswith(NO_PREVIOUS), message
     assert not paths.destination.exists()
 
 
@@ -420,7 +418,7 @@ def test_a_destination_without_a_sentinel_does_not_count_as_a_previous_run(
     assert not has_complete_run(paths.destination)
     message = _failure(paths)
 
-    assert message.rstrip().endswith(_NO_PREVIOUS), message
+    assert message.rstrip().endswith(NO_PREVIOUS), message
     assert "was kept" not in message
     assert snapshot(paths.destination) == before
 
@@ -535,7 +533,7 @@ def test_a_failed_undo_of_the_move_says_where_each_run_is(
     assert str(paths.previous) in message, message
     assert str(new_run) in message, message
     assert paths.kept() not in message, message
-    assert _NO_PREVIOUS not in message, message
+    assert NO_PREVIOUS not in message, message
     assert snapshot(paths.previous) == before
     assert snapshot(new_run) == written
     assert {path for path in (paths.destination, paths.run) if path.exists()} == {new_run}
@@ -572,6 +570,55 @@ def test_main_prints_the_message_to_stderr_and_returns_one_on_failure(
     assert message.startswith(start), message
     assert message in capsys.readouterr().err
     assert not paths.destination.exists()
+
+
+def test_a_check_crash_with_no_previous_run_says_there_was_none(
+    paths: _Paths, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Say there was no previous run when the check fails and none was complete."""
+    _write_run(paths.run)
+
+    def refusing_listing(scratch: Path) -> list[Path]:
+        raise PermissionError(13, "Permission denied", str(scratch))
+
+    monkeypatch.setattr(_collect_simulation, "_run_directories", refusing_listing)
+
+    assert main([str(paths.scratch), str(paths.destination)]) == 1
+    message = paths.message_file.read_text().strip()
+    assert message.startswith(
+        "psimulate finished, but the check that collects its run failed:"
+    )
+    assert message.endswith(
+        f"psimulate's output is under {paths.scratch}. There was no previous run."
+    )
+
+
+def test_main_writes_a_message_naming_the_check_when_the_check_itself_fails(
+    paths: _Paths, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When listing the scratch directory raises PermissionError, main writes a message file that names the check and the error, prints it to stderr, returns 1, and leaves the run and the previous run as they were."""
+    written = snapshot(_write_run(paths.run))
+    previous = _write_previous(paths.destination)
+
+    def refusing_listing(scratch: Path) -> list[Path]:
+        raise PermissionError(13, "Permission denied", str(scratch))
+
+    monkeypatch.setattr(_collect_simulation, "_run_directories", refusing_listing)
+
+    status = main([str(paths.scratch), str(paths.destination)])
+
+    assert status == 1
+    message = paths.message_file.read_text().strip()
+    assert message == (
+        "psimulate finished, but the check that collects its run failed: PermissionError: "
+        f"[Errno 13] Permission denied: '{paths.scratch}'. psimulate's output is under "
+        f"{paths.scratch}. The previous complete run at {paths.destination} was kept."
+    )
+    errors = capsys.readouterr().err
+    assert message in errors
+    assert "Traceback" in errors
+    assert snapshot(paths.run) == written
+    assert snapshot(paths.destination) == previous
 
 
 @pytest.mark.parametrize("count", [1, 3])

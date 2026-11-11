@@ -212,8 +212,9 @@ def run(
         pipeline, ``force`` is given and ``pytask.lock`` is not a lockfile pytask
         accepts, the backend rejects the tasks (for example, a declared env does not
         resolve), or pytask stops before any step fails. A shared name, a missing bridge
-        plugin and an unknown step are reported before anything is built or written. A shared name gives one
-        line per name, in sorted order, such as ``Two steps are named 'population';
+        plugin and an unknown step are reported before anything is built or written. A
+        shared name gives one line per name, in sorted order, such as ``Two steps are
+        named 'population';
         pass name= to python_step or notebook_step to tell them apart.`` (with the count
         as a digit, as in ``3 steps are named``, for more than two), and is chained from
         the backend's ``ValueError``. An unknown step is reported with the valid step
@@ -235,14 +236,14 @@ def run(
         :func:`~vivarium.dagger.frontend.notebook_step.describe_notebook_failure` when
         that returns a description, and a simulation step by
         :func:`~vivarium.dagger.frontend.simulation_step.describe_simulation_failure`
-        when that returns one, which gives the check's message or says that psimulate
-        did not finish, with where its logs are and whether the previous complete run
-        was kept. Any other step whose ``run`` is a shell command and
-        that failed with :class:`subprocess.CalledProcessError` is described as
-        ``<exit>; its output is in pytask's report for the step.``, where ``<exit>`` is
-        :func:`~vivarium.dagger.backend.build.describe_exit` of the return code, so the
-        generated command stays out of the message; it is still in the cause and in
-        pytask's report. Every other failure, including a ``CalledProcessError`` that a
+        when that returns one, which gives the check's message or says that the
+        step's command failed before writing one, with where psimulate's logs are and
+        whether the previous complete run was kept. Any other step whose ``run`` is a
+        shell command and that failed with :class:`subprocess.CalledProcessError` is
+        described as ``<exit>; its output is in pytask's report for the step.``, where
+        ``<exit>`` is :func:`~vivarium.dagger.backend.build.describe_exit` of the return
+        code, so the generated command stays out of the message; it is still in the cause
+        and in pytask's report. Every other failure, including a ``CalledProcessError`` that a
         python step's own code raised, is described by its type and message, as
         :class:`StepFailed` describes it by default.
     StepExited
