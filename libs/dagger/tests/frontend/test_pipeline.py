@@ -1286,3 +1286,23 @@ def test_artifact_registry_and_step_exited_are_exported_from_the_frontend() -> N
     assert frontend.ArtifactRegistry is ArtifactRegistry
     assert frontend.StepExited is vivarium.dagger.frontend.pipeline.StepExited
     assert {"ArtifactRegistry", "StepExited"} <= set(frontend.__all__)
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+def test_run_with_jobmon_but_no_bridge_plugin_raises_before_force_touches_the_lockfile(
+    tmp_path: Path,
+) -> None:
+    """run(force=..., jobmon=True) without the bridge's plugin raises PipelineError, chained from
+    the backend's ValueError, and leaves pytask.lock byte-identical."""
+    fixture = build_fixture(tmp_path)
+    pipeline = _pipeline(fixture, stable=True)
+    run(pipeline)
+    lockfile = fixture.state / "pytask.lock"
+    before = lockfile.read_bytes()
+
+    with pytest.raises(PipelineError, match="its pytask plugin is not registered") as excinfo:
+        run(pipeline, force=["mid.parquet"], jobmon=True)
+
+    assert isinstance(excinfo.value.__cause__, ValueError)
+    assert excinfo.value.exit_code is None
+    assert lockfile.read_bytes() == before

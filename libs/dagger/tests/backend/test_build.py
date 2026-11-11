@@ -2,13 +2,16 @@ import re
 import signal
 import subprocess
 from collections.abc import Callable, Mapping
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 from pytask import ExitCode, PNode, PythonNode, TaskOutcome
 
+import vivarium.dagger.backend.build as build_module
 from vivarium.dagger.backend.build import (
+    BRIDGE_PLUGIN,
     CODE_ID_KEY,
     COMMAND_KEY,
     TASK_KEY,
@@ -482,3 +485,60 @@ def test_a_task_that_raises_system_exit_makes_build_raise_task_exited_naming_it(
     cause = exited.__cause__
     assert type(cause) is SystemExit
     assert cause.code == 3
+
+
+def test_bridge_plugin_names_the_module_of_the_bridge_entry_point() -> None:
+    """BRIDGE_PLUGIN is the value of vivarium-dagger's ``pytask`` entry point for the bridge."""
+    assert BRIDGE_PLUGIN in {point.value for point in entry_points(group="pytask")}
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+def test_build_with_jobmon_but_no_bridge_plugin_raises_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """build(jobmon=True) without the bridge's plugin raises ValueError before the root exists."""
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+
+    with pytest.raises(ValueError, match="its pytask plugin is not registered") as excinfo:
+        build([_copy("a", src, a)], tmp_path / "state", jobmon=True)
+
+    assert BRIDGE_PLUGIN in str(excinfo.value)
+    assert "pip install -e" in str(excinfo.value)
+    assert not (tmp_path / "state").exists()
+    assert not a.exists()
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+@pytest.mark.parametrize("mode", ["dry_run", "explain"])
+def test_a_local_only_build_with_jobmon_is_not_refused_without_the_bridge_plugin(
+    tmp_path: Path, mode: str
+) -> None:
+    """With dry_run or explain the bridge keeps steps local anyway, so jobmon=True is not refused."""
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+    flags: dict[str, Any] = {"jobmon": True, mode: True}
+
+    session = build([_copy("a", src, a)], tmp_path / "state", **flags)
+
+    assert session.exit_code == ExitCode.OK
+    assert not a.exists()
+
+
+@pytest.mark.parametrize("jobmon", [{}, {"jobmon": False}], ids=["unset", "false"])
+def test_build_without_jobmon_does_not_look_for_the_bridge_plugin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, jobmon: dict[str, Any]
+) -> None:
+    """A build that does not ask for Jobmon never reads the entry points and runs locally."""
+
+    def fail(**kwargs: Any) -> list[Any]:
+        raise AssertionError("entry_points was read")
+
+    monkeypatch.setattr(build_module, "entry_points", fail)
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+
+    assert outcomes(build([_copy("a", src, a)], tmp_path / "state", **jobmon)) == {
+        "a": TaskOutcome.SUCCESS
+    }
+    assert a.read_text() == "x"

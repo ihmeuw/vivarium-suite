@@ -6,7 +6,8 @@ import os
 import signal
 import socket
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ import pytask
 
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task, check_unique_task_names
+from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
 
 CODE_ID_KEY = "__code_id__"
 """Reserved ``depends_on`` key under which a task's ``code_id`` node is attached."""
@@ -26,6 +28,9 @@ TASK_KEY = "task"
 
 SELECTED_MARKER = "dagger_selected"
 """Marker :func:`build` attaches to each task named in its ``selected`` argument."""
+
+BRIDGE_PLUGIN = "vivarium.dagger.bridge.plugin"
+"""The module of the Jobmon bridge's pytask plugin, as its ``pytask`` entry point names it."""
 
 
 class TaskExited(SystemExit):
@@ -294,12 +299,16 @@ def build(
     ------
     ValueError
         If two tasks share a name, a task cannot be converted, a declared env does not
-        resolve, or ``selected`` names a task that is not in ``tasks``. Envs are checked
-        before any task runs. The error has one line per env that does not resolve,
-        naming that env once, the tasks that declare it, and why.
+        resolve, ``selected`` names a task that is not in ``tasks``, or ``jobmon`` is
+        set but the bridge's pytask plugin is not registered (see
+        :func:`check_bridge_registered`). Envs are checked before any task runs. The
+        error has one line per env that does not resolve, naming that env once, the
+        tasks that declare it, and why. Nothing is written under ``root`` for any of
+        these.
     TaskExited
         If a task raises ``SystemExit``, which stops the build.
     """
+    check_bridge_registered(kwargs)
     tasks = list(tasks)
     check_unique_task_names(tasks)
     _check_envs(tasks)
@@ -316,6 +325,42 @@ def build(
         config.write_text("[tool.pytask.ini_options]\n")
     return pytask.build(
         tasks=pytask_tasks, config=config, task_files=(), **selection, **kwargs
+    )
+
+
+def check_bridge_registered(build_kwargs: Mapping[str, Any]) -> None:
+    """Raise if a build asks for Jobmon but the bridge's pytask plugin is not registered.
+
+    pytask loads the bridge only through vivarium-dagger's ``pytask`` entry point, and
+    without it pytask ignores ``jobmon=True`` and runs every step in the build's own
+    process. An editable install made before the bridge existed has no such entry point.
+    Only the ``jobmon`` keyword argument is checked, and a build in one of the bridge's
+    :data:`~vivarium.dagger.bridge.plugin.LOCAL_ONLY_MODES` is not checked, because it
+    stays in its own process with the plugin too.
+
+    Parameters
+    ----------
+    build_kwargs
+        The keyword arguments a build passes to ``pytask.build``.
+
+    Raises
+    ------
+    ValueError
+        If ``build_kwargs`` sets ``jobmon`` to a true value, sets none of the local-only
+        modes, and no ``pytask`` entry point names :data:`BRIDGE_PLUGIN`.
+    """
+    if not build_kwargs.get("jobmon"):
+        return
+    if any(build_kwargs.get(mode) for mode in LOCAL_ONLY_MODES):
+        return
+    if any(point.value == BRIDGE_PLUGIN for point in entry_points(group="pytask")):
+        return
+    raise ValueError(
+        "jobmon=True needs the Jobmon bridge, but its pytask plugin is not registered in "
+        f"this environment: no 'pytask' entry point names {BRIDGE_PLUGIN}, so every step "
+        "would run in this process. Reinstall vivarium-dagger; for an editable install, "
+        "run `pip install -e` on libs/dagger again, because one made before the bridge "
+        "existed lacks the entry point."
     )
 
 
