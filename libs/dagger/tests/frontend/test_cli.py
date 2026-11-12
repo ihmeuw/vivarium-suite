@@ -2088,14 +2088,19 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_import_the_registry_from_the_frontend() -> None:
-    """tests/frontend/pipeline_example/pipeline.py and tests/frontend/command_example/pipeline.py import nothing from vivarium.dagger.backend, and no example definition imports from vivarium.dagger.backend.wiring."""
+    """tests/frontend/pipeline_example/pipeline.py, tests/frontend/command_example/pipeline.py and tests/frontend/simulation_example/pipeline.py import nothing from vivarium.dagger.backend, and no example definition imports from vivarium.dagger.backend.wiring."""
     here = Path(__file__).parent
     examples = {
         name: _imported_modules(here / name / "pipeline.py")
-        for name in ("pipeline_example", "handoff_example", "command_example")
+        for name in (
+            "pipeline_example",
+            "handoff_example",
+            "command_example",
+            "simulation_example",
+        )
     }
 
-    for name in ("pipeline_example", "command_example"):
+    for name in ("pipeline_example", "command_example", "simulation_example"):
         backend = [
             module
             for module in examples[name]

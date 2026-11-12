@@ -18,6 +18,7 @@ from vivarium.dagger.frontend.pipeline import (
     run,
 )
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.simulation_step import simulation_step
 
 __all__ = [
     "ArtifactRegistry",
@@ -35,4 +36,5 @@ __all__ = [
     "preview",
     "python_step",
     "run",
+    "simulation_step",
 ]

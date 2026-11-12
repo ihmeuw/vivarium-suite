@@ -1,8 +1,10 @@
 """Producer/consumer wiring: resolve declared artifact keys to shared nodes.
 
 A pipeline names each artifact with a logical key. An output registers its key
-against one resolved file node under the run's output directory, and an input
-naming that key resolves to the identical node object, so pytask draws the
+against one resolved file node under the run's output directory, or against a run
+directory node for a key registered by
+:meth:`~vivarium.dagger.backend.wiring.ArtifactRegistry.register_directory_output`.
+An input naming that key resolves to the identical node object, so pytask draws the
 producer-to-consumer edge from shared node identity rather than from any separate
 declaration. The output root and run name namespace produced paths, so two runs
 write to distinct directories.
@@ -12,8 +14,9 @@ a list and hands them to :func:`~vivarium.dagger.backend.build.build`.
 Register every output before resolving inputs. The guards here are the ones pytask
 cannot make for us -- a hard error when two keys resolve to one path (which pytask
 would otherwise silently merge), a hard error when a step declares a root input's key
-as its output (which would otherwise shadow the root input for every consumer), and a
-did-you-mean on a mistyped key. An unresolved input (no producer and no root-input
+as its output (which would otherwise shadow the root input for every consumer), a
+hard error when one key is registered as both a file output and a run directory
+output, and a did-you-mean on a mistyped key. An unresolved input (no producer and no root-input
 file) is caught here with a did-you-mean; everything heavier (a cycle, two tasks
 claiming one product) is left to pytask, which fails safe.
 """
@@ -24,10 +27,14 @@ from pathlib import Path, PurePosixPath
 
 from pytask import PathNode
 
-from vivarium.dagger.backend.nodes import file_node
+from vivarium.dagger.backend.nodes import RunDirectoryNode, file_node, run_directory_node
 
 ArtifactKey = str
-"""A logical artifact name, resolved to a file node under the run's output directory."""
+"""A logical artifact name, resolved to a node under the run's output directory.
+
+The node is a file node, or a run directory node for a key registered by
+:meth:`~vivarium.dagger.backend.wiring.ArtifactRegistry.register_directory_output`.
+"""
 
 _LISTED_KEYS = 10
 """How many registered keys an unresolved input's message lists when no key is close."""
@@ -38,7 +45,10 @@ class WiringError(Exception):
 
 
 class ArtifactRegistry:
-    """Resolve declared artifact keys to shared file nodes for one run.
+    """Resolve declared artifact keys to shared nodes for one run.
+
+    A key resolves to a file node, or to a run directory node when it is registered by
+    :meth:`register_directory_output`.
 
     Parameters
     ----------
@@ -107,8 +117,10 @@ class ArtifactRegistry:
         ------
         WiringError
             If ``key`` is itself a declared root input, which a step cannot also
-            produce, or if a different key -- an output or a declared root input --
-            already resolves to this key's path.
+            produce, if a different key -- an output or a declared root input --
+            already resolves to this key's path, or if ``key`` is already registered as
+            a directory output by :meth:`register_directory_output`. The last message
+            names the key.
         """
         source = self._root_inputs.get(key)
         if source is not None:
@@ -123,11 +135,77 @@ class ArtifactRegistry:
                 f"keys {claimant!r} and {key!r} resolve to one path {resolved}."
             )
         node = self._producers.get(key)
+        if isinstance(node, RunDirectoryNode):
+            raise WiringError(
+                f"output {key!r} is already registered as a run directory; a step cannot "
+                "also produce it as a file."
+            )
         if node is None:
             node = file_node(resolved)
             self._producers[key] = node
             self._key_by_path[resolved] = key
         return node
+
+    def register_directory_output(self, key: ArtifactKey, sentinel: str) -> RunDirectoryNode:
+        """Register ``key`` as a run directory produced by a step and return its node.
+
+        The directory is at :meth:`path_for` of ``key``, and its state is the content of
+        its ``sentinel`` file, as :class:`~vivarium.dagger.backend.nodes.RunDirectoryNode`
+        describes. A consumer names ``key`` as its input, and :meth:`resolve_input`
+        returns this same node, so the consumer gets an edge to the producer and receives
+        the directory's path. :meth:`key_for` of the directory's path returns ``key``.
+        Registering the same key again returns the same node.
+
+        Parameters
+        ----------
+        key
+            The run directory's logical key.
+        sentinel
+            The file name, inside the directory, that the producing command writes last.
+
+        Returns
+        -------
+            The run directory node the key resolves to, shared with any consumer of the
+            key.
+
+        Raises
+        ------
+        WiringError
+            If ``key`` is a declared root input or a different key already resolves to
+            the directory's path, with the same messages as :meth:`register_output`, or
+            if ``key`` is already registered as a file output by :meth:`register_output`,
+            with a message that names the key.
+        """
+        resolved = self._claim_output_path(key)
+        node = self._producers.get(key)
+        if node is None:
+            directory = run_directory_node(resolved, sentinel)
+            self._producers[key] = directory
+            self._key_by_path[resolved] = key
+            return directory
+        if not isinstance(node, RunDirectoryNode):
+            raise WiringError(
+                f"output {key!r} is already registered as a file; a step cannot also "
+                "produce it as a run directory."
+            )
+        return node
+
+    def _claim_output_path(self, key: ArtifactKey) -> Path:
+        """Return ``key``'s path, refusing a root input's key or a path another key holds."""
+        # The messages match register_output's, which keeps its own copy of these guards.
+        source = self._root_inputs.get(key)
+        if source is not None:
+            raise WiringError(
+                f"output {key!r} is a declared root input at {source}; a step cannot "
+                "also produce it."
+            )
+        resolved = self.path_for(key)
+        claimant = self._key_by_path.get(resolved)
+        if claimant is not None and claimant != key:
+            raise WiringError(
+                f"keys {claimant!r} and {key!r} resolve to one path {resolved}."
+            )
+        return resolved
 
     def resolve_input(self, key: ArtifactKey) -> PathNode:
         """Resolve an input ``key`` to the node that produces it, or a root-input file.

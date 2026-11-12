@@ -37,6 +37,7 @@ from vivarium.dagger.backend.preview import preview as backend_preview
 from vivarium.dagger.backend.task import Task, check_unique_task_names
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.frontend.notebook_step import describe_notebook_failure
+from vivarium.dagger.frontend.simulation_step import describe_simulation_failure
 
 # TODO(MIC-7541): once iterate() fans a step out over coordinates, map each task name
 # back to its step and coordinates; until then every task name is a step name.
@@ -211,12 +212,12 @@ def run(
         pipeline, ``force`` is given and ``pytask.lock`` is not a lockfile pytask
         accepts, the backend rejects the tasks (for example, a declared env does not
         resolve), or pytask stops before any step fails. A shared name, a missing bridge
-        plugin and an unknown step are reported before anything is built or written. A shared name gives one
-        line per name, in sorted order, such as ``Two steps are named 'population';
-        give each a different name= to tell them apart.`` (with the count
-        as a digit, as in ``3 steps are named``, for more than two), and is chained from
-        the backend's ``ValueError``. An unknown step is reported with the valid step
-        names and the closest match. A rejection by the backend is chained from its
+        plugin and an unknown step are reported before anything is built or written. A
+        shared name gives one line per name, in sorted order, such as ``Two steps are
+        named 'population'; give each a different name= to tell them apart.`` (with the
+        count as a digit, as in ``3 steps are named``, for more than two), and is
+        chained from the backend's ``ValueError``. An unknown step is reported with the
+        valid step names and the closest match. A rejection by the backend is chained from its
         ``ValueError``, and an invalid lockfile from pytask's lockfile error.
         When pytask stops, the message is
         :func:`~vivarium.dagger.backend.build.failure_message`'s; for a cause pytask
@@ -232,12 +233,16 @@ def run(
         in the message describes its failure in step terms. A notebook step is
         described by
         :func:`~vivarium.dagger.frontend.notebook_step.describe_notebook_failure` when
-        that returns a description. Any other step whose ``run`` is a shell command and
-        that failed with :class:`subprocess.CalledProcessError` is described as
-        ``<exit>; its output is in pytask's report for the step.``, where ``<exit>`` is
-        :func:`~vivarium.dagger.backend.build.describe_exit` of the return code, so the
-        generated command stays out of the message; it is still in the cause and in
-        pytask's report. Every other failure, including a ``CalledProcessError`` that a
+        that returns a description, and a simulation step by
+        :func:`~vivarium.dagger.frontend.simulation_step.describe_simulation_failure`
+        when that returns one, which gives the check's message or says that the
+        step's command failed before writing one, with where psimulate's logs are and
+        whether the previous complete run was kept. Any other step whose ``run`` is a
+        shell command and that failed with :class:`subprocess.CalledProcessError` is
+        described as ``<exit>; its output is in pytask's report for the step.``, where
+        ``<exit>`` is :func:`~vivarium.dagger.backend.build.describe_exit` of the return
+        code, so the generated command stays out of the message; it is still in the cause
+        and in pytask's report. Every other failure, including a ``CalledProcessError`` that a
         python step's own code raised, is described by its type and message, as
         :class:`StepFailed` describes it by default.
     StepExited
@@ -411,6 +416,9 @@ def _step_description(task: Task, error: BaseException) -> str:
         notebook = describe_notebook_failure(task, error)
         if notebook is not None:
             return notebook
+        simulation = describe_simulation_failure(task, error)
+        if simulation is not None:
+            return simulation
         if isinstance(error, subprocess.CalledProcessError):
             return (
                 f"{describe_exit(error.returncode)}; its output is in pytask's report for "
