@@ -452,10 +452,12 @@ def _check_parameters_cell(
     unassigned = [_unassigned(name, passed[name], candidates) for name in missing]
     raise ValueError(
         f"Step '{task_name}': the parameters cell of notebook {str(source)!r} does not "
-        f"assign {_listed(unassigned)}. papermill would inject each one as a variable the "
-        "notebook never reads. Fix the name in the step, or assign it in that cell with a "
-        f"plain top-level assignment such as {missing[0]} = None; assignments in loops, "
-        "conditions or through globals() are not counted."
+        f"assign {_listed(unassigned)}. papermill puts the names the step passes in a new "
+        "cell after that one, so a name that cell does not assign is misspelled, has no "
+        "default when the notebook runs on its own, or is overwritten by a later cell. Fix "
+        "the name in the step, or "
+        f"assign it in that cell with a plain top-level assignment such as {missing[0]} = "
+        "None; assignments in loops, conditions or through globals() are not counted."
     )
 
 

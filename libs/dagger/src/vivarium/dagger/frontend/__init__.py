@@ -5,6 +5,7 @@ pipeline definition needs no import from the backend.
 """
 
 from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.command_step import command_step
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
 from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
 from vivarium.dagger.frontend.notebook_step import notebook_step
@@ -27,6 +28,7 @@ __all__ = [
     "PipelineError",
     "StepExited",
     "StepFailed",
+    "command_step",
     "handoff_inputs",
     "handoff_key",
     "load_pipeline",

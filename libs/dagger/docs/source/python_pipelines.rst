@@ -288,8 +288,8 @@ Each of these exits with status 2 before any step runs:
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
-- Two steps have the same name. ``dagger`` names it and says to pass ``name=`` to
-  ``python_step`` or ``notebook_step`` to tell the steps apart. This is reported first,
+- Two steps have the same name. ``dagger`` names it and says to give each step a
+  different ``name=`` to tell the steps apart. This is reported first,
   even when ``--until`` or ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
@@ -307,3 +307,79 @@ prints only the file, the line number, the line with a caret under the error, an
 ``SyntaxError``, as Python does.
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.
+
+Steps that run a command
+------------------------
+
+:func:`~vivarium.dagger.frontend.command_step.command_step` makes a step that runs a
+shell command. Use it when the step needs another environment than the pipeline's, or
+when the work is already a command-line tool or a script. A ``python_step`` always runs
+in the pipeline's own process, so it cannot use another environment. For any other step,
+use ``python_step``.
+
+This example puts a command step between two Python steps. The ``population`` step
+writes a table, ``adults`` runs a script on it, and ``summary`` reads the script's
+output:
+
+.. literalinclude:: ../../tests/frontend/command_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+The script, ``select_adults.py``, is in the same directory:
+
+.. literalinclude:: ../../tests/frontend/command_example/select_adults.py
+   :language: python
+   :caption: select_adults.py
+
+It runs like any other definition:
+
+.. code-block:: text
+
+   dagger preview -c pipeline.py
+   dagger run -c pipeline.py --local
+
+``inputs`` and ``produces`` map names to artifact keys. Each ``{name}`` in the command is
+replaced by the absolute path of the input or product of that name, quoted for the
+shell, so do not put quotes around a placeholder. The placeholders follow Python's
+:meth:`str.format`, so a literal brace in the command must be doubled: write the shell
+variable ``${VAR}`` as ``${{VAR}}``, and the ``awk`` program ``'{print $1}'`` as
+``'{{print $1}}'``. A placeholder that is not an input or product name is refused when
+the definition is loaded, with the valid names and, when one is close, the closest one.
+The command does not have to use every name. An input that it does not name still runs
+the step after the input's producer and makes the step stale when the input changes.
+
+The command runs under ``/bin/sh``, not bash, both with ``--local`` and on a compute
+node. On Ubuntu that is dash. Use POSIX sh syntax only: bash forms such as ``[[ ]]``,
+``source``, ``set -o pipefail`` and ``{a,b}`` fail. In a pipe ``a | b``, the step's
+status is the status of ``b`` alone, so a failure of ``a`` is lost. When you need bash,
+write ``bash -c '...'`` or put the work in a script.
+
+``env`` names the environment whose ``bin`` directories go first on ``PATH`` while the
+command runs, for every part of a command such as ``a && b``. It is a conda env or venv
+name, or the path to its prefix, and it is checked when the pipeline is built or
+previewed. In a model, ``env`` names the other environment the step needs. The example
+uses ``sys.prefix``, the pipeline's own environment, so that it runs anywhere. Without
+``env``, the command runs with the ``PATH`` of the process that runs it: the ``dagger``
+process for a local run, and the compute node's job for a run through Jobmon, which is
+not the pipeline's environment. Name the environment whenever the command needs a tool
+from it.
+
+The command, with its paths, is part of the step's state, so a changed command makes
+the step stale. A change to a script that the command runs does not, unless the script
+is an input. Declare the script as a root input and pass it through a placeholder, as
+the example does with ``{script}``. Like a ``python_step``, a command step re-runs on
+every build for now, because a step cannot yet declare a fingerprint of its code; these
+rules apply once it can.
+
+Before the command runs, ``dagger`` creates the directory of each product. Products from
+an earlier run are not removed first, so the command must write every product on every
+run; a product left by an earlier run counts as written.
+
+When the command exits with a status other than 0, the step fails, and ``dagger``'s
+line for it gives the status, or the signal that stopped the command:
+
+.. code-block:: text
+
+   Step 'adults' failed: the command exited with status 1; its output is in pytask's report for the step.
+
+The command and its output are in pytask's report for the step.

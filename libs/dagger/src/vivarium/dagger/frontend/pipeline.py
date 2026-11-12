@@ -214,11 +214,10 @@ def run(
         resolve), or pytask stops before any step fails. A shared name, a missing bridge
         plugin and an unknown step are reported before anything is built or written. A
         shared name gives one line per name, in sorted order, such as ``Two steps are
-        named 'population';
-        pass name= to python_step or notebook_step to tell them apart.`` (with the count
-        as a digit, as in ``3 steps are named``, for more than two), and is chained from
-        the backend's ``ValueError``. An unknown step is reported with the valid step
-        names and the closest match. A rejection by the backend is chained from its
+        named 'population'; give each a different name= to tell them apart.`` (with the
+        count as a digit, as in ``3 steps are named``, for more than two), and is
+        chained from the backend's ``ValueError``. An unknown step is reported with the
+        valid step names and the closest match. A rejection by the backend is chained from its
         ``ValueError``, and an invalid lockfile from pytask's lockfile error.
         When pytask stops, the message is
         :func:`~vivarium.dagger.backend.build.failure_message`'s; for a cause pytask
@@ -344,8 +343,8 @@ def _check_unique_steps(pipeline: Pipeline) -> None:
     except ValueError as error:
         counts = Counter(task.name for task in pipeline.tasks)
         lines = [
-            f"{'Two' if count == 2 else count} steps are named {name!r}; pass name= to "
-            "python_step or notebook_step to tell them apart."
+            f"{'Two' if count == 2 else count} steps are named {name!r}; give each a "
+            "different name= to tell them apart."
             for name, count in sorted(counts.items())
             if count > 1
         ]
