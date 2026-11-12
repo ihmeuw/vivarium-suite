@@ -9,8 +9,8 @@ Command line interface for ``dagger``.
 pipeline definition (``path/to/file.py`` or ``package.module``, either optionally
 followed by ``:function``), and the command uses the matching frontend. A YAML workflow
 runs through Jobmon as :doc:`/dagger` describes. A pipeline definition is run, previewed,
-or forced as :doc:`/python_pipelines` describes; it runs only in this process, with
-``--local``, until it can run through Jobmon.
+or forced as :doc:`/python_pipelines` describes; ``run`` and ``force`` run its stale steps
+through Jobmon, or in this process with ``--local``.
 
 .. click:: vivarium.dagger.cli:dagger
    :prog: dagger
@@ -18,6 +18,7 @@ or forced as :doc:`/python_pipelines` describes; it runs only in this process, w
 
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import click
@@ -30,16 +31,15 @@ from vivarium.dagger.frontend import cli as definitions
 
 # The YAML commands import vivarium.dagger.runner and vivarium.dagger.config inside their
 # bodies, because both import Jobmon, which only the ``cluster`` extra installs. A
-# pipeline definition run with --local then needs no Jobmon.
+# pipeline definition imports Jobmon only when the bridge runs its workflow, so a preview
+# and a run with --local need no Jobmon.
 
 _YAML_SUFFIXES = (".yaml", ".yml")
 """Suffixes of a ``-c`` value that names a workflow YAML file, not a pipeline definition."""
 
-_JOBMON_NOT_AVAILABLE = (
-    "Running a Python pipeline definition through Jobmon is not available yet "
-    "(MIC-7752). Pass --local to run it in this process."
-)
-"""The usage error for a pipeline definition that would need the Jobmon bridge."""
+_JOBMON_OPTIONS = ("project", "queue", "max_attempts")
+"""Options that apply to a workflow YAML file and to a pipeline definition run through
+Jobmon, but not to a pipeline definition run with ``--local``."""
 
 
 def _is_yaml(config: str | Path) -> bool:
@@ -92,7 +92,10 @@ def _with_local(func: cli_tools.CLIFunction) -> cli_tools.CLIFunction:
     return click.option(
         "--local",
         is_flag=True,
-        help="Pipeline definitions only. Run the steps in this process, not through Jobmon.",
+        help=(
+            "Pipeline definitions only. Run the steps in this process. Without it, they "
+            "run through Jobmon."
+        ),
     )(func)
 
 
@@ -104,6 +107,56 @@ def _reject_given(ctx: click.Context, names: tuple[str, ...], accepts: str) -> N
             and ctx.get_parameter_source(param.name) is ParameterSource.COMMANDLINE
         ):
             raise click.UsageError(f"{param.opts[0]} applies only to {accepts}.", ctx)
+
+
+def _with_jobmon_options(
+    yaml: bool,
+) -> Callable[[cli_tools.CLIFunction], cli_tools.CLIFunction]:
+    """Return a decorator that adds -P, -q and -m; ``yaml`` adds their YAML help."""
+
+    def help_text(yaml_text: str, definition_text: str) -> str:
+        if yaml:
+            return (
+                f"For a workflow YAML file, {yaml_text} For a pipeline definition run "
+                f"through Jobmon, {definition_text}"
+            )
+        return f"For a run through Jobmon, {definition_text}"
+
+    def decorate(func: cli_tools.CLIFunction) -> cli_tools.CLIFunction:
+        for option in (
+            click.option(
+                "--max-attempts",
+                "-m",
+                type=click.IntRange(min=1),
+                default=None,
+                help=help_text(
+                    "override the maximum Jobmon task attempts from the config file.",
+                    "how many times Jobmon tries each step.",
+                ),
+            ),
+            click.option(
+                "--queue",
+                "-q",
+                default=None,
+                help=help_text(
+                    "override the queue from the config file.",
+                    "the queue of every step that does not set its own.",
+                ),
+            ),
+            click.option(
+                "--project",
+                "-P",
+                default=None,
+                help=help_text(
+                    "override the project from the config file.",
+                    "the project of every step that does not set its own.",
+                ),
+            ),
+        ):
+            func = option(func)
+        return func
+
+    return decorate
 
 
 def _require_definition(ctx: click.Context, config: Path | str) -> str:
@@ -129,21 +182,23 @@ def dagger() -> None:
     ``pipeline``) that returns a Pipeline; ``run`` runs its stale steps, ``preview``
     shows which would run and why, and ``force`` runs named steps even if current.
 
+    A pipeline definition's ``run`` and ``force`` go through Jobmon unless given
+    ``--local``. -P/--project and -q/--queue then set the project and queue of every
+    step that does not set its own, and -m/--max-attempts sets how many times Jobmon
+    tries each step.
+
     For a pipeline definition, exit status is 0 on success; 1 if a step failed or
-    exited, or the build stopped for another reason, possibly before any step ran; 2
-    if the definition or the command is wrong and nothing ran; and 130 if the command
-    was interrupted.
+    exited, another run holds the pipeline's run lock, or the build stopped for another
+    reason, possibly before any step ran; 2 if the definition or the command is wrong,
+    or Jobmon cannot run here, and nothing ran; and 130 if the command was interrupted.
     """
     pass
 
 
 _YAML_RUN_OPTIONS = (
     "name",
-    "project",
-    "queue",
     "output_directory",
     "default_environment",
-    "max_attempts",
     "slack_channel",
     "slack_tag",
     "mute_slack",
@@ -163,18 +218,7 @@ _YAML_RUN_OPTIONS = (
     default=None,
     help="Override workflow name from config file.",
 )
-@click.option(
-    "--project",
-    "-P",
-    default=None,
-    help="Override project from config file.",
-)
-@click.option(
-    "--queue",
-    "-q",
-    default=None,
-    help="Override queue from config file.",
-)
+@_with_jobmon_options(yaml=True)
 @click.option(
     "--output-directory",
     "-o",
@@ -188,13 +232,6 @@ _YAML_RUN_OPTIONS = (
     "-e",
     default=None,
     help="Override default_environment from config file.",
-)
-@click.option(
-    "--max-attempts",
-    "-m",
-    type=click.IntRange(min=1),
-    default=None,
-    help="Override maximum Jobmon task attempts from config file.",
 )
 @cli_tools.with_slack_channel
 @cli_tools.with_slack_tag
@@ -220,15 +257,24 @@ def run(
 
     For a workflow YAML file, every top-level configuration value other than
     ``steps`` can be overridden from the command line via the corresponding flag.
-    For a pipeline definition, --until runs only the named steps and the steps they
-    depend on, and --local is required until definitions can run through Jobmon.
+    For a pipeline definition, the stale steps run through Jobmon, or in this process
+    with --local, and --until runs only the named steps and the steps they depend on.
+    -P/--project, -q/--queue and -m/--max-attempts apply to a definition only when it
+    runs through Jobmon. A step's own resources override -P and -q.
     """
     ctx = click.get_current_context()
     if not _is_yaml(config):
         _reject_given(ctx, _YAML_RUN_OPTIONS, "a workflow YAML file")
-        if not local:
-            raise click.UsageError(_JOBMON_NOT_AVAILABLE, ctx)
-        definitions.run_definition(str(config), until)
+        if local:
+            _reject_given(ctx, _JOBMON_OPTIONS, "a run through Jobmon, not with --local")
+        definitions.run_definition(
+            str(config),
+            until,
+            local=local,
+            project=project,
+            queue=queue,
+            max_attempts=max_attempts,
+        )
         return
     _reject_given(ctx, ("until", "local"), "a Python pipeline definition")
 
@@ -352,14 +398,30 @@ def preview(config: Path | str, until: tuple[str, ...]) -> None:
 @_with_config
 @click.argument("steps", nargs=-1, required=True, metavar="STEP...")
 @_with_local
-def force(config: Path | str, steps: tuple[str, ...], local: bool) -> None:
+@_with_jobmon_options(yaml=False)
+def force(
+    config: Path | str,
+    steps: tuple[str, ...],
+    local: bool,
+    project: str | None,
+    queue: str | None,
+    max_attempts: int | None,
+) -> None:
     """Run each STEP of a pipeline definition even if it is current.
 
-    Every other stale step of the definition runs too. --local is required until
-    definitions can run through Jobmon.
+    Every other stale step of the definition runs too. The steps run through Jobmon, or
+    in this process with --local. -P/--project, -q/--queue and -m/--max-attempts are as
+    for ``run`` and apply only to a run through Jobmon.
     """
     ctx = click.get_current_context()
     definition = _require_definition(ctx, config)
-    if not local:
-        raise click.UsageError(_JOBMON_NOT_AVAILABLE, ctx)
-    definitions.force_definition(definition, steps)
+    if local:
+        _reject_given(ctx, _JOBMON_OPTIONS, "a run through Jobmon, not with --local")
+    definitions.force_definition(
+        definition,
+        steps,
+        local=local,
+        project=project,
+        queue=queue,
+        max_attempts=max_attempts,
+    )
