@@ -87,9 +87,11 @@ def command_step(
         The environment whose ``bin`` directories go first on ``PATH`` while the command
         runs: a conda env or venv name, or a path to its prefix. Resolved when the
         pipeline is built or previewed, not here. ``None`` runs the command with the
-        ``PATH`` of the process that runs it, which is the ``dagger`` process for a local
-        run and the compute node's job for a run through Jobmon, not the pipeline's
-        environment. Name the environment when the command needs a tool from it.
+        ``PATH`` of the process that runs it. For a local run that is the ``dagger``
+        process's ``PATH`` as it is. For a run through Jobmon it is the compute node's
+        ``PATH`` with the ``bin`` directory of the environment ``dagger`` runs in put
+        first. Name the environment when the command needs a tool from a particular one,
+        so that both kinds of run find the same tool.
     resources
         Jobmon-shaped compute resources, carried on the task for the cluster bridge to
         read later.

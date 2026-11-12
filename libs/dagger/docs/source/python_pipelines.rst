@@ -359,10 +359,12 @@ command runs, for every part of a command such as ``a && b``. It is a conda env 
 name, or the path to its prefix, and it is checked when the pipeline is built or
 previewed. In a model, ``env`` names the other environment the step needs. The example
 uses ``sys.prefix``, the pipeline's own environment, so that it runs anywhere. Without
-``env``, the command runs with the ``PATH`` of the process that runs it: the ``dagger``
-process for a local run, and the compute node's job for a run through Jobmon, which is
-not the pipeline's environment. Name the environment whenever the command needs a tool
-from it.
+``env``, the command runs with the ``PATH`` of the process that runs it, and the two
+kinds of run differ. A local run uses the ``dagger`` process's ``PATH`` as it is. A run
+through Jobmon uses the compute node's ``PATH`` with the ``bin`` directory of the
+environment ``dagger`` runs in put first, so that the command finds that environment's
+``python`` before the node's. Name the environment whenever the command needs a tool
+from a particular one, so that both kinds of run find the same tool.
 
 The command, with its paths, is part of the step's state, so a changed command makes
 the step stale. A change to a script that the command runs does not, unless the script
