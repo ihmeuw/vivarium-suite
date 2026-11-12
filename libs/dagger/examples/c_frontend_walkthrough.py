@@ -19,6 +19,46 @@
 # Run it from `libs/dagger` with an env that has the `test` extra (papermill and
 # ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`.
 
+# %% [markdown]
+# ## How this notebook works
+#
+# The files a modeler writes are the definitions in `c_walkthrough_defs/`: `pipeline.py`,
+# `mncnh_slice.py` and `toy_simulation.py`, with the notebook, scripts and model files they
+# name. Each section runs the installed `dagger` command on one of them, in a separate
+# process, the way a modeler would type it in a shell. Everything else in this notebook is
+# machinery for showing many runs and many mistakes in one place. A modeler would not write
+# any of it:
+#
+# - **A copy per section.** A definition keeps its outputs and pytask state next to itself
+#   (`HERE / "output"`, `HERE / "state"`). If every section ran in one folder, each would
+#   start from what the sections before it left. So each section works in its own copy of
+#   `c_walkthrough_defs/` under a workspace folder, and the committed files never change.
+# - **One-line edits.** Several sections need a definition that differs from the committed
+#   one by a line: a misspelled key, a changed parameter, a step that raises. A modeler
+#   would edit their file. Here `make_defs(name, edits=[(old, new)])` makes the copy,
+#   applies the edit and prints it as `- old` / `+ new`, so you can see exactly what changed
+#   before you read the message it causes.
+# - **A primary-data handoff.** `write_handoff` writes the files an analyst would deliver
+#   for each location.
+# - **Running `dagger`.** `dagger(...)` runs the command, prints what a modeler would see in
+#   the terminal with its exit status and time, and returns the result so the cell can check
+#   it. `products` and `plan` read the output folder and the preview lines for those checks.
+# - **Checks.** The `assert` lines turn the walkthrough into a test of what each section
+#   claims. A modeler reads the output instead.
+# - **`:stable`.** `-c pipeline.py:stable` loads a second function in the same definition
+#   that gives every step the test harness's fixed code fingerprint, the stand-in for
+#   MIC-7760. With the public API (`-c pipeline.py`) every step is stale on every run; C5
+#   shows both.
+#
+# The cluster sections add a little more machinery of their own, explained where it
+# appears.
+
+# %% [markdown]
+# Imports, and where things are: this example folder, the library, the installed `dagger`
+# next to this Python, and the workspace (`C_WALKTHROUGH_DIR`, or a new temporary folder).
+# The child processes get the notebook's environment without its colour settings, which
+# would otherwise put pytask's live tables into the captured output.
+
 # %%
 import hashlib
 import json
@@ -43,8 +83,6 @@ LIB = EXAMPLES.parent
 DAGGER = Path(sys.executable).parent / "dagger"
 WORK = Path(os.environ.get("C_WALKTHROUGH_DIR") or tempfile.mkdtemp(prefix="frontend_"))
 WORK.mkdir(parents=True, exist_ok=True)
-# ipykernel sets these, and a child that inherits them draws pytask's live tables into
-# the captured output.
 CHILD_ENV = {
     k: v
     for k, v in os.environ.items()
@@ -63,6 +101,15 @@ def commit():
     return out.stdout.strip() or "unknown"
 
 
+print(f"workspace: {WORK}")
+print(f"dagger: {DAGGER}")
+print(f"python {sys.version.split()[0]} at {sys.executable}; commit {commit()}")
+
+
+# %% [markdown]
+# Copies of the definitions, the one-line edits, and the analyst's handoff.
+
+# %%
 def edit(path, pairs):
     """Apply (old, new) edits to the file at `path` and print each one; each old occurs once."""
     text = path.read_text()
@@ -98,6 +145,11 @@ def write_handoff(root, values=(0.5, 0.7), locations=LOCATIONS):
         ).to_csv(path, index=False)
 
 
+
+# %% [markdown]
+# Running the installed `dagger` and reading what it left.
+
+# %%
 def dagger(*args, cwd, show=True, stdout=True, env=None):
     """Run the installed `dagger` with `args` in `cwd`, print what a modeler sees, and return it."""
     start = time.perf_counter()
@@ -136,10 +188,6 @@ def plan(proc):
     lines = [l for l in proc.stdout.splitlines() if re.match(r"(run |skip) ", l)]
     return {l.split()[1].rstrip(":"): l for l in lines}
 
-
-print(f"workspace: {WORK}")
-print(f"dagger: {DAGGER}")
-print(f"python {sys.version.split()[0]} at {sys.executable}; commit {commit()}")
 
 # %% [markdown]
 # ## C1 — One definition declares the steps; custom steps are first-class (local)
