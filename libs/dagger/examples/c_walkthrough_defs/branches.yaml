@@ -1,0 +1,4 @@
+# Two draws and two seeds with no branches, so psimulate runs 4 simulations.
+# A copy of tests/frontend/simulation_example/branches.yaml.
+input_draw_count: 2
+random_seed_count: 2

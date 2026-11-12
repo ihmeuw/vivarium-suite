@@ -1,10 +1,9 @@
-"""Track C walkthrough definition: python steps, a handoff, a notebook step, and a command step.
+"""Track C walkthrough definition: python steps, a handoff, a notebook step and a command step.
 
 ``-c pipeline.py`` uses the public API only, so every step is always stale until MIC-7760.
 ``-c pipeline.py:stable`` gives every step the harness's ``stable_code_id`` stand-in.
 """
 
-import shlex
 import sys
 from pathlib import Path
 
@@ -14,6 +13,7 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.frontend import (
     ArtifactRegistry,
     Pipeline,
+    command_step,
     handoff_inputs,
     handoff_key,
     notebook_step,
@@ -97,20 +97,14 @@ def _tasks() -> tuple[list[Task], ArtifactRegistry]:
             parameters={"title": "Adults"},
             name="report",
         ),
-    ]
-    # No frontend step runs a shell command yet (command_step is MIC-7740), so this one is
-    # a hand-built backend Task. A command string does not receive its paths, so it names them.
-    source, copy = registry.path_for("report.csv"), registry.path_for("archive/report.csv")
-    tasks.append(
-        Task(
+        command_step(
+            "cp {report} {copy}",
+            inputs={"report": "report.csv"},
+            produces={"copy": "archive/report.csv"},
+            registry=registry,
             name="archive",
-            run=f"mkdir -p {shlex.quote(str(copy.parent))} && cp {shlex.quote(str(source))} {shlex.quote(str(copy))}",
-            inputs={"report": registry.resolve_input("report.csv")},
-            outputs={"copy": registry.register_output("archive/report.csv")},
-            resources={},
-            env=None,
-        )
-    )
+        ),
+    ]
     return tasks, registry
 
 

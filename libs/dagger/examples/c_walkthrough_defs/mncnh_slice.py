@@ -2,7 +2,8 @@
 
 Run ``dagger`` from an MNCNH checkout so ``env="vivarium_gates_mncnh_artifact"`` resolves to
 that checkout's ``.venv/vivarium_gates_mncnh_artifact``. The pipeline's own env must import
-``vivarium_gates_mncnh``, because a ``python_step`` runs in the pipeline's process.
+``vivarium_gates_mncnh``, because a ``python_step`` runs in the pipeline's process. The
+artifact step and the notebook step run in the artifact env, as ``make_artifacts`` does.
 
 ``-c mncnh_slice.py`` uses the public API only, so every step is always stale until
 MIC-7760; ``-c mncnh_slice.py:stable`` gives every step the harness's ``stable_code_id``
@@ -13,7 +14,6 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from vivarium.artifact import Artifact
 from vivarium_gates_mncnh.constants import data_keys
 from vivarium_gates_mncnh.data import loader
 
@@ -21,6 +21,7 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.frontend import (
     ArtifactRegistry,
     Pipeline,
+    command_step,
     handoff_inputs,
     handoff_key,
     notebook_step,
@@ -35,7 +36,8 @@ LOCATION = "Nigeria"
 PRIMARY_DATA = {
     "ifa_coverage.csv": ["location_id", "year_id", "age_group_id", "sex_id", "draw_0"]
 }
-NOTEBOOK_ENV = "vivarium_gates_mncnh_artifact"
+HERE = Path(__file__).resolve().parent
+ARTIFACT_ENV = "vivarium_gates_mncnh_artifact"
 
 
 def postpartum_fraction() -> pd.DataFrame:
@@ -53,28 +55,15 @@ def ifa_coverage(extract: Path) -> pd.DataFrame:
     return loader.load_coverage_from_file(extract, LOCATION)
 
 
-def write_artifact(
-    postpartum_fraction: Path, demography: Path, ifa_coverage: Path, artifact: Path
-) -> None:
-    """Write the three loaded keys into a fresh artifact, as ``make_artifacts`` would."""
-    artifact.parent.mkdir(parents=True, exist_ok=True)
-    artifact.unlink(missing_ok=True)
-    hdf = Artifact(artifact)
-    hdf.write(data_keys.METADATA_LOCATIONS, [LOCATION])
-    hdf.write(data_keys.POPULATION.DEMOGRAPHY, pd.read_parquet(demography))
-    hdf.write(
-        data_keys.MATERNAL_HEMORRHAGE.POSTPARTUM_FRACTION,
-        pd.read_parquet(postpartum_fraction),
-    )
-    hdf.write(data_keys.IFA_SUPPLEMENTATION.COVERAGE, pd.read_parquet(ifa_coverage))
-
-
 def _tasks() -> tuple[list[Task], ArtifactRegistry]:
     """Compile the slice's steps."""
     registry = ArtifactRegistry(
         SLICE_ROOT / "output",
         run_name="nigeria",
-        root_inputs=handoff_inputs(SLICE_ROOT / "handoff", [LOCATION], PRIMARY_DATA),
+        root_inputs={
+            **handoff_inputs(SLICE_ROOT / "handoff", [LOCATION], PRIMARY_DATA),
+            "write_artifact.py": HERE / "write_artifact.py",
+        },
     )
     tasks = [
         python_step(
@@ -98,34 +87,28 @@ def _tasks() -> tuple[list[Task], ArtifactRegistry]:
             registry=registry,
             name="ifa_coverage",
         ),
-    ]
-    # No frontend step writes an HDF yet (command_step is MIC-7740), so this one is a
-    # hand-built backend Task with a callable run.
-    inputs = {
-        "postpartum_fraction": "postpartum_fraction.parquet",
-        "demography": "demography.parquet",
-        "ifa_coverage": "ifa_coverage.parquet",
-    }
-    tasks.append(
-        Task(
+        command_step(
+            "python {script} {postpartum_fraction} {demography} {ifa_coverage} {artifact}",
+            inputs={
+                "script": "write_artifact.py",
+                "postpartum_fraction": "postpartum_fraction.parquet",
+                "demography": "demography.parquet",
+                "ifa_coverage": "ifa_coverage.parquet",
+            },
+            produces={"artifact": "artifacts/nigeria.hdf"},
+            registry=registry,
+            env=ARTIFACT_ENV,
             name="artifact",
-            run=write_artifact,
-            inputs={param: registry.resolve_input(key) for param, key in inputs.items()},
-            outputs={"artifact": registry.register_output("artifacts/nigeria.hdf")},
-            resources={},
-            env=None,
-        )
-    )
-    tasks.append(
+        ),
         notebook_step(
             SLICE_ROOT / "notebooks" / "hemorrhage_split_proportions.ipynb",
             executed="notebooks/hemorrhage_split_proportions_executed.ipynb",
             registry=registry,
-            env=NOTEBOOK_ENV,
+            env=ARTIFACT_ENV,
             inputs={"artifact": "artifacts/nigeria.hdf"},
             name="split_proportions_notebook",
-        )
-    )
+        ),
+    ]
     return tasks, registry
 
 

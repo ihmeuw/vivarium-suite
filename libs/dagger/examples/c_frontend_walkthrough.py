@@ -8,11 +8,13 @@
 #
 # Most sections drive `dagger` as a modeler would, as a separate process on a definition
 # file in `c_walkthrough_defs/`. Sections marked "local" run anywhere in under a minute.
-# Two sections are marked "cluster". C1-real runs MNCNH's own loaders and V&V notebook; it
-# needs the MNCNH environments described there and skips itself when
+# Three sections are marked "cluster". C1-real runs MNCNH's own loaders and V&V notebook;
+# it needs the MNCNH environments described there and skips itself when
 # `C_WALKTHROUGH_MNCNH` is not set. C16 runs a definition through Jobmon with the Python
-# API; it skips itself outside a Slurm allocation or without Jobmon. C14 and C15 are about
-# the test suite, so the review doc shows them.
+# API; it skips itself outside a Slurm allocation or without Jobmon. C19 runs a toy
+# simulation with psimulate; it skips itself outside a Slurm allocation or when
+# `C_WALKTHROUGH_SIM_ENV` is not set. C14 and C15 are about the test suite, so the review
+# doc shows them.
 #
 # Run it from `libs/dagger` with an env that has the `test` extra (papermill and
 # ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`.
@@ -61,6 +63,16 @@ def commit():
     return out.stdout.strip() or "unknown"
 
 
+def edit(path, pairs):
+    """Apply (old, new) edits to the file at `path` and print each one; each old occurs once."""
+    text = path.read_text()
+    for old, new in pairs:
+        assert text.count(old) == 1, f"{old!r} occurs {text.count(old)} times in {path.name}"
+        text = text.replace(old, new)
+        print(f"{path.name}: - {old.strip()}\n{' ' * len(path.name)}  + {new.strip()}")
+    path.write_text(text)
+
+
 def make_defs(name, edits=(), report_edits=()):
     """Copy the definitions into a new folder under WORK, apply one-line edits, and return it.
 
@@ -71,14 +83,8 @@ def make_defs(name, edits=(), report_edits=()):
     shutil.rmtree(folder, ignore_errors=True)
     shutil.copytree(EXAMPLES / "c_walkthrough_defs", folder)
     write_handoff(folder / "handoff")
-    for file, pairs in (("pipeline.py", edits), ("report.ipynb", report_edits)):
-        path = folder / file
-        text = path.read_text()
-        for old, new in pairs:
-            assert text.count(old) == 1, f"{old!r} occurs {text.count(old)} times in {file}"
-            text = text.replace(old, new)
-            print(f"{file}: - {old.strip()}\n{' ' * len(file)}  + {new.strip()}")
-        path.write_text(text)
+    edit(folder / "pipeline.py", edits)
+    edit(folder / "report.ipynb", report_edits)
     return folder
 
 
@@ -92,11 +98,15 @@ def write_handoff(root, values=(0.5, 0.7), locations=LOCATIONS):
         ).to_csv(path, index=False)
 
 
-def dagger(*args, cwd, show=True, stdout=True):
+def dagger(*args, cwd, show=True, stdout=True, env=None):
     """Run the installed `dagger` with `args` in `cwd`, print what a modeler sees, and return it."""
     start = time.perf_counter()
     proc = subprocess.run(
-        [str(DAGGER), *map(str, args)], cwd=cwd, env=CHILD_ENV, capture_output=True, text=True
+        [str(DAGGER), *map(str, args)],
+        cwd=cwd,
+        env=CHILD_ENV | dict(env or {}),
+        capture_output=True,
+        text=True,
     )
     proc.seconds = time.perf_counter() - start
     if show:
@@ -135,7 +145,7 @@ print(f"python {sys.version.split()[0]} at {sys.executable}; commit {commit()}")
 # ## C1 — One definition declares the steps; custom steps are first-class (local)
 #
 # The definition below has python steps, a fan-out over a two-location handoff, a
-# notebook step, and one hand-built command step, all wired by artifact key through one
+# notebook step, and a command step, all wired by artifact key through one
 # registry. No file path appears in the wiring. Loading the definition runs nothing, so
 # `preview` plans the whole DAG before any product exists, and names every file by its key.
 
@@ -267,7 +277,7 @@ digest = {
 # A second definition file next to the first shares its outputs and state.
 stamped = (FORCE / "pipeline.py").read_text()
 for old, new in (
-    ("import shlex\n", "import shlex\nimport time\n"),
+    ("import sys\n", "import sys\nimport time\n"),
     ('"count": [30, 55, 15]})', '"count": [30, 55, 15]}).assign(made_at=time.time())'),
 ):
     assert stamped.count(old) == 1, old
@@ -313,7 +323,10 @@ print(pd.read_parquet(HANDOFF / "output/walk/nigeria/mean_coverage.parquet"))
 # ## C11 — The notebook step (local)
 #
 # The report notebook ran in the declared env and wrote its product and an executed copy.
-# The source notebook is unchanged. A changed parameter marks the step in preview.
+# The source notebook is unchanged. A changed parameter marks the step in preview. Its
+# parameters cell assigns `summary`, `report` and `title`, the names the step passes, so
+# the parameters-cell check (C18) accepts it; the two cases it refuses are in the
+# plain-errors table below.
 
 # %%
 executed = json.loads((HANDOFF / "output/walk/report_executed.ipynb").read_text())
@@ -335,7 +348,27 @@ param = dagger("preview", "-c", "retitled.py:stable", cwd=HANDOFF)
 assert {s for s, l in plan(param).items() if l.startswith("run")} == {"report", "archive"}
 
 # %% [markdown]
-# ## C8, C9, C13 — Plain errors (local)
+# ## C17 — A command step runs a shell command with its paths filled in (local)
+#
+# The archive step is `command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
+# the absolute path of the input or product of that name, quoted for the shell, and the
+# product's folder is made before the command runs. The cell prints the command the step
+# ran, with this workspace's path shortened, and checks that the copy matches the report.
+# C1-real's artifact step is a command step that runs a script in the model's artifact
+# env. A misspelled placeholder and a failing command are in the plain-errors table below.
+
+# %%
+from vivarium.dagger.frontend import load_pipeline
+
+archive = next(
+    t for t in load_pipeline(f"{HANDOFF / 'pipeline.py'}:stable").tasks if t.name == "archive"
+)
+print(archive.run.replace(str(WORK), "<workspace>"))
+copy, report = HANDOFF / "output/walk/archive/report.csv", HANDOFF / "output/walk/report.csv"
+assert copy.read_bytes() == report.read_bytes()
+
+# %% [markdown]
+# ## C8, C9, C13, C17, C18 — Plain errors (local)
 #
 # Each case below makes one deliberate mistake in a fresh copy of the definition, runs the
 # installed `dagger`, and prints the exit code and the error output verbatim, with the
@@ -438,6 +471,24 @@ show_error(
     absent=["['coverage']"],
 )
 show_error(
+    "P1 a command placeholder typo",
+    edits=[('"cp {report} {copy}"', '"cp {reprot} {copy}"')],
+    exit_code=2,
+    names=["archive", "{reprot}", "Did you mean 'report'?"],
+)
+show_error(
+    "N1 a parameter the notebook's parameters cell does not assign",
+    edits=[('parameters={"title": "Adults"}', 'parameters={"titel": "Adults"}')],
+    exit_code=2,
+    names=["report", "'titel'", "did you mean 'title'?"],
+)
+show_error(
+    "N2 a notebook with no parameters cell",
+    report_edits=[('"tags":["parameters"]', '"tags":[]')],
+    exit_code=2,
+    names=["report", "report.ipynb", "parameters"],
+)
+show_error(
     "H1+H2 handoff: a missing file and a renamed column",
     setup=break_handoff,
     exit_code=2,
@@ -486,11 +537,11 @@ show_error(
 )
 show_error(
     "Command step fails",
-    edits=[('run=f"mkdir -p', 'run=f"false && mkdir -p')],
+    edits=[('"cp {report} {copy}"', '"false && cp {report} {copy}"')],
     args=("run", "-c", "pipeline.py:stable", "--local"),
     exit_code=1,
     names=["archive", "status 1"],
-    absent=["mkdir -p"],
+    absent=["&& cp"],
 )
 show_error(
     "T6 declared env does not exist",
@@ -621,9 +672,9 @@ assert docs.returncode == 0
 # `c_walkthrough_defs/mncnh_slice.py` turns part of MNCNH's artifact build into steps:
 # three python steps call the model's own loader (`postpartum_fraction`, `demography`,
 # and `ifa_coverage`, which reads the analyst's Nigeria extract through the handoff); a
-# hand-built command step writes them into `nigeria.hdf` as `make_artifacts` would; and a
-# notebook step runs the model's `hemorrhage_split_proportions.ipynb` V&V notebook on that
-# artifact in the model's artifact env.
+# command step runs `write_artifact.py` in the model's artifact env to write them into
+# `nigeria.hdf`, as `make_artifacts` does; and a notebook step runs the model's
+# `hemorrhage_split_proportions.ipynb` V&V notebook on that artifact in the same env.
 #
 # It needs the GBD database, `/snfs1`, and two venvs over the Jenkins
 # `vivarium_gates_mncnh_artifact_current` shared env in an MNCNH checkout:
@@ -631,8 +682,9 @@ assert docs.returncode == 0
 # walkthrough, which must import `vivarium_gates_mncnh` and this branch's dagger;
 # `c_walkthrough_defs/build_mncnh_envs.sh` builds both on a compute node. Set
 # `C_WALKTHROUGH_MNCNH` to the checkout and `DAGGER_SLICE_ROOT` to a new directory, and
-# run on a compute node. The model's notebook has no `parameters` cell, so the demo copy
-# adds one; that change is what a modeler makes to adopt `notebook_step` (MIC-7755).
+# run on a compute node. The model's notebook has no `parameters` cell, and
+# `notebook_step` refuses such a notebook when the step passes it names (C18), so the demo
+# copy adds one; that change is what a modeler makes to adopt `notebook_step`.
 # The section ends with two mistakes on the real slice, each made in a copy of the
 # definition: a misspelled handoff file name, and a handoff whose IFA file renamed
 # `year_id` (1007 columns, as the real extract has).
@@ -835,6 +887,91 @@ else:
         }
     finally:
         console.quiet = False
+
+# %% [markdown]
+# ## C19 — A simulation step runs psimulate on the cluster (cluster)
+#
+# `c_walkthrough_defs/toy_simulation.py` has three steps. A command step writes a toy
+# artifact; a simulation step runs the toy model (10 simulants, 2 draws and 2 seeds, so 4
+# simulations) with `psimulate run` on that artifact; and a python step sums the deaths by
+# draw from the run directory, which it names by its key, `sims/toy`. The definition names
+# its env `simulation`, which resolves to `.venv/simulation` in the folder `dagger` runs
+# from, as MNCNH's envs do in its checkout. This section links that to the env named by
+# `C_WALKTHROUGH_SIM_ENV`, which needs `psimulate` and Jobmon; the track B env has both.
+# psimulate refuses hosts outside Slurm, so the section skips itself outside an allocation.
+#
+# It makes three runs from one copy, as MIC-7754 asks:
+#
+# 1. The toy run. Every step succeeds, and the run directory holds the 4 simulations'
+#    results and metadata and the sentinel.
+# 2. A failure drill. The copy's spec adds psimulate's fail-once component and its options
+#    add `max_attempts=1`, so every simulation fails once and is not tried again. The step
+#    fails with "0 of 4", run 1's directory is unchanged byte for byte, the partial run
+#    stays in the scratch directory, and the summary does not run.
+# 3. The same command again. The fail-once markers now exist, so every simulation
+#    succeeds and the run directory is replaced.
+
+# %%
+SIM_ENV = os.environ.get("C_WALKTHROUGH_SIM_ENV")
+
+
+def tree(folder):
+    """Return {relative path: sha256} for every file under `folder`."""
+    return {
+        str(p.relative_to(folder)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(folder.rglob("*"))
+        if p.is_file()
+    }
+
+
+if not (SIM_ENV and "SLURM_JOB_ID" in os.environ):
+    print("skipped: C_WALKTHROUGH_SIM_ENV is not set, or not in a Slurm allocation")
+else:
+    SIM = make_defs("simulation")
+    (SIM / ".venv").mkdir()
+    (SIM / ".venv" / "simulation").symlink_to(SIM_ENV)
+    print((SIM / "toy_simulation.py").read_text())
+    RUN, SUMMARY = SIM / "output/toy/sims/toy", SIM / "output/toy/summary.csv"
+
+    toy = dagger("run", "-c", "toy_simulation.py", "--local", cwd=SIM)
+    assert toy.returncode == 0
+    first_run = tree(RUN)
+    print("run directory:", *first_run, sep="\n  ")
+    assert sum(f.startswith("results/dead/") for f in first_run) == 4
+    assert sum(f.startswith("metadata/") and f.endswith(".json") for f in first_run) == 4
+    print("sentinel:", (RUN / "_SUCCESS").read_text())
+    print(pd.read_csv(SUMMARY))
+
+    summary_written = SUMMARY.stat().st_mtime_ns
+    edit(
+        SIM / "toy_model.yaml",
+        [
+            (
+                "      - DeathsObserver()\n",
+                "      - DeathsObserver()\n"
+                "  vivarium.psimulate.testing.fail_once_component:\n"
+                "    - FailOnceComponent()\n",
+            )
+        ],
+    )
+    edit(SIM / "toy_simulation.py", [('"no_slack": True,', '"no_slack": True, "max_attempts": 1,')])
+    markers = WORK / "fail_once_markers"
+    markers.mkdir(exist_ok=True)
+    fail_once = {"FAIL_ONCE_SENTINEL_DIR": str(markers)}
+    drill = dagger("run", "-c", "toy_simulation.py", "--local", cwd=SIM, env=fail_once)
+    assert drill.returncode == 1 and "0 of 4" in drill.stderr
+    assert tree(RUN) == first_run, "run 1's directory changed"
+    scratch = SIM / "output/toy/sims/toy.psimulate"
+    print("scratch:", sorted(str(p.relative_to(scratch)) for p in scratch.glob("*/*")))
+    assert any(scratch.glob("*/*"))
+    assert SUMMARY.stat().st_mtime_ns == summary_written, "the summary ran"
+
+    again = dagger("run", "-c", "toy_simulation.py", "--local", cwd=SIM, env=fail_once)
+    assert again.returncode == 0
+    third_run = tree(RUN)
+    print("sentinel:", (RUN / "_SUCCESS").read_text())
+    assert third_run["_SUCCESS"] != first_run["_SUCCESS"]
+    print(pd.read_csv(SUMMARY))
 
 # %% [markdown]
 # ## PLAY
