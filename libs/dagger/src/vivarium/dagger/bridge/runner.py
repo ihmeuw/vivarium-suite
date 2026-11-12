@@ -167,7 +167,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     earlier result at the result path is removed before the step runs, so a result always
     belongs to the run whose capture files sit beside it. The descriptors, the stream
     buffering and the working directory are restored before it returns, so it can also be
-    called in-process.
+    called in-process. A python recipe's ``sys_path`` entries that are not on ``sys.path``
+    are appended to it, after the node's own entries, before the target is imported, and
+    removed again when the step ends, so a module that the node can already import is
+    imported from where the node finds it.
 
     Parameters
     ----------
@@ -278,8 +281,9 @@ def _run_step(payload: Payload) -> None:
     os.chdir(payload["cwd"])
     try:
         if payload["kind"] == "python":
-            step = PythonStepRun(_resolve_target(payload), payload["suffix"])
-            step(**decode(payload["kwargs"]))
+            with _appended_to_sys_path(payload["sys_path"]):
+                step = PythonStepRun(_resolve_target(payload), payload["suffix"])
+                step(**decode(payload["kwargs"]))
         elif payload["kind"] == "command":
             run_command_with_bin_path(payload["command"], payload["env_path"])
     finally:
@@ -291,14 +295,69 @@ def _resolve_target(payload: PythonPayload) -> Callable[..., Any]:
     try:
         return resolve_reference(payload["target"])
     except (ImportError, AttributeError) as error:
-        first_entry = sys.path[0] if sys.path else None
-        error.add_note(
-            f"The step {payload['task']!r} could not import its target "
-            f"{payload['target']!r} on this node. The target's module must be importable "
-            "in the node's environment from the node's own sys.path, whose first entry is "
-            f"{first_entry!r}."
-        )
+        error.add_note(_import_note(payload, error))
         raise
+
+
+def _import_note(payload: PythonPayload, error: BaseException) -> str:
+    """Return the note for a target that could not be imported on this node."""
+    start = (
+        f"The step {payload['task']!r} could not import its target "
+        f"{payload['target']!r} on this node"
+    )
+    module = payload["target"].partition(":")[0]
+    missing = _missing_dependency(error, module)
+    if missing is not None:
+        return (
+            f"{start}. Importing its module {module!r} raised while importing {missing!r}, "
+            f"which this node cannot find. Install {missing!r} in the node's environment, "
+            "or make it importable from the node's sys.path."
+        )
+    roots = payload["sys_path"]
+    if not roots:
+        first_entry = sys.path[0] if sys.path else None
+        return (
+            f"{start}. The target's module must be importable in the node's environment "
+            f"from the node's own sys.path, whose first entry is {first_entry!r}."
+        )
+    places = " or ".join(
+        f"{root!r} ({'found' if os.path.isdir(root) else 'not found'} on this node)"
+        for root in roots
+    )
+    directory = "That directory" if len(roots) == 1 else "Those directories"
+    top_level = module.split(".")[0]
+    return (
+        f"{start}, from the node's own sys.path, which dagger extends with {places} after "
+        f"the node's own entries. {directory} must be readable from every compute "
+        f"node, and no other module named {top_level!r} may come earlier on the node's "
+        "sys.path, because the first one found is the one imported."
+    )
+
+
+def _missing_dependency(error: BaseException, module: str) -> str | None:
+    """Return the name ``error`` could not find, unless it is ``module`` or a parent."""
+    if not isinstance(error, ModuleNotFoundError) or not error.name:
+        return None
+    parts = module.split(".")
+    own = {".".join(parts[: count + 1]) for count in range(len(parts))}
+    return None if error.name in own else error.name
+
+
+@contextmanager
+def _appended_to_sys_path(entries: Sequence[str]) -> Iterator[None]:
+    """Append each of ``entries`` not on ``sys.path``; remove the ones added on exit."""
+    added: list[str] = []
+    for entry in entries:
+        if entry not in sys.path:
+            sys.path.append(entry)
+            added.append(entry)
+    try:
+        yield
+    finally:
+        for entry in added:
+            # The last occurrence is the one appended here, unless the step moved it.
+            if entry in sys.path:
+                del sys.path[len(sys.path) - 1 - sys.path[::-1].index(entry)]
 
 
 @contextmanager

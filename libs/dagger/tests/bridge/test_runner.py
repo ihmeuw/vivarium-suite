@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from pathlib import Path
@@ -119,6 +120,7 @@ def _python_payload(task: str, cwd: Path, target: str) -> PythonPayload:
         "task": task,
         "cwd": str(cwd),
         "target": target,
+        "sys_path": [],
         "suffix": ".parquet",
         "kwargs": {"product": _tag(cwd / "out" / f"{task}.parquet")},
     }
@@ -838,3 +840,177 @@ def test_a_target_that_cannot_be_imported_on_the_node_is_named_in_the_traceback(
     assert exc is not None
     assert task in exc, exc
     assert reference in exc, exc
+
+
+# The payload's sys_path (MIC-7752)
+
+_SYS_PATH_MODULE = """\
+import json
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+
+def make():
+    Path({observed!r}).write_text(json.dumps(sys.path))
+    return pd.DataFrame({{"n": [{value}]}})
+
+
+def fail():
+    Path({observed!r}).write_text(json.dumps(sys.path))
+    raise ValueError("the step failed after its import")
+"""
+"""A module whose ``make`` writes ``sys.path`` as JSON to ``observed`` and returns the frame
+``n == [value]``, and whose ``fail`` writes ``sys.path`` and raises ValueError."""
+
+
+def _sys_path_module(directory: Path, value: int, observed: Path) -> str:
+    """Write a :data:`_SYS_PATH_MODULE` into ``directory`` and return its new, unique name."""
+    name = f"sys_path_probe_{uuid.uuid4().hex[:12]}"
+    source = _SYS_PATH_MODULE.format(value=value, observed=str(observed))
+    (_mkdir(directory) / f"{name}.py").write_text(source)
+    return name
+
+
+def _sys_path_payload(task: str, cwd: Path, target: str, entries: list[str]) -> PythonPayload:
+    """Return :func:`_python_payload` for ``target`` with ``entries`` as its sys_path."""
+    payload = _python_payload(task, cwd, target)
+    payload["sys_path"] = entries
+    return payload
+
+
+def _observed(path: Path) -> list[str]:
+    """Return the ``sys.path`` that a step of :data:`_SYS_PATH_MODULE` wrote to ``path``."""
+    observed: list[str] = json.loads(path.read_text())
+    return observed
+
+
+def test_runner_imports_a_target_from_the_payloads_sys_path_without_pythonpath(
+    tmp_path: Path,
+) -> None:
+    """A runner subprocess whose PYTHONPATH lacks a module's directory runs a python payload naming a target in that module, with sys_path holding the directory, writes a successful result and the product."""
+    modules = tmp_path / "modules"
+    name = _sys_path_module(modules, 1, tmp_path / "observed.json")
+    assert str(modules) not in _subprocess_env()["PYTHONPATH"].split(os.pathsep)
+    payload = _sys_path_payload("sys_path_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    assert process.returncode == 0, process.stderr
+    assert (result["task"], result["success"]) == ("sys_path_step", True), result["exc"]
+    product = tmp_path / "out" / "sys_path_step.parquet"
+    assert pd.read_parquet(product)["n"].tolist() == [1]
+
+
+def test_without_sys_path_the_same_target_fails_to_import_on_the_node(tmp_path: Path) -> None:
+    """The same payload with sys_path [] fails in the runner subprocess with ModuleNotFoundError, and the result names the step and the target reference and says the module must be importable from the node's own sys.path."""
+    name = _sys_path_module(tmp_path / "modules", 1, tmp_path / "observed.json")
+    reference = f"{name}:make"
+    payload = _sys_path_payload("sys_path_step", tmp_path, reference, [])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert (result["task"], result["success"]) == ("sys_path_step", False)
+    assert result["exc_type"] == "ModuleNotFoundError", exc
+    assert exc is not None
+    assert "sys_path_step" in exc, exc
+    assert reference in exc, exc
+    assert "node's own sys.path" in exc, exc
+    assert not (tmp_path / "out" / "sys_path_step.parquet").exists()
+
+
+def test_import_note_names_a_sys_path_root_missing_on_the_node(tmp_path: Path) -> None:
+    """A payload whose sys_path holds a directory that does not exist on the node and whose target's module is not importable fails, and the note names that directory, says it was not found on this node and names the module's top-level name."""
+    missing = tmp_path / "missing"
+    top = f"absent_package_{uuid.uuid4().hex[:12]}"
+    reference = f"{top}.steps:make"
+    payload = _sys_path_payload("sys_path_step", tmp_path, reference, [str(missing)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert (result["task"], result["success"]) == ("sys_path_step", False)
+    assert result["exc_type"] == "ModuleNotFoundError", exc
+    assert exc is not None
+    assert not missing.exists()
+    assert "sys_path_step" in exc, exc
+    assert reference in exc, exc
+    assert str(missing) in exc, exc
+    assert "not found on this node" in exc, exc
+    assert top in exc, exc
+
+
+def test_runner_prefers_the_nodes_own_module_to_one_under_the_payloads_sys_path(
+    tmp_path: Path,
+) -> None:
+    """When a module of the target's name is importable from the runner's own sys.path and another copy sits under the payload's sys_path, the runner runs the target from its own sys.path."""
+    node_modules = tmp_path / "node_modules"
+    payload_modules = tmp_path / "payload_modules"
+    name = _sys_path_module(node_modules, 1, tmp_path / "observed.json")
+    source = (node_modules / f"{name}.py").read_text().replace("[1]", "[2]")
+    (_mkdir(payload_modules) / f"{name}.py").write_text(source)
+    entries = [str(payload_modules)]
+    recipe = _sys_path_payload("sys_path_step", tmp_path, f"{name}:make", entries)
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+    result_path = tmp_path / _RESULT_NAME
+    env = _subprocess_env()
+    env["PYTHONPATH"] = os.pathsep.join([str(node_modules), env["PYTHONPATH"]])
+
+    process = _run_runner(payload, result_path, tmp_path / "elsewhere", env)
+
+    assert process.returncode == 0, process.stderr
+    assert _read(result_path)["success"] is True
+    product = tmp_path / "out" / "sys_path_step.parquet"
+    assert pd.read_parquet(product)["n"].tolist() == [1]
+
+
+def test_main_called_in_process_removes_the_sys_path_entries_it_added(tmp_path: Path) -> None:
+    """After main() runs a python payload in-process whose sys_path holds a directory not on sys.path, sys.path equals what it was before, also when the step raises."""
+    modules = tmp_path / "modules"
+    observed = tmp_path / "observed.json"
+    name = _sys_path_module(modules, 1, observed)
+    assert str(modules) not in sys.path
+    before = list(sys.path)
+    statuses: list[int] = []
+
+    for target in ("make", "fail"):
+        recipe = _sys_path_payload(target, tmp_path, f"{name}:{target}", [str(modules)])
+        payload = _write_payload(tmp_path / f"{target}.payload.json", recipe)
+        try:
+            statuses.append(main([str(payload), str(tmp_path / f"{target}{RESULT_SUFFIX}")]))
+        finally:
+            # Dropped, so that the next payload must import the module from sys_path again.
+            sys.modules.pop(name, None)
+        assert sys.path == before
+        seen = _observed(observed)
+        assert seen[: len(before)] == before
+        assert str(modules) in seen[len(before) :]
+
+    assert statuses == [0, 1]
+    assert _read(tmp_path / f"fail{RESULT_SUFFIX}")["exc_type"] == "ValueError"
+
+
+def test_main_called_in_process_keeps_a_sys_path_entry_that_was_already_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the payload's sys_path entry is already on sys.path, main() leaves it in place, does not add a second copy, and does not remove it afterwards."""
+    modules = tmp_path / "modules"
+    observed = tmp_path / "observed.json"
+    name = _sys_path_module(modules, 1, observed)
+    monkeypatch.syspath_prepend(str(modules))
+    before = list(sys.path)
+    recipe = _sys_path_payload("kept_step", tmp_path, f"{name}:make", [str(modules)])
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+
+    try:
+        status = main([str(payload), str(tmp_path / _RESULT_NAME)])
+    finally:
+        sys.modules.pop(name, None)
+
+    assert status == 0, _read(tmp_path / _RESULT_NAME)["exc"]
+    assert _observed(observed).count(str(modules)) == 1
+    assert sys.path == before
