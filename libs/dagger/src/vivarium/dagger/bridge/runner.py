@@ -307,11 +307,17 @@ def _import_note(payload: PythonPayload, error: BaseException) -> str:
     )
     module = payload["target"].partition(":")[0]
     missing = _missing_dependency(error, module)
-    if missing is not None:
+    if missing is not None and isinstance(error, ModuleNotFoundError):
         return (
             f"{start}. Importing its module {module!r} raised while importing {missing!r}, "
             f"which this node cannot find. Install {missing!r} in the node's environment, "
             "or make it importable from the node's sys.path."
+        )
+    if missing is not None:
+        return (
+            f"{start}. Importing its module {module!r} failed inside {missing!r} ({error}). "
+            f"The node's {missing!r} may not be the version the pipeline was built with; "
+            "install the same version in the node's environment."
         )
     roots = payload["sys_path"]
     if not roots:
@@ -335,8 +341,8 @@ def _import_note(payload: PythonPayload, error: BaseException) -> str:
 
 
 def _missing_dependency(error: BaseException, module: str) -> str | None:
-    """Return the name ``error`` could not find, unless it is ``module`` or a parent."""
-    if not isinstance(error, ModuleNotFoundError) or not error.name:
+    """Return the module ``error`` failed to import from, unless it is ``module`` or a parent."""
+    if not isinstance(error, ImportError) or not error.name:
         return None
     parts = module.split(".")
     own = {".".join(parts[: count + 1]) for count in range(len(parts))}

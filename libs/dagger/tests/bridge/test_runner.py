@@ -944,6 +944,67 @@ def test_import_note_names_a_sys_path_root_missing_on_the_node(tmp_path: Path) -
     assert top in exc, exc
 
 
+def _failing_module(directory: Path, body: str) -> str:
+    """Write a module under ``directory`` whose import runs ``body`` and return its name."""
+    name = f"import_note_probe_{uuid.uuid4().hex[:12]}"
+    (_mkdir(directory) / f"{name}.py").write_text(f"{body}\n\ndef make():\n    return None\n")
+    return name
+
+
+def test_import_note_names_a_missing_dependency_of_a_module_under_sys_path(
+    tmp_path: Path,
+) -> None:
+    """A target whose module is found under the payload's sys_path but imports a module the node does not have fails with a note that names that module and says to install it, not the readable-directory note."""
+    absent = f"absent_dependency_{uuid.uuid4().hex[:12]}"
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, f"import {absent}")
+    payload = _sys_path_payload("dep_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert f"{absent!r}, which this node cannot find" in exc, exc
+    assert "Install" in exc and "node's environment" in exc, exc
+    assert "must be readable from every compute node" not in exc, exc
+
+
+def test_import_note_names_a_dependency_that_lacks_a_name_the_module_imports(
+    tmp_path: Path,
+) -> None:
+    """A target whose module is found under the payload's sys_path but imports a name its dependency does not have fails with a note that names the dependency and its version, not the readable-directory note."""
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, f"from json import does_not_exist_{uuid.uuid4().hex[:8]}")
+    payload = _sys_path_payload("dep_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert "failed inside 'json'" in exc, exc
+    assert "the version the pipeline was built with" in exc, exc
+    assert "must be readable from every compute node" not in exc, exc
+
+
+def test_import_note_for_a_missing_parent_package_under_a_found_root_is_the_root_note(
+    tmp_path: Path,
+) -> None:
+    """A target in a package that does not exist, with a sys_path root that does exist on the node, gets the note that names the root as found, not a missing-dependency note for its own package."""
+    root = _mkdir(tmp_path / "root")
+    top = f"absent_package_{uuid.uuid4().hex[:12]}"
+    payload = _sys_path_payload("sys_path_step", tmp_path, f"{top}.steps:make", [str(root)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert f"{str(root)!r} (found on this node)" in exc, exc
+    assert "Install" not in exc, exc
+
+
 def test_runner_prefers_the_nodes_own_module_to_one_under_the_payloads_sys_path(
     tmp_path: Path,
 ) -> None:
