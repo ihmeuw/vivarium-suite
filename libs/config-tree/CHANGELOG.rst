@@ -1,8 +1,11 @@
 **5.3.0b1 - 11/09/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
-- Add ``ConfigNode.path``, the dotted path to a node from the root of its tree
+- Add ``ConfigNode.path``, the path to a node from the root of its tree written as
+  attribute and bracket access, such as ``foo.bar.baz`` or ``['foo.bar'].baz``
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
+- Write ``ConfigTree.unused_keys()`` paths the way ``ConfigNode.path`` does, so a key
+  that contains a dot is told apart from nested keys
 
 **5.2.1 - 09/22/26**
 

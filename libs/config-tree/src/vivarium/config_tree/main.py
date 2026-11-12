@@ -29,6 +29,7 @@ For example:
 
 from __future__ import annotations
 
+import keyword
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -103,13 +104,22 @@ class ConfigNode:
 
     @property
     def path(self) -> str:
-        """The dotted path to this node from the root of its tree."""
-        return ".".join(self._key_path())
+        """The path to this node from the root of its tree, written as Python access.
+
+        A key that works as an attribute is written with dot notation, and any other
+        key with bracket notation, so ``foo`` -> ``bar`` -> ``baz`` is
+        ``foo.bar.baz`` and ``foo.bar`` -> ``baz`` is ``['foo.bar'].baz``. Adding
+        the root tree in front, as in ``tree.foo.bar.baz`` or ``tree['foo.bar'].baz``,
+        gives code that reads the node's value. A node outside any tree has an empty
+        path.
+        """
+        return _format_path(self._key_path())
 
     def _key_path(self) -> tuple[str, ...]:
         """Return the keys from the root of the tree down to this node."""
-        parent_keys = self._parent._key_path() if self._parent is not None else ()
-        return (*parent_keys, self._key)
+        if self._parent is None:
+            return ()
+        return (*self._parent._key_path(), self._key)
 
     @property
     def metadata(self) -> list[dict[str, Any | str | None]]:
@@ -264,6 +274,27 @@ class ConfigNode:
         return f"{layer}: {value}"
 
 
+def _format_path(keys: tuple[str, ...]) -> str:
+    """Write a key path as attribute access where it works, and bracket access elsewhere."""
+    path = ""
+    for key in keys:
+        if _is_attribute_key(key):
+            path += f".{key}" if path else key
+        else:
+            path += f"[{key!r}]"
+    return path
+
+
+def _is_attribute_key(key: str) -> bool:
+    """Return whether ``tree.<key>`` reads the child named ``key``."""
+    return (
+        key.isidentifier()
+        and not keyword.iskeyword(key)
+        and not key.startswith("_")
+        and not hasattr(ConfigTree, key)
+    )
+
+
 class ConfigIterator:
     """An iterator over the keys of a :class:`ConfigTree`."""
 
@@ -361,16 +392,18 @@ class ConfigTree:
         return self._children.values()
 
     def unused_keys(self) -> list[str]:
-        """List all values in the ``ConfigTree`` that haven't been accessed."""
-        unused = []
-        for name, child in self.items():
-            if isinstance(child, ConfigNode):
-                if not child.accessed:
-                    unused.append(name)
-            else:
-                for grandchild_name in child.unused_keys():
-                    unused.append(f"{name}.{grandchild_name}")
-        return unused
+        """List the paths of all values in the ``ConfigTree`` that haven't been accessed.
+
+        Each path starts at this tree and is written the way :attr:`ConfigNode.path`
+        writes it, so a key that contains a dot appears in bracket notation, as in
+        ``['risk.child_wasting'].distribution_type``.
+        """
+        depth = len(self._key_path())
+        return [
+            _format_path(node._key_path()[depth:])
+            for node in self.leaves()
+            if not node.accessed
+        ]
 
     def leaves(self) -> list[ConfigNode]:
         """List every leaf node in the ``ConfigTree``, in the order the keys were added.

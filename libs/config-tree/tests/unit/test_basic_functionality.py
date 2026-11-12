@@ -275,7 +275,7 @@ class TestLeaves:
         assert [node.path for node in tree.leaves()] == [
             "time.start",
             "time.step_size",
-            "risk.child_wasting.data_sources.exposure",
+            "['risk.child_wasting'].data_sources.exposure",
             "seed",
         ]
 
@@ -287,7 +287,7 @@ class TestLeaves:
     def test_paths_start_at_the_root_of_the_tree(self, tree: ConfigTree) -> None:
         """A subtree that still has a parent reports paths from the parent's root."""
         exposure = tree.get_tree("risk.child_wasting").leaves()[0]
-        assert exposure.path == "risk.child_wasting.data_sources.exposure"
+        assert exposure.path == "['risk.child_wasting'].data_sources.exposure"
 
     def test_listing_a_subtree_leaves_paths_unchanged(self, tree: ConfigTree) -> None:
         step_size = tree.leaves()[1]
@@ -299,7 +299,7 @@ class TestLeaves:
         assert tree.unused_keys() == [
             "time.start",
             "time.step_size",
-            "risk.child_wasting.data_sources.exposure",
+            "['risk.child_wasting'].data_sources.exposure",
             "seed",
         ]
 
@@ -333,6 +333,52 @@ class TestLeaves:
         assert copied.leaves()[1]._parent is copied.time
 
 
+class TestPath:
+    """Tests for writing a node's path as the Python that reads its value."""
+
+    def test_a_nested_key_and_a_dotted_key_have_different_paths(self) -> None:
+        tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
+        assert [node.path for node in tree.leaves()] == ["foo.bar.baz", "['foo.bar'].baz"]
+        assert tree.foo.bar.baz == 1
+        assert tree["foo.bar"].baz == 10
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "has.dot",
+            "has-dash",
+            "1st",
+            "class",
+            "items",
+            "_private",
+            "__dunder__",
+            "it's",
+            'say "hi"',
+            "back\\slash",
+            "",
+        ],
+    )
+    def test_a_key_that_is_not_an_attribute_uses_brackets(self, key: str) -> None:
+        tree = ConfigTree({"outer": {key: {"value": 3}}})
+        [node] = tree.leaves()
+        assert node.path == f"outer[{key!r}].value"
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            {"time": {"start": 2020, "step_size": 1}},
+            {"risk.child_wasting": {"exposure_bounds": {"lower": 0.0}}},
+            {"a": {"has-dash": {"class": {"it's": 5}}}},
+            {"items": {"back\\slash": 6}},
+        ],
+    )
+    def test_the_path_is_code_that_reads_the_value(self, data: dict[str, Any]) -> None:
+        tree = ConfigTree(data)
+        for node in tree.leaves():
+            access = f"tree{node.path}" if node.path.startswith("[") else f"tree.{node.path}"
+            assert eval(access, {"tree": tree}) == node.get_value()
+
+
 class TestFind:
     """Tests for finding leaf nodes by path."""
 
@@ -360,14 +406,23 @@ class TestFind:
 
     def test_only_leaves_are_returned(self, tree: ConfigTree) -> None:
         assert self.paths(tree.find("exposure_bounds")) == [
-            "risk.child_wasting.exposure_bounds.lower",
-            "risk.child_wasting.exposure_bounds.upper",
+            "['risk.child_wasting'].exposure_bounds.lower",
+            "['risk.child_wasting'].exposure_bounds.upper",
         ]
 
     def test_a_fragment_need_not_be_the_whole_path(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("wasting.dist")) == [
-            "risk.child_wasting.distribution_type"
+        assert self.paths(tree.find("me.step")) == ["time.step_size"]
+
+    def test_a_key_with_a_dot_is_found_by_its_own_text(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find("risk.child_wasting")) == [
+            "['risk.child_wasting'].distribution_type",
+            "['risk.child_wasting'].exposure_bounds.lower",
+            "['risk.child_wasting'].exposure_bounds.upper",
         ]
+
+    def test_a_copied_path_finds_its_own_node(self, tree: ConfigTree) -> None:
+        for node in tree.leaves():
+            assert node in tree.find(node.path)
 
     def test_matching_is_case_insensitive(self, tree: ConfigTree) -> None:
         assert self.paths(tree.find("TIME.STEP_SIZE")) == ["time.step_size"]
@@ -662,6 +717,17 @@ def test_unused_keys() -> None:
     _ = tree.test_key.test_key3
 
     assert not tree.unused_keys()
+
+
+def test_unused_keys_tell_a_dotted_key_from_a_nested_one() -> None:
+    tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
+    assert tree.unused_keys() == ["foo.bar.baz", "['foo.bar'].baz"]
+
+
+def test_unused_keys_of_a_subtree_start_at_that_subtree() -> None:
+    tree = ConfigTree({"outer": {"risk.child_wasting": {"lower": 0.0}, "seed": 7}})
+    _ = tree.outer.seed
+    assert tree.outer.unused_keys() == ["['risk.child_wasting'].lower"]
 
 
 def test_to_dict_dict() -> None:
