@@ -73,7 +73,7 @@ def validate_model_specification_file(file_path: str | Path) -> None:
 
 
 def build_simulation_configuration() -> ConfigTree:
-    return _get_default_specification().get_tree("configuration")
+    return _get_default_specification().get_tree("configuration").copy()
 
 
 def _get_default_specification() -> ConfigTree:

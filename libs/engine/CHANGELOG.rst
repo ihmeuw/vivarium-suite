@@ -1,3 +1,10 @@
+**6.1.0b1 - 11/12/26**
+
+- Make ``sim.configuration`` and ``build_simulation_configuration()`` the root of their own
+  configuration tree, so configuration paths start at the configuration rather than at
+  the model specification
+- Require ``vivarium-config-tree`` 5.3.0b1
+
 **6.0.2 - 11/04/26**
 
 - Raise ``FutureWarning`` instead of ``DeprecationWarning`` so they show in model repos by default

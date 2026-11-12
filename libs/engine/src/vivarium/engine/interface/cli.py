@@ -120,8 +120,14 @@ def run(
     sim = Simulation(
         model_specification=model_specification, configuration=override_configuration
     )
+    # sim.configuration is a copy that also holds the managers' defaults, so write it
+    # in place of the specification's own configuration.
+    model_specification_data = {
+        **sim.model_specification.to_dict(),
+        "configuration": sim.configuration.to_dict(),
+    }
     with open(f"{results_directory}/model_specification.yaml", "w") as f:
-        yaml.dump(sim.model_specification.to_dict(), f)
+        yaml.dump(model_specification_data, f)
 
     main = handle_exceptions(sim.run_simulation, logger, with_debugger)
     main()

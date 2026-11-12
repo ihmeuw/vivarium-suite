@@ -129,3 +129,9 @@ def test_build_model_specification(
     test_data["configuration"].update(user_data)
 
     assert loaded_model_spec.to_dict() == test_data
+
+
+def test_build_simulation_configuration_is_a_root() -> None:
+    config = build_simulation_configuration()
+    assert config._parent is None
+    assert all(not node.path.startswith("configuration") for node in config.leaves())

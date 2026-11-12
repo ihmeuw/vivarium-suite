@@ -183,6 +183,25 @@ def test_Simulation_init_default(
     assert list(sim._component_manager._components) == unpacked_components
 
 
+def test_Simulation_configuration_is_a_root(Simulation: type[Simulation_]) -> None:
+    sim = Simulation(configuration={"time": {"step_size": 5}})
+    [step_size] = sim.configuration.find("time.step_size")
+    assert step_size.path == "time.step_size"
+    assert sim.configuration.time.step_size == 5
+
+
+def test_Simulation_configuration_keeps_the_model_specification_history(
+    Simulation: type[Simulation_],
+) -> None:
+    sim = Simulation(configuration={"time": {"step_size": 5}})
+    spec_config = sim.model_specification.get_tree("configuration")
+    assert sim.configuration is not spec_config
+    [step_size] = sim.configuration.find("time.step_size")
+    spec_history = spec_config.time._children["step_size"].metadata
+    assert all(entry in step_size.metadata for entry in spec_history)
+    assert sim.configuration.time.step_size == 5
+
+
 def test_Simulation_name_management(
     Simulation: type[Simulation_],
 ) -> None:
