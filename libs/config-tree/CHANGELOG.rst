@@ -4,8 +4,9 @@
 - Add ``ConfigNode.path``, the path to a node from the root of its tree written as
   attribute and bracket access, such as ``foo.bar.baz`` or ``['foo.bar'].baz``
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
-- Add ``ConfigTree.copy()``, which copies a tree with all its layers and sources as the
-  root of its own tree
+- Copy every layer and source when a ``ConfigTree`` is passed to the ``ConfigTree``
+  constructor, and make the new tree the root of its own tree. It used to keep only
+  the outermost values, all in the lowest layer
 - Display a ``ConfigNode`` in IPython as ``ConfigNode(path, value)``, using its outermost value
 - Default ``ConfigNode.update()``'s ``layer`` and ``source`` to None, so a found node can be
   set with ``node.update(value)`` the way assigning through the tree sets it

@@ -354,10 +354,10 @@ class ConfigTree:
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
-             - ``ConfigTree`` : Another ``ConfigTree`` can be
-               used. All source information will be ignored and the source
-               will be set to 'initial_data' and values will be stored at
-               the lowest priority level.
+             - ``ConfigTree`` : The new tree is a copy of it with every
+               layer, source, and value, and it is the root of its own tree, so
+               the paths of its nodes start at the new tree. Changes to the copy
+               do not change the original, and the reverse.
              - :class:`str` : Strings provided can be yaml formatted strings,
                which will be parsed into a dictionary using standard yaml
                parsing. Alternatively, a path to a yaml file may be provided
@@ -365,25 +365,50 @@ class ConfigTree:
              - :class:`pathlib.Path` : A path object to a yaml file will
                be interpreted the same as a string representation.
 
-            All values will be set with 'initial_data' as the source and
-            will use the lowest priority level. If values are set at higher
-            priorities they will be used when the ``ConfigTree`` is
-            accessed.
+            For every type except ``ConfigTree``, all values will be set with
+            'initial_data' as the source and will use the lowest priority level.
+            If values are set at higher priorities they will be used when the
+            ``ConfigTree`` is accessed.
         layers
             A list of layer names. The order in which layers defined
             determines their priority. Later layers override the values from
-            earlier ones.
+            earlier ones. When ``data`` is a ``ConfigTree``, its layers are used.
         name
             The name of the parent tree node that owns this tree. This is used
-            for error messages and metadata.
+            for error messages and metadata. When ``data`` is a ``ConfigTree``,
+            its name is used unless a name is given.
+
+        Raises
+        ------
+        ValueError
+            If ``data`` is a ``ConfigTree`` and ``layers`` names different layers.
 
         """
+        if isinstance(data, ConfigTree):
+            self._copy_from(data, layers, name)
+            return
         self.__dict__["_layers"] = layers if layers else ["base"]
         self.__dict__["_children"] = {}
         self.__dict__["_frozen"] = False
         self.__dict__["_name"] = name
         self.__dict__["_parent"] = None
         self.update(data, layer=self._layers[0], source="initial data")
+
+    def _copy_from(self, tree: ConfigTree, layers: list[str], name: str) -> None:
+        """Make this tree a root copy of ``tree``, keeping every layer and source."""
+        if layers and layers != tree._layers:
+            raise ValueError(
+                f"Cannot copy a ConfigTree with layers {tree._layers} into a ConfigTree "
+                f"with layers {layers}. Leave out layers to keep the tree's own."
+            )
+        memo = {} if tree._parent is None else {id(tree._parent): None}
+        copied = copy.deepcopy(tree, memo)
+        self.__dict__.update(copied.__dict__)
+        self.__dict__["_parent"] = None
+        if name:
+            self.__dict__["_name"] = name
+        for child in self._children.values():
+            child.__dict__["_parent"] = self
 
     def freeze(self) -> None:
         """Convert the ``ConfigTree`` to read only.
@@ -475,17 +500,6 @@ class ConfigTree:
         if self._parent is None:
             return ()
         return (*self._parent._key_path(), self._name)
-
-    def copy(self) -> ConfigTree:
-        """Return a copy of the ``ConfigTree`` that is the root of its own tree.
-
-        The copy keeps every layer and source, unlike passing the tree to the
-        ``ConfigTree`` constructor, which keeps only the outermost values. It holds
-        no link to the trees above this one, so the paths of its nodes start at the
-        copy. Changes to the copy do not change this tree, and the reverse.
-        """
-        memo = {} if self._parent is None else {id(self._parent): None}
-        return copy.deepcopy(self, memo)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the ``ConfigTree`` to a nested dictionary.
