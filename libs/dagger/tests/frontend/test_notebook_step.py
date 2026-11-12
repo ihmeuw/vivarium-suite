@@ -331,6 +331,9 @@ _UNREADABLE_NOTEBOOKS: dict[str, _NotebookContent] = {
     ],
     "tags_not_a_list": [{**code_cell(_BASE_PARAMETERS), "metadata": {"tags": "parameters"}}],
     "parameters_source_not_text": [{**code_cell("", tags=["parameters"]), "source": 5}],
+    "parameters_source_list_not_all_text": [
+        {**code_cell("", tags=["parameters"]), "source": [_BASE_PARAMETERS, None]}
+    ],
 }
 """Source notebook files that cannot be read as a notebook, keyed by case.
 
@@ -1998,7 +2001,7 @@ def test_a_misspelled_product_name_is_rejected_with_a_did_you_mean(tmp_path: Pat
 def test_the_unassigned_names_message_gives_each_name_its_argument_and_the_fix(
     tmp_path: Path,
 ) -> None:
-    """A step 'report' passing parameters={'loaction_id': '179'} and inputs={'raw_path': 'raw'} over a cell assigning 'location_id' and 'draws' raises ValueError whose message is exactly "Step 'report': the parameters cell of notebook <repr(str(source))> does not assign 'loaction_id' (parameters; did you mean 'location_id'?), 'raw_path' (inputs). papermill would inject each one as a variable the notebook never reads. Fix the name in the step, or assign it in that cell with a plain top-level assignment such as loaction_id = None; assignments in loops, conditions or through globals() are not counted."."""
+    """A step 'report' passing parameters={'loaction_id': '179'} and inputs={'raw_path': 'raw'} over a cell assigning 'location_id' and 'draws' raises ValueError whose message is exactly "Step 'report': the parameters cell of notebook <repr(str(source))> does not assign 'loaction_id' (parameters; did you mean 'location_id'?), 'raw_path' (inputs). papermill puts the names the step passes in a new cell after that one, so a name that cell does not assign is misspelled, has no default when the notebook runs on its own, or is overwritten by a later cell. Fix the name in the step, or assign it in that cell with a plain top-level assignment such as loaction_id = None; assignments in loops, conditions or through globals() are not counted."."""
     source = _checked_source(tmp_path, "location_id = None\ndraws = None")
 
     message = _rejection(
@@ -2012,10 +2015,12 @@ def test_the_unassigned_names_message_gives_each_name_its_argument_and_the_fix(
     assert message == (
         f"Step 'report': the parameters cell of notebook {str(source.resolve())!r} does "
         "not assign 'loaction_id' (parameters; did you mean 'location_id'?), 'raw_path' "
-        "(inputs). papermill would inject each one as a variable the notebook never reads. "
-        "Fix the name in the step, or assign it in that cell with a plain top-level "
-        "assignment such as loaction_id = None; assignments in loops, conditions or "
-        "through globals() are not counted."
+        "(inputs). papermill puts the names the step passes in a new cell after that one, "
+        "so a name that cell does not assign is misspelled, has no default when the "
+        "notebook runs on its own, or is overwritten by a later cell. Fix the name in the "
+        "step, or assign it in that "
+        "cell with a plain top-level assignment such as loaction_id = None; assignments in "
+        "loops, conditions or through globals() are not counted."
     )
 
 
@@ -2327,6 +2332,27 @@ def test_a_parameters_cell_that_is_not_valid_python_is_rejected(
     assert "line 2" in message, message
     assert error.msg in message, message
     assert "plain assignments" in message, message
+
+
+@pytest.mark.parametrize(
+    "value, error_type",
+    [("1+" * 100_000 + "1", RecursionError), ("-" * 100_000 + "1", MemoryError)],
+    ids=["recursion", "memory"],
+)
+def test_a_parameters_cell_nested_too_deeply_to_parse_is_rejected(
+    tmp_path: Path, value: str, error_type: type[Exception]
+) -> None:
+    """A parameters cell 'location = <value>', for which ast.parse raises ``error_type`` rather than SyntaxError, raises ValueError naming the step, repr(str(source)) and "is not valid Python"."""
+    cell = f"location = {value}"
+    with pytest.raises(error_type):
+        ast.parse(cell)
+    source = _checked_source(tmp_path, cell)
+
+    message = _rejection(tmp_path, source, parameters={"location": "179"})
+
+    assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
+    assert repr(str(source.resolve())) in message
+    assert "is not valid Python" in message, message
 
 
 def test_a_parameters_cell_with_an_invalid_escape_builds_when_its_warning_is_an_error(
