@@ -240,7 +240,7 @@ assert "exit 0 jobmon imported: False" in out.stdout
 #
 # The `dagger` command runs a definition only with `--local` until MIC-7752 wires it to
 # the bridge; without it, `dagger` says so and exits 2. The Python API can already run a
-# definition through Jobmon, with `run(pipeline, jobmon=True)`; this walkthrough does not.
+# definition through Jobmon, with `run(pipeline, jobmon=True)`; C16 shows it on the cluster.
 # A failed step exits 1, so the status can gate the next command in a shell. The failing
 # definition here is C9's.
 
