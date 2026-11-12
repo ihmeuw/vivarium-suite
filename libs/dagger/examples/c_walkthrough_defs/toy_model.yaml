@@ -1,6 +1,6 @@
-# A toy vivarium model for the track C walkthrough: 10 simulants, two weekly time steps,
-# a mortality component and a deaths observer. A copy of
-# tests/frontend/simulation_example/toy_model.yaml.
+# A toy vivarium model for the track C walkthrough: 1,000 simulants, two weekly time steps,
+# a mortality component and a deaths observer. tests/frontend/simulation_example/toy_model.yaml
+# with 1,000 simulants instead of 10, so that some die, and an input_data section.
 components:
   vivarium.engine.examples.disease_model:
     population:
@@ -23,7 +23,7 @@ configuration:
       day: 15
     step_size: 7  # days
   population:
-    population_size: 10
+    population_size: 1000
   randomness:
     key_columns: []
   mortality:

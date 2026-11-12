@@ -892,8 +892,8 @@ else:
 # ## C19 — A simulation step runs psimulate on the cluster (cluster)
 #
 # `c_walkthrough_defs/toy_simulation.py` has three steps. A command step writes a toy
-# artifact; a simulation step runs the toy model (10 simulants, 2 draws and 2 seeds, so 4
-# simulations) with `psimulate run` on that artifact; and a python step sums the deaths by
+# artifact; a simulation step runs the toy model (1,000 simulants, 2 draws and 2 seeds, so
+# 4 simulations) with `psimulate run` on that artifact; and a python step sums the deaths by
 # draw from the run directory, which it names by its key, `sims/toy`. The definition names
 # its env `simulation`, which resolves to `.venv/simulation` in the folder `dagger` runs
 # from, as MNCNH's envs do in its checkout. This section links that to the env named by
