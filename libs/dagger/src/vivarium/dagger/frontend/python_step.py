@@ -213,7 +213,7 @@ def python_step(
     """Compile ``target`` into one backend task wired through ``registry``.
 
     The step runs in the pipeline's own environment; a step that needs another
-    environment is a command step.
+    environment is a :func:`~vivarium.dagger.frontend.command_step.command_step`.
 
     Parameters
     ----------

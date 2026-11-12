@@ -1085,15 +1085,15 @@ def _named(tmp_path: Path, *names: str) -> Pipeline:
 def _shared(name: str, count: str = "Two") -> str:
     """Return the line for ``count`` steps that share ``name``."""
     return (
-        f"{count} steps are named {name!r}; pass name= to python_step or notebook_step "
-        "to tell them apart."
+        f"{count} steps are named {name!r}; give each a different name= to tell them "
+        "apart."
     )
 
 
 def test_two_steps_with_one_name_make_run_raise_a_pipeline_error_naming_it(
     tmp_path: Path,
 ) -> None:
-    """Two steps named 'dup' make run() raise PipelineError, not StepFailed, whose message is exactly "Two steps are named 'dup'; pass name= to python_step or notebook_step to tell them apart.", with exit_code None, chained from the backend's ValueError, and nothing written under the root."""
+    """Two steps named 'dup' make run() raise PipelineError, not StepFailed, whose message is exactly "Two steps are named 'dup'; give each a different name= to tell them apart.", with exit_code None, chained from the backend's ValueError, and nothing written under the root."""
     with pytest.raises(PipelineError) as info:
         run(_named(tmp_path, "dup", "dup"))
 
@@ -1119,7 +1119,7 @@ def test_two_steps_with_one_name_make_preview_raise_the_same_pipeline_error(
 
 
 def test_three_steps_with_one_name_are_counted_with_a_digit(tmp_path: Path) -> None:
-    """Three steps named 'dup' are reported as "3 steps are named 'dup'; pass name= ..."."""
+    """Three steps named 'dup' are reported as "3 steps are named 'dup'; give each a different name= ..."."""
     with pytest.raises(PipelineError) as info:
         run(_named(tmp_path, "dup", "dup", "dup"))
 
