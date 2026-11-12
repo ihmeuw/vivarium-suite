@@ -293,24 +293,6 @@ STUDENT_HOUSES = pd.Series(["gryffindor", "slytherin", "ravenclaw"])
 
 FAMILIARS = ["owl", "cat", "gecko", "banana_slug", "unladen_swallow"]
 
-
-class ConfiguredRisk(Component):
-    """Declare configuration under a name containing a dot, as public-health risks do."""
-
-    @property
-    def name(self) -> str:
-        return "risk.child_wasting"
-
-    @property
-    def configuration_defaults(self) -> dict[str, Any]:
-        return {
-            self.name: {
-                "distribution_type": "ordered_polytomous",
-                "exposure_bounds": {"lower": 0.0, "upper": 1.0},
-            }
-        }
-
-
 POWER_LEVELS = [20, 40, 60, 80]
 
 POWER_LEVEL_BIN_EDGES = [0, 25, 50, 75, 100]

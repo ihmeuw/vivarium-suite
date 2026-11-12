@@ -314,34 +314,54 @@ result is the same either way.
     # warn you if you are adding new keys, e.g. due to a typo!
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
-To find a key's path, pass part of it to
-:meth:`~vivarium.interactive.simulation.Simulation.find_configuration`. It
-returns the matching keys, and in IPython or Jupyter the list displays each one
-as its path from ``sim.configuration``, here
-``[population.population_size, population.age_start, population.age_end]``.
-Like :meth:`~vivarium.interactive.simulation.Simulation.find_resources`, it
-matches the text literally and ignores case, takes ``regex=True`` for a regular
-expression, and lists every key when called with no pattern.
+If you know roughly what a key is called but not where it sits, pass part of its
+name to :meth:`~vivarium.config_tree.main.ConfigTree.find`. It returns the
+matching configuration nodes. It matches the text literally and ignores case,
+takes ``regex=True`` for a regular expression, and lists every key when called
+with no pattern.
 
 .. testcode::
 
-    found = sim.find_configuration("population")
-    print([key.path for key in found])
+    print([node.path for node in sim.configuration.find("population")])
 
 .. testoutput::
 
     ['population.population_size', 'population.age_start', 'population.age_end']
 
+Each node's :attr:`~vivarium.config_tree.main.ConfigNode.path` is the code that
+reaches it from ``sim.configuration``, so ``population.population_size`` is set
+with ``sim.configuration.population.population_size = ...``. In IPython or
+Jupyter, a node displays as its path and the value the simulation will use, such
+as ``ConfigNode(population.population_size, 1000)``.
+
 A component's name can contain dots, and its keys sit under that whole name. The
-path ``disease_state.infected_with_lower_respiratory_infections.data_sources.excess_mortality_rate``
-starts with the single key ``disease_state.infected_with_lower_respiratory_infections``,
-so that part needs brackets when you set it:
+path shows that key in brackets, which is also how you set it:
+
+.. testcode::
+
+    for node in sim.configuration.find("excess_mortality_rate"):
+        print(node.path)
+
+.. testoutput::
+
+    ['disease_state.infected_with_lower_respiratory_infections'].data_sources.excess_mortality_rate
+    ['disease_state.susceptible_to_lower_respiratory_infections'].data_sources.excess_mortality_rate
 
 .. code-block:: python
 
     sim.configuration[
         "disease_state.infected_with_lower_respiratory_infections"
     ].data_sources.excess_mortality_rate = 0.01
+
+You can also change a value through a node you found.
+:meth:`~vivarium.config_tree.main.ConfigNode.update` sets it in the same layer
+as setting it through ``sim.configuration``. Here we make each time step one day
+instead of the model specification's half day:
+
+.. testcode::
+
+    [step_size] = sim.configuration.find("time.step_size")
+    step_size.update(1)
 
 We then need to call the
 :meth:`~vivarium.interactive.simulation.Simulation.setup` method on the
@@ -350,6 +370,18 @@ simulation context to prepare it to run.
 .. testcode::
 
    sim.setup()
+
+The simulation now uses the new step size:
+
+.. testcode::
+
+   start = sim.current_time
+   sim.step()
+   print(sim.current_time - start)
+
+.. testoutput::
+
+   1 days 00:00:00
 
 After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 
