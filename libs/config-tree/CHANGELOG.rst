@@ -1,4 +1,4 @@
-**5.3.0b1 - 11/09/26**
+**5.3.0b1 - 11/12/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
 - Add ``ConfigNode.path``, the path to a node from the root of its tree written as
