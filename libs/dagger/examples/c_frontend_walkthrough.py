@@ -1029,7 +1029,8 @@ else:
         assert expected in broken_err, expected
     assert "Traceback" not in broken_err
     assert "mean_coverage" in broken_out, "the node's traceback is in pytask's report"
-    assert not (BROKEN_JOBMON / "output/walk/archive").exists()
+    # The archive step did not run, so its product is missing (its folder may exist).
+    assert not (BROKEN_JOBMON / "output/walk/archive/report.csv").exists()
 
     # 6. The run lock and an interrupt.
     LOCKED = make_defs(
