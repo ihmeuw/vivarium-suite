@@ -131,6 +131,69 @@ step runs again only if the forced step's output changed. Until a step can decla
 fingerprint of its code, every ``python_step`` is stale on every build, so in this
 example ``adults`` and ``summary`` run as well.
 
+Simulation steps
+----------------
+
+:func:`~vivarium.dagger.frontend.simulation_step.simulation_step` runs a vivarium
+simulation with ``psimulate run`` in the environment named by ``env``, which needs
+``vivarium-psimulate`` installed with its ``cluster`` extra. psimulate runs only on a
+cluster compute node: it refuses to start on a submit host or outside the cluster. A
+``dagger run --local`` of a pipeline with a simulation step must therefore be started
+inside an allocation, for example:
+
+.. code-block:: text
+
+   srun -A proj_simscience -p i.q -c 2 --mem 8G -t 01:00:00 --pty bash
+   dagger run -c pipeline.py --local
+
+psimulate submits its own Jobmon workflow and waits for it to finish. The allocation
+that the step runs in must last for the whole simulation, and so must the step's
+``resources`` runtime once a definition can run through Jobmon. psimulate stops waiting
+when the allocation's time runs out, and the step then fails because some simulations
+did not finish.
+
+``produces`` names the run directory. A step that reads the simulation's results names
+the same key as an input and receives the run directory's path: a ``pathlib.Path`` in a
+``python_step`` target, and a ``str`` in a notebook step. The run directory holds
+psimulate's run, with one file per simulation for each metric in
+``results/<metric>/*.parquet``, the simulations' metadata in ``metadata/``, and
+psimulate's logs in ``logs/``. The step counts as done only when every simulation
+finished and wrote every metric, so a consumer never reads a partial run. The registry's
+output root must be on storage that every node sees, because psimulate's workers write
+the results.
+
+When a simulation does not finish, the step fails with how many of the simulations
+finished, and the steps that read its results do not run. The last complete run stays
+in the run directory, where the consumers expect it. The partial run stays beside it, in
+``<run directory>.psimulate``, until the step runs again. A re-run starts the whole
+simulation again; the step does not resume a partial run.
+
+The step replaces its run directory on every successful run, so no other step may write
+under it.
+
+``options`` holds psimulate's options for ``run``, keyed by long option name with
+``_`` for ``-``. ``project`` is required. ``backup_freq``, ``hardware``,
+``max_attempts``, ``max_runtime``, ``max_workers``, ``peak_memory``, ``project``,
+``queue``, ``slack_channel`` and ``slack_tag`` take a string or a number. ``no_slack``
+takes ``True`` or ``False``. psimulate sends a Slack message when the run ends unless
+you pass ``no_slack=True``. ``no_slack=True`` cannot be combined with ``slack_channel``
+or ``slack_tag``, and ``slack_tag`` needs ``slack_channel``. The step sets the model
+specification, the branches file, the artifact and the result directory itself, from
+``spec``, ``branches``, ``artifact`` and ``produces``. Any other key is refused when the
+step is defined.
+
+This example runs a toy model with two draws and two seeds, so four simulations, and
+sums the deaths by draw:
+
+.. literalinclude:: ../../tests/frontend/simulation_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+In a model's pipeline, ``env`` names the model's environment. The example uses
+``sys.prefix``, the environment that ``dagger`` runs in, so that it needs no other
+environment; that environment must then have ``vivarium-psimulate`` with its
+``cluster`` extra.
+
 When a step fails
 -----------------
 
@@ -158,6 +221,20 @@ command, or the signal that stopped it (for example SIGKILL). For any other step
 runs a shell command, the line gives the command's exit status, or the signal that
 stopped it. In both cases the command itself and its output are in pytask's report for
 the step, not in ``dagger``'s line.
+
+For a simulation step in which some simulations did not finish, the line gives how many
+finished, where the partial run is, and whether the previous complete run was kept. For
+example:
+
+.. code-block:: text
+
+   Step 'sims/toy' failed: psimulate finished 3 of 4 simulations; the partial run is at /home/user/model/output/example/sims/toy.psimulate/toy_model/2026_11_10_09_30_00. The previous complete run at /home/user/model/output/example/sims/toy was kept.
+
+If the step's command failed before the check wrote a message, for example because
+psimulate itself failed, the line says only that the command failed, with its exit
+status, where psimulate's logs are, and whether the previous complete run was kept. If
+the check itself failed with an unexpected error, the line names the check and the
+error.
 
 If pytask stops the build for another reason, for example because its configuration
 file or lockfile under the root cannot be read or a pytask plugin failed, pytask's
@@ -203,13 +280,16 @@ Each of these exits with status 2 before any step runs:
   error names the step and the artifact key, with the closest key that does exist. If
   no key is close, it lists the keys registered so far instead, which are the root
   inputs and the products of the steps defined before the one that reads the key.
+  A notebook step that passes a name its notebook's ``parameters`` cell does not
+  assign, or passes names to a notebook with no such cell, is rejected with an error
+  that names the step, the notebook and each name.
 - Two steps produce the same artifact. ``dagger`` names the artifact key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
-- Two steps have the same name. ``dagger`` names it and says to pass ``name=`` to
-  ``python_step`` or ``notebook_step`` to tell the steps apart. This is reported first,
+- Two steps have the same name. ``dagger`` names it and says to give each step a
+  different ``name=`` to tell the steps apart. This is reported first,
   even when ``--until`` or ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
@@ -227,3 +307,79 @@ prints only the file, the line number, the line with a caret under the error, an
 ``SyntaxError``, as Python does.
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.
+
+Steps that run a command
+------------------------
+
+:func:`~vivarium.dagger.frontend.command_step.command_step` makes a step that runs a
+shell command. Use it when the step needs another environment than the pipeline's, or
+when the work is already a command-line tool or a script. A ``python_step`` always runs
+in the pipeline's own process, so it cannot use another environment. For any other step,
+use ``python_step``.
+
+This example puts a command step between two Python steps. The ``population`` step
+writes a table, ``adults`` runs a script on it, and ``summary`` reads the script's
+output:
+
+.. literalinclude:: ../../tests/frontend/command_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+The script, ``select_adults.py``, is in the same directory:
+
+.. literalinclude:: ../../tests/frontend/command_example/select_adults.py
+   :language: python
+   :caption: select_adults.py
+
+It runs like any other definition:
+
+.. code-block:: text
+
+   dagger preview -c pipeline.py
+   dagger run -c pipeline.py --local
+
+``inputs`` and ``produces`` map names to artifact keys. Each ``{name}`` in the command is
+replaced by the absolute path of the input or product of that name, quoted for the
+shell, so do not put quotes around a placeholder. The placeholders follow Python's
+:meth:`str.format`, so a literal brace in the command must be doubled: write the shell
+variable ``${VAR}`` as ``${{VAR}}``, and the ``awk`` program ``'{print $1}'`` as
+``'{{print $1}}'``. A placeholder that is not an input or product name is refused when
+the definition is loaded, with the valid names and, when one is close, the closest one.
+The command does not have to use every name. An input that it does not name still runs
+the step after the input's producer and makes the step stale when the input changes.
+
+The command runs under ``/bin/sh``, not bash, both with ``--local`` and on a compute
+node. On Ubuntu that is dash. Use POSIX sh syntax only: bash forms such as ``[[ ]]``,
+``source``, ``set -o pipefail`` and ``{a,b}`` fail. In a pipe ``a | b``, the step's
+status is the status of ``b`` alone, so a failure of ``a`` is lost. When you need bash,
+write ``bash -c '...'`` or put the work in a script.
+
+``env`` names the environment whose ``bin`` directories go first on ``PATH`` while the
+command runs, for every part of a command such as ``a && b``. It is a conda env or venv
+name, or the path to its prefix, and it is checked when the pipeline is built or
+previewed. In a model, ``env`` names the other environment the step needs. The example
+uses ``sys.prefix``, the pipeline's own environment, so that it runs anywhere. Without
+``env``, the command runs with the ``PATH`` of the process that runs it: the ``dagger``
+process for a local run, and the compute node's job for a run through Jobmon, which is
+not the pipeline's environment. Name the environment whenever the command needs a tool
+from it.
+
+The command, with its paths, is part of the step's state, so a changed command makes
+the step stale. A change to a script that the command runs does not, unless the script
+is an input. Declare the script as a root input and pass it through a placeholder, as
+the example does with ``{script}``. Like a ``python_step``, a command step re-runs on
+every build for now, because a step cannot yet declare a fingerprint of its code; these
+rules apply once it can.
+
+Before the command runs, ``dagger`` creates the directory of each product. Products from
+an earlier run are not removed first, so the command must write every product on every
+run; a product left by an earlier run counts as written.
+
+When the command exits with a status other than 0, the step fails, and ``dagger``'s
+line for it gives the status, or the signal that stopped the command:
+
+.. code-block:: text
+
+   Step 'adults' failed: the command exited with status 1; its output is in pytask's report for the step.
+
+The command and its output are in pytask's report for the step.

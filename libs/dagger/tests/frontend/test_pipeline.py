@@ -1085,15 +1085,15 @@ def _named(tmp_path: Path, *names: str) -> Pipeline:
 def _shared(name: str, count: str = "Two") -> str:
     """Return the line for ``count`` steps that share ``name``."""
     return (
-        f"{count} steps are named {name!r}; pass name= to python_step or notebook_step "
-        "to tell them apart."
+        f"{count} steps are named {name!r}; give each a different name= to tell them "
+        "apart."
     )
 
 
 def test_two_steps_with_one_name_make_run_raise_a_pipeline_error_naming_it(
     tmp_path: Path,
 ) -> None:
-    """Two steps named 'dup' make run() raise PipelineError, not StepFailed, whose message is exactly "Two steps are named 'dup'; pass name= to python_step or notebook_step to tell them apart.", with exit_code None, chained from the backend's ValueError, and nothing written under the root."""
+    """Two steps named 'dup' make run() raise PipelineError, not StepFailed, whose message is exactly "Two steps are named 'dup'; give each a different name= to tell them apart.", with exit_code None, chained from the backend's ValueError, and nothing written under the root."""
     with pytest.raises(PipelineError) as info:
         run(_named(tmp_path, "dup", "dup"))
 
@@ -1119,7 +1119,7 @@ def test_two_steps_with_one_name_make_preview_raise_the_same_pipeline_error(
 
 
 def test_three_steps_with_one_name_are_counted_with_a_digit(tmp_path: Path) -> None:
-    """Three steps named 'dup' are reported as "3 steps are named 'dup'; pass name= ..."."""
+    """Three steps named 'dup' are reported as "3 steps are named 'dup'; give each a different name= ..."."""
     with pytest.raises(PipelineError) as info:
         run(_named(tmp_path, "dup", "dup", "dup"))
 
@@ -1286,3 +1286,23 @@ def test_artifact_registry_and_step_exited_are_exported_from_the_frontend() -> N
     assert frontend.ArtifactRegistry is ArtifactRegistry
     assert frontend.StepExited is vivarium.dagger.frontend.pipeline.StepExited
     assert {"ArtifactRegistry", "StepExited"} <= set(frontend.__all__)
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+def test_run_with_jobmon_but_no_bridge_plugin_raises_before_force_touches_the_lockfile(
+    tmp_path: Path,
+) -> None:
+    """run(force=..., jobmon=True) without the bridge's plugin raises PipelineError, chained from
+    the backend's ValueError, and leaves pytask.lock byte-identical."""
+    fixture = build_fixture(tmp_path)
+    pipeline = _pipeline(fixture, stable=True)
+    run(pipeline)
+    lockfile = fixture.state / "pytask.lock"
+    before = lockfile.read_bytes()
+
+    with pytest.raises(PipelineError, match="its pytask plugin is not registered") as excinfo:
+        run(pipeline, force=["mid.parquet"], jobmon=True)
+
+    assert isinstance(excinfo.value.__cause__, ValueError)
+    assert excinfo.value.exit_code is None
+    assert lockfile.read_bytes() == before

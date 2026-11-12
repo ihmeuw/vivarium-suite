@@ -16,7 +16,14 @@ step's failure message.
 Papermill injects parameters into the notebook's cell tagged ``parameters``. Each input
 and product reaches the notebook as its resolved path, as a ``str``, under its parameter
 name, and the notebook reads and writes those paths itself. Scalar parameters keep their
-Python type, so the string ``"123"`` stays a string and is not read as a number.
+Python type, so the string ``"123"`` stays a string and is not read as a number. Every
+name a step passes in ``inputs``, ``produces`` or ``parameters`` must be assigned at the
+top level of the notebook's first cell tagged ``parameters``, by a plain assignment such
+as ``location = None`` or an annotated one such as ``location: str``, and a notebook with
+no cell tagged ``parameters`` takes no names. :func:`notebook_step` checks this each time
+the step is defined, so a misspelled name fails at once and the notebook does not run on
+its own default. The check reads the notebook as JSON with the standard library, so the
+pipeline's own environment needs neither papermill nor nbformat.
 
 The notebook always runs on the declared environment's own Python. At run time the
 command creates a temporary kernelspec named :data:`KERNEL_NAME` for that environment's
@@ -32,12 +39,15 @@ changed parameter marks the step stale. Code identity defaults to always-stale, 
 step re-runs on every build.
 """
 
+import ast
+import difflib
 import json
 import keyword
 import numbers
 import shlex
 import subprocess
-from collections.abc import Iterable, Mapping
+import warnings
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +77,12 @@ _EXECUTED_OUTPUT = "__executed__"
 
 _RESERVED_NAMES = frozenset({_NOTEBOOK_INPUT, _EXECUTED_OUTPUT, CODE_ID_KEY, COMMAND_KEY})
 """Names a notebook parameter cannot take, because the task or the backend uses them."""
+
+_PARAMETERS_TAG = "parameters"
+"""The cell tag papermill injects parameters after, in the first cell that carries it."""
+
+_LISTED_NAMES = 10
+"""The most names one definition-time error lists before it counts the rest."""
 
 
 def notebook_step(
@@ -150,7 +166,15 @@ def notebook_step(
         ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
         ``notebook``, ``executed`` and the ``produces`` keys resolve to one path, as when a
         ``produces`` key equals ``executed`` or is given twice (the message names both).
-        Every one of these is raised before anything is registered.
+        When ``inputs``, ``produces`` and ``parameters`` hold at least one name between
+        them, also if ``notebook`` cannot be read as an nbformat 4 notebook, has no cell
+        tagged ``parameters``, or its first cell tagged ``parameters`` is not a code cell,
+        is not valid Python, or does not assign every passed name at its top level. Each
+        of these messages starts with ``Step '<name>':`` and names the notebook. A name
+        the cell does not assign is listed with the argument it came from and, when one
+        is close, a name the cell does assign. A message lists at most ten names, in
+        sorted order, followed by ``, and <N> more``. Every one of these is raised before
+        anything is registered.
     """
     task_name = executed if name is None else name
     if not task_name:
@@ -160,13 +184,17 @@ def notebook_step(
     input_keys: dict[str, ArtifactKey] = dict(inputs or {})
     product_keys: dict[str, ArtifactKey] = dict(produces or {})
     scalars: dict[str, NotebookParameter] = dict(parameters or {})
-    _check_names(
-        task_name, {"inputs": input_keys, "produces": product_keys, "parameters": scalars}
-    )
+    groups: dict[str, Iterable[str]] = {
+        "inputs": input_keys,
+        "produces": product_keys,
+        "parameters": scalars,
+    }
+    _check_names(task_name, groups)
     _check_parameter_values(task_name, scalars)
     source = Path(notebook).resolve()
     _check_paths(task_name, source, executed)
     _check_collisions(task_name, source, executed, product_keys, registry)
+    _check_parameters_cell(task_name, source, groups)
 
     try:
         dependencies = {
@@ -392,6 +420,164 @@ def _check_collisions(
                 f"{str(path)!r}; each output must be written to its own path."
             )
         claimed[path] = label
+
+
+def _check_parameters_cell(
+    task_name: str, source: Path, groups: Mapping[str, Iterable[str]]
+) -> None:
+    """Reject a passed name that the notebook's ``parameters`` cell does not assign."""
+    passed = {name: group for group, names in groups.items() for name in names}
+    if not passed:
+        return
+    cell = _parameters_cell(task_name, source)
+    names = sorted(passed)
+    if cell is None:
+        raise ValueError(
+            f"Step '{task_name}': notebook {str(source)!r} has no cell tagged 'parameters', "
+            f"so papermill would inject {_listed([repr(name) for name in names])} at the "
+            "top of the notebook, where a later cell can overwrite what it injects. Add a "
+            "code cell tagged 'parameters' that assigns each name, such as "
+            f"{names[0]} = None."
+        )
+    try:
+        assigned = _assigned_names(cell)
+    except (SyntaxError, ValueError, RecursionError, MemoryError) as error:
+        # ast.parse raises RecursionError or MemoryError for deeply nested code, and
+        # ValueError for a null byte on some older releases.
+        raise ValueError(_invalid_python(task_name, source, error)) from None
+    missing = [name for name in names if name not in assigned]
+    if not missing:
+        return
+    candidates = sorted(assigned)
+    unassigned = [_unassigned(name, passed[name], candidates) for name in missing]
+    raise ValueError(
+        f"Step '{task_name}': the parameters cell of notebook {str(source)!r} does not "
+        f"assign {_listed(unassigned)}. papermill puts the names the step passes in a new "
+        "cell after that one, so a name that cell does not assign is misspelled, has no "
+        "default when the notebook runs on its own, or is overwritten by a later cell. Fix "
+        "the name in the step, or "
+        f"assign it in that cell with a plain top-level assignment such as {missing[0]} = "
+        "None; assignments in loops, conditions or through globals() are not counted."
+    )
+
+
+def _unassigned(name: str, group: str, candidates: Sequence[str]) -> str:
+    """Describe an unassigned name with its argument and the closest assigned name."""
+    close = difflib.get_close_matches(name, candidates, n=1)
+    suggestion = f"; did you mean {close[0]!r}?" if close else ""
+    return f"{name!r} ({group}{suggestion})"
+
+
+def _invalid_python(task_name: str, source: Path, error: Exception) -> str:
+    """Describe a ``parameters`` cell that ``ast.parse`` rejects with ``error``."""
+    if isinstance(error, SyntaxError):
+        line = "" if error.lineno is None else f" at line {error.lineno}"
+        problem = f"{line}: {error.msg}"
+    else:
+        problem = f": {str(error) or type(error).__name__}"
+    return (
+        f"Step '{task_name}': the parameters cell of notebook {str(source)!r} is not valid "
+        f"Python{problem}; keep only plain assignments in that cell, and move magics, "
+        "shell commands and other code to a later cell."
+    )
+
+
+def _parameters_cell(task_name: str, source: Path) -> str | None:
+    """Return the source of the first cell tagged ``parameters``, or ``None`` if none is."""
+    try:
+        notebook = json.loads(source.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as error:
+        raise _unreadable(task_name, source, f"it is not UTF-8 text ({error})") from None
+    except json.JSONDecodeError as error:
+        raise _unreadable(task_name, source, f"it is not JSON ({error})") from None
+    except RecursionError:
+        raise _unreadable(task_name, source, "its JSON is nested too deeply") from None
+    except OSError as error:
+        raise _unreadable(task_name, source, f"it could not be read ({error})") from None
+    if not isinstance(notebook, dict):
+        raise _unreadable(task_name, source, "its top level is not a JSON object")
+    cells = notebook.get("cells")
+    if not isinstance(cells, list):
+        raise _unreadable(
+            task_name, source, "it has no top-level 'cells' list, as nbformat 4 requires"
+        )
+    for index, cell in enumerate(cells):
+        if not isinstance(cell, dict):
+            raise _unreadable(task_name, source, f"cells[{index}] is not a JSON object")
+        metadata = cell.get("metadata", {})
+        if not isinstance(metadata, dict):
+            raise _unreadable(
+                task_name, source, f"the metadata of cells[{index}] is not a JSON object"
+            )
+        tags = metadata.get("tags", [])
+        if not isinstance(tags, list):
+            raise _unreadable(task_name, source, f"the tags of cells[{index}] are not a list")
+        if _PARAMETERS_TAG not in tags:
+            continue
+        cell_type = cell.get("cell_type")
+        if cell_type != "code":
+            raise ValueError(
+                f"Step '{task_name}': the first cell tagged 'parameters' in notebook "
+                f"{str(source)!r}, cells[{index}], has cell_type {cell_type!r}, but it must "
+                "be a code cell, because papermill injects the parameters after it. Make "
+                "it a code cell that assigns each name the step passes."
+            )
+        text = cell.get("source")
+        if isinstance(text, list) and all(isinstance(line, str) for line in text):
+            return "".join(text)
+        if isinstance(text, str):
+            return text
+        raise _unreadable(
+            task_name,
+            source,
+            f"the source of cells[{index}], the first cell tagged 'parameters', is not a "
+            "string or a list of strings",
+        )
+    return None
+
+
+def _unreadable(task_name: str, source: Path, reason: str) -> ValueError:
+    """Return the error for a source notebook that cannot be read, for ``reason``."""
+    return ValueError(
+        f"Step '{task_name}': notebook {str(source)!r} cannot be read as a notebook: "
+        f"{reason}."
+    )
+
+
+def _assigned_names(cell: str) -> set[str]:
+    """Return the names bound by ``cell``'s top-level plain and annotated assignments."""
+    names: set[str] = set()
+    # A SyntaxWarning (such as "C:\data") must neither print nor, under -W error, reject a
+    # cell that runs.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        tree = ast.parse(cell)
+    for statement in tree.body:
+        if isinstance(statement, ast.Assign):
+            for target in statement.targets:
+                names.update(_target_names(target))
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            names.add(statement.target.id)
+    return names
+
+
+def _target_names(target: ast.expr) -> Iterator[str]:
+    """Yield each plain name that the assignment target ``target`` binds."""
+    if isinstance(target, ast.Name):
+        yield target.id
+    elif isinstance(target, (ast.Tuple, ast.List)):
+        for element in target.elts:
+            yield from _target_names(element)
+    elif isinstance(target, ast.Starred):
+        yield from _target_names(target.value)
+
+
+def _listed(items: Sequence[str]) -> str:
+    """Join the first ``_LISTED_NAMES`` of ``items`` and count the rest."""
+    shown = items[:_LISTED_NAMES]
+    rest = len(items) - len(shown)
+    listed = ", ".join(shown)
+    return f"{listed}, and {rest} more" if rest > 0 else listed
 
 
 def _parameter_flag(name: str, value: NotebookParameter) -> list[str]:
