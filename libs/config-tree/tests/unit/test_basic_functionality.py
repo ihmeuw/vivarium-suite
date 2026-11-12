@@ -379,6 +379,63 @@ class TestPath:
             assert eval(access, {"tree": tree}) == node.get_value()
 
 
+class _TextPrinter:
+    """Collect what ``_repr_pretty_`` prints, standing in for IPython's printer."""
+
+    def __init__(self) -> None:
+        self.output = ""
+
+    def text(self, text: str) -> None:
+        self.output += text
+
+
+def _pretty(node: ConfigNode) -> str:
+    printer = _TextPrinter()
+    node._repr_pretty_(printer, cycle=False)
+    return printer.output
+
+
+class TestPrettyRepr:
+    """Tests for how IPython displays a node."""
+
+    @pytest.fixture
+    def tree(self) -> ConfigTree:
+        tree = ConfigTree(layers=["base", "override"])
+        tree.update(
+            {
+                "time": {"step_size": 1},
+                "risk.child_wasting": {"distribution_type": "ordered_polytomous"},
+            },
+            layer="base",
+        )
+        tree.update({"time": {"step_size": 10}}, layer="override")
+        return tree
+
+    def test_a_node_displays_its_path_and_outermost_value(self, tree: ConfigTree) -> None:
+        assert [_pretty(node) for node in tree.leaves()] == [
+            "ConfigNode(time.step_size, 10)",
+            "ConfigNode(['risk.child_wasting'].distribution_type, 'ordered_polytomous')",
+        ]
+
+    def test_displaying_does_not_mark_the_node_accessed(self, tree: ConfigTree) -> None:
+        for node in tree.leaves():
+            _pretty(node)
+        assert tree.unused_keys() == [
+            "time.step_size",
+            "['risk.child_wasting'].distribution_type",
+        ]
+
+    def test_a_node_with_no_value_displays_its_path(self, tree: ConfigTree) -> None:
+        step_size = tree.time._children["step_size"]
+        step_size._values.clear()
+        assert _pretty(step_size) == "ConfigNode(time.step_size)"
+
+    def test_a_node_outside_a_tree_displays_as_its_repr(self) -> None:
+        node = ConfigNode(["base"], name="test_node")
+        node.update("test_value", layer="base", source="test")
+        assert _pretty(node) == repr(node)
+
+
 class TestFind:
     """Tests for finding leaf nodes by path."""
 

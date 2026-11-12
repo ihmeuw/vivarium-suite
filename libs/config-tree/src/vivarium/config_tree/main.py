@@ -273,6 +273,20 @@ class ConfigNode:
         layer, _, value = self.metadata[-1].values()
         return f"{layer}: {value}"
 
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Display the node in IPython as its path and its outermost value.
+
+        Reading the value for display does not mark the node as accessed. A node
+        outside any tree displays as its ``repr``.
+        """
+        if self._parent is None:
+            printer.text(repr(self))
+        elif not self:
+            printer.text(f"ConfigNode({self.path})")
+        else:
+            value = self._get_value_with_source(layer=None)[1]
+            printer.text(f"ConfigNode({self.path}, {value!r})")
+
 
 def _format_path(keys: tuple[str, ...]) -> str:
     """Write a key path as attribute access where it works, and bracket access elsewhere."""

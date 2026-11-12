@@ -4,6 +4,7 @@
 - Add ``ConfigNode.path``, the path to a node from the root of its tree written as
   attribute and bracket access, such as ``foo.bar.baz`` or ``['foo.bar'].baz``
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
+- Display a ``ConfigNode`` in IPython as ``ConfigNode(path, value)``, using its outermost value
 - Write ``ConfigTree.unused_keys()`` paths the way ``ConfigNode.path`` does, so a key
   that contains a dot is told apart from nested keys
 
