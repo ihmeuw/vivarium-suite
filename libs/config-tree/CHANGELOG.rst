@@ -1,17 +1,11 @@
 **5.3.0b1 - 11/12/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
-- Add ``ConfigNode.path``, the path to a node from the root of its tree written as
-  attribute and bracket access, such as ``foo.bar.baz`` or ``['foo.bar'].baz``
-- Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
-- Copy every layer and source when a ``ConfigTree`` is passed to the ``ConfigTree``
-  constructor, and make the new tree the root of its own tree. It used to keep only
-  the outermost values, all in the lowest layer
-- Display a ``ConfigNode`` in IPython as ``ConfigNode(path, value)``, using its outermost value
+- Add ``ConfigTree.find()``, which finds the leaf nodes whose keys match a pattern
+- Display a ``ConfigNode`` in IPython as its keys from the root of its tree and its
+  outermost value, such as ``ConfigNode(("configuration", "time", "step_size"), 10)``
 - Default ``ConfigNode.update()``'s ``layer`` and ``source`` to None, so a found node can be
   set with ``node.update(value)`` the way assigning through the tree sets it
-- Write ``ConfigTree.unused_keys()`` paths the way ``ConfigNode.path`` does, so a key
-  that contains a dot is told apart from nested keys
 
 **5.2.1 - 09/22/26**
 

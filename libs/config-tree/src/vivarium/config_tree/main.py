@@ -29,8 +29,7 @@ For example:
 
 from __future__ import annotations
 
-import copy
-import keyword
+import json
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -102,19 +101,6 @@ class ConfigNode:
     def accessed(self) -> bool:
         """Whether or not this node has been accessed."""
         return self._accessed
-
-    @property
-    def path(self) -> str:
-        """The path to this node from the root of its tree, written as Python access.
-
-        A key that works as an attribute is written with dot notation, and any other
-        key with bracket notation, so ``foo`` -> ``bar`` -> ``baz`` is
-        ``foo.bar.baz`` and ``foo.bar`` -> ``baz`` is ``['foo.bar'].baz``. Adding
-        the root tree in front, as in ``tree.foo.bar.baz`` or ``tree['foo.bar'].baz``,
-        gives code that reads the node's value. A node outside any tree has an empty
-        path.
-        """
-        return _format_path(self._key_path())
 
     def _key_path(self) -> tuple[str, ...]:
         """Return the keys from the root of the tree down to this node."""
@@ -276,39 +262,29 @@ class ConfigNode:
         return f"{layer}: {value}"
 
     def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
-        """Display the node in IPython as its path and its outermost value.
+        """Display the node in IPython as its keys and its outermost value.
 
-        Reading the value for display does not mark the node as accessed. A node
-        outside any tree displays as its ``repr``.
+        The keys run from the root of the node's tree down to the node, each one
+        quoted, so a key that contains a dot stays one key, as in
+        ``ConfigNode(("configuration", "risk.child_wasting", "distribution_type"),
+        'ordered')``. Reading the value for display does not mark the node as
+        accessed. A node outside any tree displays as its ``repr``.
         """
         if self._parent is None:
             printer.text(repr(self))
-        elif not self:
-            printer.text(f"ConfigNode({self.path})")
+            return
+        keys = _format_keys(self._key_path())
+        if not self:
+            printer.text(f"ConfigNode({keys})")
         else:
             value = self._get_value_with_source(layer=None)[1]
-            printer.text(f"ConfigNode({self.path}, {value!r})")
+            printer.text(f"ConfigNode({keys}, {value!r})")
 
 
-def _format_path(keys: tuple[str, ...]) -> str:
-    """Write a key path as attribute access where it works, and bracket access elsewhere."""
-    path = ""
-    for key in keys:
-        if _is_attribute_key(key):
-            path += f".{key}" if path else key
-        else:
-            path += f"[{key!r}]"
-    return path
-
-
-def _is_attribute_key(key: str) -> bool:
-    """Return whether ``tree.<key>`` reads the child named ``key``."""
-    return (
-        key.isidentifier()
-        and not keyword.iskeyword(key)
-        and not key.startswith("_")
-        and not hasattr(ConfigTree, key)
-    )
+def _format_keys(keys: tuple[str, ...]) -> str:
+    """Write keys as a tuple of double-quoted strings."""
+    quoted = ", ".join(json.dumps(key) for key in keys)
+    return f"({quoted},)" if len(keys) == 1 else f"({quoted})"
 
 
 class ConfigIterator:
@@ -354,10 +330,10 @@ class ConfigTree:
 
              - :class:`dict` : Flat or nested dictionaries may be provided.
                Keys of dictionaries at all levels must be strings.
-             - ``ConfigTree`` : The new tree is a copy of it with every
-               layer, source, and value, and it is the root of its own tree, so
-               the paths of its nodes start at the new tree. Changes to the copy
-               do not change the original, and the reverse.
+             - ``ConfigTree`` : Another ``ConfigTree`` can be
+               used. All source information will be ignored and the source
+               will be set to 'initial_data' and values will be stored at
+               the lowest priority level.
              - :class:`str` : Strings provided can be yaml formatted strings,
                which will be parsed into a dictionary using standard yaml
                parsing. Alternatively, a path to a yaml file may be provided
@@ -365,50 +341,25 @@ class ConfigTree:
              - :class:`pathlib.Path` : A path object to a yaml file will
                be interpreted the same as a string representation.
 
-            For every type except ``ConfigTree``, all values will be set with
-            'initial_data' as the source and will use the lowest priority level.
-            If values are set at higher priorities they will be used when the
-            ``ConfigTree`` is accessed.
+            All values will be set with 'initial_data' as the source and
+            will use the lowest priority level. If values are set at higher
+            priorities they will be used when the ``ConfigTree`` is
+            accessed.
         layers
             A list of layer names. The order in which layers defined
             determines their priority. Later layers override the values from
-            earlier ones. When ``data`` is a ``ConfigTree``, its layers are used.
+            earlier ones.
         name
             The name of the parent tree node that owns this tree. This is used
-            for error messages and metadata. When ``data`` is a ``ConfigTree``,
-            its name is used unless a name is given.
-
-        Raises
-        ------
-        ValueError
-            If ``data`` is a ``ConfigTree`` and ``layers`` names different layers.
+            for error messages and metadata.
 
         """
-        if isinstance(data, ConfigTree):
-            self._copy_from(data, layers, name)
-            return
         self.__dict__["_layers"] = layers if layers else ["base"]
         self.__dict__["_children"] = {}
         self.__dict__["_frozen"] = False
         self.__dict__["_name"] = name
         self.__dict__["_parent"] = None
         self.update(data, layer=self._layers[0], source="initial data")
-
-    def _copy_from(self, tree: ConfigTree, layers: list[str], name: str) -> None:
-        """Make this tree a root copy of ``tree``, keeping every layer and source."""
-        if layers and layers != tree._layers:
-            raise ValueError(
-                f"Cannot copy a ConfigTree with layers {tree._layers} into a ConfigTree "
-                f"with layers {layers}. Leave out layers to keep the tree's own."
-            )
-        memo = {} if tree._parent is None else {id(tree._parent): None}
-        copied = copy.deepcopy(tree, memo)
-        self.__dict__.update(copied.__dict__)
-        self.__dict__["_parent"] = None
-        if name:
-            self.__dict__["_name"] = name
-        for child in self._children.values():
-            child.__dict__["_parent"] = self
 
     def freeze(self) -> None:
         """Convert the ``ConfigTree`` to read only.
@@ -433,18 +384,16 @@ class ConfigTree:
         return self._children.values()
 
     def unused_keys(self) -> list[str]:
-        """List the paths of all values in the ``ConfigTree`` that haven't been accessed.
-
-        Each path starts at this tree and is written the way :attr:`ConfigNode.path`
-        writes it, so a key that contains a dot appears in bracket notation, as in
-        ``['risk.child_wasting'].distribution_type``.
-        """
-        depth = len(self._key_path())
-        return [
-            _format_path(node._key_path()[depth:])
-            for node in self.leaves()
-            if not node.accessed
-        ]
+        """List all values in the ``ConfigTree`` that haven't been accessed."""
+        unused = []
+        for name, child in self.items():
+            if isinstance(child, ConfigNode):
+                if not child.accessed:
+                    unused.append(name)
+            else:
+                for grandchild_name in child.unused_keys():
+                    unused.append(f"{name}.{grandchild_name}")
+        return unused
 
     def leaves(self) -> list[ConfigNode]:
         """List every leaf node in the ``ConfigTree``, in the order the keys were added.
@@ -469,13 +418,12 @@ class ConfigTree:
         ----------
         pattern
             The text to look for, matched case-insensitively against each node's
-            :attr:`ConfigNode.path`. It may appear anywhere in the path. An empty
-            pattern, the default, matches every leaf.
+            keys from the root of its tree joined with dots, such as
+            ``configuration.time.step_size``. It may appear anywhere in that text.
+            An empty pattern, the default, matches every leaf.
         regex
             Whether to treat the pattern as a regular expression. It is matched
-            literally by default, so a path copied out of an earlier result always
-            finds itself even when it contains characters a regular expression
-            would read as syntax.
+            literally by default, so a dot in the pattern matches only a dot.
 
         Returns
         -------
@@ -493,7 +441,7 @@ class ConfigTree:
                 f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
                 " search for this text literally."
             ) from error
-        return [node for node in self.leaves() if matcher.search(node.path)]
+        return [node for node in self.leaves() if matcher.search(".".join(node._key_path()))]
 
     def _key_path(self) -> tuple[str, ...]:
         """Return the keys from the root of the tree down to this tree."""

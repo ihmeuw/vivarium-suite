@@ -258,125 +258,8 @@ def test_node_str() -> None:
     assert str(cn) == expected_str
 
 
-class TestLeaves:
-    """Tests for listing a tree's leaf nodes and the paths the nodes report."""
-
-    @pytest.fixture
-    def tree(self) -> ConfigTree:
-        return ConfigTree(
-            {
-                "time": {"start": 2020, "step_size": 1},
-                "risk.child_wasting": {"data_sources": {"exposure": "artifact.key"}},
-                "seed": 7,
-            }
-        )
-
-    def test_lists_every_leaf_in_the_order_added(self, tree: ConfigTree) -> None:
-        assert [node.path for node in tree.leaves()] == [
-            "time.start",
-            "time.step_size",
-            "['risk.child_wasting'].data_sources.exposure",
-            "seed",
-        ]
-
-    def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
-        """A caller can update the configuration through what it gets back."""
-        step_size = tree.leaves()[1]
-        assert step_size is tree.time._children["step_size"]
-
-    def test_paths_start_at_the_root_of_the_tree(self, tree: ConfigTree) -> None:
-        """A subtree that still has a parent reports paths from the parent's root."""
-        exposure = tree.get_tree("risk.child_wasting").leaves()[0]
-        assert exposure.path == "['risk.child_wasting'].data_sources.exposure"
-
-    def test_listing_a_subtree_leaves_paths_unchanged(self, tree: ConfigTree) -> None:
-        step_size = tree.leaves()[1]
-        tree.time.leaves()
-        assert step_size.path == "time.step_size"
-
-    def test_listing_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
-        tree.leaves()
-        assert tree.unused_keys() == [
-            "time.start",
-            "time.step_size",
-            "['risk.child_wasting'].data_sources.exposure",
-            "seed",
-        ]
-
-    def test_an_empty_tree_has_no_leaves(self) -> None:
-        assert ConfigTree().leaves() == []
-
-    def test_a_frozen_tree_can_be_listed(self, tree: ConfigTree) -> None:
-        tree.freeze()
-        assert len(tree.leaves()) == 4
-
-    def test_a_node_outside_a_tree_has_an_empty_path(self) -> None:
-        assert ConfigNode(["base"], name="test_node").path == ""
-
-    def test_a_removed_subtree_becomes_a_root(self, tree: ConfigTree) -> None:
-        time = tree.get_tree("time")
-        del tree["time"]
-        assert [node.path for node in time.leaves()] == ["start", "step_size"]
-
-    @pytest.mark.parametrize(
-        "copy_tree",
-        [lambda tree: pickle.loads(pickle.dumps(tree)), copy.deepcopy],
-        ids=["pickle", "deepcopy"],
-    )
-    def test_a_copied_tree_keeps_its_paths(
-        self, tree: ConfigTree, copy_tree: Callable[[ConfigTree], ConfigTree]
-    ) -> None:
-        copied = copy_tree(tree)
-        assert [node.path for node in copied.leaves()] == [
-            node.path for node in tree.leaves()
-        ]
-        assert copied.leaves()[1]._parent is copied.time
-
-
-class TestPath:
-    """Tests for writing a node's path as the Python that reads its value."""
-
-    def test_a_nested_key_and_a_dotted_key_have_different_paths(self) -> None:
-        tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
-        assert [node.path for node in tree.leaves()] == ["foo.bar.baz", "['foo.bar'].baz"]
-        assert tree.foo.bar.baz == 1
-        assert tree["foo.bar"].baz == 10
-
-    @pytest.mark.parametrize(
-        "key",
-        [
-            "has.dot",
-            "has-dash",
-            "1st",
-            "class",
-            "items",
-            "_private",
-            "__dunder__",
-            "it's",
-            'say "hi"',
-            "back\\slash",
-            "",
-        ],
-    )
-    def test_a_key_that_is_not_an_attribute_uses_brackets(self, key: str) -> None:
-        tree = ConfigTree({"outer": {key: {"value": 3}}})
-        [node] = tree.leaves()
-        assert node.path == f"outer[{key!r}].value"
-
-    @pytest.mark.parametrize(
-        "data",
-        [
-            {"time": {"start": 2020, "step_size": 1}},
-            {"risk.child_wasting": {"exposure_bounds": {"lower": 0.0}}},
-            {"a": {"has-dash": {"class": {"it's": 5}}}},
-            {"items": {"back\\slash": 6}},
-        ],
-    )
-    def test_the_path_is_code_that_reads_the_value(self, data: dict[str, Any]) -> None:
-        tree = ConfigTree(data)
-        for node in tree.leaves():
-            access = f"tree{node.path}" if node.path.startswith("[") else f"tree.{node.path}"
-            assert eval(access, {"tree": tree}) == node.get_value()
+def _keys(nodes: list[ConfigNode]) -> list[str]:
+    return [".".join(node._key_path()) for node in nodes]
 
 
 class _TextPrinter:
@@ -395,6 +278,64 @@ def _pretty(node: ConfigNode) -> str:
     return printer.output
 
 
+class TestLeaves:
+    """Tests for listing a tree's leaf nodes and the parents they keep."""
+
+    @pytest.fixture
+    def tree(self) -> ConfigTree:
+        return ConfigTree(
+            {
+                "time": {"start": 2020, "step_size": 1},
+                "risk.child_wasting": {"data_sources": {"exposure": "artifact.key"}},
+                "seed": 7,
+            }
+        )
+
+    def test_lists_every_leaf_in_the_order_added(self, tree: ConfigTree) -> None:
+        assert [node._key_path() for node in tree.leaves()] == [
+            ("time", "start"),
+            ("time", "step_size"),
+            ("risk.child_wasting", "data_sources", "exposure"),
+            ("seed",),
+        ]
+
+    def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
+        step_size = tree.leaves()[1]
+        assert step_size is tree.time._children["step_size"]
+
+    def test_a_subtree_keeps_the_keys_above_it(self, tree: ConfigTree) -> None:
+        exposure = tree.get_tree("risk.child_wasting").leaves()[0]
+        assert exposure._key_path() == ("risk.child_wasting", "data_sources", "exposure")
+
+    def test_listing_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
+        tree.leaves()
+        assert len(tree.unused_keys()) == 4
+
+    def test_an_empty_tree_has_no_leaves(self) -> None:
+        assert ConfigTree().leaves() == []
+
+    def test_a_frozen_tree_can_be_listed(self, tree: ConfigTree) -> None:
+        tree.freeze()
+        assert len(tree.leaves()) == 4
+
+    def test_a_removed_subtree_becomes_a_root(self, tree: ConfigTree) -> None:
+        time = tree.get_tree("time")
+        del tree["time"]
+        assert [node._key_path() for node in time.leaves()] == [("start",), ("step_size",)]
+
+    @pytest.mark.parametrize(
+        "copy_tree",
+        [lambda tree: pickle.loads(pickle.dumps(tree)), copy.deepcopy],
+        ids=["pickle", "deepcopy"],
+    )
+    def test_a_copied_tree_keeps_its_parents(
+        self, tree: ConfigTree, copy_tree: Callable[[ConfigTree], ConfigTree]
+    ) -> None:
+        copied = copy_tree(tree)
+        assert _keys(copied.leaves()) == _keys(tree.leaves())
+        assert copied.leaves()[1]._parent is copied.time
+
+
 class TestPrettyRepr:
     """Tests for how IPython displays a node."""
 
@@ -403,32 +344,45 @@ class TestPrettyRepr:
         tree = ConfigTree(layers=["base", "override"])
         tree.update(
             {
-                "time": {"step_size": 1},
-                "risk.child_wasting": {"distribution_type": "ordered_polytomous"},
+                "configuration": {
+                    "time": {"step_size": 1},
+                    "risk.child_wasting": {"distribution_type": "ordered_polytomous"},
+                },
+                "seed": 7,
             },
             layer="base",
         )
-        tree.update({"time": {"step_size": 10}}, layer="override")
+        tree.update({"configuration": {"time": {"step_size": 10}}}, layer="override")
         return tree
 
-    def test_a_node_displays_its_path_and_outermost_value(self, tree: ConfigTree) -> None:
+    def test_a_node_displays_its_keys_and_outermost_value(self, tree: ConfigTree) -> None:
         assert [_pretty(node) for node in tree.leaves()] == [
-            "ConfigNode(time.step_size, 10)",
-            "ConfigNode(['risk.child_wasting'].distribution_type, 'ordered_polytomous')",
+            'ConfigNode(("configuration", "time", "step_size"), 10)',
+            'ConfigNode(("configuration", "risk.child_wasting", "distribution_type"), '
+            "'ordered_polytomous')",
+            'ConfigNode(("seed",), 7)',
         ]
+
+    def test_a_dotted_key_and_nested_keys_display_differently(self) -> None:
+        tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
+        assert [_pretty(node) for node in tree.leaves()] == [
+            'ConfigNode(("foo", "bar", "baz"), 1)',
+            'ConfigNode(("foo.bar", "baz"), 10)',
+        ]
+
+    def test_a_key_with_a_quote_is_escaped(self) -> None:
+        tree = ConfigTree({'say "hi"': 1})
+        assert _pretty(tree.leaves()[0]) == 'ConfigNode(("say \\"hi\\"",), 1)'
 
     def test_displaying_does_not_mark_the_node_accessed(self, tree: ConfigTree) -> None:
         for node in tree.leaves():
             _pretty(node)
-        assert tree.unused_keys() == [
-            "time.step_size",
-            "['risk.child_wasting'].distribution_type",
-        ]
+        assert len(tree.unused_keys()) == 3
 
-    def test_a_node_with_no_value_displays_its_path(self, tree: ConfigTree) -> None:
-        step_size = tree.time._children["step_size"]
+    def test_a_node_with_no_value_displays_its_keys(self, tree: ConfigTree) -> None:
+        step_size = tree.configuration.time._children["step_size"]
         step_size._values.clear()
-        assert _pretty(step_size) == "ConfigNode(time.step_size)"
+        assert _pretty(step_size) == 'ConfigNode(("configuration", "time", "step_size"))'
 
     def test_a_node_outside_a_tree_displays_as_its_repr(self) -> None:
         node = ConfigNode(["base"], name="test_node")
@@ -464,7 +418,7 @@ class TestUpdateFoundNode:
     def test_the_display_shows_the_new_value(self, tree: ConfigTree) -> None:
         [step_size] = tree.find("step_size")
         step_size.update(5)
-        assert _pretty(step_size) == "ConfigNode(time.step_size, 5)"
+        assert _pretty(step_size) == 'ConfigNode(("time", "step_size"), 5)'
 
     def test_a_second_update_at_the_outermost_layer_is_rejected(
         self, tree: ConfigTree
@@ -475,81 +429,8 @@ class TestUpdateFoundNode:
             step_size.update(6)
 
 
-class TestConstructFromTree:
-    """Tests for building a tree from another tree, as the root of its own tree."""
-
-    @pytest.fixture
-    def spec(self) -> ConfigTree:
-        spec = ConfigTree(layers=["base", "override"])
-        spec.update(
-            {
-                "configuration": {
-                    "time": {"step_size": 1},
-                    "risk.child_wasting": {"distribution_type": "ordered_polytomous"},
-                }
-            },
-            layer="base",
-            source="defaults",
-        )
-        spec.update(
-            {"configuration": {"time": {"step_size": 10}}},
-            layer="override",
-            source="user",
-        )
-        return spec
-
-    def test_paths_start_at_the_copy(self, spec: ConfigTree) -> None:
-        config = ConfigTree(spec.configuration)
-        assert [node.path for node in config.leaves()] == [
-            "time.step_size",
-            "['risk.child_wasting'].distribution_type",
-        ]
-
-    def test_the_original_keeps_its_parent(self, spec: ConfigTree) -> None:
-        ConfigTree(spec.configuration)
-        assert spec.configuration.leaves()[0].path == "configuration.time.step_size"
-
-    def test_every_layer_and_source_is_kept(self, spec: ConfigTree) -> None:
-        config = ConfigTree(spec.configuration)
-        original = spec.configuration.time._children["step_size"]
-        copied = config.time._children["step_size"]
-        assert copied.metadata == original.metadata
-        assert config.time.step_size == 10
-
-    def test_the_trees_above_are_not_copied(self, spec: ConfigTree) -> None:
-        config = ConfigTree(spec.configuration)
-        assert config._parent is None
-        assert config.time._parent is config
-
-    def test_the_copy_and_the_original_change_separately(self, spec: ConfigTree) -> None:
-        config = ConfigTree(spec.configuration)
-        config["risk.child_wasting"].distribution_type = "dichotomous"
-        assert spec.configuration["risk.child_wasting"].distribution_type == (
-            "ordered_polytomous"
-        )
-
-    def test_a_root_copies_whole(self, spec: ConfigTree) -> None:
-        copied = ConfigTree(spec)
-        assert [node.path for node in copied.leaves()] == [
-            node.path for node in spec.leaves()
-        ]
-        assert copied.configuration is not spec.configuration
-
-    def test_the_tree_s_layers_are_used(self, spec: ConfigTree) -> None:
-        assert ConfigTree(spec.configuration)._layers == ["base", "override"]
-        assert ConfigTree(spec.configuration, layers=["base", "override"])
-
-    def test_different_layers_are_rejected(self, spec: ConfigTree) -> None:
-        with pytest.raises(ValueError, match="Cannot copy a ConfigTree with layers"):
-            ConfigTree(spec.configuration, layers=["base"])
-
-    def test_the_tree_s_name_is_kept_unless_one_is_given(self, spec: ConfigTree) -> None:
-        assert ConfigTree(spec.configuration)._name == "configuration"
-        assert ConfigTree(spec.configuration, name="sim")._name == "sim"
-
-
 class TestFind:
-    """Tests for finding leaf nodes by path."""
+    """Tests for finding leaf nodes by their keys."""
 
     @pytest.fixture
     def tree(self) -> ConfigTree:
@@ -564,54 +445,39 @@ class TestFind:
             }
         )
 
-    @staticmethod
-    def paths(nodes: list[ConfigNode]) -> list[str]:
-        return [node.path for node in nodes]
-
     def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
         [step_size] = tree.find("time.step_size")
         assert isinstance(step_size, ConfigNode)
         assert step_size is tree.time._children["step_size"]
 
     def test_only_leaves_are_returned(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("exposure_bounds")) == [
-            "['risk.child_wasting'].exposure_bounds.lower",
-            "['risk.child_wasting'].exposure_bounds.upper",
+        assert _keys(tree.find("exposure_bounds")) == [
+            "risk.child_wasting.exposure_bounds.lower",
+            "risk.child_wasting.exposure_bounds.upper",
         ]
 
     def test_a_fragment_need_not_be_the_whole_path(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("me.step")) == ["time.step_size"]
-
-    def test_a_key_with_a_dot_is_found_by_its_own_text(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("risk.child_wasting")) == [
-            "['risk.child_wasting'].distribution_type",
-            "['risk.child_wasting'].exposure_bounds.lower",
-            "['risk.child_wasting'].exposure_bounds.upper",
-        ]
-
-    def test_a_copied_path_finds_its_own_node(self, tree: ConfigTree) -> None:
-        for node in tree.leaves():
-            assert node in tree.find(node.path)
+        assert _keys(tree.find("wasting.dist")) == ["risk.child_wasting.distribution_type"]
 
     def test_matching_is_case_insensitive(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("TIME.STEP_SIZE")) == ["time.step_size"]
+        assert _keys(tree.find("TIME.STEP_SIZE")) == ["time.step_size"]
 
     def test_the_pattern_is_literal_by_default(self, tree: ConfigTree) -> None:
         assert tree.find("risk.child.wasting") == []
 
     def test_regex_matching_is_opt_in(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find("^time\\.(start|end)$", regex=True)) == [
+        assert _keys(tree.find("^time\\.(start|end)$", regex=True)) == [
             "time.start",
             "time.end",
         ]
 
     def test_results_keep_the_order_keys_were_added(self, tree: ConfigTree) -> None:
-        every_path = self.paths(tree.leaves())
-        assert self.paths(tree.find("e")) == [path for path in every_path if "e" in path]
+        every_key = _keys(tree.leaves())
+        assert _keys(tree.find("e")) == [key for key in every_key if "e" in key]
 
     def test_no_pattern_finds_every_leaf(self, tree: ConfigTree) -> None:
-        assert self.paths(tree.find()) == self.paths(tree.leaves())
-        assert self.paths(tree.find("")) == self.paths(tree.leaves())
+        assert tree.find() == tree.leaves()
+        assert tree.find("") == tree.leaves()
 
     def test_no_match_returns_an_empty_list(self, tree: ConfigTree) -> None:
         assert tree.find("no_such_key") == []
@@ -628,9 +494,12 @@ class TestFind:
         tree.find()
         assert tree.unused_keys() == unused
 
-    def test_a_subtree_finds_only_its_own_nodes(self, tree: ConfigTree) -> None:
-        """Paths still start at the root, since the subtree keeps its parent."""
-        assert self.paths(tree.time.find("s")) == ["time.start", "time.step_size"]
+    def test_a_subtree_matches_on_keys_from_the_root(self, tree: ConfigTree) -> None:
+        """A subtree keeps its parent, so its nodes' keys start at the root."""
+        assert _keys(tree.time.find("^time\\.s", regex=True)) == [
+            "time.start",
+            "time.step_size",
+        ]
 
 
 def test_tree_creation(empty_tree: ConfigTree) -> None:
@@ -886,17 +755,6 @@ def test_unused_keys() -> None:
     _ = tree.test_key.test_key3
 
     assert not tree.unused_keys()
-
-
-def test_unused_keys_tell_a_dotted_key_from_a_nested_one() -> None:
-    tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
-    assert tree.unused_keys() == ["foo.bar.baz", "['foo.bar'].baz"]
-
-
-def test_unused_keys_of_a_subtree_start_at_that_subtree() -> None:
-    tree = ConfigTree({"outer": {"risk.child_wasting": {"lower": 0.0}, "seed": 7}})
-    _ = tree.outer.seed
-    assert tree.outer.unused_keys() == ["['risk.child_wasting'].lower"]
 
 
 def test_to_dict_dict() -> None:
