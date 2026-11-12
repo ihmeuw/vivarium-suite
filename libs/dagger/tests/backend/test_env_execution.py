@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 from pytask import TaskOutcome
 
+import vivarium.dagger
 from vivarium.dagger.backend.build import (
+    COLLECT_SIMULATION_VARIABLE,
     build,
     outcomes,
     run_command,
@@ -125,6 +127,25 @@ def test_run_command_adds_no_empty_path_entry_when_path_is_unset(
     run_command(f'printf %s "$PATH" > {seen}', str(env))
 
     assert seen.read_text() == str(env / "bin")
+
+
+def test_run_command_with_bin_path_names_the_simulation_check_with_or_without_an_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With bin_path None and with an env's bin directory, the command sees DAGGER_COLLECT_SIMULATION as the path of frontend/_collect_simulation.py in this vivarium-dagger, even when the caller's environment set it to another path."""
+    env = _make_env(tmp_path / "env")
+    monkeypatch.setenv(COLLECT_SIMULATION_VARIABLE, str(tmp_path / "elsewhere.py"))
+    package = Path(vivarium.dagger.__file__).resolve().parent
+    expected = package / "frontend" / "_collect_simulation.py"
+
+    for name, bin_path in (("no_env", None), ("env", str(env / "bin"))):
+        seen = tmp_path / f"seen_{name}"
+        run_command_with_bin_path(
+            f'printf %s "${COLLECT_SIMULATION_VARIABLE}" > {seen}', bin_path
+        )
+        assert Path(seen.read_text()) == expected, name
+
+    assert expected.is_file()
 
 
 def test_run_command_with_bin_path_puts_every_directory_first_on_path(

@@ -32,6 +32,14 @@ SELECTED_MARKER = "dagger_selected"
 BRIDGE_PLUGIN = "vivarium.dagger.bridge.plugin"
 """The module of the Jobmon bridge's pytask plugin, as its ``pytask`` entry point names it."""
 
+COLLECT_SIMULATION_VARIABLE = "DAGGER_COLLECT_SIMULATION"
+"""Environment variable that gives a simulation step's command the path of its check."""
+
+COLLECT_SIMULATION_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "frontend" / "_collect_simulation.py"
+)
+"""The check a simulation step's command runs, found without importing the frontend."""
+
 
 class TaskExited(SystemExit):
     """A task raised :class:`SystemExit`, as ``sys.exit`` does, while :func:`build` ran it.
@@ -92,8 +100,10 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
     This is :func:`run_command` after its env is resolved, for a caller that resolved the
     env elsewhere, such as a compute node running a step the controller planned. The
     directories are set on the child process's ``PATH``, so they apply to every part of a
-    compound command such as ``a && b``, and no empty entry is added to ``PATH``. Output
-    goes to this process's standard output and standard error.
+    compound command such as ``a && b``, and no empty entry is added to ``PATH``. The
+    command's environment also sets ``DAGGER_COLLECT_SIMULATION`` to the path of the check
+    that a simulation step's command runs. Output goes to this process's standard output
+    and standard error.
 
     Parameters
     ----------
@@ -114,8 +124,9 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
     subprocess.CalledProcessError
         If the command exits with a non-zero status.
     """
+    child_env = {**os.environ, COLLECT_SIMULATION_VARIABLE: str(COLLECT_SIMULATION_SCRIPT)}
     if bin_path is None:
-        subprocess.run(command, shell=True, check=True)
+        subprocess.run(command, shell=True, check=True, env=child_env)
         return
     env_bin = bin_path.split(":")[0]
     if not os.path.isdir(env_bin):
@@ -127,7 +138,7 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
         )
     parts = [*bin_path.split(":"), os.environ.get("PATH", "")]
     path = ":".join(part for part in parts if part)
-    subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
+    subprocess.run(command, shell=True, check=True, env={**child_env, "PATH": path})
 
 
 def describe_exit(returncode: int) -> str:
