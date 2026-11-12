@@ -13,6 +13,7 @@ import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
+import click
 import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
@@ -604,6 +605,16 @@ def _describe(result: Result) -> str:
     if result.exception is not None and not isinstance(result.exception, SystemExit):
         text += "".join(traceback.format_exception(result.exception))
     return text
+
+
+def _jobmon_option_help(verb: str) -> dict[str, str]:
+    """Return the help of ``dagger <verb>``'s -P, -q and -m options by parameter name."""
+    options = {
+        param.name: param
+        for param in dagger.commands[verb].params
+        if isinstance(param, click.Option)
+    }
+    return {name: options[name].help or "" for name in ("project", "queue", "max_attempts")}
 
 
 def _calls(directory: Path) -> list[str]:
@@ -1504,20 +1515,39 @@ def test_a_root_through_a_symlink_to_a_directory_is_accepted(tmp_path: Path) -> 
 _WORKFLOW_YAML = "workflow:\n  name: w\n  steps: []\n"
 """A workflow YAML file's text; the tests that use it stop before it is read."""
 
+_HELP_AND_PREVIEW = """
+import sys
+
+from click.testing import CliRunner
+
+from vivarium.dagger.cli import dagger
+
+for args in (["--help"], ["run", "--help"], ["preview", "-c", sys.argv[1]]):
+    result = CliRunner().invoke(dagger, args)
+    assert result.exit_code == 0, (args, result.output)
+loaded = sorted(name for name in sys.modules if name.partition(".")[0] == "jobmon")
+print("jobmon modules:", loaded)
+"""
+"""A script that runs 'dagger --help', 'dagger run --help' and 'dagger preview' on the
+definition its first argument names, then prints the jobmon modules it imported."""
+
 
 @pytest.mark.parametrize("verb, steps", [("run", []), ("force", ["a"])])
-def test_a_definition_without_local_exits_two_and_runs_nothing(
-    tmp_path: Path, verb: str, steps: list[str]
+@pytest.mark.parametrize(
+    "option", [["-P", "proj_x"], ["--queue", "all.q"], ["-m", "3"], ["--max-attempts", "3"]]
+)
+def test_jobmon_options_with_local_exit_two_saying_they_need_a_jobmon_run(
+    tmp_path: Path, verb: str, steps: list[str], option: list[str]
 ) -> None:
-    """'dagger run' and 'dagger force' on a pipeline definition without --local exit 2 with a usage error saying Jobmon runs are not available yet, and run no step."""
+    """'dagger run' and 'dagger force' on a pipeline definition with --local and -P, -q or -m exit 2 saying the option applies only to a run through Jobmon, and run no step."""
     path = _write_definition(tmp_path, _CHAIN)
 
-    result = _dagger(verb, "-c", str(path), *steps)
+    result = _dagger(verb, "-c", str(path), "--local", *option, *steps)
 
     assert result.exit_code == 2, _describe(result)
-    assert "through Jobmon is not available yet" in result.stderr
-    assert "--local" in result.stderr
+    assert "applies only to a run through Jobmon" in result.stderr, result.stderr
     assert _calls(tmp_path) == []
+    assert not (tmp_path / "state").exists()
 
 
 @pytest.mark.parametrize("suffix", [".yaml", ".yml"])
@@ -1535,9 +1565,7 @@ def test_preview_and_force_refuse_a_workflow_yaml_file(
     assert "takes a Python pipeline definition" in result.stderr
 
 
-@pytest.mark.parametrize(
-    "option", [["-P", "proj_x"], ["--queue", "all.q"], ["-o", "out"], ["-v"], ["--pdb"]]
-)
+@pytest.mark.parametrize("option", [["-n", "name"], ["-o", "out"], ["-v"], ["--pdb"]])
 def test_run_refuses_yaml_only_options_for_a_definition(
     tmp_path: Path, option: list[str]
 ) -> None:
@@ -1571,6 +1599,55 @@ def test_a_missing_yaml_file_is_a_usage_error(tmp_path: Path) -> None:
 
     assert result.exit_code == 2, _describe(result)
     assert "does not exist" in result.stderr
+
+
+def test_dagger_help_and_a_preview_do_not_import_jobmon(tmp_path: Path) -> None:
+    """In a fresh interpreter, 'dagger --help', 'dagger run --help' and 'dagger preview -c def.py' on a definition exit 0 and leave jobmon out of sys.modules."""
+    path = _write_definition(tmp_path, _CHAIN)
+
+    completed = subprocess.run(
+        [sys.executable, "-c", _HELP_AND_PREVIEW, str(path)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "jobmon modules: []" in completed.stdout.splitlines(), completed.stdout
+    assert _calls(tmp_path) == []
+
+
+def test_dagger_run_help_describes_project_queue_and_max_attempts_for_a_definition() -> None:
+    """'dagger run --help' and 'dagger force --help' list -P/--project, -q/--queue and -m/--max-attempts, and say that a definition runs through Jobmon unless given --local."""
+    for verb in ("run", "force"):
+        result = _dagger(verb, "--help")
+
+        assert result.exit_code == 0, _describe(result)
+        text = " ".join(result.output.split())
+        for option in ("-P, --project", "-q, --queue", "-m, --max-attempts", "--local"):
+            assert option in text, (verb, text)
+        assert re.search(r"(?i)through jobmon", text), (verb, text)
+
+
+def test_dagger_force_help_describes_jobmon_options_without_workflow_yaml() -> None:
+    """'dagger force --help' describes -P/--project, -q/--queue and -m/--max-attempts for a run through Jobmon and does not mention a workflow YAML file, while 'dagger run --help' still does."""
+    subjects = {"project": "project", "queue": "queue", "max_attempts": "each step"}
+    for verb, for_yaml in (("force", False), ("run", True)):
+        result = _dagger(verb, "--help")
+
+        assert result.exit_code == 0, _describe(result)
+        # Squashed, so that a help text that click wraps still matches.
+        shown = "".join(result.output.split())
+        for name, text in _jobmon_option_help(verb).items():
+            assert "".join(text.split()) in shown, (verb, name, result.output)
+            assert subjects[name] in text, (verb, name, text)
+            assert re.search(r"(?i)through jobmon", text), (verb, name, text)
+            assert ("workflow YAML file" in text) is for_yaml, (verb, name, text)
+            assert ("config file" in text) is for_yaml, (verb, name, text)
+    force_help = dagger.commands["force"].help or ""
+    assert "yaml" not in force_help.lower(), force_help
 
 
 def test_importing_the_cli_does_not_import_jobmon() -> None:
