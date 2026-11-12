@@ -2,6 +2,7 @@
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
 - Add ``ConfigNode.path``, the dotted path to a node from the root of its tree
+- Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
 
 **5.2.1 - 09/22/26**
 

@@ -29,6 +29,7 @@ For example:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -383,6 +384,42 @@ class ConfigTree:
             else:
                 leaves.extend(child.leaves())
         return leaves
+
+    def find(self, pattern: str = "", *, regex: bool = False) -> list[ConfigNode]:
+        """Find the leaf nodes whose path matches a pattern.
+
+        Use this to locate a key when you know roughly what it is called but not
+        where it sits in the tree.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against each node's
+            :attr:`ConfigNode.path`. It may appear anywhere in the path. An empty
+            pattern, the default, matches every leaf.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a path copied out of an earlier result always
+            finds itself even when it contains characters a regular expression
+            would read as syntax.
+
+        Returns
+        -------
+            The matching nodes held by this tree, in the order the keys were added.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+        """
+        try:
+            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(
+                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+                " search for this text literally."
+            ) from error
+        return [node for node in self.leaves() if matcher.search(node.path)]
 
     def _key_path(self) -> tuple[str, ...]:
         """Return the keys from the root of the tree down to this tree."""

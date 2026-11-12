@@ -333,6 +333,82 @@ class TestLeaves:
         assert copied.leaves()[1]._parent is copied.time
 
 
+class TestFind:
+    """Tests for finding leaf nodes by path."""
+
+    @pytest.fixture
+    def tree(self) -> ConfigTree:
+        return ConfigTree(
+            {
+                "time": {"start": 2020, "end": 2025, "step_size": 1},
+                "risk.child_wasting": {
+                    "distribution_type": "ordered_polytomous",
+                    "exposure_bounds": {"lower": 0.0, "upper": 1.0},
+                },
+                "population": {"population_size": 100},
+            }
+        )
+
+    @staticmethod
+    def paths(nodes: list[ConfigNode]) -> list[str]:
+        return [node.path for node in nodes]
+
+    def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
+        [step_size] = tree.find("time.step_size")
+        assert isinstance(step_size, ConfigNode)
+        assert step_size is tree.time._children["step_size"]
+
+    def test_only_leaves_are_returned(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find("exposure_bounds")) == [
+            "risk.child_wasting.exposure_bounds.lower",
+            "risk.child_wasting.exposure_bounds.upper",
+        ]
+
+    def test_a_fragment_need_not_be_the_whole_path(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find("wasting.dist")) == [
+            "risk.child_wasting.distribution_type"
+        ]
+
+    def test_matching_is_case_insensitive(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find("TIME.STEP_SIZE")) == ["time.step_size"]
+
+    def test_the_pattern_is_literal_by_default(self, tree: ConfigTree) -> None:
+        assert tree.find("risk.child.wasting") == []
+
+    def test_regex_matching_is_opt_in(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find("^time\\.(start|end)$", regex=True)) == [
+            "time.start",
+            "time.end",
+        ]
+
+    def test_results_keep_the_order_keys_were_added(self, tree: ConfigTree) -> None:
+        every_path = self.paths(tree.leaves())
+        assert self.paths(tree.find("e")) == [path for path in every_path if "e" in path]
+
+    def test_no_pattern_finds_every_leaf(self, tree: ConfigTree) -> None:
+        assert self.paths(tree.find()) == self.paths(tree.leaves())
+        assert self.paths(tree.find("")) == self.paths(tree.leaves())
+
+    def test_no_match_returns_an_empty_list(self, tree: ConfigTree) -> None:
+        assert tree.find("no_such_key") == []
+
+    def test_an_invalid_regex_raises_a_useful_error(self, tree: ConfigTree) -> None:
+        with pytest.raises(ValueError, match="Invalid regular expression 'time\\['"):
+            tree.find("time[", regex=True)
+
+    def test_invalid_regex_text_is_harmless_without_the_flag(self, tree: ConfigTree) -> None:
+        assert tree.find("time[") == []
+
+    def test_finding_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
+        unused = tree.unused_keys()
+        tree.find()
+        assert tree.unused_keys() == unused
+
+    def test_a_subtree_finds_only_its_own_nodes(self, tree: ConfigTree) -> None:
+        """Paths still start at the root, since the subtree keeps its parent."""
+        assert self.paths(tree.time.find("s")) == ["time.start", "time.step_size"]
+
+
 def test_tree_creation(empty_tree: ConfigTree) -> None:
     assert len(empty_tree) == 0
     assert not empty_tree.items()
