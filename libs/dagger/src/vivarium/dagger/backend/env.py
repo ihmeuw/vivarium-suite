@@ -47,10 +47,11 @@ def resolve_env_prefix(env: str) -> str:
     ------
     RuntimeError
         If ``env`` is a path that does not contain ``bin/python`` or cannot be checked (an
-        unknown ``~user``, or a parent directory that cannot be searched), a name that no
-        lookup resolves, or a name whose conda lookup fails. Every message names ``env``; a
-        failed conda lookup says whether ``CONDA_EXE`` could not be run, exited with a
-        non-zero status, or printed output that is not JSON.
+        unknown ``~user``, or a parent directory that cannot be searched), a name whose
+        local venv cannot be checked, a name that no lookup resolves, or a name whose conda
+        lookup fails. Every message names ``env``; a failed conda lookup says whether
+        ``CONDA_EXE`` could not be run, exited with a non-zero status (with conda's own
+        reason when it gives one), or printed output that is not JSON.
     """
     if os.sep in env or env.startswith("~"):
         try:
@@ -118,8 +119,14 @@ def _find_env_candidates(env: str) -> list[tuple[str, str]]:
     """Return (source, prefix) pairs matching ``env`` by name, in precedence order."""
     candidates: list[tuple[str, str]] = []
     local_venv = Path.cwd() / VENV_DIR_NAME / env
-    if _is_env_prefix(local_venv):
-        candidates.append(("local venv", str(local_venv.resolve())))
+    try:
+        if _is_env_prefix(local_venv):
+            candidates.append(("local venv", str(local_venv.resolve())))
+    except OSError as error:
+        raise RuntimeError(
+            f"Could not resolve environment {env!r}: the venv at {local_venv} could not be "
+            f"checked: {error}"
+        ) from error
     conda_prefix = _find_conda_env(env)
     if conda_prefix is not None:
         candidates.append(("conda env", str(conda_prefix.resolve())))
@@ -147,9 +154,9 @@ def _find_conda_env(env: str) -> Path | None:
             f"{failed} because CONDA_EXE {conda_exe!r} could not be run ({error})."
         ) from error
     except subprocess.CalledProcessError as error:
-        stderr = " ".join((error.stderr or "").split())
+        reason = _conda_failure_reason(error.stdout, error.stderr)
         status = f"{failed} because {listing} exited with status {error.returncode}"
-        raise RuntimeError(f"{status}: {stderr}" if stderr else f"{status}.") from error
+        raise RuntimeError(f"{status}: {reason}" if reason else f"{status}.") from error
     try:
         prefixes = [Path(path) for path in json.loads(result.stdout)["envs"]]
     except (json.JSONDecodeError, KeyError, TypeError) as error:
@@ -158,6 +165,22 @@ def _find_conda_env(env: str) -> Path | None:
             f"({type(error).__name__}: {error})."
         ) from error
     return next((prefix for prefix in prefixes if prefix.name == env), None)
+
+
+def _conda_failure_reason(stdout: str | None, stderr: str | None) -> str:
+    """Return conda's reason for a failed ``--json`` command: its JSON message, else stderr."""
+    # With --json, conda reports its own errors as a JSON object on stdout, and stderr may
+    # hold only an unrelated warning.
+    try:
+        report = json.loads(stdout or "")
+    except json.JSONDecodeError:
+        report = None
+    if isinstance(report, dict):
+        for field in ("message", "error"):
+            value = report.get(field)
+            if isinstance(value, str) and value.strip():
+                return " ".join(value.split())
+    return " ".join((stderr or "").split())
 
 
 def _get_venv_base_bin_dir(env_prefix: Path) -> str | None:

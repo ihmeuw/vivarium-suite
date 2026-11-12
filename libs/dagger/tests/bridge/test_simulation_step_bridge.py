@@ -54,6 +54,9 @@ _OPTIONS: dict[str, str | int | float | bool] = {
     "no_slack": True,
 }
 
+_JOBMON_PROJECT = "proj_test"
+"""The Jobmon project of a bridged run; the project in ``_OPTIONS`` is psimulate's."""
+
 _SUCCEEDED = {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
 
 _SKIPPED = {_KEY: TaskOutcome.SKIP_UNCHANGED, _CONSUMER: TaskOutcome.SKIP_UNCHANGED}
@@ -135,10 +138,15 @@ def _pipeline(
     return Pipeline(tasks, simulation.base / "state", registry)
 
 
+def _run_bridged(pipeline: Pipeline) -> dict[str, TaskOutcome]:
+    """Run ``pipeline`` with jobmon=True and a Jobmon project, and return its outcomes."""
+    return run(pipeline, jobmon=True, jobmon_resources={"project": _JOBMON_PROJECT})
+
+
 def _failure_line(pipeline: Pipeline) -> str:
     """Run ``pipeline`` with jobmon=True; assert StepFailed and return its message."""
     with pytest.raises(StepFailed) as excinfo:
-        run(pipeline, jobmon=True)
+        _run_bridged(pipeline)
     return str(excinfo.value)
 
 
@@ -174,7 +182,7 @@ def test_a_simulation_and_its_consumer_run_through_fake_jobmon(
     simulation: _Simulation, fake_jobmon: FakeJobmon
 ) -> None:
     """run(pipeline, jobmon=True) under FakeJobmon runs the simulation step and a downstream python_step; the target receives a Path equal to the run directory, as it writes str(path) and the parquet file count to its output, and the run directory holds the results and the sentinel."""
-    outcomes = run(_pipeline(simulation, consumer=True), jobmon=True)
+    outcomes = _run_bridged(_pipeline(simulation, consumer=True))
 
     assert outcomes == _SUCCEEDED
     bound = {entry.name for plan in fake_jobmon.plans for entry in plan}
@@ -196,9 +204,9 @@ def test_the_controller_records_the_run_from_the_sentinel_so_a_second_run_skips(
 ) -> None:
     """With stable code identities, a second run(jobmon=True) gives both steps SKIP_UNCHANGED and the stub's argv log still has one entry."""
     pipeline = _pipeline(simulation, consumer=True, stable_ids=True)
-    assert run(pipeline, jobmon=True) == _SUCCEEDED
+    assert _run_bridged(pipeline) == _SUCCEEDED
 
-    outcomes = run(pipeline, jobmon=True)
+    outcomes = _run_bridged(pipeline)
 
     assert outcomes == _SKIPPED
     assert len(simulation.calls()) == 1
@@ -210,11 +218,11 @@ def test_removing_the_sentinel_makes_a_third_bridged_run_run_both_steps(
 ) -> None:
     """After two bridged runs and the sentinel's removal, a third run(jobmon=True) runs both the simulation step and its consumer."""
     pipeline = _pipeline(simulation, consumer=True, stable_ids=True)
-    assert run(pipeline, jobmon=True) == _SUCCEEDED
-    assert run(pipeline, jobmon=True) == _SKIPPED
+    assert _run_bridged(pipeline) == _SUCCEEDED
+    assert _run_bridged(pipeline) == _SKIPPED
     (simulation.run_dir / _SENTINEL).unlink()
 
-    outcomes = run(pipeline, jobmon=True)
+    outcomes = _run_bridged(pipeline)
 
     assert outcomes == _SUCCEEDED
     assert len(simulation.calls()) == 2

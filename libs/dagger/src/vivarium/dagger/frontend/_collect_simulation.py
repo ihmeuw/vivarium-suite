@@ -1,12 +1,13 @@
 """Check a finished psimulate run and move it to a simulation step's run directory.
 
-A simulation step's command runs this module's source as a script, with
-``python -I -c <source> <scratch> <destination>``, on the declared environment's own
-Python. That environment is a model's environment, not the pipeline's, so this module
-imports only the standard library and uses no syntax or standard-library API newer than
-Python 3.9. :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` reads the
-source when a step is defined. Editing this file therefore changes every simulation
-step's command, which makes those steps stale.
+A simulation step's command runs this file as a script, with
+``python -I "$DAGGER_COLLECT_SIMULATION" <scratch> <destination>``, on the declared
+environment's own Python; the command runner sets ``DAGGER_COLLECT_SIMULATION`` to this
+file's path. That environment is a model's environment, not the pipeline's, so this
+module imports only the standard library and uses no syntax or standard-library API newer
+than Python 3.9. :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` ends
+each command with a hash of this file, so editing it changes every simulation step's
+command, which makes those steps stale.
 
 psimulate writes one run to ``<scratch>/<model name>/<timestamp>/``. The run is complete
 when every simulation that psimulate recorded under ``metadata/`` wrote its file under
