@@ -173,8 +173,10 @@ exits with status 2 before anything is written.
 
 A step function defined in the definition file runs on the compute node without any
 change to ``PYTHONPATH``: each step tells the node the directory that its function's
-module was imported from. The pipeline's root, its outputs, and its inputs must be on
-storage that every compute node can read and write, such as a team share. A node's own
+module was imported from. That directory, and any modules the definition imports from
+it, must be readable from every compute node. The pipeline's root, its outputs, and its
+inputs must be on storage that every compute node can read and write, such as a team
+share. A node's own
 disk, such as ``/tmp``, does not work.
 
 Compute resources

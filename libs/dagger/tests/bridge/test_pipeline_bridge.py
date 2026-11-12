@@ -443,7 +443,7 @@ def test_a_local_force_takes_no_run_lock(tmp_path: Path) -> None:
 def test_sigterm_while_jobmon_runs_raises_run_interrupted_with_the_workflow_id(
     tmp_path: Path,
 ) -> None:
-    """Under FakeJobmon(workflow_id=4242, interrupt_after=1), run(pipeline, jobmon=True) on a three-step chain raises RunInterrupted whose workflow_id is 4242, whose run_directory is the bridge's run directory under <root>/.pytask/jobmon, and whose outcomes give the first step SUCCESS."""
+    """Under FakeJobmon(workflow_id=4242, interrupt_after=1), run(pipeline, jobmon=True) on a three-step chain raises RunInterrupted whose workflow_id is 4242, whose run_directory is the bridge's run directory under <root>/.pytask/jobmon, whose outcomes give the first step SUCCESS, and whose exit_code is the interrupted build's FAILED."""
     pipeline = _chain(tmp_path)
 
     error = _interrupted(pipeline, FakeJobmon(workflow_id=WORKFLOW_ID, interrupt_after=1))
@@ -453,6 +453,7 @@ def test_sigterm_while_jobmon_runs_raises_run_interrupted_with_the_workflow_id(
     assert error.run_directory.resolve().parent == runs
     assert (error.run_directory / STATE_FILE).is_file()
     assert error.outcomes[A] == TaskOutcome.SUCCESS
+    assert error.exit_code == ExitCode.FAILED
     assert str(WORKFLOW_ID) in str(error), str(error)
     assert str(error.run_directory) in str(error), str(error)
 
