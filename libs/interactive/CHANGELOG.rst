@@ -1,7 +1,7 @@
 **1.1.0b2 - 11/09/26**
 
 - Document finding and updating configuration keys with ``ConfigTree.find``
-- Require ``vivarium-config-tree`` 5.3.0b1
+- Require ``vivarium-config-tree`` 5.3.0b1 and ``vivarium-engine`` 6.1.0b1
 
 **1.1.0b1 - 11/03/26**
 
