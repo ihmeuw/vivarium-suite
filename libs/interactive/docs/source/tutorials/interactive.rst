@@ -318,42 +318,27 @@ If you know roughly what a key is called but not where it sits, pass part of its
 name to :meth:`~vivarium.config_tree.main.ConfigTree.find`. It returns the
 matching configuration nodes. It matches the text literally and ignores case,
 takes ``regex=True`` for a regular expression, and lists every key when called
-with no pattern.
-
-.. testcode::
-
-    print([node.path for node in sim.configuration.find("population")])
-
-.. testoutput::
-
-    ['population.population_size', 'population.age_start', 'population.age_end']
-
-Each node's :attr:`~vivarium.config_tree.main.ConfigNode.path` is the code that
-reaches it from ``sim.configuration``, so ``population.population_size`` is set
-with ``sim.configuration.population.population_size = ...``. In IPython or
-Jupyter, a node displays as its path and the value the simulation will use, such
-as ``ConfigNode(population.population_size, 1000)``.
-
-A component's name can contain dots, and its keys sit under that whole name. The
-path shows that key in brackets, which is also how you set it:
-
-.. testcode::
-
-    for node in sim.configuration.find("excess_mortality_rate"):
-        print(node.path)
-
-.. testoutput::
-
-    ['disease_state.infected_with_lower_respiratory_infections'].data_sources.excess_mortality_rate
-    ['disease_state.susceptible_to_lower_respiratory_infections'].data_sources.excess_mortality_rate
+with no pattern. In IPython or Jupyter, each node displays as its keys and the
+value the simulation will use:
 
 .. code-block:: python
 
-    sim.configuration[
-        "disease_state.infected_with_lower_respiratory_infections"
-    ].data_sources.excess_mortality_rate = 0.01
+    >>> sim.configuration.find("population")
+    [ConfigNode(("configuration", "population", "population_size"), 1000),
+     ConfigNode(("configuration", "population", "age_start"), 0),
+     ConfigNode(("configuration", "population", "age_end"), 5)]
 
-You can also change a value through a node you found.
+The keys start at the model specification, so they begin with
+``"configuration"``. Each quoted string is one key, so a component name that
+contains dots stays whole:
+
+.. code-block:: python
+
+    >>> sim.configuration.find("excess_mortality_rate")
+    [ConfigNode(("configuration", "disease_state.infected_with_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.06),
+     ConfigNode(("configuration", "disease_state.susceptible_to_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.0)]
+
+You can change a value through a node you found.
 :meth:`~vivarium.config_tree.main.ConfigNode.update` sets it in the same layer
 as setting it through ``sim.configuration``. Here we make each time step one day
 instead of the model specification's half day:
