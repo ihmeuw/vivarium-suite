@@ -26,6 +26,7 @@ step re-runs on every build.
 """
 
 import difflib
+import hashlib
 import shlex
 import subprocess
 from collections.abc import Mapping
@@ -34,7 +35,11 @@ from typing import Any
 
 from pytask import PathNode
 
-from vivarium.dagger.backend.build import describe_exit
+from vivarium.dagger.backend.build import (
+    COLLECT_SIMULATION_SCRIPT,
+    COLLECT_SIMULATION_VARIABLE,
+    describe_exit,
+)
 from vivarium.dagger.backend.nodes import RunDirectoryNode, file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
@@ -111,14 +116,18 @@ def simulation_step(
     2. runs ``psimulate run -M <spec> -B <branches> [-i <artifact>] -o <scratch>``
        followed by the option flags, with ``psimulate`` found on ``PATH``, that is, in
        ``env``;
-    3. runs ``python -I -c <check>`` on the scratch and run directories with ``env``'s
-       own ``python``. The check confirms that psimulate wrote one run in which every
-       simulation finished, moves it to the run directory, replacing the previous run
-       only then, and writes the sentinel last. When a simulation did not finish, it
-       fails the step, keeps the previous complete run, and leaves the partial run in
-       the scratch directory.
+    3. runs a check on the scratch and run directories with ``env``'s own ``python -I``.
+       The check confirms that psimulate wrote one run in which every simulation
+       finished, moves it to the run directory, replacing the previous run only then,
+       and writes the sentinel last. When a simulation did not finish, it fails the
+       step, keeps the previous complete run, and leaves the partial run in the scratch
+       directory.
 
-    Every path in the command is absolute, and every value is shell-quoted.
+    Every path in the command is absolute, and every value is shell-quoted. The command
+    names the check's script as ``"$DAGGER_COLLECT_SIMULATION"``, which dagger sets when
+    it runs the step, and ends with a comment that holds a hash of the script, so an edit
+    to the check changes the command and the step is stale. Run outside dagger, without
+    that variable, the command stops with a message that names it.
 
     Parameters
     ----------
@@ -416,19 +425,20 @@ def _psimulate_command(
     if artifact is not None:
         psimulate += ["-i", str(artifact)]
     psimulate += ["-o", str(scratch), *_option_flags(options)]
-    # Bare `python` keeps an absolute interpreter path out of the hashed command. -I keeps
-    # the working directory and PYTHON* variables off sys.path, so no file in the
-    # directory pytask runs from can replace a standard-library module in the check.
-    collect = ["python", "-I", "-c", _collect_script(), str(scratch), str(destination)]
-    return " && ".join(
-        [
-            f"mkdir -p {shlex.quote(str(destination.parent))}",
-            f"rm -rf {shlex.quote(str(scratch))}",
-            f"mkdir {shlex.quote(str(scratch))}",
-            shlex.join(psimulate),
-            shlex.join(collect),
-        ]
-    )
+    # Bare `python` and the variable keep absolute env paths out of the hashed command,
+    # and the script's hash keeps an edit to the check in it. -I keeps the working
+    # directory and PYTHON* variables off sys.path, so no file in the directory pytask
+    # runs from can replace a standard-library module in the check.
+    check = f'"${{{COLLECT_SIMULATION_VARIABLE}:?is set by dagger when it runs the step}}"'
+    collect = f"python -I {check} {shlex.quote(str(scratch))} {shlex.quote(str(destination))}"
+    commands = [
+        f"mkdir -p {shlex.quote(str(destination.parent))}",
+        f"rm -rf {shlex.quote(str(scratch))}",
+        f"mkdir {shlex.quote(str(scratch))}",
+        shlex.join(psimulate),
+        collect,
+    ]
+    return " && ".join(commands) + f"  # check {_collect_script_hash()}"
 
 
 def _is_command_failure(error: BaseException) -> bool:
@@ -438,9 +448,9 @@ def _is_command_failure(error: BaseException) -> bool:
     return getattr(error, "exc_type", None) == "subprocess.CalledProcessError"
 
 
-def _collect_script() -> str:
-    """Return the source of the check that the command runs with ``python -I -c``."""
-    return (Path(__file__).parent / "_collect_simulation.py").read_text(encoding="utf-8")
+def _collect_script_hash() -> str:
+    """Return a short hash of the check's script, which ends the step's command."""
+    return hashlib.sha256(COLLECT_SIMULATION_SCRIPT.read_bytes()).hexdigest()[:12]
 
 
 def _scratch_for(run_dir: Path) -> Path:
