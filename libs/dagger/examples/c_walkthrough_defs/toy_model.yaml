@@ -8,6 +8,10 @@ components:
     observer:
       - DeathsObserver()
 configuration:
+  # psimulate's -i adds the artifact path to this section, so it must exist, as it does in
+  # a model's own specification.
+  input_data:
+    location: Toyland
   time:
     start:
       year: 2025
