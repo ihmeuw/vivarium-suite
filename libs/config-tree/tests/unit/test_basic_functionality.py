@@ -1,14 +1,14 @@
-import dataclasses
+import copy
 import pickle
 import re
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from vivarium.config_tree import (
-    ConfigLeaf,
     ConfigNode,
     ConfigTree,
     ConfigurationError,
@@ -258,24 +258,8 @@ def test_node_str() -> None:
     assert str(cn) == expected_str
 
 
-class _TextPrinter:
-    """Collect what ``_repr_pretty_`` prints, standing in for IPython's printer."""
-
-    def __init__(self) -> None:
-        self.output = ""
-
-    def text(self, text: str) -> None:
-        self.output += text
-
-
-def _pretty(leaf: ConfigLeaf) -> str:
-    printer = _TextPrinter()
-    leaf._repr_pretty_(printer, cycle=False)
-    return printer.output
-
-
 class TestLeaves:
-    """Tests for listing a tree's leaves and the paths they display."""
+    """Tests for listing a tree's leaf nodes and the paths the nodes report."""
 
     @pytest.fixture
     def tree(self) -> ConfigTree:
@@ -288,40 +272,27 @@ class TestLeaves:
         )
 
     def test_lists_every_leaf_in_the_order_added(self, tree: ConfigTree) -> None:
-        assert [leaf.path for leaf in tree.leaves()] == [
+        assert [node.path for node in tree.leaves()] == [
             "time.start",
             "time.step_size",
             "risk.child_wasting.data_sources.exposure",
             "seed",
         ]
 
-    def test_a_key_with_a_dot_stays_whole(self, tree: ConfigTree) -> None:
-        assert tree.leaves()[2].key_path == (
-            "risk.child_wasting",
-            "data_sources",
-            "exposure",
-        )
-
     def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
         """A caller can update the configuration through what it gets back."""
         step_size = tree.leaves()[1]
-        assert step_size.node is tree.time._children["step_size"]
+        assert step_size is tree.time._children["step_size"]
 
-    def test_paths_are_relative_to_the_tree_listed(self, tree: ConfigTree) -> None:
+    def test_paths_start_at_the_root_of_the_tree(self, tree: ConfigTree) -> None:
+        """A subtree that still has a parent reports paths from the parent's root."""
         exposure = tree.get_tree("risk.child_wasting").leaves()[0]
-        assert exposure.path == "data_sources.exposure"
+        assert exposure.path == "risk.child_wasting.data_sources.exposure"
 
-    def test_listing_a_subtree_leaves_an_earlier_listing_unchanged(
-        self, tree: ConfigTree
-    ) -> None:
-        earlier = tree.leaves()
+    def test_listing_a_subtree_leaves_paths_unchanged(self, tree: ConfigTree) -> None:
+        step_size = tree.leaves()[1]
         tree.time.leaves()
-        assert earlier[1].path == "time.step_size"
-
-    def test_a_leaf_cannot_be_changed(self, tree: ConfigTree) -> None:
-        leaf = tree.leaves()[0]
-        with pytest.raises(dataclasses.FrozenInstanceError):
-            leaf.key_path = ("other",)  # type: ignore[misc]
+        assert step_size.path == "time.step_size"
 
     def test_listing_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
         tree.leaves()
@@ -339,13 +310,27 @@ class TestLeaves:
         tree.freeze()
         assert len(tree.leaves()) == 4
 
-    def test_a_leaf_displays_as_its_path(self, tree: ConfigTree) -> None:
-        assert [_pretty(leaf) for leaf in tree.leaves()] == [
-            "time.start",
-            "time.step_size",
-            "risk.child_wasting.data_sources.exposure",
-            "seed",
+    def test_a_node_outside_a_tree_has_an_empty_path(self) -> None:
+        assert ConfigNode(["base"], name="test_node").path == ""
+
+    def test_a_removed_subtree_becomes_a_root(self, tree: ConfigTree) -> None:
+        time = tree.get_tree("time")
+        del tree["time"]
+        assert [node.path for node in time.leaves()] == ["start", "step_size"]
+
+    @pytest.mark.parametrize(
+        "copy_tree",
+        [lambda tree: pickle.loads(pickle.dumps(tree)), copy.deepcopy],
+        ids=["pickle", "deepcopy"],
+    )
+    def test_a_copied_tree_keeps_its_paths(
+        self, tree: ConfigTree, copy_tree: Callable[[ConfigTree], ConfigTree]
+    ) -> None:
+        copied = copy_tree(tree)
+        assert [node.path for node in copied.leaves()] == [
+            node.path for node in tree.leaves()
         ]
+        assert copied.leaves()[1]._parent is copied.time
 
 
 def test_tree_creation(empty_tree: ConfigTree) -> None:

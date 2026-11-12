@@ -20,4 +20,4 @@ from vivarium.config_tree.exceptions import (
     ImproperAccessError,
     MissingLayerError,
 )
-from vivarium.config_tree.main import ConfigLeaf, ConfigNode, ConfigTree, load_yaml
+from vivarium.config_tree.main import ConfigNode, ConfigTree, load_yaml
