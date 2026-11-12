@@ -7,27 +7,34 @@
 # your own run of the installed `dagger` command on this branch.
 #
 # Most sections drive `dagger` as a modeler would, as a separate process on a definition
-# file in `c_walkthrough_defs/`. Sections marked "local" run anywhere in under a minute.
-# Three sections are marked "cluster". C1-real runs MNCNH's own loaders and V&V notebook;
-# it needs the MNCNH environments described there and skips itself when
-# `C_WALKTHROUGH_MNCNH` is not set. C16 runs a definition through Jobmon with the Python
-# API; it skips itself outside a Slurm allocation or without Jobmon. C19 runs a toy
+# file in `c_walkthrough_defs/`. Sections marked "local" run anywhere; together they take
+# about a minute on a laptop and a few minutes on a cluster node. Three sections are marked
+# "cluster". C1-real runs MNCNH's own loaders and V&V notebook, in this process and then
+# through Jobmon; it needs the MNCNH environments described there and skips itself when
+# `C_WALKTHROUGH_MNCNH` is not set. C16 runs a definition through Jobmon with the `dagger`
+# command; it skips itself outside a Slurm allocation or without Jobmon. C19 runs a toy
 # simulation with psimulate; it skips itself outside a Slurm allocation or when
 # `C_WALKTHROUGH_SIM_ENV` is not set. C14 and C15 are about the test suite, so the review
 # doc shows them.
 #
 # Run it from `libs/dagger` with an env that has the `test` extra (papermill and
-# ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`.
+# ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`. The
+# cluster sections also need Jobmon in that env (the `cluster` extra, or a shared env that
+# provides it), and `C_WALKTHROUGH_DIR` set to a folder on storage that every node can read
+# and write, because steps that run through Jobmon write their products there.
 
 # %% [markdown]
 # ## How this notebook works
 #
 # The files a modeler writes are the definitions in `c_walkthrough_defs/`: `pipeline.py`,
 # `mncnh_slice.py` and `toy_simulation.py`, with the notebook, scripts and model files they
-# name. Each section runs the installed `dagger` command on one of them, in a separate
-# process, the way a modeler would type it in a shell. Everything else in this notebook is
-# machinery for showing many runs and many mistakes in one place. A modeler would not write
-# any of it:
+# name. Almost every section runs the installed `dagger` command on one of them, in a
+# separate process, the way a modeler would type it in a shell. The exceptions are C2's
+# check that the command imports no Jobmon (it runs the command through click's test runner
+# in a child Python), C12 (which runs the docs test with pytest) and C17 (which loads a
+# definition in this process to print a step's command). Everything else in this notebook
+# is machinery for showing many runs and many mistakes in one place. A modeler would not
+# write any of it:
 #
 # - **A copy per section.** A definition keeps its outputs and pytask state next to itself
 #   (`HERE / "output"`, `HERE / "state"`). If every section ran in one folder, each would
@@ -49,9 +56,17 @@
 #   that gives every step the test harness's fixed code fingerprint, the stand-in for
 #   MIC-7760. With the public API (`-c pipeline.py`) every step is stale on every run; C5
 #   shows both.
+# - **`--local`.** `dagger run` and `dagger force` send a definition's stale steps through
+#   Jobmon unless `--local` is given. The local sections pass `--local` so that they run
+#   anywhere in seconds; C16 and C1-real show the default on the cluster.
 #
-# The cluster sections add a little more machinery of their own, explained where it
-# appears.
+# The cluster sections add a little more machinery, explained where it appears: the
+# bridge's run directories (`.pytask/jobmon/<run>/state.json`), read to print each Jobmon
+# workflow's id; one addition to `PATH` for Jobmon's worker script (below); and, in C16, a
+# run started in the background so that a second run can meet its lock and the first can
+# be stopped with SIGTERM, as Slurm stops a job at the end of its time limit. The error
+# table's case J1 takes `scontrol` off the command's `PATH` to stand in for a host where
+# Jobmon cannot run.
 
 # %% [markdown]
 # Imports, and where things are: this example folder, the library, the installed `dagger`
@@ -173,6 +188,18 @@ def dagger(*args, cwd, show=True, stdout=True, env=None):
     return proc
 
 
+# A venv layered over a shared env, as build_mncnh_envs.sh makes, has Jobmon's console
+# scripts only in the shared env's bin, and jobmon_slurm looks for its worker script on PATH
+# or next to the Python that runs it. So the commands that go through Jobmon get the shared
+# env's bin at the end of PATH. This is a recorded finding of the review, not something a
+# modeler should need; the overlay venvs are being retired.
+JOBMON_ENV = (
+    {"PATH": CHILD_ENV["PATH"] + os.pathsep + str(Path(sys.base_prefix) / "bin")}
+    if shutil.which("worker_node_entry_point", path=CHILD_ENV["PATH"]) is None
+    else {}
+)
+
+
 def products(folder):
     """Return the files under a definition's output folder, relative to it."""
     out = folder / "output"
@@ -187,6 +214,24 @@ def plan(proc):
     """Return the preview's run/skip lines as {step: line}."""
     lines = [l for l in proc.stdout.splitlines() if re.match(r"(run |skip) ", l)]
     return {l.split()[1].rstrip(":"): l for l in lines}
+
+
+def bridged_runs(state):
+    """Return the bridge's run directories under a pipeline's state folder."""
+    runs = state / ".pytask" / "jobmon"
+    return sorted(runs.iterdir()) if runs.exists() else []
+
+
+def show_runs(runs):
+    """Print the Jobmon workflow id and status that each bridge run directory records."""
+    for run_dir in runs:
+        state = json.loads((run_dir / "state.json").read_text())
+        print(
+            f"Jobmon workflow {state['workflow_id']}, status {state['workflow_status']} "
+            f"({state['status']}), run directory {run_dir.name}"
+        )
+    if not runs:
+        print("No Jobmon workflow was bound.")
 
 
 # %% [markdown]
@@ -218,35 +263,48 @@ assert str(WORK) not in first.stdout, "a reason shows an absolute path"
 # %% [markdown]
 # ## C2 — One installed command (local)
 #
-# `dagger --help` lists the verbs. There is no `vwf` script, and a preview of a definition
-# does not import Jobmon.
+# `dagger --help` lists the verbs, and `dagger run --help` shows the options a run through
+# Jobmon takes. There is no `vwf` script. Neither a preview nor a run with `--local`
+# imports Jobmon; each is checked in its own copy, so the run's products stay out of the
+# folder the next sections use.
 
 # %%
 dagger("--help", cwd=GOOD)
+dagger("run", "--help", cwd=GOOD)
 assert not (DAGGER.parent / "vwf").exists()
-probe = (
-    "import sys; from click.testing import CliRunner; from vivarium.dagger.cli import dagger; "
-    "r = CliRunner().invoke(dagger, ['preview', '-c', 'pipeline.py:stable']); "
-    "print('exit', r.exit_code, 'jobmon imported:', any(m.split('.')[0] == 'jobmon' for m in sys.modules))"
-)
-out = subprocess.run(
-    [sys.executable, "-c", probe], cwd=GOOD, env=CHILD_ENV, capture_output=True, text=True
-)
-print(out.stdout.strip())
-assert "exit 0 jobmon imported: False" in out.stdout
+for verb in (["preview"], ["run", "--local"]):
+    folder = make_defs("c2_" + verb[0])
+    probe = (
+        "import sys; from click.testing import CliRunner; from vivarium.dagger.cli import dagger; "
+        f"r = CliRunner().invoke(dagger, [{verb[0]!r}, '-c', 'pipeline.py:stable', *{verb[1:]!r}]); "
+        "print('exit', r.exit_code, 'jobmon imported:', any(m.split('.')[0] == 'jobmon' for m in sys.modules))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", probe], cwd=folder, env=CHILD_ENV, capture_output=True, text=True
+    )
+    print(" ".join(verb) + ":", out.stdout.strip())
+    assert "exit 0 jobmon imported: False" in out.stdout, out.stdout + out.stderr
 
 # %% [markdown]
 # ## C3 — Exit status: 0 success, 1 a failed step, 2 a wrong definition or command (local)
 #
-# The `dagger` command runs a definition only with `--local` until MIC-7752 wires it to
-# the bridge; without it, `dagger` says so and exits 2. The Python API can already run a
-# definition through Jobmon, with `run(pipeline, jobmon=True)`; C16 shows it on the cluster.
-# A failed step exits 1, so the status can gate the next command in a shell. The failing
-# definition here is C9's.
+# `dagger run` and `dagger force` send a definition's stale steps through Jobmon unless
+# `--local` is given. C16 shows that on the cluster, including a failing run whose exit
+# status gates the next command; this section stays local so that it runs anywhere.
+# Exit 2 means nothing ran: a wrong definition or command, a host where Jobmon cannot run
+# (case J1 in the error table), or a step with no project (C16). Exit 1 means a step failed,
+# or another run held the run lock (C16). 130 is an interrupt; for a run through Jobmon the
+# message names the workflow, which is not cancelled (C16).
+#
+# The first command gives a Jobmon option together with `--local`, which is refused before
+# the definition is loaded. Then a failed step exits 1, so the status can gate the next
+# command in a shell. The failing definition here is C9's.
 
 # %%
-no_local = dagger("run", "-c", "pipeline.py:stable", cwd=GOOD)
-assert no_local.returncode == 2 and "--local" in no_local.stderr
+wrong = dagger("run", "-c", "pipeline.py:stable", "--local", "-P", "proj_simscience", cwd=GOOD)
+assert wrong.returncode == 2, wrong.returncode
+assert "--project" in wrong.stderr and "not with --local" in wrong.stderr
+assert products(GOOD) == []
 
 FAILS = make_defs(
     "c3_fails", edits=[('frame["age_group"] != "0-14"', 'frame["age"] != "0-14"')]
@@ -307,6 +365,11 @@ assert all(l.startswith("run") for l in plan(public).values())
 # population step that also writes the time it ran, so forcing it changes
 # population.parquet: adults runs again, but adults drops that column, so its output is
 # unchanged and summary and later steps stay skipped.
+#
+# The rule holds for a run in this process (`--local`), which this section uses. Through
+# Jobmon, the bridge submits every step after a forced or stale step even when that step's
+# inputs did not change; early cutoff on the bridge is MIC-7763. C16 forces a step through
+# Jobmon.
 
 # %%
 FORCE = UNTIL
@@ -436,6 +499,7 @@ def show_error(
     report_edits=(),
     args=("preview", "-c", "pipeline.py:stable"),
     setup=None,
+    env=None,
     exit_code,
     names=(),
     absent=(),
@@ -446,7 +510,7 @@ def show_error(
     folder = make_defs(f"err_{len(CASES):02d}", edits=edits, report_edits=report_edits)
     if setup:
         setup(folder)
-    proc = dagger(*args, cwd=folder, stdout=False)
+    proc = dagger(*args, cwd=folder, stdout=False, env=env)
     stdout_tail = "\n".join(proc.stdout.rstrip().splitlines()[-12:])
     if proc.returncode == 1 and stdout_tail:
         print("[end of pytask's report on stdout]\n" + stdout_tail + "\n")
@@ -635,11 +699,19 @@ show_error(
     names=["pipeline.py", "SyntaxError", "Could not load"],
     user_frames_only=True,
 )
-_ = show_error(
-    "C1 a definition run without --local",
-    args=("run", "-c", "pipeline.py:stable"),
+# J1 stands in for a login node or a laptop: scontrol is taken off the command's PATH.
+# On the cluster the message says scontrol is missing and to run on a compute node; in an
+# env without Jobmon it says to install vivarium-dagger[cluster]. Both end by offering
+# --local, and nothing is written.
+NO_SCONTROL_PATH = os.pathsep.join(
+    d for d in CHILD_ENV["PATH"].split(os.pathsep) if not (Path(d) / "scontrol").exists()
+)
+_, no_jobmon = show_error(
+    "J1 a run through Jobmon where Jobmon cannot run",
+    args=("run", "-c", "pipeline.py:stable", "-P", "proj_simscience"),
+    env={"PATH": NO_SCONTROL_PATH},
     exit_code=2,
-    names=["--local"],
+    names=["Jobmon", "--local"],
 )
 
 # %% [markdown]
@@ -694,6 +766,9 @@ print(
 #
 # `docs/source/python_pipelines.rst` shows each subcommand on a worked example. The test
 # below runs every `$ dagger` line on that page in order and fails if one exits non-zero.
+# It runs them under the test harness's fake Jobmon, so the page's example of a run through
+# Jobmon (`dagger run -c pipeline.py -P ...`) runs through the bridge without a cluster;
+# C16 is the real run.
 
 # %%
 docs = subprocess.run(
@@ -738,8 +813,13 @@ assert docs.returncode == 0
 # `year_id` (1007 columns, as the real extract has).
 #
 # The run and the skip use `mncnh_slice.py:stable`, which carries the `stable_code_id`
-# stand-in. The last two commands run the public API (`mncnh_slice.py`), with its own
-# state, and show that every step would run again until MIC-7760.
+# stand-in, and run in this process (`--local`). Then the public API (`mncnh_slice.py`),
+# which has its own state, runs the slice again through Jobmon, the command's default: the
+# step functions are imported on the nodes from a definition file outside the folder
+# `dagger` runs from, the artifact and notebook steps run in the model's env there, and the
+# slice's `Pipeline(resources=...)` gives every step more memory than dagger's default. The
+# project comes from `-P`. A preview after it shows that every step would run again until
+# MIC-7760.
 
 # %%
 MNCNH = os.environ.get("C_WALKTHROUGH_MNCNH")
@@ -796,7 +876,10 @@ else:
                     "".join(o.get("data", {}).get("text/plain", "")) for o in cell["outputs"]
                 ),
             )
-    dagger("run", "-c", DEF, "--local", cwd=MNCNH, stdout=False)
+    real_jobmon = dagger("run", "-c", DEF, "-P", "proj_simscience", cwd=MNCNH, env=JOBMON_ENV)
+    show_runs(bridged_runs(SLICE / "state"))
+    assert real_jobmon.returncode == 0
+    assert len(bridged_runs(SLICE / "state")) == 1
     real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
     assert all(l.startswith("run") for l in plan(real_public).values())
 
@@ -826,115 +909,168 @@ else:
     assert len(renamed.stderr) < 1500, len(renamed.stderr)
 
 # %% [markdown]
-# ## C16 — A definition runs through Jobmon from the Python API (cluster)
+# ## C16 — A definition runs through Jobmon from the `dagger` command (cluster)
 #
-# Track B's bridge is in the same tree, so `run(pipeline, jobmon=True)` sends a definition's
-# stale steps to Slurm as one Jobmon workflow. The `dagger` command still refuses a
-# definition without `--local` until MIC-7752 wires it (C3), so this section calls the verb
-# from Python. It loads the walkthrough's definition in this process and runs it through
-# real Jobmon, runs it again, and then runs a copy in which a python step and the notebook
-# both fail. A node imports each step's function by its module name, so each copy gets a
-# module name of its own and its folder goes on `PYTHONPATH`, which Slurm passes to every
-# node. The section skips itself outside a Slurm allocation or without Jobmon.
+# Without `--local`, `dagger run` and `dagger force` send a definition's stale steps to
+# Slurm as one Jobmon workflow. Each step's compute resources start from dagger's defaults
+# (`vivarium.dagger.constants.DEFAULT_RESOURCES`: all.q, 1 GB, an hour, one core), then the
+# definition's `Pipeline(resources=...)`, then the command's `-P`, `-q` and `-m`, then the
+# step's own `resources=`. The walkthrough's definition sets no project, as an example
+# shared between people should not, so each command passes `-P`. A node imports each python
+# step's function through the import root that the bridge sends with the step, so nothing
+# sets `PYTHONPATH`: the commands run from the workspace folder, not the definition's, and
+# the cell checks that `PYTHONPATH` is unset and that no installed module is named
+# `pipeline`.
+#
+# In order, each in its own copy where it says so:
+#
+# 1. The command with no project exits 2 and writes nothing.
+# 2. The good copy runs through Jobmon; a preview then skips every step, and the same
+#    command again binds no workflow.
+# 3. `dagger force ... adults` runs through Jobmon. The bridge also submits the steps after
+#    adults, because it has no early cutoff (C6, MIC-7763).
+# 4. A copy of the definition next to it, `failing_archive.py`, whose archive command fails
+#    on its node: exit 1, and dagger's line for the step.
+# 5. A broken copy, in which a python step and the notebook fail, runs with `-m 1` behind
+#    the same shell gate as C3: "stopped: dagger exited 1", each failure named by step, and
+#    the node's traceback in pytask's report.
+# 6. In its own copy, whose population step sleeps for three minutes: a second run while
+#    the first holds the run lock is refused (exit 1, the lock file and its holder); SIGTERM
+#    to the first, as Slurm sends at the end of a job's time limit, ends it with exit 130
+#    and its workflow id; and the same command then runs again to the end.
 
 # %%
 import importlib.util
+import signal
 
-from vivarium.dagger.frontend import StepFailed, load_pipeline, run
-
-ON_SLURM = (
-    "SLURM_JOB_ID" in os.environ
-    and shutil.which("sbatch") is not None
-    and importlib.util.find_spec("jobmon") is not None
-)
-SLURM = {
-    "jobmon_cluster": "slurm",
-    "jobmon_resources": {
-        "project": "proj_simscience",
-        "queue": "all.q",
-        "memory": 1,
-        "runtime": 600,
-        "cores": 1,
-    },
-}
+ON_SLURM = "SLURM_JOB_ID" in os.environ and importlib.util.find_spec("jobmon") is not None
+PROJECT = "proj_simscience"
 
 
-def jobmon_defs(name, edits=(), report_edits=()):
-    """Copy the definitions as `make_defs` does, under a module name of their own."""
-    folder = make_defs(name, edits=edits, report_edits=report_edits)
-    (folder / "pipeline.py").rename(folder / f"{name}.py")
-    return folder
-
-
-def bridged_runs(pipe):
-    """Return the bridge's run directories under the pipeline's root."""
-    runs = pipe.root / ".pytask" / "jobmon"
-    return sorted(runs.iterdir()) if runs.exists() else []
-
-
-def jobmon_run(folder):
-    """Run the folder's definition through Jobmon in this process and print what happened."""
-    os.environ["PYTHONPATH"] = str(folder)
-    pipe = load_pipeline(f"{folder / (folder.name + '.py')}:stable")
-    before = set(bridged_runs(pipe))
-    start = time.perf_counter()
-    try:
-        outcomes, failed = run(pipe, jobmon=True, **SLURM), None
-    except StepFailed as error:
-        outcomes, failed = error.outcomes, error
-    print(f"run(pipeline, jobmon=True) took {time.perf_counter() - start:.0f} s")
-    for step, outcome in outcomes.items():
-        print(f"  {step}: {outcome.name}")
-    new = [r for r in bridged_runs(pipe) if r not in before]
-    for r in new:
-        state = json.loads((r / "state.json").read_text())
-        print(
-            f"Jobmon workflow {state['workflow_id']}, status {state['workflow_status']} "
-            f"({state['status']}), run directory {r.name}"
-        )
-    if not new:
-        print("No Jobmon workflow was bound.")
-    if failed is not None:
-        print("StepFailed:\n" + str(failed))
-    print()
-    return outcomes, new, failed
+def jobmon_dagger(*args, **kwargs):
+    """Run `dagger` from the workspace with the PATH that the Jobmon runs need."""
+    return dagger(*args, cwd=WORK, env=JOBMON_ENV, **kwargs)
 
 
 if not ON_SLURM:
     print("skipped: not in a Slurm allocation, or Jobmon is not installed")
 else:
-    from pytask import console
+    if JOBMON_ENV:
+        print(f"Jobmon's worker script is not on PATH; the commands add {JOBMON_ENV['PATH'].rsplit(os.pathsep, 1)[1]}")
+    assert "PYTHONPATH" not in CHILD_ENV, "C16 shows that a node imports steps without it"
+    clash = subprocess.run(
+        [sys.executable, "-I", "-c", "import importlib.util as u; print(u.find_spec('pipeline'))"],
+        cwd=WORK,
+        env=CHILD_ENV,
+        capture_output=True,
+        text=True,
+    )
+    print("PYTHONPATH is not set; an installed module named 'pipeline':", clash.stdout.strip())
+    assert clash.stdout.strip() == "None"
 
-    # A venv layered over a shared env, as build_mncnh_envs.sh makes, has Jobmon's console
-    # scripts only in the shared env's bin. jobmon_slurm looks for its worker script on
-    # PATH or next to this Python, so the shared env's bin goes at the end of PATH.
-    BASE_BIN = str(Path(sys.base_prefix) / "bin")
-    if shutil.which("worker_node_entry_point") is None:
-        os.environ["PATH"] = os.environ["PATH"] + os.pathsep + BASE_BIN
-        print(f"Jobmon's worker script is not on PATH; added {BASE_BIN}")
-    console.quiet = True
-    try:
-        GOOD_JOBMON = jobmon_defs("jobmon_good")
-        first, first_runs, _ = jobmon_run(GOOD_JOBMON)
-        assert len(first_runs) == 1
-        assert all(o.name == "SUCCESS" for o in first.values()), first
-        print("products:", products(GOOD_JOBMON))
-        second, second_runs, _ = jobmon_run(GOOD_JOBMON)
-        assert not second_runs
-        assert all(o.name == "SKIP_UNCHANGED" for o in second.values()), second
-        BROKEN_JOBMON = jobmon_defs(
-            "jobmon_broken",
-            edits=[('pd.read_csv(coverage)["coverage"]', 'pd.read_csv(coverage)["coverag"]')],
-            report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
-        )
-        third, _, failed = jobmon_run(BROKEN_JOBMON)
-        assert failed is not None
-        assert {s for s, o in third.items() if o.name == "FAIL"} >= {
-            "coverage_kenya",
-            "report",
-        }
-    finally:
-        console.quiet = False
+    # 1. No project.
+    GOOD_JOBMON = make_defs("jobmon_good")
+    GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py:stable", GOOD_JOBMON / "state_stable"
+    no_project = jobmon_dagger("run", "-c", GOOD_DEF)
+    assert no_project.returncode == 2 and "-P/--project" in no_project.stderr
+    assert products(GOOD_JOBMON) == [] and not bridged_runs(GOOD_STATE)
+
+    # 2. The good copy, a preview, and the same command again.
+    first = jobmon_dagger("run", "-c", GOOD_DEF, "-P", PROJECT)
+    first_runs = bridged_runs(GOOD_STATE)
+    show_runs(first_runs)
+    assert first.returncode == 0 and len(first_runs) == 1
+    print("products:", products(GOOD_JOBMON))
+    assert len(products(GOOD_JOBMON)) == 8
+    assert all(l.startswith("skip") for l in plan(jobmon_dagger("preview", "-c", GOOD_DEF)).values())
+    second = jobmon_dagger("run", "-c", GOOD_DEF, "-P", PROJECT)
+    assert second.returncode == 0 and bridged_runs(GOOD_STATE) == first_runs
+
+    # 3. Force through Jobmon.
+    forced = jobmon_dagger("force", "-c", GOOD_DEF, "-P", PROJECT, "adults")
+    force_runs = [r for r in bridged_runs(GOOD_STATE) if r not in first_runs]
+    show_runs(force_runs)
+    assert forced.returncode == 0 and len(force_runs) == 1
+    assert all(l.startswith("skip") for l in plan(jobmon_dagger("preview", "-c", GOOD_DEF)).values())
+
+    # 4. A command step that fails on its node.
+    shutil.copy(GOOD_JOBMON / "pipeline.py", GOOD_JOBMON / "failing_archive.py")
+    edit(GOOD_JOBMON / "failing_archive.py", [('"cp {report} {copy}"', '"false && cp {report} {copy}"')])
+    cmd_fail = jobmon_dagger("run", "-c", "jobmon_good/failing_archive.py:stable", "-P", PROJECT)
+    assert cmd_fail.returncode == 1 and "Step 'archive' failed" in cmd_fail.stderr
+    assert "status 1" in cmd_fail.stderr and "&& cp" not in cmd_fail.stderr
+
+    # 5. A broken copy behind the shell gate.
+    BROKEN_JOBMON = make_defs(
+        "jobmon_broken",
+        edits=[('pd.read_csv(coverage)["coverage"]', 'pd.read_csv(coverage)["coverag"]')],
+        report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
+    )
+    gate = (
+        f"{shlex.quote(str(DAGGER))} run -c jobmon_broken/pipeline.py:stable -P {PROJECT} -m 1 "
+        "> broken.out 2> broken.err && echo 'next command ran' || echo \"stopped: dagger exited $?\""
+    )
+    print(f"$ {gate}")
+    chain = subprocess.run(
+        ["bash", "-c", gate], cwd=WORK, env=CHILD_ENV | JOBMON_ENV, capture_output=True, text=True
+    )
+    print(chain.stdout.strip())
+    assert chain.stdout.strip() == "stopped: dagger exited 1"
+    broken_err, broken_out = (WORK / "broken.err").read_text(), (WORK / "broken.out").read_text()
+    print("[stderr]\n" + broken_err.rstrip())
+    print("[end of pytask's report on stdout]\n" + "\n".join(broken_out.rstrip().splitlines()[-25:]))
+    show_runs(bridged_runs(BROKEN_JOBMON / "state_stable"))
+    for expected in (
+        "Step 'coverage_kenya' failed: KeyError: 'coverag'",
+        "Step 'coverage_nigeria' failed: KeyError: 'coverag'",
+        "Step 'report' failed: notebook report.ipynb raised KeyError: 'adult' in cell In [3]",
+        "report_executed.ipynb",
+    ):
+        assert expected in broken_err, expected
+    assert "Traceback" not in broken_err
+    assert "mean_coverage" in broken_out, "the node's traceback is in pytask's report"
+    assert not (BROKEN_JOBMON / "output/walk/archive").exists()
+
+    # 6. The run lock and an interrupt.
+    LOCKED = make_defs(
+        "jobmon_lock",
+        edits=[
+            ("import sys\n", "import sys\nimport time\n"),
+            (
+                '"""Return a small population table by age group."""',
+                '"""Return a small population table by age group."""\n    time.sleep(180)',
+            ),
+        ],
+    )
+    LOCK_DEF, LOCK_STATE = "jobmon_lock/pipeline.py:stable", LOCKED / "state_stable"
+    argv = [str(DAGGER), "run", "-c", LOCK_DEF, "-P", PROJECT]
+    print(f"$ dagger {shlex.join(argv[1:])} &    # started in the background")
+    # Its output goes to files, which nothing has to read while it runs.
+    held_out, held_err = WORK / "lock_holder.out", WORK / "lock_holder.err"
+    with held_out.open("w") as out_file, held_err.open("w") as err_file:
+        holder = subprocess.Popen(argv, cwd=WORK, env=CHILD_ENV | JOBMON_ENV, stdout=out_file, stderr=err_file)
+    workflow_id, waited = None, time.perf_counter()
+    while workflow_id is None:
+        assert holder.poll() is None, "the first run ended before its workflow was bound"
+        assert time.perf_counter() - waited < 1800, "no workflow was bound in 30 minutes"
+        time.sleep(5)
+        runs = bridged_runs(LOCK_STATE)
+        if runs and (runs[-1] / "state.json").exists():
+            workflow_id = json.loads((runs[-1] / "state.json").read_text()).get("workflow_id")
+    print(f"the first run holds the lock; its Jobmon workflow is {workflow_id}")
+    refused = jobmon_dagger("run", "-c", LOCK_DEF, "-P", PROJECT)
+    assert refused.returncode == 1 and "run.lock" in refused.stderr, refused.stderr
+    holder.send_signal(signal.SIGTERM)
+    holder.wait(timeout=900)
+    interrupted = held_err.read_text()
+    print(f"$ kill -TERM <first run>    # the first run exits {holder.returncode}")
+    print("[stderr]\n" + interrupted.rstrip())
+    assert holder.returncode == 130, holder.returncode
+    assert f"Jobmon workflow {workflow_id} was not cancelled" in interrupted
+    assert "run the same command again" in interrupted
+    resumed = jobmon_dagger("run", "-c", LOCK_DEF, "-P", PROJECT)
+    show_runs(bridged_runs(LOCK_STATE))
+    assert resumed.returncode == 0
 
 # %% [markdown]
 # ## C19 — A simulation step runs psimulate on the cluster (cluster)
@@ -958,6 +1094,14 @@ else:
 #    stays in the scratch directory, and the summary does not run.
 # 3. The same command again. The fail-once markers now exist, so every simulation
 #    succeeds and the run directory is replaced.
+#
+# The drill also shows MIC-7799: the step's command names its check script through
+# `$DAGGER_COLLECT_SIMULATION`, so pytask's report for the failed step no longer prints the
+# script (385 lines in the earlier run).
+#
+# All three runs pass `--local`. Through Jobmon a simulation step would be one Jobmon task
+# whose job starts psimulate's own workflow and holds a node for the whole run; MIC-7801
+# owns that case and its evidence.
 
 # %%
 SIM_ENV = os.environ.get("C_WALKTHROUGH_SIM_ENV")
@@ -1008,6 +1152,9 @@ else:
     fail_once = {"FAIL_ONCE_SENTINEL_DIR": str(markers)}
     drill = dagger("run", "-c", "toy_simulation.py", "--local", cwd=SIM, env=fail_once)
     assert drill.returncode == 1 and "0 of 4" in drill.stderr
+    assert "DAGGER_COLLECT_SIMULATION" in drill.stdout, "pytask's report names the check's path"
+    assert "def collect_run" not in drill.stdout + drill.stderr
+    print("pytask's report for the drill:", len(drill.stdout.splitlines()), "lines")
     assert tree(RUN) == first_run, "run 1's directory changed"
     scratch = SIM / "output/toy/sims/toy.psimulate"
     print("scratch:", sorted(str(p.relative_to(scratch)) for p in scratch.glob("*/*")))
@@ -1025,7 +1172,7 @@ else:
 # ## PLAY
 #
 # Try your own: change a step in `GOOD / "pipeline.py"`, run `preview` to see what would
-# run, then `run --local --until <step>` or `force <step>`. `make_defs("mine", edits=[...])`
+# run, then `run --local --until <step>` or `force --local <step>`. `make_defs("mine", edits=[...])`
 # gives a fresh copy with one-line edits applied.
 
 # %%

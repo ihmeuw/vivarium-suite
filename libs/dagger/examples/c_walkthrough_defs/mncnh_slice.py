@@ -2,8 +2,10 @@
 
 Run ``dagger`` from an MNCNH checkout so ``env="vivarium_gates_mncnh_artifact"`` resolves to
 that checkout's ``.venv/vivarium_gates_mncnh_artifact``. The pipeline's own env must import
-``vivarium_gates_mncnh``, because a ``python_step`` runs in the pipeline's process. The
-artifact step and the notebook step run in the artifact env, as ``make_artifacts`` does.
+``vivarium_gates_mncnh``, because a ``python_step`` runs with that env's Python: in the
+``dagger`` process with ``--local``, and on a compute node through Jobmon. The artifact step
+and the notebook step run in the artifact env, as ``make_artifacts`` does. Set
+``DAGGER_SLICE_ROOT`` to the folder that holds the slice's handoff, outputs and state.
 
 ``-c mncnh_slice.py`` uses the public API only, so every step is always stale until
 MIC-7760; ``-c mncnh_slice.py:stable`` gives every step the harness's ``stable_code_id``
@@ -29,9 +31,10 @@ from vivarium.dagger.frontend import (
 )
 from vivarium.dagger.harness import with_stable_code_id
 
-SLICE_ROOT = Path(
-    os.environ.get("DAGGER_SLICE_ROOT", "/ihme/homes/pnast/scratch/dagger-evidence/slice")
-)
+SLICE_ROOT = Path(os.environ["DAGGER_SLICE_ROOT"])
+SLICE_RESOURCES = {"memory": 8}
+"""Compute resources for every step run through Jobmon; the model's loaders need more
+memory than dagger's default. The project comes from the ``dagger`` command's ``-P``."""
 LOCATION = "Nigeria"
 PRIMARY_DATA = {
     "ifa_coverage.csv": ["location_id", "year_id", "age_group_id", "sex_id", "draw_0"]
@@ -115,12 +118,15 @@ def _tasks() -> tuple[list[Task], ArtifactRegistry]:
 def pipeline() -> Pipeline:
     """Return the slice built with the public API only."""
     tasks, registry = _tasks()
-    return Pipeline(tasks, SLICE_ROOT / "state", registry)
+    return Pipeline(tasks, SLICE_ROOT / "state", registry, resources=SLICE_RESOURCES)
 
 
 def stable() -> Pipeline:
     """Return the slice with the harness's code-fingerprint stand-in on every step."""
     tasks, registry = _tasks()
     return Pipeline(
-        [with_stable_code_id(t) for t in tasks], SLICE_ROOT / "state_stable", registry
+        [with_stable_code_id(t) for t in tasks],
+        SLICE_ROOT / "state_stable",
+        registry,
+        resources=SLICE_RESOURCES,
     )
