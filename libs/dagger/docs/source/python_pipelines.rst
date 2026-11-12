@@ -131,6 +131,69 @@ step runs again only if the forced step's output changed. Until a step can decla
 fingerprint of its code, every ``python_step`` is stale on every build, so in this
 example ``adults`` and ``summary`` run as well.
 
+Simulation steps
+----------------
+
+:func:`~vivarium.dagger.frontend.simulation_step.simulation_step` runs a vivarium
+simulation with ``psimulate run`` in the environment named by ``env``, which needs
+``vivarium-psimulate`` installed with its ``cluster`` extra. psimulate runs only on a
+cluster compute node: it refuses to start on a submit host or outside the cluster. A
+``dagger run --local`` of a pipeline with a simulation step must therefore be started
+inside an allocation, for example:
+
+.. code-block:: text
+
+   srun -A proj_simscience -p i.q -c 2 --mem 8G -t 01:00:00 --pty bash
+   dagger run -c pipeline.py --local
+
+psimulate submits its own Jobmon workflow and waits for it to finish. The allocation
+that the step runs in must last for the whole simulation, and so must the step's
+``resources`` runtime once a definition can run through Jobmon. psimulate stops waiting
+when the allocation's time runs out, and the step then fails because some simulations
+did not finish.
+
+``produces`` names the run directory. A step that reads the simulation's results names
+the same key as an input and receives the run directory's path: a ``pathlib.Path`` in a
+``python_step`` target, and a ``str`` in a notebook step. The run directory holds
+psimulate's run, with one file per simulation for each metric in
+``results/<metric>/*.parquet``, the simulations' metadata in ``metadata/``, and
+psimulate's logs in ``logs/``. The step counts as done only when every simulation
+finished and wrote every metric, so a consumer never reads a partial run. The registry's
+output root must be on storage that every node sees, because psimulate's workers write
+the results.
+
+When a simulation does not finish, the step fails with how many of the simulations
+finished, and the steps that read its results do not run. The last complete run stays
+in the run directory, where the consumers expect it. The partial run stays beside it, in
+``<run directory>.psimulate``, until the step runs again. A re-run starts the whole
+simulation again; the step does not resume a partial run.
+
+The step replaces its run directory on every successful run, so no other step may write
+under it.
+
+``options`` holds psimulate's options for ``run``, keyed by long option name with
+``_`` for ``-``. ``project`` is required. ``backup_freq``, ``hardware``,
+``max_attempts``, ``max_runtime``, ``max_workers``, ``peak_memory``, ``project``,
+``queue``, ``slack_channel`` and ``slack_tag`` take a string or a number. ``no_slack``
+takes ``True`` or ``False``. psimulate sends a Slack message when the run ends unless
+you pass ``no_slack=True``. ``no_slack=True`` cannot be combined with ``slack_channel``
+or ``slack_tag``, and ``slack_tag`` needs ``slack_channel``. The step sets the model
+specification, the branches file, the artifact and the result directory itself, from
+``spec``, ``branches``, ``artifact`` and ``produces``. Any other key is refused when the
+step is defined.
+
+This example runs a toy model with two draws and two seeds, so four simulations, and
+sums the deaths by draw:
+
+.. literalinclude:: ../../tests/frontend/simulation_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+In a model's pipeline, ``env`` names the model's environment. The example uses
+``sys.prefix``, the environment that ``dagger`` runs in, so that it needs no other
+environment; that environment must then have ``vivarium-psimulate`` with its
+``cluster`` extra.
+
 When a step fails
 -----------------
 
@@ -158,6 +221,20 @@ command, or the signal that stopped it (for example SIGKILL). For any other step
 runs a shell command, the line gives the command's exit status, or the signal that
 stopped it. In both cases the command itself and its output are in pytask's report for
 the step, not in ``dagger``'s line.
+
+For a simulation step in which some simulations did not finish, the line gives how many
+finished, where the partial run is, and whether the previous complete run was kept. For
+example:
+
+.. code-block:: text
+
+   Step 'sims/toy' failed: psimulate finished 3 of 4 simulations; the partial run is at /home/user/model/output/example/sims/toy.psimulate/toy_model/2026_11_10_09_30_00. The previous complete run at /home/user/model/output/example/sims/toy was kept.
+
+If the step's command failed before the check wrote a message, for example because
+psimulate itself failed, the line says only that the command failed, with its exit
+status, where psimulate's logs are, and whether the previous complete run was kept. If
+the check itself failed with an unexpected error, the line names the check and the
+error.
 
 If pytask stops the build for another reason, for example because its configuration
 file or lockfile under the root cannot be read or a pytask plugin failed, pytask's
