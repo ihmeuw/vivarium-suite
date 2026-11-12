@@ -5,6 +5,8 @@
   attribute and bracket access, such as ``foo.bar.baz`` or ``['foo.bar'].baz``
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose path matches a pattern
 - Display a ``ConfigNode`` in IPython as ``ConfigNode(path, value)``, using its outermost value
+- Default ``ConfigNode.update()``'s ``layer`` and ``source`` to None, so a found node can be
+  set with ``node.update(value)`` the way assigning through the tree sets it
 - Write ``ConfigTree.unused_keys()`` paths the way ``ConfigNode.path`` does, so a key
   that contains a dot is told apart from nested keys
 

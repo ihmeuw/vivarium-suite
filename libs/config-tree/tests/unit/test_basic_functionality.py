@@ -436,6 +436,45 @@ class TestPrettyRepr:
         assert _pretty(node) == repr(node)
 
 
+class TestUpdateFoundNode:
+    """Tests for changing a value through a node found in the tree."""
+
+    @pytest.fixture
+    def tree(self) -> ConfigTree:
+        tree = ConfigTree(layers=["base", "override"])
+        tree.update({"time": {"step_size": 1}}, layer="base")
+        return tree
+
+    def test_the_tree_reads_the_new_value(self, tree: ConfigTree) -> None:
+        [step_size] = tree.find("step_size")
+        step_size.update(5)
+        assert tree.time.step_size == 5
+        assert tree.get(["time", "step_size"]) == 5
+
+    def test_it_matches_assigning_through_the_tree(self, tree: ConfigTree) -> None:
+        [step_size] = tree.find("step_size")
+        step_size.update(5)
+
+        assigned = ConfigTree(layers=["base", "override"])
+        assigned.update({"time": {"step_size": 1}}, layer="base")
+        assigned.time.step_size = 5
+
+        assert step_size.metadata == assigned.time._children["step_size"].metadata
+
+    def test_the_display_shows_the_new_value(self, tree: ConfigTree) -> None:
+        [step_size] = tree.find("step_size")
+        step_size.update(5)
+        assert _pretty(step_size) == "ConfigNode(time.step_size, 5)"
+
+    def test_a_second_update_at_the_outermost_layer_is_rejected(
+        self, tree: ConfigTree
+    ) -> None:
+        [step_size] = tree.find("step_size")
+        step_size.update(5)
+        with pytest.raises(DuplicatedConfigurationError):
+            step_size.update(6)
+
+
 class TestFind:
     """Tests for finding leaf nodes by path."""
 

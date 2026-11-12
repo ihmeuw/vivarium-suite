@@ -166,7 +166,7 @@ class ConfigNode:
         self._accessed = True
         return value
 
-    def update(self, value: Any, layer: str | None, source: str | None) -> None:
+    def update(self, value: Any, layer: str | None = None, source: str | None = None) -> None:
         """Set a value for a layer with optional metadata about source.
 
         Parameters
@@ -175,7 +175,8 @@ class ConfigNode:
             Data to store in the node.
         layer
             Name of the layer to use. If no layer is provided, the value will
-            be set in the outermost (highest priority) layer.
+            be set in the outermost (highest priority) layer, the same layer that
+            assigning through the tree, as in ``tree.time.step_size = 5``, uses.
         source
             Metadata indicating the source of this value.
 
