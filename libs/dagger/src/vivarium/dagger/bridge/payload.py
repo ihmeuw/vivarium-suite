@@ -1,8 +1,9 @@
 """Turn a pipeline step into a JSON recipe that a compute node can run.
 
 The controller calls :func:`payload_for` for each step it sends to a node. A recipe is
-plain JSON: a python step crosses as its target's import reference, its product suffix,
-and its arguments, and a command step crosses as its command string and the ``bin``
+plain JSON: a python step crosses as its target's import reference, the directory its
+target's module imports from, its product suffix, and its arguments, and a command step
+crosses as its command string and the ``bin``
 directories of its env, resolved on the controller. No pickled code or data crosses, so
 an argument must be JSON or a path, and a step that cannot be named by reference is
 refused before anything is sent. :mod:`~vivarium.dagger.bridge.runner` runs a recipe.
@@ -10,6 +11,7 @@ refused before anything is sent. :mod:`~vivarium.dagger.bridge.runner` runs a re
 
 from __future__ import annotations
 
+import importlib
 import os
 from collections.abc import Mapping, MutableMapping
 from pathlib import Path, PurePath
@@ -40,6 +42,12 @@ class PythonPayload(TypedDict):
     """The controller's working directory when the recipe was made; the step runs there."""
     target: str
     """The import reference ``"package.module:qualname"`` of the step's target."""
+    sys_path: list[str]
+    """The import root of the target's module, the directory that its dotted name
+    imports from, as the only entry; empty when the module has no file. The node runner
+    appends it to ``sys.path`` while the step runs, so a step function defined in a
+    pipeline definition file that was loaded by path imports on the node without
+    ``PYTHONPATH``."""
     suffix: str
     """The product suffix, which names the save format (``.parquet`` or ``.csv``)."""
     kwargs: dict[str, JSONValue]
@@ -159,9 +167,16 @@ def payload_for(
     :class:`~vivarium.dagger.frontend.python_step.PythonStepRun` gives a
     :class:`PythonPayload` that names the target by
     :func:`~vivarium.dagger.frontend.python_step.target_reference` and carries the encoded
-    ``kwargs``. A task whose ``run`` is a command string gives a :class:`CommandPayload`
-    whose ``env_path`` is the task's env resolved here, so the node needs no conda and can
-    run an env that has no ``bin/python``. Both record the current working directory.
+    ``kwargs``. Its ``sys_path`` holds the import root of the target's module, worked out
+    from the module's ``__file__`` and dotted ``__name__``: the directory that holds the
+    module's file, then one directory up for each dot in the name, and one more for a
+    package's ``__init__.py``, which sits inside the package's own directory. The
+    ``__file__`` is made absolute against the current working directory but symbolic
+    links are not resolved, so the node sees the path that the controller imported from.
+    A module with no ``__file__`` gives an empty ``sys_path``. A task whose ``run`` is a
+    command string gives a :class:`CommandPayload` whose ``env_path`` is the task's env
+    resolved here, so the node needs no conda and can run an env that has no
+    ``bin/python``. Both record the current working directory.
 
     Parameters
     ----------
@@ -239,6 +254,23 @@ def payload_for(
         task=task.name,
         cwd=os.getcwd(),
         target=target,
+        sys_path=_import_roots(target),
         suffix=run.suffix,
         kwargs=encoded,
     )
+
+
+def _import_roots(target: str) -> list[str]:
+    """Return the import root of the module that the reference ``target`` names, as a list."""
+    name = target.partition(":")[0]
+    # target_reference has just imported the module, so this takes it from sys.modules.
+    module = importlib.import_module(name)
+    file = getattr(module, "__file__", None)
+    if not isinstance(file, str):
+        return []
+    root = Path(file).absolute().parent
+    # A package's __init__.py sits in the directory that its own last name component names.
+    levels = name.count(".") + (1 if hasattr(module, "__path__") else 0)
+    for _ in range(levels):
+        root = root.parent
+    return [str(root)]

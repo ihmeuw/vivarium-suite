@@ -13,12 +13,15 @@ force a step to run even when it is current. It is installed with ``vivarium-dag
 workflow YAML file, and anything else is a pipeline definition. ``dagger preview`` and
 ``dagger force`` take only pipeline definitions, and ``dagger restart`` takes only the
 output directory of a YAML workflow. The options of ``dagger run`` that override a YAML
-file's settings are refused for a pipeline definition, and ``--until`` and ``--local``
-are refused for a YAML file. Each refusal exits with status 2.
+file's settings are refused for a pipeline definition, except ``-P/--project``,
+``-q/--queue`` and ``-m/--max-attempts``, which a pipeline definition uses when it runs
+through Jobmon. ``--until`` and ``--local`` are refused for a YAML file. Each refusal
+exits with status 2.
 
-A pipeline definition cannot run through Jobmon yet, so ``dagger run`` and
-``dagger force`` require ``--local``, which runs the steps in this process. Without it,
-they exit with status 2 and say so.
+By default, ``dagger run`` and ``dagger force`` run a pipeline definition's stale steps
+through Jobmon, as one Jobmon workflow, with each step on a compute node (see
+`Running through Jobmon`_). With ``--local``, they run the steps in this process
+instead. ``dagger preview`` never runs anything and never uses Jobmon.
 
 .. contents::
    :local:
@@ -67,7 +70,8 @@ imported from ``vivarium.dagger.frontend``:
 
 The commands below are run from the directory that holds ``pipeline.py``, in the order
 shown. The library's tests run each of them on a copy of this file, so the page and the
-code cannot drift apart.
+code cannot drift apart. The tests run the command that goes through Jobmon with a
+stand-in for Jobmon that runs each step in its own process, as a compute node would.
 
 Previewing a run
 ----------------
@@ -98,6 +102,10 @@ standard error, followed by a line naming pytask's exit code, and exits with sta
 
 Running steps
 -------------
+
+The examples in this section use ``--local``, so they run the steps in this process. The
+same commands without ``--local`` run the steps through Jobmon, as
+`Running through Jobmon`_ describes.
 
 .. code-block:: console
 
@@ -131,6 +139,92 @@ step runs again only if the forced step's output changed. Until a step can decla
 fingerprint of its code, every ``python_step`` is stale on every build, so in this
 example ``adults`` and ``summary`` run as well.
 
+Running through Jobmon
+----------------------
+
+Without ``--local``, ``dagger run`` and ``dagger force`` plan the run in this process and
+then run every stale step as a task of one Jobmon workflow on the Slurm cluster. Each task
+runs one step on a compute node and waits for the steps it depends on. When the workflow
+ends, ``dagger`` records each step's result in the pipeline's state, exactly as a local
+run does, so a later run, with or without ``--local``, skips a step that is current.
+
+.. code-block:: console
+
+   $ dagger run -c pipeline.py -P proj_example
+
+A run through Jobmon needs the ``cluster`` extra (``pip install
+"vivarium-dagger[cluster]"``), and ``dagger`` must run on a compute node with
+``/opt/slurm/bin`` on ``PATH``, because Jobmon calls Slurm's commands from the host that
+runs the workflow. ``dagger`` waits there until the whole workflow ends, so start it in an
+allocation that lasts longer than the workflow, for example:
+
+.. code-block:: text
+
+   srun -A proj_example -p all.q -c 1 --mem 4G -t 24:00:00 --pty bash
+   dagger run -c pipeline.py -P proj_example
+
+In a batch script, start ``dagger`` with ``exec``, as in
+``exec dagger run -c pipeline.py -P proj_example``, so that it gets the SIGTERM that Slurm
+sends when the allocation's time runs out and can stop cleanly, as described below.
+
+If Jobmon is not installed, or the installed Jobmon or this host cannot run the workflow,
+``dagger`` says what is missing, adds that ``--local`` runs the steps in this process, and
+exits with status 2 before anything is written.
+
+A step function defined in the definition file runs on the compute node without any
+change to ``PYTHONPATH``: each step tells the node the directory that its function's
+module was imported from. That directory, and any modules the definition imports from
+it, must be readable from every compute node. The pipeline's root, its outputs, and its
+inputs must be on storage that every compute node can read and write, such as a team
+share. A node's own
+disk, such as ``/tmp``, does not work.
+
+Compute resources
+~~~~~~~~~~~~~~~~~
+
+Each step's compute resources come from four layers. Each layer overrides the one
+before it, key by key:
+
+1. ``dagger``'s defaults, :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES`: the
+   ``all.q`` queue, 1 GB of memory, a runtime of 3600 seconds, and 1 core. There is no
+   default project.
+2. The definition's defaults, given as ``resources`` to its ``Pipeline``. A model can
+   keep them in its own constants module, for example
+   ``Pipeline(tasks, HERE / "state", registry, resources=PIPELINE_RESOURCES)`` with
+   ``PIPELINE_RESOURCES = {"project": "proj_example", "memory": 4}``.
+3. The command's options: ``-P/--project`` and ``-q/--queue``.
+4. The step's own ``resources=``, such as
+   ``python_step(..., resources={"memory": 16, "runtime": 7200})``.
+
+Memory is in gigabytes and runtime in seconds. ``-m/--max-attempts`` sets how many times
+Jobmon tries each step; the default is 2. Jobmon raises a step's memory and runtime by
+half when it retries a step that ran out of them.
+
+Every step needs a project. If some step would have none, ``dagger`` names each such step
+and the three ways to set a project (``-P``, ``Pipeline(resources=...)``, and the step's
+``resources=``), and exits with status 2 before anything is written.
+
+When a run through Jobmon stops
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A step that fails on its compute node is reported as any failed step is (see
+`When a step fails`_): pytask's report for the step shows the traceback from the node,
+which starts in the step's own code, and what the step printed there, and ``dagger``'s
+line for the step gives the error's type and message. The steps that depend on it do not
+run, and ``dagger`` exits with status 1.
+
+Only one run through Jobmon works on a pipeline's root at a time. A second one, from you
+or from another user, stops before it plans anything, prints the lock file and who holds
+it, and exits with status 1. A run with ``--local`` and a preview take no lock.
+
+If the ``dagger`` process gets SIGTERM while the workflow runs, as Slurm sends at the end
+of the allocation's time, it stops waiting for the workflow, records the steps that
+finished, prints ``Interrupted.`` with the Jobmon workflow id, and says that running the
+same command again continues the run. It exits with status 130. The workflow is not
+cancelled, so its jobs that already started can still be running; the next run warns
+about them. If you press Ctrl-C while the workflow runs, Jobmon asks whether to stop;
+if you confirm, the run stops in the same way.
+
 Simulation steps
 ----------------
 
@@ -148,7 +242,7 @@ inside an allocation, for example:
 
 psimulate submits its own Jobmon workflow and waits for it to finish. The allocation
 that the step runs in must last for the whole simulation, and so must the step's
-``resources`` runtime once a definition can run through Jobmon. psimulate stops waiting
+``resources`` runtime when the definition runs through Jobmon. psimulate stops waiting
 when the allocation's time runs out, and the step then fails because some simulations
 did not finish.
 
@@ -249,7 +343,8 @@ the step that exited and its exit code.
 
 If you interrupt a run (Ctrl-C), ``dagger`` says that it was interrupted. The steps that
 finished before the interrupt are recorded, so running the same command again
-continues the run.
+continues the run. `When a run through Jobmon stops`_ describes an interrupted run
+through Jobmon.
 
 Exit status
 -----------
@@ -261,10 +356,11 @@ Exit status
 Code  Meaning
 ====  ===================================================================================
 0     The command succeeded.
-1     A step failed or exited, or the build stopped for another reason, possibly
-      before any step ran.
-2     The definition or the command is wrong, and nothing ran.
-130   The command was interrupted.
+1     A step failed or exited, another run through Jobmon holds the pipeline's root, or
+      the build stopped for another reason, possibly before any step ran.
+2     The definition or the command is wrong, or Jobmon cannot run here, and nothing
+      ran.
+130   The command was interrupted, also by SIGTERM while Jobmon ran the workflow.
 ====  ===================================================================================
 
 Errors in a definition or a command
@@ -297,6 +393,9 @@ Each of these exits with status 2 before any step runs:
 - The pipeline's root cannot be created or written, for example because it is an
   existing file or a directory above it is not writable. ``dagger`` checks this before
   pytask starts, without creating anything, and names the root and the reason.
+- For a run through Jobmon: Jobmon is not installed or cannot run on this host, or a
+  step would have no project (see `Running through Jobmon`_). ``-P``, ``-q`` or ``-m``
+  given with ``--local`` is refused too.
 
 For an error raised by the definition's own code, ``dagger`` prints the traceback with
 the frames of ``vivarium.dagger``, pytask, pluggy, click, and Python's import

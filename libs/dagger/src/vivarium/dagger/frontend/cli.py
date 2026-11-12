@@ -9,7 +9,10 @@ command, which calls these functions when ``-c`` names a definition.
 Each function loads a definition with
 :func:`~vivarium.dagger.frontend.definition.load_pipeline`, checks that no artifact
 has more than one producing step and that the pipeline's root can be used, and calls
-one verb of :mod:`~vivarium.dagger.frontend.pipeline`. :doc:`/python_pipelines` shows
+one verb of :mod:`~vivarium.dagger.frontend.pipeline`. A run or a force goes through the
+Jobmon bridge unless ``local`` is set; Jobmon is then checked before anything is written
+and imported only when the bridge runs the workflow, so a preview and a local run never
+import it. :doc:`/python_pipelines` shows
 an example of each command and describes the exit status and how each error is
 reported. The preview plan goes to standard output, as do pytask's progress table and
 failure reports. The command's own messages and tracebacks go to standard error, and so
@@ -24,15 +27,24 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from types import FrameType
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import click
 import pytask
 
 from vivarium.dagger.backend.preview import StepPreview
+from vivarium.dagger.bridge import _jobmon_adapter
+from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
 from vivarium.dagger.frontend.handoff import HandoffError
-from vivarium.dagger.frontend.pipeline import Pipeline, PipelineError, StepExited, StepFailed
+from vivarium.dagger.frontend.pipeline import (
+    Pipeline,
+    PipelineError,
+    RunInterrupted,
+    RunRefused,
+    StepExited,
+    StepFailed,
+)
 from vivarium.dagger.frontend.pipeline import preview as preview_pipeline
 from vivarium.dagger.frontend.pipeline import run as run_pipeline
 
@@ -73,12 +85,51 @@ class _DefinitionProblem(click.ClickException):
     exit_code = 2
 
 
-def run_definition(definition: str, until: tuple[str, ...]) -> None:
-    """Run every stale step of ``definition``, or only ``until`` and the steps they need."""
+def run_definition(
+    definition: str,
+    until: tuple[str, ...],
+    *,
+    local: bool = False,
+    project: str | None = None,
+    queue: str | None = None,
+    max_attempts: int | None = None,
+) -> None:
+    """Run every stale step of ``definition``, or only ``until`` and the steps they need.
+
+    Errors end the command with a message on standard error and an exit status. It is 2
+    if the definition or the command is wrong, or, for a run through Jobmon, if Jobmon
+    is not installed or cannot run on this host; that is checked after the definition
+    is loaded and before anything is written, and the message says how to install
+    Jobmon or to pass ``--local``. It is 1 if a step failed or exited, another run holds
+    the pipeline's run lock (the message names the lock file and its holder), or the
+    build stopped for another reason. It is 130 if the run was interrupted; the message
+    then names the Jobmon workflow id when the workflow was bound and says that running
+    the same command again continues the run.
+
+    Parameters
+    ----------
+    definition
+        The pipeline definition, as ``dagger``'s ``-c`` gives it.
+    until
+        Names of the steps to run with the steps they depend on; empty runs every
+        stale step.
+    local
+        Run the steps in this process. Otherwise they run through the Jobmon bridge on
+        the bridge's default cluster.
+    project
+        The project of every step that does not set its own, for a run through Jobmon.
+        It overrides the definition's ``Pipeline.resources``.
+    queue
+        The queue of every step that does not set its own, for a run through Jobmon,
+        overriding the definition's ``Pipeline.resources`` in the same way.
+    max_attempts
+        How many times Jobmon tries each step. ``None`` keeps the bridge's default.
+    """
     try:
         pipeline = _load(definition)
+        build_kwargs = _bridge_options(local, project, queue, max_attempts)
         with _verb_errors(pipeline, until, "'--until'"):
-            run_pipeline(pipeline, only=until or None)
+            run_pipeline(pipeline, only=until or None, **build_kwargs)
     except KeyboardInterrupt:
         _interrupted(resumable=True)
 
@@ -94,12 +145,26 @@ def preview_definition(definition: str, until: tuple[str, ...]) -> None:
         _interrupted(resumable=False)
 
 
-def force_definition(definition: str, steps: tuple[str, ...]) -> None:
-    """Run each of ``steps`` even if it is current, with every other stale step."""
+def force_definition(
+    definition: str,
+    steps: tuple[str, ...],
+    *,
+    local: bool = False,
+    project: str | None = None,
+    queue: str | None = None,
+    max_attempts: int | None = None,
+) -> None:
+    """Run each of ``steps`` even if it is current, with every other stale step.
+
+    ``definition``, ``local``, ``project``, ``queue`` and ``max_attempts`` and the
+    errors are as for :func:`run_definition`. ``steps`` names the steps to run even if
+    they are current.
+    """
     try:
         pipeline = _load(definition)
+        build_kwargs = _bridge_options(local, project, queue, max_attempts)
         with _verb_errors(pipeline, steps, "'STEP...'"):
-            run_pipeline(pipeline, force=steps)
+            run_pipeline(pipeline, force=steps, **build_kwargs)
     except KeyboardInterrupt:
         _interrupted(resumable=True)
 
@@ -118,6 +183,29 @@ def _load(definition: str) -> Pipeline:
     _check_single_producers(pipeline)
     _check_root(pipeline.root)
     return pipeline
+
+
+def _bridge_options(
+    local: bool, project: str | None, queue: str | None, max_attempts: int | None
+) -> dict[str, Any]:
+    """Return the build keyword arguments for a run; exit 2 if Jobmon cannot run here."""
+    if local:
+        return {}
+    try:
+        _jobmon_adapter.check_environment(DEFAULT_CLUSTER)
+    except _jobmon_adapter.JobmonEnvironmentError as error:
+        raise _DefinitionProblem(
+            f"{error} Or pass --local to run the steps in this process."
+        ) from None
+    resources = {
+        key: value
+        for key, value in (("project", project), ("queue", queue))
+        if value is not None
+    }
+    options: dict[str, Any] = {"jobmon": True, "jobmon_resources": resources}
+    if max_attempts is not None:
+        options["jobmon_max_attempts"] = max_attempts
+    return options
 
 
 def _check_single_producers(pipeline: Pipeline) -> None:
@@ -191,10 +279,18 @@ def _verb_errors(
 
     A :class:`~vivarium.dagger.frontend.pipeline.StepExited` is reported as ``Step
     '<name>' exited with code <code> before the build finished.``, with the code as
-    ``repr`` gives it, and exits with status 1.
+    ``repr`` gives it, and exits with status 1. A
+    :class:`~vivarium.dagger.frontend.pipeline.RunRefused` is reported with its own
+    message, which names the lock file and its holder, and exits with status 1. A
+    :class:`~vivarium.dagger.frontend.pipeline.RunInterrupted` is reported by
+    :func:`_interrupted` with its workflow id and exits with status 130.
     """
     try:
         yield
+    except RunRefused as error:
+        raise click.ClickException(str(error)) from None
+    except RunInterrupted as error:
+        _interrupted(resumable=True, workflow_id=error.workflow_id)
     except StepFailed as error:
         raise click.ClickException(_failure_summary(error)) from None
     except PipelineError as error:
@@ -265,9 +361,14 @@ def _quiet_preview(pipeline: Pipeline, until: tuple[str, ...]) -> list[StepPrevi
         raise
 
 
-def _interrupted(resumable: bool) -> NoReturn:
-    """Report an interrupt and exit with status 130."""
+def _interrupted(resumable: bool, workflow_id: int | None = None) -> NoReturn:
+    """Report an interrupt, naming any Jobmon workflow, and exit with status 130."""
     message = "Interrupted."
+    if workflow_id is not None:
+        message += (
+            f" The Jobmon workflow {workflow_id} was not cancelled; its jobs that already "
+            "started may still be running."
+        )
     if resumable:
         message += (
             " Steps that finished before the interrupt are recorded; run the same command "

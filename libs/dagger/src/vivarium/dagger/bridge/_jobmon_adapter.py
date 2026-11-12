@@ -2,10 +2,13 @@
 
 This is the only module of the library that imports Jobmon, and it does so only inside
 :func:`bind` and :func:`run`, so the rest of the bridge, the node runner and the test
-harness import without the ``cluster`` extra. It is not meant to be called directly:
-:mod:`~vivarium.dagger.bridge.execute` calls :func:`check_environment`, then
-:func:`bind`, then :func:`run`, and :class:`~vivarium.dagger.harness.FakeJobmon`
-replaces those three functions in tests.
+harness import without the ``cluster`` extra.
+:mod:`~vivarium.dagger.bridge.execute` calls :func:`check_environment`, :func:`bind` and
+:func:`run` in that order, and the ``dagger`` command
+(:mod:`~vivarium.dagger.frontend.cli`) calls :func:`check_environment` after it loads
+the definition and before it builds anything through Jobmon. Both look these functions
+up on this module when they call them, so :class:`~vivarium.dagger.harness.FakeJobmon`
+can replace them in tests.
 
 Each step becomes one Jobmon task. Steps of one family (see :func:`family`) share a task
 template, so Jobmon's GUI shows one node per family.

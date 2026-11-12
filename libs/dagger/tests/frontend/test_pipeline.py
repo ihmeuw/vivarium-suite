@@ -7,6 +7,7 @@ import sys
 import traceback
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -1306,3 +1307,81 @@ def test_run_with_jobmon_but_no_bridge_plugin_raises_before_force_touches_the_lo
     assert isinstance(excinfo.value.__cause__, ValueError)
     assert excinfo.value.exit_code is None
     assert lockfile.read_bytes() == before
+
+
+# Pipeline resources and the bridge's errors (MIC-7752)
+
+
+def test_pipeline_resources_default_to_an_empty_mapping(tmp_path: Path) -> None:
+    """Pipeline(tasks, root) has resources equal to {}, and two pipelines made that way do not share one mapping object."""
+    first = Pipeline([], tmp_path / "first")
+    second = Pipeline([], tmp_path / "second")
+
+    assert first.resources == {}
+    assert second.resources == {}
+    assert first.resources is not second.resources
+
+
+def test_pipeline_keeps_the_resources_it_is_given(tmp_path: Path) -> None:
+    """Pipeline(tasks, root, registry, resources={'project': 'proj_a'}) has resources equal to {'project': 'proj_a'}."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+
+    pipeline = Pipeline([], tmp_path / "state", registry, resources={"project": "proj_a"})
+
+    assert pipeline.resources == {"project": "proj_a"}
+    assert pipeline.registry is registry
+
+
+def test_pipeline_rejects_resources_that_are_not_a_mapping(tmp_path: Path) -> None:
+    """Pipeline(tasks, root, resources=[('project', 'proj_a')]) raises TypeError naming the type it got."""
+    pairs: Any = [("project", "proj_a")]
+
+    with pytest.raises(TypeError, match=r"\blist\b"):
+        Pipeline([], tmp_path / "state", resources=pairs)
+
+
+def test_run_without_jobmon_ignores_pipeline_resources_and_needs_no_project(
+    tmp_path: Path,
+) -> None:
+    """run(pipeline) on a Pipeline with resources={'memory': 4} and no project anywhere runs every step locally and returns SUCCESS for each."""
+    fixture = build_fixture(tmp_path)
+    pipeline = Pipeline(
+        fixture.tasks, fixture.state, fixture.registry, resources={"memory": 4}
+    )
+
+    assert run(pipeline) == dict.fromkeys(fixture.steps, TaskOutcome.SUCCESS)
+    assert fixture.registry.path_for("final.parquet").exists()
+
+
+def test_run_refused_and_run_interrupted_are_exported_pipeline_errors() -> None:
+    """RunRefused and RunInterrupted are subclasses of PipelineError, are importable from vivarium.dagger.frontend, and are in its __all__."""
+    frontend = vivarium.dagger.frontend
+    module = vivarium.dagger.frontend.pipeline
+
+    assert frontend.RunRefused is module.RunRefused
+    assert frontend.RunInterrupted is module.RunInterrupted
+    assert issubclass(frontend.RunRefused, PipelineError)
+    assert issubclass(frontend.RunInterrupted, PipelineError)
+    assert {"RunRefused", "RunInterrupted"} <= set(frontend.__all__)
+
+
+def test_run_interrupted_keeps_its_workflow_id_run_directory_outcomes_and_exit_code(
+    tmp_path: Path,
+) -> None:
+    """RunInterrupted('msg', workflow_id=7, run_directory=path, outcomes={...}, exit_code=ExitCode.FAILED) has those attributes and str() equal to 'msg'."""
+    run_directory = tmp_path / "run"
+    reported = {"a": TaskOutcome.SUCCESS, "b": TaskOutcome.FAIL}
+
+    error = vivarium.dagger.frontend.RunInterrupted(
+        "msg",
+        workflow_id=7,
+        run_directory=run_directory,
+        outcomes=reported,
+        exit_code=ExitCode.FAILED,
+    )
+
+    assert error.workflow_id == 7
+    assert error.run_directory == run_directory
+    assert error.outcomes == reported
+    assert error.exit_code == ExitCode.FAILED
+    assert str(error) == "msg"

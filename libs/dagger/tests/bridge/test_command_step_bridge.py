@@ -9,13 +9,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import pytest
 from pytask import TaskOutcome
 
 from tests.bridge.helpers import bound_names
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, command_step, run
+from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, StepFailed, command_step, run
 from vivarium.dagger.harness import FakeJobmon
 
 _TOOL = "vivarium_dagger_command_bridge_probe"
@@ -97,9 +98,48 @@ def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs
         name="second",
     )
 
-    result = run(Pipeline([first, second], tmp_path / "state", registry), jobmon=True)
+    result = run(
+        Pipeline([first, second], tmp_path / "state", registry),
+        jobmon=True,
+        jobmon_resources={"project": "proj_test"},
+    )
 
     assert result == {"first": TaskOutcome.SUCCESS, "second": TaskOutcome.SUCCESS}
     assert bound_names(fake_jobmon) == [["first", "second"]]
     assert registry.path_for("chain/first.txt").read_text() == "first\n"
     assert registry.path_for("chain/second.txt").read_text() == "first\ntool-ran\n"
+
+
+@pytest.mark.parametrize(
+    "command, exit_text",
+    [
+        ("exit 3", "the command exited with status 3"),
+        ("kill -KILL $$", "the command was stopped by signal SIGKILL"),
+    ],
+    ids=["status", "signal"],
+)
+def test_a_command_step_that_fails_on_its_node_is_described_as_a_local_failure(
+    tmp_path: Path, fake_jobmon: FakeJobmon, command: str, exit_text: str
+) -> None:
+    """A command step that exits 3, or is killed by SIGKILL, on its node through FakeJobmon makes run() raise StepFailed whose line gives the exit as a local failure does and leaves the generated command out."""
+    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    step = command_step(
+        command + " && printf 'never' > {out}",
+        produces={"out": "out.txt"},
+        registry=registry,
+        name="failing",
+    )
+
+    with pytest.raises(StepFailed) as info:
+        run(
+            Pipeline([step], tmp_path / "state", registry),
+            jobmon=True,
+            jobmon_resources={"project": "proj_test"},
+        )
+
+    line = str(info.value)
+    assert line == (
+        f"Step 'failing' failed: {exit_text}; its output is in pytask's report for the step."
+    ), line
+    assert "printf" not in line
+    assert bound_names(fake_jobmon) == [["failing"]]
