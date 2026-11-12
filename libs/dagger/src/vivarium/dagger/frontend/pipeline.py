@@ -19,6 +19,7 @@ Jobmon ran it as :class:`RunInterrupted`.
 """
 
 import difflib
+import re
 import subprocess
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
@@ -350,11 +351,12 @@ def run(
         when that returns one, which gives the check's message or says that the
         step's command failed before writing one, with where psimulate's logs are and
         whether the previous complete run was kept. Any other step whose ``run`` is a
-        shell command and that failed with :class:`subprocess.CalledProcessError` is
-        described as ``<exit>; its output is in pytask's report for the step.``, where
-        ``<exit>`` is :func:`~vivarium.dagger.backend.build.describe_exit` of the return
-        code, so the generated command stays out of the message; it is still in the cause
-        and in pytask's report. Every other failure, including a ``CalledProcessError`` that a
+        shell command and that failed with :class:`subprocess.CalledProcessError`, in this
+        process or on a compute node, is described as ``<exit>; its output is in pytask's
+        report for the step.``, where ``<exit>`` is
+        :func:`~vivarium.dagger.backend.build.describe_exit` of the return code, so the
+        generated command stays out of the message; it is still in the cause and in
+        pytask's report. Every other failure, including a ``CalledProcessError`` that a
         python step's own code raised, is described by its type and message, as
         :class:`StepFailed` describes it by default.
     StepExited
@@ -614,12 +616,31 @@ def _step_description(task: Task, error: BaseException) -> str:
         simulation = describe_simulation_failure(task, error)
         if simulation is not None:
             return simulation
-        if isinstance(error, subprocess.CalledProcessError):
+        returncode = _command_returncode(error)
+        if returncode is not None:
             return (
-                f"{describe_exit(error.returncode)}; its output is in pytask's report for "
-                "the step."
+                f"{describe_exit(returncode)}; its output is in pytask's report for the step."
             )
     return _describe(error)
+
+
+def _command_returncode(error: BaseException) -> int | None:
+    """Return a failed command's return code, here or as a compute node reported it."""
+    if isinstance(error, subprocess.CalledProcessError):
+        return error.returncode
+    if getattr(error, "exc_type", None) != "subprocess.CalledProcessError":
+        return None
+    # A node reports CalledProcessError's own text, which ends with the status or signal.
+    message = str(getattr(error, "exc_message", None) or "")
+    for pattern, sign in (
+        (r"returned non-zero exit status (\d+)\.$", 1),
+        (r"died with <Signals\.\w+: (\d+)>\.$", -1),
+        (r"died with unknown signal (\d+)\.$", -1),
+    ):
+        found = re.search(pattern, message)
+        if found:
+            return sign * int(found.group(1))
+    return None
 
 
 def _describe(error: BaseException) -> str:
