@@ -12,6 +12,8 @@ from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.pipeline import (
     Pipeline,
     PipelineError,
+    RunInterrupted,
+    RunRefused,
     StepExited,
     StepFailed,
     preview,
@@ -26,6 +28,8 @@ __all__ = [
     "HandoffError",
     "Pipeline",
     "PipelineError",
+    "RunInterrupted",
+    "RunRefused",
     "StepExited",
     "StepFailed",
     "command_step",

@@ -9,13 +9,20 @@ naming, where it can, an artifact key or a step instead of a file path or a pyta
 name. :func:`run` describes a failed command or notebook step without its generated
 command and names a step that calls ``sys.exit``; both verbs report two steps that
 share a name with what to change.
+
+With ``jobmon=True``, :func:`run` runs the stale steps through the Jobmon bridge (see
+:mod:`~vivarium.dagger.bridge.plugin`). It then gives every step its compute resources
+in the layers that :mod:`~vivarium.dagger.constants` lists, refuses a pipeline in which
+some step would have no project before anything is written, and reports a run that
+another run's lock refused as :class:`RunRefused` and a run that was interrupted while
+Jobmon ran it as :class:`RunInterrupted`.
 """
 
 import difflib
 import subprocess
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -32,10 +39,14 @@ from vivarium.dagger.backend.build import (
     failure_message,
     outcomes,
 )
+from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RUN_REFUSED_KEY, RunLocked, run_lock
 from vivarium.dagger.backend.preview import PlanFailed, StepPreview
 from vivarium.dagger.backend.preview import preview as backend_preview
 from vivarium.dagger.backend.task import Task, check_unique_task_names
 from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
+from vivarium.dagger.bridge.state import RUN_STATE_KEY, RunState
+from vivarium.dagger.constants import DEFAULT_RESOURCES
 from vivarium.dagger.frontend.notebook_step import describe_notebook_failure
 from vivarium.dagger.frontend.simulation_step import describe_simulation_failure
 
@@ -53,7 +64,8 @@ class Pipeline:
     Raises
     ------
     TypeError
-        If ``root`` is not a :class:`pathlib.Path`, for example a string.
+        If ``root`` is not a :class:`pathlib.Path`, for example a string, or
+        ``resources`` is not a mapping.
     ValueError
         If ``root`` is a relative path, which would move the pipeline's state with the
         current directory.
@@ -67,9 +79,15 @@ class Pipeline:
     registry: ArtifactRegistry | None = None
     """The registry the steps were wired through. With it, :func:`preview` names files by
     artifact key; without it, by path."""
+    resources: Mapping[str, Any] = field(default_factory=dict)
+    """The definition's default compute resources for a run through Jobmon, such as
+    ``{"project": "proj_simscience", "memory": 4}``. They override
+    :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES` key by key, and the ``dagger``
+    command's options and each step's own ``resources=`` override them in turn. A run in
+    this process ignores them. The default is an empty mapping."""
 
     def __post_init__(self) -> None:
-        """Reject a root that is not an absolute path."""
+        """Reject a root that is not an absolute path and resources that are not a mapping."""
         if not isinstance(self.root, Path):
             raise TypeError(
                 f"Pipeline root must be a pathlib.Path, got {type(self.root).__name__} "
@@ -78,6 +96,11 @@ class Pipeline:
         if not self.root.is_absolute():
             raise ValueError(
                 f"Pipeline root must be absolute, got the relative path {str(self.root)!r}."
+            )
+        if not isinstance(self.resources, Mapping):
+            raise TypeError(
+                "Pipeline resources must be a mapping, got "
+                f"{type(self.resources).__name__} {self.resources!r}."
             )
 
 
@@ -148,6 +171,67 @@ class StepFailed(PipelineError):
         super().__init__("\n".join(lines), exit_code=ExitCode.FAILED)
 
 
+class RunRefused(PipelineError):
+    """Another run holds the run lock on the pipeline's root, so :func:`run` ran nothing.
+
+    Only a run through Jobmon takes the lock. The message is that of the
+    :class:`~vivarium.dagger.backend.lock.RunLocked` that refused the run, which names
+    the lock file and the holder's user, pid, host and start time and says what to do;
+    the error is chained from it. Its ``exit_code`` is ``ExitCode.FAILED``.
+    """
+
+
+class RunInterrupted(PipelineError):
+    """A run through Jobmon was interrupted while Jobmon ran it.
+
+    The bridge turns SIGTERM, or a ``KeyboardInterrupt`` from Jobmon, into an orderly
+    stop: it records the steps whose results were already written and reports every
+    other submitted step as failed or skipped. Running the pipeline again continues the
+    run from what was recorded. The bridge does not cancel the Jobmon workflow, so its
+    jobs that had started on compute nodes can still be running.
+
+    The message names the Jobmon workflow id, or says that the run was interrupted
+    before its workflow was bound, and names the run directory. Its ``exit_code`` is
+    pytask's exit code for the build.
+
+    Parameters
+    ----------
+    message
+        What happened.
+    workflow_id
+        Kept as :attr:`workflow_id`.
+    run_directory
+        Kept as :attr:`run_directory`.
+    outcomes
+        Kept as :attr:`outcomes`.
+    exit_code
+        pytask's exit code for the build.
+    """
+
+    workflow_id: int | None
+    """The Jobmon workflow id of the interrupted run, or ``None`` if the run was
+    interrupted before its workflow was bound."""
+    run_directory: Path
+    """The bridge's directory for the run, which holds its recipes, results and state
+    file (see :mod:`~vivarium.dagger.bridge.state`)."""
+    outcomes: dict[str, TaskOutcome]
+    """Every step's outcome from the run, keyed by step name, in pytask's report order."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        workflow_id: int | None,
+        run_directory: Path,
+        outcomes: dict[str, TaskOutcome],
+        exit_code: ExitCode | None = None,
+    ) -> None:
+        super().__init__(message, exit_code=exit_code)
+        self.workflow_id = workflow_id
+        self.run_directory = run_directory
+        self.outcomes = outcomes
+
+
 class StepExited(SystemExit):
     """A step raised :class:`SystemExit`, as ``sys.exit`` does, and stopped the build.
 
@@ -198,7 +282,15 @@ def run(
     build_kwargs
         Extra keyword arguments passed to
         :func:`~vivarium.dagger.backend.build.build`, and from there to
-        ``pytask.build``.
+        ``pytask.build``. ``jobmon=True`` runs the stale steps through the Jobmon bridge,
+        unless one of the bridge's
+        :data:`~vivarium.dagger.bridge.plugin.LOCAL_ONLY_MODES`, such as ``dry_run``, is
+        also set. Such a run passes ``jobmon_resources`` to the build as
+        :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES`, overridden key by key by
+        ``pipeline.resources`` and then by the ``jobmon_resources`` given here, if any.
+        The bridge then lets each step's own
+        :attr:`~vivarium.dagger.backend.task.Task.resources` override that key by key.
+        The other bridge keys, such as ``jobmon_max_attempts``, pass through unchanged.
 
     Returns
     -------
@@ -206,13 +298,33 @@ def run(
 
     Raises
     ------
+    RunRefused
+        If the run goes through Jobmon and another process holds the run lock on
+        ``pipeline.root``. Nothing is planned or run. With ``force``, the forced steps'
+        entries in ``pytask.lock`` are removed only while this call holds the lock, so a
+        run refused before that leaves ``pytask.lock`` as it was. The build takes the
+        lock again; if another run takes it in between, the build is refused and the
+        forced entries stay removed, as for a rejected build.
+    RunInterrupted
+        If the run goes through Jobmon and is interrupted while Jobmon runs it (the
+        bridge leaves a run state whose status is ``"interrupted"``). It is raised
+        instead of :class:`StepFailed`, although the steps that had not finished are
+        reported as failed.
     PipelineError
         If two steps share a name, ``jobmon=True`` is given but the bridge's pytask
         plugin is not registered, ``only`` or ``force`` names a step that is not in the
-        pipeline, ``force`` is given and ``pytask.lock`` is not a lockfile pytask
-        accepts, the backend rejects the tasks (for example, a declared env does not
-        resolve), or pytask stops before any step fails. A shared name, a missing bridge
-        plugin and an unknown step are reported before anything is built or written. A
+        pipeline, the run goes through Jobmon and some step would have no project,
+        ``force`` is given and ``pytask.lock`` is not a lockfile pytask accepts, the
+        backend rejects the tasks (for example, a declared env does not resolve), or
+        pytask stops before any step fails. A shared name, a missing bridge plugin, an
+        unknown step and a step without a project are reported in that order, before
+        anything is built or written. A step has no project when neither
+        ``jobmon_resources`` as described under ``build_kwargs`` nor the step's own
+        resources give a non-empty ``"project"``. Every step of the pipeline is checked,
+        not only the steps that would run, and the message names each step without a
+        project and the three ways to set one: the ``dagger`` command's ``-P/--project``
+        (``jobmon_resources={"project": ...}`` when calling this function),
+        ``Pipeline(resources={"project": ...})``, and the step's own ``resources=``. A
         shared name gives one line per name, in sorted order, such as ``Two steps are
         named 'population'; give each a different name= to tell them apart.`` (with the
         count as a digit, as in ``3 steps are named``, for more than two), and is
@@ -261,7 +373,18 @@ def run(
     forced: set[str] = set() if force is None else _resolve(pipeline, force)
     if selected is not None:
         selected |= forced
-    _reset(pipeline.root, forced)
+    bridged = _through_bridge(build_kwargs)
+    if bridged:
+        build_kwargs = {
+            **build_kwargs,
+            "jobmon_resources": _bridge_resources(
+                pipeline, build_kwargs.get("jobmon_resources")
+            ),
+        }
+        _check_projects(pipeline, build_kwargs["jobmon_resources"])
+        _reset_under_lock(pipeline.root, forced)
+    else:
+        _reset(pipeline.root, forced)
     try:
         session = build(pipeline.tasks, pipeline.root, selected=selected, **build_kwargs)
     except ValueError as error:
@@ -269,6 +392,8 @@ def run(
     except TaskExited as error:
         raise StepExited(error.task, error.code) from error
     result = outcomes(session)
+    if bridged:
+        _raise_for_bridge_stop(session, result)
     failures = _failures(session)
     for failure in failures.values():
         if isinstance(failure, KeyboardInterrupt):
@@ -367,6 +492,76 @@ def _resolve(pipeline: Pipeline, steps: str | Iterable[str]) -> set[str]:
     listed = ", ".join(repr(name) for name in unknown)
     choices = ", ".join(repr(name) for name in valid) or "none"
     raise PipelineError(f"No step named {listed}.{''.join(hints)} Valid steps: {choices}.")
+
+
+def _through_bridge(build_kwargs: Mapping[str, Any]) -> bool:
+    """Return whether a build with ``build_kwargs`` runs its steps through the bridge."""
+    if not build_kwargs.get("jobmon"):
+        return False
+    return not any(build_kwargs.get(mode) for mode in LOCAL_ONLY_MODES)
+
+
+def _bridge_resources(pipeline: Pipeline, given: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Return the default resources, then ``pipeline.resources``, then ``given``, merged."""
+    merged = {**DEFAULT_RESOURCES, **pipeline.resources}
+    if given is not None:
+        merged.update(given)
+    return merged
+
+
+def _check_projects(pipeline: Pipeline, resources: Mapping[str, Any]) -> None:
+    """Raise PipelineError naming each step with no project in ``resources`` or its own."""
+    # The bridge merges each step's own resources over jobmon_resources key by key.
+    missing = [
+        task.name
+        for task in pipeline.tasks
+        if not {**resources, **task.resources}.get("project")
+    ]
+    if not missing:
+        return
+    noun = "step" if len(missing) == 1 else "steps"
+    raise PipelineError(
+        "A run through Jobmon needs a project for every step, but none is set for the "
+        f"{noun} {', '.join(repr(name) for name in missing)}. Set one with the dagger "
+        "command's -P/--project (jobmon_resources={'project': ...} when calling run()), "
+        "with Pipeline(resources={'project': ...}) in the definition, or with the step's "
+        "own resources={'project': ...}."
+    )
+
+
+def _reset_under_lock(root: Path, steps: set[str]) -> None:
+    """Reset ``steps`` while holding ``root``'s run lock; do nothing if ``steps`` is empty."""
+    if not steps:
+        return
+    # run_lock needs the lock file's directory; the build would create it anyway.
+    root.mkdir(parents=True, exist_ok=True)
+    try:
+        with run_lock(root / RUN_LOCK_NAME):
+            _reset(root, steps)
+    except RunLocked as error:
+        raise RunRefused(str(error), exit_code=ExitCode.FAILED) from error
+
+
+def _raise_for_bridge_stop(session: Session, result: dict[str, TaskOutcome]) -> None:
+    """Raise RunRefused or RunInterrupted if the bridge refused the run or it was interrupted."""
+    refused = session.config.get(RUN_REFUSED_KEY)
+    if isinstance(refused, RunLocked):
+        raise RunRefused(str(refused), exit_code=ExitCode.FAILED) from refused
+    state = session.config.get(RUN_STATE_KEY)
+    if not isinstance(state, RunState) or state.status != "interrupted":
+        return
+    if state.workflow_id is None:
+        stopped = "before its workflow was bound"
+    else:
+        stopped = f"while Jobmon ran its workflow {state.workflow_id}"
+    raise RunInterrupted(
+        f"The run through Jobmon was interrupted {stopped}. Its run directory is "
+        f"{state.workdir}. Run the pipeline again to continue.",
+        workflow_id=state.workflow_id,
+        run_directory=state.workdir,
+        outcomes=result,
+        exit_code=session.exit_code,
+    )
 
 
 def _reset(root: Path, steps: set[str]) -> None:

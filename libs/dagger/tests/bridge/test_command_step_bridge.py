@@ -97,7 +97,11 @@ def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs
         name="second",
     )
 
-    result = run(Pipeline([first, second], tmp_path / "state", registry), jobmon=True)
+    result = run(
+        Pipeline([first, second], tmp_path / "state", registry),
+        jobmon=True,
+        jobmon_resources={"project": "proj_test"},
+    )
 
     assert result == {"first": TaskOutcome.SUCCESS, "second": TaskOutcome.SUCCESS}
     assert bound_names(fake_jobmon) == [["first", "second"]]
