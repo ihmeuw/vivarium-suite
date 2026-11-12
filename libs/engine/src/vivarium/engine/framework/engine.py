@@ -166,7 +166,7 @@ class BaseSimulation(ABC):
         self._component_configuration = self.model_specification.components
         # A copy, so configuration paths start at sim.configuration rather than at
         # the model specification that holds it.
-        self.configuration = self.model_specification.get_tree("configuration").copy()
+        self.configuration = ConfigTree(self.model_specification.get_tree("configuration"))
 
         self._plugin_manager = PluginManager(self.model_specification.plugins)
 
