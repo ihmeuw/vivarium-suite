@@ -22,7 +22,7 @@ from tests.frontend.notebooks import broken_env, recorded_errors, write_source_n
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import Pipeline, load_pipeline, preview, run
-from vivarium.dagger.harness import Perturbed, with_stable_code_id
+from vivarium.dagger.harness import FakeJobmon, Perturbed, with_stable_code_id
 
 _HEADER = """\
 import sys
@@ -1197,7 +1197,7 @@ def test_an_operator_fixes_a_failed_step_and_reruns(tmp_path: Path) -> None:
 
 
 def test_every_command_in_the_docs_page_exits_zero(tmp_path: Path) -> None:
-    """Each '$ dagger ...' line in docs/source/python_pipelines.rst, run in order on a copy of tests/frontend/pipeline_example/pipeline.py in tmp_path, exits 0, and the page shows at least one example of run, preview and force."""
+    """Each '$ dagger ...' line in docs/source/python_pipelines.rst, run in order under FakeJobmon with SLURM_JOB_ID unset on a copy of tests/frontend/pipeline_example/pipeline.py in tmp_path, exits 0; the page shows at least one example of run, preview and force, and at least one run without --local, which binds a plan."""
     page = Path(__file__).parents[2] / "docs" / "source" / "python_pipelines.rst"
     prompt = "$ dagger "
     commands = [
@@ -1207,13 +1207,18 @@ def test_every_command_in_the_docs_page_exits_zero(tmp_path: Path) -> None:
     ]
     shutil.copy(Path(__file__).parent / "pipeline_example" / "pipeline.py", tmp_path)
 
-    with pytest.MonkeyPatch.context() as patch:
+    with pytest.MonkeyPatch.context() as patch, FakeJobmon() as jobmon:
         patch.chdir(tmp_path)
+        # Outside an allocation, so that no bridged run asks Slurm for its remaining time.
+        patch.delenv("SLURM_JOB_ID", raising=False)
         for command in commands:
             result = _dagger(*shlex.split(command))
             assert result.exit_code == 0, f"$ dagger {command}\n{_describe(result)}"
 
-    assert {"run", "preview", "force"} <= {shlex.split(command)[0] for command in commands}
+    words = [shlex.split(command) for command in commands]
+    assert {"run", "preview", "force"} <= {command[0] for command in words}
+    assert any(command[0] == "run" and "--local" not in command for command in words)
+    assert jobmon.plans, "no command on the page bound a plan"
 
 
 # Review fixes (round 2)
