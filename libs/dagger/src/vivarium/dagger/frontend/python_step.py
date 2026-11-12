@@ -19,6 +19,7 @@ so in this cut a step re-runs on every build.
 """
 
 import importlib
+import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,12 +128,15 @@ def target_reference(target: Callable[..., Any]) -> str:
         a function wrapped by a decorator that does not use ``functools.wraps``), has no
         module or qualified name (a ``functools.partial`` or a callable instance), its
         reference cannot be imported, or its reference imports a different object (a bound
-        method or a classmethod). The message names the case and says to define the
-        function at the top level of an importable module.
+        method or a classmethod, or a function whose module was reloaded after the step
+        was built). The message names the case and says what to do: rebuild the steps
+        after a reload, and otherwise define the function at the top level of an
+        importable module.
     """
     module = getattr(target, "__module__", None)
     qualname = getattr(target, "__qualname__", None)
     cause: Exception | None = None
+    advice = "Define the function at the top level of an importable module."
     if not isinstance(module, str) or not isinstance(qualname, str):
         reason = (
             "it has no module or qualified name, as with a functools.partial or a "
@@ -160,14 +164,29 @@ def target_reference(target: Callable[..., Any]) -> str:
         else:
             if resolved is target:
                 return reference
-            reason = (
-                f"its reference {reference!r} imports a different object (as for a "
-                "bound method or a classmethod)"
-            )
-    raise ValueError(
-        f"Cannot import {target!r} by reference: {reason}. Define the function at the top "
-        "level of an importable module."
-    ) from cause
+            if _is_reloaded(target, resolved):
+                reason = (
+                    f"its reference {reference!r} imports a newer copy of it: its module "
+                    "was reloaded after the step was built (importlib.reload or IPython's "
+                    "autoreload)"
+                )
+                advice = "Build the steps again after reloading the module."
+            else:
+                reason = (
+                    f"its reference {reference!r} imports a different object (as for a "
+                    "bound method or a classmethod)"
+                )
+    raise ValueError(f"Cannot import {target!r} by reference: {reason}. {advice}") from cause
+
+
+def _is_reloaded(target: Callable[..., Any], resolved: Callable[..., Any]) -> bool:
+    """Return whether ``resolved`` is a reloaded module's copy of the plain function ``target``."""
+    return (
+        inspect.isfunction(target)
+        and inspect.isfunction(resolved)
+        and resolved.__module__ == target.__module__
+        and resolved.__qualname__ == target.__qualname__
+    )
 
 
 def resolve_reference(reference: str) -> Callable[..., Any]:
