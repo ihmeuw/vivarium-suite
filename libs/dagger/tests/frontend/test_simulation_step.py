@@ -2,7 +2,7 @@
 definition-time errors, and runs through ``run``, ``preview`` and the ``dagger`` command
 with a stub ``psimulate`` (see ``tests.frontend.simulations``)."""
 
-import inspect
+import hashlib
 import json
 import os
 import shlex
@@ -42,6 +42,10 @@ from tests.frontend.simulations import (
     write_spec,
 )
 from vivarium.dagger import frontend
+from vivarium.dagger.backend.build import (
+    COLLECT_SIMULATION_SCRIPT,
+    COLLECT_SIMULATION_VARIABLE,
+)
 from vivarium.dagger.backend.nodes import AlwaysStaleNode, RunDirectoryNode, file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
@@ -470,21 +474,79 @@ def test_command_prepares_the_parent_and_a_fresh_scratch_directory_before_psimul
     assert removes[0] < makes_scratch[-1], parts
 
 
-def test_command_runs_the_check_with_isolated_bare_python_and_no_interpreter_path(
+_CHECK_ARGUMENT = (
+    f"${{{COLLECT_SIMULATION_VARIABLE}:?is set by dagger when it runs the step}}"
+)
+"""The check's script argument as the shell reads it, before it expands the variable."""
+
+
+def _script_lines() -> list[str]:
+    """Return the check script's lines that are long enough to identify it."""
+    source = COLLECT_SIMULATION_SCRIPT.read_text(encoding="utf-8")
+    return [line.strip() for line in source.splitlines() if len(line.strip()) > 30]
+
+
+def test_command_runs_the_check_from_the_variable_with_isolated_bare_python(
     model: _Model,
 ) -> None:
-    """The command runs the check as 'python -I -c <script> <scratch> <run directory>', and holds neither sys.executable nor any other absolute path to an interpreter."""
+    """The command's last part is 'python -I "${DAGGER_COLLECT_SIMULATION:?...}" <scratch> <run directory>', and the command holds neither sys.executable nor any other absolute path to an interpreter."""
     command = _command(_step(model, model.registry()))
     parts = _parts(command)
 
-    script = Path(inspect.getfile(_collect_simulation)).read_text(encoding="utf-8")
-    assert parts[-1] == ["python", "-I", "-c", script, str(model.scratch), str(model.run_dir)]
+    assert parts[-1] == [
+        "python",
+        "-I",
+        _CHECK_ARGUMENT,
+        str(model.scratch),
+        str(model.run_dir),
+    ]
     assert parts[-2][:1] == ["psimulate"]
     assert sys.executable not in command
     assert str(Path(sys.executable).resolve()) not in command
     for part in parts:
         program = part[0]
         assert not (os.path.isabs(program) and "python" in Path(program).name), part
+
+
+def test_command_holds_no_line_of_the_check_and_ends_with_its_hash(model: _Model) -> None:
+    """The command contains no line of the check script and no path to it, and ends with the comment '# check' and the first 12 hex digits of the script's SHA-256."""
+    command = _command(_step(model, model.registry()))
+    digest = hashlib.sha256(COLLECT_SIMULATION_SCRIPT.read_bytes()).hexdigest()[:12]
+
+    assert [line for line in _script_lines() if line in command] == []
+    assert str(COLLECT_SIMULATION_SCRIPT) not in command
+    assert command.endswith(f"  # check {digest}"), command[-80:]
+
+
+def test_an_edited_check_changes_only_the_hash_at_the_end_of_the_command(
+    model: _Model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the check script replaced by a copy that has one more line, the step's command differs from the original's, and only in the hash after '# check'."""
+    original = _command(_step(model, model.registry()))
+    edited = tmp_path / "_collect_simulation.py"
+    edited.write_text(COLLECT_SIMULATION_SCRIPT.read_text(encoding="utf-8") + "# edited\n")
+    simulation_module = sys.modules["vivarium.dagger.frontend.simulation_step"]
+    monkeypatch.setattr(simulation_module, "COLLECT_SIMULATION_SCRIPT", edited)
+
+    changed = _command(_step(model, model.registry()))
+
+    assert changed != original
+    assert changed.rsplit("# check ", 1)[0] == original.rsplit("# check ", 1)[0]
+
+
+def test_the_command_run_by_hand_without_the_variable_stops_naming_it(
+    model: _Model, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The command's check part, run with /bin/sh and no DAGGER_COLLECT_SIMULATION in the environment, exits non-zero with a message that names the variable and says dagger sets it, and writes no run directory."""
+    monkeypatch.delenv(COLLECT_SIMULATION_VARIABLE, raising=False)
+    check = _command(_step(model, model.registry())).split(" && ")[-1]
+
+    result = subprocess.run(["/bin/sh", "-c", check], capture_output=True, text=True)
+
+    assert result.returncode != 0
+    assert COLLECT_SIMULATION_VARIABLE in result.stderr, result.stderr
+    assert "is set by dagger when it runs the step" in result.stderr, result.stderr
+    assert not model.run_dir.exists()
 
 
 def test_command_paths_are_absolute_for_relative_spec_and_branches(
@@ -1021,6 +1083,24 @@ def test_one_simulation_missing_fails_with_the_counts_and_keeps_the_previous_run
     assert snapshot(model.run_dir) == before
     assert len(list((partial / "results" / METRIC).glob("*.parquet"))) == 3
     assert error.outcomes[_CONSUMER] == TaskOutcome.SKIP_PREVIOUS_FAILED
+
+
+def test_a_failing_simulation_step_shows_no_line_of_the_check(
+    model: _Model, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """When a run with one simulation unfinished fails, neither the StepFailed message, nor its cause's command, nor what pytask printed holds a line of the check script."""
+    pipeline = _pipeline(model)
+    _first_run(model, pipeline)
+    capsys.readouterr()
+    monkeypatch.setenv(UNFINISHED_VARIABLE, "1")
+
+    error = _step_failed(pipeline)
+
+    printed = capsys.readouterr()
+    [cause] = [failure for failure in error.failures.values()]
+    shown = "\n".join([str(error), repr(cause), printed.out, printed.err])
+    assert "psimulate finished 3 of 4 simulations" in str(error)
+    assert [line for line in _script_lines() if line in shown] == []
 
 
 def test_a_psimulate_that_exits_non_zero_fails_with_its_exit_status_and_keeps_the_previous_run(
