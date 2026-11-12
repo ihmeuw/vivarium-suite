@@ -475,6 +475,67 @@ class TestUpdateFoundNode:
             step_size.update(6)
 
 
+class TestCopy:
+    """Tests for copying a subtree out as the root of its own tree."""
+
+    @pytest.fixture
+    def spec(self) -> ConfigTree:
+        spec = ConfigTree(layers=["base", "override"])
+        spec.update(
+            {
+                "configuration": {
+                    "time": {"step_size": 1},
+                    "risk.child_wasting": {"distribution_type": "ordered_polytomous"},
+                }
+            },
+            layer="base",
+            source="defaults",
+        )
+        spec.update(
+            {"configuration": {"time": {"step_size": 10}}},
+            layer="override",
+            source="user",
+        )
+        return spec
+
+    def test_paths_start_at_the_copy(self, spec: ConfigTree) -> None:
+        config = spec.configuration.copy()
+        assert [node.path for node in config.leaves()] == [
+            "time.step_size",
+            "['risk.child_wasting'].distribution_type",
+        ]
+
+    def test_the_original_keeps_its_parent(self, spec: ConfigTree) -> None:
+        spec.configuration.copy()
+        assert spec.configuration.leaves()[0].path == "configuration.time.step_size"
+
+    def test_every_layer_and_source_is_kept(self, spec: ConfigTree) -> None:
+        config = spec.configuration.copy()
+        original = spec.configuration.time._children["step_size"]
+        copied = config.time._children["step_size"]
+        assert copied.metadata == original.metadata
+        assert config.time.step_size == 10
+
+    def test_the_trees_above_are_not_copied(self, spec: ConfigTree) -> None:
+        config = spec.configuration.copy()
+        assert config._parent is None
+        assert config.time._parent is config
+
+    def test_the_copy_and_the_original_change_separately(self, spec: ConfigTree) -> None:
+        config = spec.configuration.copy()
+        config["risk.child_wasting"].distribution_type = "dichotomous"
+        assert spec.configuration["risk.child_wasting"].distribution_type == (
+            "ordered_polytomous"
+        )
+
+    def test_a_root_copies_whole(self, spec: ConfigTree) -> None:
+        copied = spec.copy()
+        assert [node.path for node in copied.leaves()] == [
+            node.path for node in spec.leaves()
+        ]
+        assert copied.configuration is not spec.configuration
+
+
 class TestFind:
     """Tests for finding leaf nodes by path."""
 

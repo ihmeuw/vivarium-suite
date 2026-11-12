@@ -29,6 +29,7 @@ For example:
 
 from __future__ import annotations
 
+import copy
 import keyword
 import re
 from collections.abc import Iterable
@@ -474,6 +475,17 @@ class ConfigTree:
         if self._parent is None:
             return ()
         return (*self._parent._key_path(), self._name)
+
+    def copy(self) -> ConfigTree:
+        """Return a copy of the ``ConfigTree`` that is the root of its own tree.
+
+        The copy keeps every layer and source, unlike passing the tree to the
+        ``ConfigTree`` constructor, which keeps only the outermost values. It holds
+        no link to the trees above this one, so the paths of its nodes start at the
+        copy. Changes to the copy do not change this tree, and the reverse.
+        """
+        memo = {} if self._parent is None else {id(self._parent): None}
+        return copy.deepcopy(self, memo)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the ``ConfigTree`` to a nested dictionary.
