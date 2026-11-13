@@ -17,6 +17,7 @@ If the repo root has a committed `uv.lock`, the environment is the checkout's ow
 - Otherwise run `uv sync --locked`, then use `.venv/bin/python` or `source .venv/bin/activate`.
 - If the sync fails because the lock is out of date, do not run `uv lock` on your own. Tell the user, since the lock is committed.
 - `make install` refuses in these repos. Don't work around it with `pip install`, which installs outside the lock. uv venvs have no `pip`.
+- If `make build-env` stops because a conda environment is active, run `conda deactivate` first.
 - An old `.venv` that holds overlays from before the switch is not a venv. `make build-env` says how to remove it. Ask the user before deleting it.
 
 ## Discovering the right environment
@@ -26,7 +27,7 @@ For repos without a `uv.lock`, stop as soon as you have a confident match:
 1. **VS Code settings.** Check the interpreter for the current workspace in VS Code.
 2. **Conda env list.** Run `conda env list` and look for envs that either match the repo / monorepo library name or seem to be a shortened version thereof, e.g. 'vct' for 'vivarium_cluster_tools'. If one seems borderline, confirm with the user. 
 3. **`.venv/` directory.** Particularly if you are working in a model repository, look for `.venv/<repo>_<type>/` (where type can be 'simulation' or 'artifact'). That's a shared-env venv overlay (see below).
-5. **Ask the user** if multiple plausible candidates exist (e.g. both `simulation` and `artifact` are present and the task doesn't make the choice obvious). Put the answer in your memory.
+4. **Ask the user** if multiple plausible candidates exist (e.g. both `simulation` and `artifact` are present and the task doesn't make the choice obvious). Put the answer in your memory.
 
 Don't silently `conda create` a new env to "make the problem go away" — that ends with stale parallel envs and missed bugs.
 

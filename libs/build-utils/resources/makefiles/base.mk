@@ -115,7 +115,7 @@ help: # Curated help message
 	echo "                                      (or 'uv sync --locked')"; \
 	echo "  2. lint                             Check for formatting errors"; \
 	echo "  3. mypy                             (optional) Check for type hinting errors"; \
-	echo "  4. test-<test-type>                 Run specific tests unit, integration,"; \
+	echo "  4. test-<test-type>                 Run specific tests (unit, integration,"; \
 	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
 	echo "  5. build-docs                       Build documentation"; \
 	echo "  6. test-docs                        Test documentation examples"; \
@@ -125,7 +125,7 @@ help: # Curated help message
 	echo "  2. install                          Install package and dependencies"; \
 	echo "  3. lint                             Check for formatting errors"; \
 	echo "  4. mypy                             (optional) Check for type hinting errors"; \
-	echo "  5. test-<test-type>                 Run specific tests unit, integration,"; \
+	echo "  5. test-<test-type>                 Run specific tests (unit, integration,"; \
 	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
 	echo "  6. build-docs                       Build documentation"; \
 	echo "  7. test-docs                        Test documentation examples"; \
