@@ -21,4 +21,4 @@ def test_public_api_exports() -> None:
     """Verify the subpackages expose their public API as the real objects."""
     assert inspect.isclass(backend.Task)
     assert inspect.isfunction(backend.check_unique_task_names)
-    assert inspect.isfunction(frontend.python_step)
+    assert inspect.isclass(frontend.Workflow)

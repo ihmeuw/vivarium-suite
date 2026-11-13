@@ -18,20 +18,13 @@ import pytest
 from click.testing import CliRunner, Result
 from pytask import NodeNotFoundError, PathNode, PNode, TaskOutcome
 
-import vivarium.dagger.frontend as frontend_package
 from vivarium.dagger.backend.build import run_command
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
 from vivarium.dagger.cli import dagger
-from vivarium.dagger.frontend import (
-    Pipeline,
-    PipelineError,
-    StepFailed,
-    preview,
-    python_step,
-    run,
-)
+from vivarium.dagger.frontend import Pipeline, PipelineError, StepFailed, preview, run
 from vivarium.dagger.frontend.command_step import command_step
+from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _V = TypeVar("_V")
@@ -79,7 +72,9 @@ _FORMATTER_MESSAGES = (
 _DEFINITION = """
 from pathlib import Path
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, command_step
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.command_step import command_step
 
 HERE = Path(__file__).resolve().parent
 
@@ -342,12 +337,6 @@ def forget_definitions(tmp_path: Path) -> Iterator[None]:
 
 
 # The task command_step returns
-
-
-def test_command_step_is_exported_from_the_frontend() -> None:
-    """``vivarium.dagger.frontend.command_step`` is the function in ``frontend.command_step`` and is listed in the frontend's ``__all__``."""
-    assert vars(frontend_package)["command_step"] is command_step
-    assert "command_step" in frontend_package.__all__
 
 
 def test_command_step_returns_one_command_task_with_the_declared_env_and_resources(

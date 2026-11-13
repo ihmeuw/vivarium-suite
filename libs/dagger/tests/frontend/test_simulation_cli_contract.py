@@ -25,7 +25,8 @@ from tests.frontend.simulations import (
     write_spec,
 )
 from vivarium.dagger.backend.wiring import ArtifactRegistry
-from vivarium.dagger.frontend import Pipeline, run, simulation_step
+from vivarium.dagger.frontend import Pipeline, run
+from vivarium.dagger.frontend.simulation_step import simulation_step
 
 _KEY = "sims/toy"
 """The simulation step's produces key."""

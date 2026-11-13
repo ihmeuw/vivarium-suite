@@ -36,8 +36,10 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import Pipeline, StepFailed, python_step, run, simulation_step
+from vivarium.dagger.frontend import Pipeline, StepFailed, run
 from vivarium.dagger.frontend._collect_simulation import _MESSAGE_FILE, _SENTINEL
+from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.simulation_step import simulation_step
 from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 _KEY = "sims/toy"

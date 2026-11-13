@@ -73,7 +73,9 @@ class Pipeline:
     """
 
     tasks: Sequence[Task]
-    """The compiled tasks. Each task's name is a step name."""
+    """The compiled tasks, in order. Each task's name is a step name. A sequence passed
+    to the constructor is stored as a tuple, so the pipeline does not change when the
+    caller changes the list it passed."""
     root: Path
     """Absolute directory for pytask's configuration, state database, and lockfile, as
     :func:`~vivarium.dagger.backend.build.build` uses it."""
@@ -88,7 +90,8 @@ class Pipeline:
     this process ignores them. The default is an empty mapping."""
 
     def __post_init__(self) -> None:
-        """Reject a root that is not an absolute path and resources that are not a mapping."""
+        """Store ``tasks`` as a tuple; reject a relative root or non-mapping resources."""
+        object.__setattr__(self, "tasks", tuple(self.tasks))
         if not isinstance(self.root, Path):
             raise TypeError(
                 f"Pipeline root must be a pathlib.Path, got {type(self.root).__name__} "
@@ -324,7 +327,8 @@ def run(
         resources give a non-empty ``"project"``. Every step of the pipeline is checked,
         not only the steps that would run, and the message names each step without a
         project and the three ways to set one: the ``dagger`` command's ``-P/--project``
-        (``jobmon_resources={"project": ...}`` when calling this function),
+        (``jobmon_resources={"project": ...}`` when calling this function), the
+        definition's ``Workflow(resources={"project": ...})`` or
         ``Pipeline(resources={"project": ...})``, and the step's own ``resources=``. A
         shared name gives one line per name, in sorted order, such as ``Two steps are
         named 'population'; give each a different name= to tell them apart.`` (with the
@@ -526,8 +530,8 @@ def _check_projects(pipeline: Pipeline, resources: Mapping[str, Any]) -> None:
         "A run through Jobmon needs a project for every step, but none is set for the "
         f"{noun} {', '.join(repr(name) for name in missing)}. Set one with the dagger "
         "command's -P/--project (jobmon_resources={'project': ...} when calling run()), "
-        "with Pipeline(resources={'project': ...}) in the definition, or with the step's "
-        "own resources={'project': ...}."
+        "with Workflow(resources={'project': ...}) or Pipeline(resources={'project': ...}) "
+        "in the definition, or with the step's own resources={'project': ...}."
     )
 
 

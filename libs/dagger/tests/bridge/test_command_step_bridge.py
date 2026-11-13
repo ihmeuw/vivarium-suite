@@ -15,8 +15,10 @@ from pytask import TaskOutcome
 from tests.bridge.helpers import bound_names
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task
+from vivarium.dagger.backend.wiring import ArtifactRegistry
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, StepFailed, command_step, run
+from vivarium.dagger.frontend import Pipeline, StepFailed, run
+from vivarium.dagger.frontend.command_step import command_step
 from vivarium.dagger.harness import FakeJobmon
 
 _TOOL = "vivarium_dagger_command_bridge_probe"

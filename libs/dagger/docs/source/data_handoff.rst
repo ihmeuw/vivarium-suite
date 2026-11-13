@@ -56,13 +56,13 @@ Reading a file in a step
 ------------------------
 
 Pass the mapping that :func:`~vivarium.dagger.frontend.handoff.handoff_inputs`
-returns as the ``root_inputs`` of an
-:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`. Each key is the file's
-path relative to the handoff root, ``<location>/primary/<file>``, and
+returns as the ``root_inputs`` of the pipeline's
+:class:`~vivarium.dagger.frontend.workflow.Workflow`. Each key is the file's path
+relative to the handoff root, ``<location>/primary/<file>``, and
 :func:`~vivarium.dagger.frontend.handoff.handoff_key` builds it. A step reads a
 handoff file by naming that key as an input, and the step's function receives the
-file's path. A step cannot also produce a handoff key: the registry refuses an output
-whose key is a declared root input.
+file's path. A step cannot also produce a handoff key: the ``Workflow`` refuses an
+output whose key is a declared root input.
 
 Worked example
 --------------
@@ -73,7 +73,7 @@ handoff root holds one location's coverage file:
 .. literalinclude:: ../../tests/frontend/handoff_example/handoff/example_location/primary/coverage.csv
    :caption: handoff/example_location/primary/coverage.csv
 
-The definition declares the file, validates the handoff, and compiles one step per
+The definition declares the file, validates the handoff, and adds one step per
 location that reads it:
 
 .. literalinclude:: ../../tests/frontend/handoff_example/pipeline.py

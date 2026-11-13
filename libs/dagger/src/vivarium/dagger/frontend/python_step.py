@@ -2,13 +2,12 @@
 
 A step is a function that reads its declared inputs and returns a ``pandas``
 DataFrame. :func:`python_step` compiles one such function into a single backend
-:class:`~vivarium.dagger.backend.task.Task`, resolving the step's
-inputs and its product through the shared
-:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` so pytask
-draws the producer-to-consumer edges from node identity. Each input reaches the
-target as its resolved file path, which the target reads itself; only the
-returned DataFrame is autosaved, to the product's path, in the format named by
-the product key's suffix.
+:class:`~vivarium.dagger.backend.task.Task`, resolving the step's inputs and its product
+through the shared :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`, so each
+input is the producer's own node and pytask draws the producer-to-consumer edge from its
+path. Each input reaches the target as its resolved file path, which the target reads
+itself; only the returned DataFrame is autosaved, to the product's path, in the format
+named by the product key's suffix.
 
 The task's ``run`` is a :class:`PythonStepRun`, a data-only object rather than a
 closure, so the same step can be rebuilt in another process from the target's

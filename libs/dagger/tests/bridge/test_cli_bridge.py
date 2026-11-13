@@ -35,7 +35,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, python_step
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
@@ -100,7 +102,9 @@ _WITH_HELPER = """\
 import os
 from pathlib import Path
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, python_step
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.python_step import python_step
 
 import HELPER as helper
 
