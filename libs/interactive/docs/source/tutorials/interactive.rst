@@ -314,6 +314,40 @@ result is the same either way.
     # warn you if you are adding new keys, e.g. due to a typo!
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
+If you know roughly what a key is called but not where it sits, pass part of its
+name to :meth:`~vivarium.config_tree.main.ConfigTree.find`. It returns the
+matching configuration nodes. It matches the text literally and ignores case,
+takes ``regex=True`` for a regular expression, and lists every key when called
+with no pattern. In IPython or Jupyter, each node displays as its keys and the
+value the simulation will use:
+
+.. code-block:: python
+
+    >>> sim.configuration.find("population")
+    [ConfigNode(("configuration", "population", "population_size"), 1000),
+     ConfigNode(("configuration", "population", "age_start"), 0),
+     ConfigNode(("configuration", "population", "age_end"), 5)]
+
+The keys start at the model specification, so they begin with
+``"configuration"``. Each quoted string is one key, so a component name that
+contains dots stays whole:
+
+.. code-block:: python
+
+    >>> sim.configuration.find("excess_mortality_rate")
+    [ConfigNode(("configuration", "disease_state.infected_with_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.06),
+     ConfigNode(("configuration", "disease_state.susceptible_to_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.0)]
+
+You can change a value through a node you found.
+:meth:`~vivarium.config_tree.main.ConfigNode.update` sets it in the same layer
+as setting it through ``sim.configuration``. Here we make each time step one day
+instead of the model specification's half day:
+
+.. testcode::
+
+    [step_size] = sim.configuration.find("time.step_size")
+    step_size.update(1)
+
 We then need to call the
 :meth:`~vivarium.interactive.simulation.Simulation.setup` method on the
 simulation context to prepare it to run.
@@ -321,6 +355,18 @@ simulation context to prepare it to run.
 .. testcode::
 
    sim.setup()
+
+The simulation now uses the new step size:
+
+.. testcode::
+
+   start = sim.current_time
+   sim.step()
+   print(sim.current_time - start)
+
+.. testoutput::
+
+   1 days 00:00:00
 
 After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 

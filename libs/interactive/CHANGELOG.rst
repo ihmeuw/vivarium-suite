@@ -1,3 +1,9 @@
+**1.1.0b2 - 11/12/26**
+
+- Document finding configuration keys with ``ConfigTree.find`` and updating them with
+  ``ConfigNode.update``
+- Require ``vivarium-config-tree`` 5.3.0b1
+
 **1.1.0b1 - 11/03/26**
 
 - Add ``population_size``, ``seed``, ``draw``, ``artifact_path``, ``start_time``, and ``end_time`` keyword parameters to ``Simulation``
