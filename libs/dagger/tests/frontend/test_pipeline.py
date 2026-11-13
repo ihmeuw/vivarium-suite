@@ -25,11 +25,11 @@ from vivarium.dagger.frontend import (
     PipelineError,
     StepExited,
     StepFailed,
-    notebook_step,
     preview,
-    python_step,
     run,
 )
+from vivarium.dagger.frontend.notebook_step import notebook_step
+from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import (
     Fixture,
     build_fixture,
@@ -647,6 +647,24 @@ def test_pipeline_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) ->
     for field, value in replacements.items():
         with pytest.raises(dataclasses.FrozenInstanceError):
             setattr(pipeline, field, value)
+
+
+def test_pipeline_stores_tasks_as_a_tuple_that_a_change_to_the_passed_list_does_not_reach(
+    tmp_path: Path,
+) -> None:
+    """Pipeline(tasks_list, root).tasks is a tuple equal to tuple(tasks_list), and appending to or clearing tasks_list afterwards leaves it unchanged."""
+    fixture = build_fixture(tmp_path)
+    tasks_list = list(fixture.tasks)
+    expected = tuple(tasks_list)
+
+    pipeline = Pipeline(tasks_list, fixture.state)
+
+    assert isinstance(pipeline.tasks, tuple)
+    assert pipeline.tasks == expected
+    tasks_list.append(_report_step(fixture))
+    assert pipeline.tasks == expected
+    tasks_list.clear()
+    assert pipeline.tasks == expected
 
 
 def test_an_operator_previews_runs_up_to_a_step_continues_and_forces_a_step(
@@ -1280,13 +1298,12 @@ def test_a_middle_step_that_exits_stops_the_build_after_its_upstream_step(
 # The frontend's exports (MIC-7785)
 
 
-def test_artifact_registry_and_step_exited_are_exported_from_the_frontend() -> None:
-    """vivarium.dagger.frontend.ArtifactRegistry is the backend's ArtifactRegistry, and 'ArtifactRegistry' and 'StepExited' are in vivarium.dagger.frontend.__all__."""
+def test_step_exited_is_exported_from_the_frontend() -> None:
+    """vivarium.dagger.frontend.StepExited is the pipeline module's StepExited, and 'StepExited' is in vivarium.dagger.frontend.__all__."""
     frontend = vivarium.dagger.frontend
 
-    assert frontend.ArtifactRegistry is ArtifactRegistry
     assert frontend.StepExited is vivarium.dagger.frontend.pipeline.StepExited
-    assert {"ArtifactRegistry", "StepExited"} <= set(frontend.__all__)
+    assert "StepExited" in frontend.__all__
 
 
 @pytest.mark.usefixtures("without_bridge_plugin")

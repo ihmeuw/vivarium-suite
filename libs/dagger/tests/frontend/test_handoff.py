@@ -18,6 +18,7 @@ from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
 from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
+from vivarium.dagger.frontend.pipeline import run
 from vivarium.dagger.frontend.python_step import python_step
 
 _COLUMNS = ["location_id", "year_id", "coverage"]
@@ -466,14 +467,10 @@ def test_redelivery_staleness_follows_the_file_contents(tmp_path: Path) -> None:
 
 
 def test_worked_example_validates_and_builds(tmp_path: Path) -> None:
-    """The documented example handoff validates and its pipeline builds the expected mean-coverage product."""
-    inputs = handoff_inputs(pipeline.HANDOFF_ROOT, pipeline.LOCATIONS, pipeline.PRIMARY_DATA)
-    assert list(inputs) == [handoff_key("example_location", "coverage.csv")]
+    """The documented example handoff validates, and run() of the pipeline its definition returns for the output root tmp_path / "out" succeeds and writes the mean coverage 0.5 to out/example/example_location/mean_coverage.parquet."""
+    built = pipeline.pipeline(output_root=tmp_path / "out")
 
-    tasks = pipeline.build_tasks(tmp_path / "out")
-    assert outcomes(build(tasks, tmp_path / "state")) == {
-        task.name: TaskOutcome.SUCCESS for task in tasks
-    }
+    assert run(built) == {"example_location/mean_coverage.parquet": TaskOutcome.SUCCESS}
     product = tmp_path / "out" / "example" / "example_location" / "mean_coverage.parquet"
     assert pd.read_parquet(product)["mean_coverage"].tolist() == pytest.approx([0.5])
 

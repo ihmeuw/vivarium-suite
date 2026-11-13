@@ -50,7 +50,8 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.backend.wiring import ArtifactRegistry
-from vivarium.dagger.frontend import Pipeline, python_step
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.frontend.python_step import python_step
 
 HERE = Path(__file__).resolve().parent
 

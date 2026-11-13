@@ -44,9 +44,9 @@ from vivarium.dagger.frontend import (
     RunInterrupted,
     RunRefused,
     StepFailed,
-    python_step,
     run,
 )
+from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon
 
 _CHAIN = (A, B, C)
