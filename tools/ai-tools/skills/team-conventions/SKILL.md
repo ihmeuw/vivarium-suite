@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, setting or changing a ticket's story points, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "move a ticket to In Progress", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
@@ -100,10 +100,8 @@ propose one from the hub page's list. If you cannot tell whether it needs an epi
 fix version, or no fix version fits, ask the user. Do not make up a new fix version.
 
 After a ticket exists, never change its story points unless the user gives you the new
-value. This covers changing a `.01` estimate to a whole number, which the team does when
-the ticket moves to In Progress. Before you move a `.01` ticket to In Progress, or change
-its points for any other reason, ask the user how many points to give it. Do not round
-the estimate or pick a number yourself.
+value. If the points need to change, ask the user how many points to give the ticket. Do
+not round a `.01` estimate or pick a number yourself.
 
 Report the resulting `MIC-####` key back to the user so it can flow into the branch name (§1) and PR body (§3).
 
