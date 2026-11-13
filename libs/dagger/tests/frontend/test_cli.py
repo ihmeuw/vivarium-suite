@@ -33,7 +33,8 @@ import pandas as pd
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import ArtifactRegistry
-from vivarium.dagger.frontend import Pipeline, handoff_inputs, python_step
+from vivarium.dagger.frontend import Pipeline, handoff_inputs
+from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
@@ -1675,7 +1676,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, notebook_step, python_step
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.frontend.notebook_step import notebook_step
+from vivarium.dagger.frontend.python_step import python_step
 
 HERE = Path(__file__).resolve().parent
 ENV = __ENV__
@@ -1853,7 +1857,7 @@ def test_an_operator_fixes_the_notebook_named_in_the_message_and_reruns(
 _NOTEBOOK_MISTYPED = (
     _HEADER
     + """
-from vivarium.dagger.frontend import notebook_step
+from vivarium.dagger.frontend.notebook_step import notebook_step
 
 NOTEBOOK = HERE / "summarize.ipynb"
 ENV = sys.prefix
@@ -1873,7 +1877,7 @@ def pipeline():
 _NOTEBOOK_MISSPELLED_PARAMETER = (
     _HEADER
     + """
-from vivarium.dagger.frontend import notebook_step
+from vivarium.dagger.frontend.notebook_step import notebook_step
 
 NOTEBOOK = HERE / "report.ipynb"
 EXECUTED = "run.ipynb"
@@ -2169,29 +2173,22 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
     return imported
 
 
-def test_the_example_definitions_import_the_registry_from_the_frontend() -> None:
-    """tests/frontend/pipeline_example/pipeline.py, tests/frontend/command_example/pipeline.py and tests/frontend/simulation_example/pipeline.py import nothing from vivarium.dagger.backend, and no example definition imports from vivarium.dagger.backend.wiring."""
-    here = Path(__file__).parent
-    examples = {
-        name: _imported_modules(here / name / "pipeline.py")
-        for name in (
-            "pipeline_example",
-            "handoff_example",
-            "command_example",
-            "simulation_example",
-        )
-    }
+def test_the_example_definitions_use_workflow_and_import_no_registry() -> None:
+    """Each of the pipeline, handoff, command and simulation example definitions imports Workflow from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names ArtifactRegistry or passes registry=."""
+    backend_parts = ["vivarium", "dagger", "backend"]
+    for example in ("pipeline", "handoff", "command", "simulation"):
+        definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
+        imported = _imported_modules(definition)
 
-    for name in ("pipeline_example", "command_example", "simulation_example"):
-        backend = [
-            module
-            for module in examples[name]
-            if f"{module}.".startswith("vivarium.dagger.backend.")
-        ]
-        assert backend == [], name
-    for name, imported in examples.items():
-        assert "vivarium.dagger.backend.wiring" not in imported, name
-        assert "ArtifactRegistry" in imported.get("vivarium.dagger.frontend", set()), name
+        assert "Workflow" in imported.get("vivarium.dagger.frontend", set()), example
+        backend = [module for module in imported if module.split(".")[:3] == backend_parts]
+        assert backend == [], (example, backend)
+        source = definition.read_text()
+        assert "ArtifactRegistry" not in source, example
+        keywords = {
+            node.arg for node in ast.walk(ast.parse(source)) if isinstance(node, ast.keyword)
+        }
+        assert "registry" not in keywords, example
 
 
 # The command step example (MIC-7740)
@@ -2257,3 +2254,160 @@ def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path
     assert adults.would_run
     nodes = [reason.node for reason in adults.reasons]
     assert "artifact 'select_adults.py'" in nodes, adults.reasons
+
+
+# The Workflow object (MIC-7805)
+
+_WORKFLOW_HEADER = (
+    _HEADER
+    + """
+from vivarium.dagger.frontend import Workflow
+
+
+def make_a():
+    log("a")
+    return frame()
+
+
+def make_b(x):
+    log("b")
+    return plus_one(x)
+"""
+)
+"""The start of every Workflow definition: ``make_a`` and ``make_b`` log that they ran."""
+
+_FIRST_STEP = 'wf.python_step(make_a, inputs={}, produces="population.parquet", name="first")'
+"""A step 'first' that produces 'population.parquet'."""
+
+_SAME_NAME_STEP = 'wf.python_step(make_a, inputs={}, produces="other.parquet", name="first")'
+"""A step with :data:`_FIRST_STEP`'s name and another product."""
+
+_SAME_KEY_STEP = (
+    'wf.python_step(make_a, inputs={}, produces="population.parquet", name="second")'
+)
+"""A step 'second' with :data:`_FIRST_STEP`'s product."""
+
+_MISTYPED_STEP = (
+    'wf.python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
+)
+"""A step 'b' that reads the mistyped key 'populaton.parquet'."""
+
+_HIDDEN_FRAMES = re.compile(r"  \[\d+ framework frames? hidden\]")
+"""The line a trimmed traceback shows in place of its framework frames."""
+
+
+def _workflow_definition(*steps: str) -> str:
+    """Return a definition that adds ``steps``, each one line of source, to one Workflow."""
+    added = "".join(f"    {step}\n" for step in steps)
+    return (
+        f"{_WORKFLOW_HEADER}\n\ndef pipeline():\n"
+        f'    wf = Workflow(HERE / "out", "run1")\n{added}    return wf.pipeline()\n'
+    )
+
+
+def _last_frame(lines: list[str]) -> int:
+    """Return the index of the last ``File`` line of a traceback's ``lines``."""
+    frames = [index for index, line in enumerate(lines) if line.startswith('  File "')]
+    assert frames, "\n".join(lines)
+    return frames[-1]
+
+
+def test_a_workflow_step_with_a_name_already_added_exits_two_with_the_definitions_line(
+    tmp_path: Path,
+) -> None:
+    """'dagger preview' and 'dagger run --local' of a definition that adds a second step named like the first through a Workflow exit 2; stderr names the step, its traceback's last frame is the definition's second wf.python_step( line, no frame of vivarium.dagger is shown, and no step body runs."""
+    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _SAME_NAME_STEP))
+
+    for verb in ("preview", "run"):
+        result = _invoke(verb, str(path))
+
+        assert result.exit_code == 2, f"{verb}\n{_describe(result)}"
+        errors = result.stderr
+        assert "Step 'first':" in errors, errors
+        lines = errors.splitlines()
+        last = _last_frame(lines)
+        assert path.name in lines[last], errors
+        assert lines[last].endswith(", in pipeline"), errors
+        assert lines[last + 1].strip() == _SAME_NAME_STEP, errors
+        frames = [line for line in lines if line.startswith('  File "')]
+        assert not any("vivarium/dagger/" in frame for frame in frames), errors
+    assert _calls(tmp_path) == []
+
+
+def test_a_workflow_step_producing_a_key_already_produced_exits_two_naming_both_steps_and_the_key(
+    tmp_path: Path,
+) -> None:
+    """'dagger run --local' of a definition whose second Workflow step produces the first step's key exits 2, stderr names both steps and the key, and no step body runs."""
+    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _SAME_KEY_STEP))
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    messages = [line for line in result.stderr.splitlines() if "Step 'second':" in line]
+    assert messages, result.stderr
+    message = messages[-1]
+    assert "WiringError" in message, result.stderr
+    assert "'first'" in message, result.stderr
+    assert "'population.parquet'" in message, result.stderr
+    assert _calls(tmp_path) == []
+
+
+def test_a_definition_time_error_in_a_workflow_method_points_at_the_modelers_line(
+    tmp_path: Path,
+) -> None:
+    """'dagger preview' of a definition whose wf.python_step names an input key no step produces exits 2; the trimmed traceback's last frame is the definition's wf.python_step( line, followed by the hidden-frames line and the WiringError naming the step and the key."""
+    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _MISTYPED_STEP))
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    lines = errors.splitlines()
+    last = _last_frame(lines)
+    assert path.name in lines[last], errors
+    assert lines[last + 1].strip() == _MISTYPED_STEP, errors
+    hidden = last + 2
+    # Python 3.11+ prints a caret line under a call that does not cover its whole line.
+    carets = lines[hidden] if hidden < len(lines) else ""
+    if "^" in carets and set(carets) <= {" ", "~", "^"}:
+        hidden += 1
+    assert hidden + 1 < len(lines), errors
+    assert _HIDDEN_FRAMES.fullmatch(lines[hidden]), errors
+    error = "WiringError: Step 'b': input 'populaton.parquet' is unresolved"
+    assert error in lines[hidden + 1], errors
+    assert _calls(tmp_path) == []
+
+
+def test_a_preview_of_a_workflow_definition_does_not_import_jobmon(tmp_path: Path) -> None:
+    """In a fresh interpreter, 'dagger preview -c def.py' of a definition built with Workflow exits 0 and leaves jobmon out of sys.modules."""
+    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP))
+
+    completed = subprocess.run(
+        [sys.executable, "-c", _HELP_AND_PREVIEW, str(path)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "jobmon modules: []" in completed.stdout.splitlines(), completed.stdout
+    assert _calls(tmp_path) == []
+
+
+def test_the_pipeline_example_keeps_its_state_under_the_output_roots_dagger_directory(
+    tmp_path: Path,
+) -> None:
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/pipeline_example writes the products under output/example and pytask.lock under output/.dagger/example, and creates no state directory beside the definition."""
+    shutil.copy(Path(__file__).parent / "pipeline_example" / "pipeline.py", tmp_path)
+
+    result = _invoke("run", str(tmp_path / "pipeline.py"))
+
+    assert result.exit_code == 0, _describe(result)
+    products = tmp_path / "output" / "example"
+    for key in ("population.parquet", "adults.parquet", "summary.csv"):
+        assert (products / key).is_file(), key
+    assert (tmp_path / "output" / ".dagger" / "example" / "pytask.lock").is_file()
+    assert not (products / "pytask.lock").exists()
+    assert not (tmp_path / "state").exists()

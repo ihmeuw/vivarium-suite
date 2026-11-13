@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, command_step, python_step
+from vivarium.dagger.frontend import Pipeline, Workflow
 
 HERE = Path(__file__).resolve().parent
 
@@ -22,34 +22,21 @@ def total_adults(adults: Path) -> pd.DataFrame:
 
 
 def pipeline() -> Pipeline:
-    """Wire the three steps and keep their outputs and state next to this file."""
-    registry = ArtifactRegistry(
+    """Add the three steps, with their outputs and state under ``output`` next to this file."""
+    wf = Workflow(
         HERE / "output",
         run_name="example",
         root_inputs={"select_adults.py": HERE / "select_adults.py"},
     )
-    tasks = [
-        python_step(
-            make_population,
-            inputs={},
-            produces="population.csv",
-            registry=registry,
-            name="population",
-        ),
-        command_step(
-            "python {script} {population} {adults}",
-            inputs={"script": "select_adults.py", "population": "population.csv"},
-            produces={"adults": "adults.csv"},
-            registry=registry,
-            env=sys.prefix,
-            name="adults",
-        ),
-        python_step(
-            total_adults,
-            inputs={"adults": "adults.csv"},
-            produces="summary.csv",
-            registry=registry,
-            name="summary",
-        ),
-    ]
-    return Pipeline(tasks, HERE / "state", registry)
+    wf.python_step(make_population, inputs={}, produces="population.csv", name="population")
+    wf.command_step(
+        "python {script} {population} {adults}",
+        inputs={"script": "select_adults.py", "population": "population.csv"},
+        produces={"adults": "adults.csv"},
+        env=sys.prefix,
+        name="adults",
+    )
+    wf.python_step(
+        total_adults, inputs={"adults": "adults.csv"}, produces="summary.csv", name="summary"
+    )
+    return wf.pipeline()

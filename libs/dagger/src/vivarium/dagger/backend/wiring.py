@@ -4,10 +4,13 @@ A pipeline names each artifact with a logical key. An output registers its key
 against one resolved file node under the run's output directory, or against a run
 directory node for a key registered by
 :meth:`~vivarium.dagger.backend.wiring.ArtifactRegistry.register_directory_output`.
-An input naming that key resolves to the identical node object, so pytask draws the
-producer-to-consumer edge from shared node identity rather than from any separate
-declaration. The output root and run name namespace produced paths, so two runs
-write to distinct directories.
+An input naming that key resolves to the producer's own node. pytask draws the
+producer-to-consumer edge from the node's path: a path node's signature is a hash of its
+path, and pytask's graph keeps one node per signature. Sharing the producer's node keeps
+the node's type, which matters for a run directory: a plain path node for the same
+directory, added after the run directory node, replaces it in the graph and makes the
+build fail with ``IsADirectoryError``. The output root and run name namespace produced
+paths, so two runs write to distinct directories.
 
 This is a plain registry, not a container class: a pipeline builds its tasks into
 a list and hands them to :func:`~vivarium.dagger.backend.build.build`.
@@ -217,8 +220,9 @@ class ArtifactRegistry:
 
         Returns
         -------
-            The identical node object a producer registered for ``key`` (so the
-            consumer gets a real edge to it), or a file node for a declared root
+            The node a producer registered for ``key``, shared so that the consumer's
+            input keeps the producer's node type, such as a run directory node (pytask
+            draws the edge from the node's path), or a file node for a declared root
             input that exists on disk.
 
         Raises

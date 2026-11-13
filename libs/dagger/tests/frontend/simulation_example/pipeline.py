@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import ArtifactRegistry, Pipeline, python_step, simulation_step
+from vivarium.dagger.frontend import Pipeline, Workflow
 
 HERE = Path(__file__).resolve().parent
 
@@ -22,28 +22,24 @@ def summarize_deaths(simulation: Path) -> pd.DataFrame:
 
 
 def pipeline() -> Pipeline:
-    """Wire the simulation and its summary, and keep their outputs and state next to this file."""
-    registry = ArtifactRegistry(HERE / "output", run_name="example")
-    tasks = [
-        simulation_step(
-            spec=HERE / "toy_model.yaml",
-            branches=HERE / "branches.yaml",
-            produces="sims/toy",
-            registry=registry,
-            env=ENV,
-            options={
-                "project": "proj_simscience",
-                "max_runtime": "00:10:00",
-                "peak_memory": 1,
-                "no_slack": True,
-            },
-        ),
-        python_step(
-            summarize_deaths,
-            inputs={"simulation": "sims/toy"},
-            produces="summary.csv",
-            registry=registry,
-            name="summary",
-        ),
-    ]
-    return Pipeline(tasks, HERE / "state", registry)
+    """Add the simulation and its summary, with their outputs and state next to this file."""
+    wf = Workflow(HERE / "output", run_name="example")
+    wf.simulation_step(
+        spec=HERE / "toy_model.yaml",
+        branches=HERE / "branches.yaml",
+        produces="sims/toy",
+        env=ENV,
+        options={
+            "project": "proj_simscience",
+            "max_runtime": "00:10:00",
+            "peak_memory": 1,
+            "no_slack": True,
+        },
+    )
+    wf.python_step(
+        summarize_deaths,
+        inputs={"simulation": "sims/toy"},
+        produces="summary.csv",
+        name="summary",
+    )
+    return wf.pipeline()

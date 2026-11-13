@@ -56,14 +56,16 @@ from vivarium.dagger.frontend import (
     PipelineError,
     StepFailed,
     _collect_simulation,
-    notebook_step,
     preview,
-    python_step,
     run,
-    simulation_step,
 )
 from vivarium.dagger.frontend._collect_simulation import _MESSAGE_FILE, _SENTINEL
-from vivarium.dagger.frontend.simulation_step import describe_simulation_failure
+from vivarium.dagger.frontend.notebook_step import notebook_step
+from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.simulation_step import (
+    describe_simulation_failure,
+    simulation_step,
+)
 from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _KEY = "sims/toy"
@@ -366,10 +368,8 @@ def test_the_one_output_is_a_run_directory_node_at_the_produces_path(model: _Mod
     assert registry.resolve_input(_KEY) is node
 
 
-def test_only_simulation_step_is_exported_from_the_frontend() -> None:
-    """vivarium.dagger.frontend exports simulation_step, and no name in its __all__ refers to the sentinel."""
-    assert "simulation_step" in frontend.__all__
-    assert frontend.simulation_step is simulation_step
+def test_no_name_the_frontend_exports_refers_to_the_sentinel() -> None:
+    """No name in vivarium.dagger.frontend's __all__ refers to the sentinel."""
     for name in frontend.__all__:
         assert "sentinel" not in name.lower(), name
         assert "success" not in name.lower(), name
