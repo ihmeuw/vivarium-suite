@@ -1,3 +1,9 @@
+**4.14.2 - 11/13/26**
+
+- Build one ``<model>_current`` shared environment for each model repo in
+  ``ACTIVE_MODELS``, and one environment per type for each repo in the new
+  ``TYPE_SPECIFIC_ACTIVE_MODELS``, which takes over the four current models
+
 **4.14.1 - 11/10/26**
 
 - Log the uv cache size on each Jenkins build node every day in the cleanup job, and
