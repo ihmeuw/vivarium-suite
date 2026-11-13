@@ -33,12 +33,12 @@ pipeline {
     parameters {
         string(
             name: 'ACTIVE_MODELS',
-            defaultValue: '',
+            defaultValue: 'vivarium_gates_lsff_2026',
             description: 'Comma-separated list of model repositories to build a single environment for'
         )
         string(
             name: 'TYPE_SPECIFIC_ACTIVE_MODELS',
-            defaultValue: 'vivarium_gates_mncnh,vivarium_gates_lsff_2026,vivarium_gates_nutrition_optimization,vivarium_gates_nutrition_optimization_child',
+            defaultValue: 'vivarium_gates_mncnh,vivarium_gates_nutrition_optimization,vivarium_gates_nutrition_optimization_child',
             description: 'Comma-separated list of model repositories to build one environment per type for'
         )
         string(

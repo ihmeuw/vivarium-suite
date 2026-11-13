@@ -2,7 +2,8 @@
 
 - Build one ``<model>_current`` shared environment for each model repo in
   ``ACTIVE_MODELS``, and one environment per type for each repo in the new
-  ``TYPE_SPECIFIC_ACTIVE_MODELS``, which takes over the four current models
+  ``TYPE_SPECIFIC_ACTIVE_MODELS``. LSFF moves to a single environment, and the other
+  three models stay type-specific
 
 **4.14.1 - 11/10/26**
 
