@@ -29,6 +29,8 @@ For example:
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -87,6 +89,8 @@ class ConfigNode:
         self._values: dict[str, tuple[str | None, Any]] = {}
         self._frozen = False
         self._accessed = False
+        self._key = ""
+        self._parent: ConfigTree | None = None
 
     @property
     def name(self) -> str:
@@ -97,6 +101,12 @@ class ConfigNode:
     def accessed(self) -> bool:
         """Whether or not this node has been accessed."""
         return self._accessed
+
+    def _key_path(self) -> tuple[str, ...]:
+        """Return the keys from the root of the tree down to this node."""
+        if self._parent is None:
+            return ()
+        return (*self._parent._key_path(), self._key)
 
     @property
     def metadata(self) -> list[dict[str, Any | str | None]]:
@@ -143,7 +153,7 @@ class ConfigNode:
         self._accessed = True
         return value
 
-    def update(self, value: Any, layer: str | None, source: str | None) -> None:
+    def update(self, value: Any, layer: str | None = None, source: str | None = None) -> None:
         """Set a value for a layer with optional metadata about source.
 
         Parameters
@@ -152,7 +162,8 @@ class ConfigNode:
             Data to store in the node.
         layer
             Name of the layer to use. If no layer is provided, the value will
-            be set in the outermost (highest priority) layer.
+            be set in the outermost (highest priority) layer, the same layer that
+            assigning through the tree, as in ``tree.time.step_size = 5``, uses.
         source
             Metadata indicating the source of this value.
 
@@ -250,6 +261,31 @@ class ConfigNode:
         layer, _, value = self.metadata[-1].values()
         return f"{layer}: {value}"
 
+    def _repr_pretty_(self, printer: Any, cycle: bool) -> None:
+        """Display the node in IPython as its keys and its outermost value.
+
+        The keys run from the root of the node's tree down to the node, each one
+        quoted, so a key that contains a dot stays one key, as in
+        ``ConfigNode(("configuration", "risk.child_wasting", "distribution_type"),
+        'ordered')``. Reading the value for display does not mark the node as
+        accessed. A node outside any tree displays as its ``repr``.
+        """
+        if self._parent is None:
+            printer.text(repr(self))
+            return
+        keys = _format_keys(self._key_path())
+        if not self:
+            printer.text(f"ConfigNode({keys})")
+        else:
+            value = self._get_value_with_source(layer=None)[1]
+            printer.text(f"ConfigNode({keys}, {value!r})")
+
+
+def _format_keys(keys: tuple[str, ...]) -> str:
+    """Write keys as a tuple of double-quoted strings."""
+    quoted = ", ".join(json.dumps(key) for key in keys)
+    return f"({quoted},)" if len(keys) == 1 else f"({quoted})"
+
 
 class ConfigIterator:
     """An iterator over the keys of a :class:`ConfigTree`."""
@@ -277,6 +313,7 @@ class ConfigTree:
     _children: dict[str, ConfigTree | ConfigNode]
     _frozen: bool
     _name: str
+    _parent: ConfigTree | None
 
     def __init__(
         self,
@@ -321,6 +358,7 @@ class ConfigTree:
         self.__dict__["_children"] = {}
         self.__dict__["_frozen"] = False
         self.__dict__["_name"] = name
+        self.__dict__["_parent"] = None
         self.update(data, layer=self._layers[0], source="initial data")
 
     def freeze(self) -> None:
@@ -356,6 +394,60 @@ class ConfigTree:
                 for grandchild_name in child.unused_keys():
                     unused.append(f"{name}.{grandchild_name}")
         return unused
+
+    def leaves(self) -> list[ConfigNode]:
+        """List every leaf node in the ``ConfigTree``, in the order the keys were added.
+
+        Listing does not mark the nodes as accessed.
+        """
+        leaves = []
+        for child in self.values():
+            if isinstance(child, ConfigNode):
+                leaves.append(child)
+            else:
+                leaves.extend(child.leaves())
+        return leaves
+
+    def find(self, pattern: str = "", *, regex: bool = False) -> list[ConfigNode]:
+        """Find the leaf nodes whose path matches a pattern.
+
+        Use this to locate a key when you know roughly what it is called but not
+        where it sits in the tree.
+
+        Parameters
+        ----------
+        pattern
+            The text to look for, matched case-insensitively against each node's
+            keys from the root of its tree joined with dots, such as
+            ``configuration.time.step_size``. It may appear anywhere in that text.
+            An empty pattern, the default, matches every leaf.
+        regex
+            Whether to treat the pattern as a regular expression. It is matched
+            literally by default, so a dot in the pattern matches only a dot.
+
+        Returns
+        -------
+            The matching nodes held by this tree, in the order the keys were added.
+
+        Raises
+        ------
+        ValueError
+            If ``regex`` is True and the pattern is not a valid regular expression.
+        """
+        try:
+            matcher = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE)
+        except re.error as error:
+            raise ValueError(
+                f"Invalid regular expression '{pattern}': {error}. Drop regex=True to"
+                " search for this text literally."
+            ) from error
+        return [node for node in self.leaves() if matcher.search(".".join(node._key_path()))]
+
+    def _key_path(self) -> tuple[str, ...]:
+        """Return the keys from the root of the tree down to this tree."""
+        if self._parent is None:
+            return ()
+        return (*self._parent._key_path(), self._name)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the ``ConfigTree`` to a nested dictionary.
@@ -632,7 +724,9 @@ class ConfigTree:
 
         if isinstance(value, dict):
             if name not in self:
-                self._children[name] = ConfigTree(layers=list(self._layers), name=name)
+                child_tree = ConfigTree(layers=list(self._layers), name=name)
+                child_tree.__dict__["_parent"] = self
+                self._children[name] = child_tree
             if isinstance(self._children[name], ConfigNode):
                 name = f"{self._name}.{name}" if self._name else name
                 raise ConfigurationError(
@@ -640,7 +734,10 @@ class ConfigTree:
                 )
         else:
             if name not in self:
-                self._children[name] = ConfigNode(list(self._layers), name=self._name)
+                node = ConfigNode(list(self._layers), name=self._name)
+                node._key = name
+                node._parent = self
+                self._children[name] = node
             if isinstance(self._children[name], ConfigTree):
                 name = f"{self._name}.{name}" if self._name else name
                 raise ConfigurationError(f"Can't assign a value to a ConfigTree.", name)
@@ -756,13 +853,16 @@ class ConfigTree:
 
     def __delattr__(self, name: str) -> None:
         """Delete a child by name using attribute syntax."""
-        if name in self:
-            del self._children[name]
+        self._remove_child(name)
 
     def __delitem__(self, name: str) -> None:
         """Delete a child by name using bracket syntax."""
+        self._remove_child(name)
+
+    def _remove_child(self, name: str) -> None:
+        """Remove a child, if present, and clear its link back to this tree."""
         if name in self:
-            del self._children[name]
+            self._children.pop(name).__dict__["_parent"] = None
 
     def __contains__(self, name: str) -> bool:
         """Test if a configuration key exists in any layer."""

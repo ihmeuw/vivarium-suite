@@ -1,3 +1,12 @@
+**5.3.0b1 - 11/12/26**
+
+- Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
+- Add ``ConfigTree.find()``, which finds the leaf nodes whose keys match a pattern
+- Display a ``ConfigNode`` in IPython as its keys from the root of its tree and its
+  outermost value, such as ``ConfigNode(("configuration", "time", "step_size"), 10)``
+- Default ``ConfigNode.update()``'s ``layer`` and ``source`` to None, so a found node can be
+  set with ``node.update(value)`` the way assigning through the tree sets it
+
 **5.2.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
