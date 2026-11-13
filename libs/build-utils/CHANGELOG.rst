@@ -1,4 +1,4 @@
-**4.14.0 - 11/05/26**
+**4.15.0 - 11/05/26**
 
 - Add a ``uv_lock`` option to ``reusable_pipeline`` that builds each Python version's
   environment from the repo's ``uv.lock`` with ``uv sync --locked --no-editable``, using
@@ -11,7 +11,6 @@
   and point to ``make build-env``
 - Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
   point to ``make list`` for a repo's own targets
-- Drop ``ln -F`` from ``make deploy-docs``, which newer ``ln`` versions reject
 - Describe uv environments in the README
 
 **4.13.0 - 11/04/26**
