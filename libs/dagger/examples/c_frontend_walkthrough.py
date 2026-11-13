@@ -36,8 +36,9 @@
 # is machinery for showing many runs and many mistakes in one place. A modeler would not
 # write any of it:
 #
-# - **A copy per section.** A definition keeps its outputs and pytask state next to itself
-#   (`HERE / "output"`, `HERE / "state"`). If every section ran in one folder, each would
+# - **A copy per section.** A definition keeps its outputs next to itself (`HERE / "output"`),
+#   and its `Workflow` keeps the pytask state inside them (`output/.dagger/<run>`). If every
+#   section ran in one folder, each would
 #   start from what the sections before it left. So each section works in its own copy of
 #   `c_walkthrough_defs/` under a workspace folder, and the committed files never change.
 # - **One-line edits.** Several sections need a definition that differs from the committed
@@ -201,10 +202,14 @@ JOBMON_ENV = (
 
 
 def products(folder):
-    """Return the files under a definition's output folder, relative to it."""
+    """Return the files under a definition's output folder, relative to it, without its state."""
     out = folder / "output"
     return (
-        sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
+        sorted(
+            str(p.relative_to(out))
+            for p in out.rglob("*")
+            if p.is_file() and p.relative_to(out).parts[0] != ".dagger"
+        )
         if out.exists()
         else []
     )
@@ -238,8 +243,8 @@ def show_runs(runs):
 # ## C1 — One definition declares the steps; custom steps are first-class (local)
 #
 # The definition below has python steps, a fan-out over a two-location handoff, a
-# notebook step, and a command step, all wired by artifact key through one
-# registry. No file path appears in the wiring. Loading the definition runs nothing, so
+# notebook step, and a command step, all added to one `Workflow` and wired by artifact
+# key. No file path appears in the wiring. Loading the definition runs nothing, so
 # `preview` plans the whole DAG before any product exists, and names every file by its key.
 
 # %%
@@ -568,12 +573,13 @@ show_error(
     "W7 two steps claim one artifact",
     edits=[
         (
-            'produces="summary.csv",',
-            'produces="summary.csv",\n            registry=registry,\n            name="summary_v1",\n        ),\n        python_step(\n            total_adults,\n            inputs={"adults": "adults.parquet"},\n            produces="summary.csv",',
+            '        name="summary",\n    )\n',
+            '        name="summary",\n    )\n    wf.python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
         )
     ],
     exit_code=2,
-    names=["summary.csv", "summary_v1", "summary"],
+    names=["summary.csv", "summary_v2", "'summary'"],
+    user_frames_only=True,
 )
 show_error(
     "W8 two steps share a name",
@@ -581,6 +587,7 @@ show_error(
     exit_code=2,
     names=["coverage", "name="],
     absent=["['coverage']"],
+    user_frames_only=True,
 )
 show_error(
     "P1 a command placeholder typo",
@@ -814,10 +821,10 @@ assert docs.returncode == 0
 #
 # The run and the skip use `mncnh_slice.py:stable`, which carries the `stable_code_id`
 # stand-in, and run in this process (`--local`). Then the public API (`mncnh_slice.py`),
-# which has its own state, runs the slice again through Jobmon, the command's default: the
+# which has its own state folder, runs the slice again through Jobmon, the command's default: the
 # step functions are imported on the nodes from a definition file outside the folder
 # `dagger` runs from, the artifact and notebook steps run in the model's env there, and the
-# slice's `Pipeline(resources=...)` gives every step more memory than dagger's default. The
+# slice's `Workflow(resources=...)` gives every step more memory than dagger's default. The
 # project comes from `-P`. A preview after it shows that every step would run again until
 # MIC-7760.
 
@@ -846,8 +853,7 @@ else:
         ],
         check=True,
     )
-    for d in ("output", "state", "state_stable"):
-        shutil.rmtree(SLICE / d, ignore_errors=True)
+    shutil.rmtree(SLICE / "output", ignore_errors=True)
     print(DEF.read_text())
     dagger("preview", "-c", f"{DEF}:stable", cwd=MNCNH)
     real = dagger("run", "-c", f"{DEF}:stable", "--local", cwd=MNCNH)
@@ -877,9 +883,9 @@ else:
                 ),
             )
     real_jobmon = dagger("run", "-c", DEF, "-P", "proj_simscience", cwd=MNCNH, env=JOBMON_ENV)
-    show_runs(bridged_runs(SLICE / "state"))
+    show_runs(bridged_runs(SLICE / "output/.dagger/nigeria"))
     assert real_jobmon.returncode == 0
-    assert len(bridged_runs(SLICE / "state")) == 1
+    assert len(bridged_runs(SLICE / "output/.dagger/nigeria")) == 1
     real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
     assert all(l.startswith("run") for l in plan(real_public).values())
 
@@ -914,7 +920,7 @@ else:
 # Without `--local`, `dagger run` and `dagger force` send a definition's stale steps to
 # Slurm as one Jobmon workflow. Each step's compute resources start from dagger's defaults
 # (`vivarium.dagger.constants.DEFAULT_RESOURCES`: all.q, 1 GB, an hour, one core), then the
-# definition's `Pipeline(resources=...)`, then the command's `-P`, `-q` and `-m`, then the
+# definition's `Workflow(resources=...)`, then the command's `-P`, `-q` and `-m`, then the
 # step's own `resources=`. The walkthrough's definition sets no project, as an example
 # shared between people should not, so each command passes `-P`. A node imports each python
 # step's function through the import root that the bridge sends with the step, so nothing
@@ -970,7 +976,7 @@ else:
 
     # 1. No project.
     GOOD_JOBMON = make_defs("jobmon_good")
-    GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py:stable", GOOD_JOBMON / "state_stable"
+    GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py:stable", GOOD_JOBMON / "output/.dagger/walk-stable"
     no_project = jobmon_dagger("run", "-c", GOOD_DEF)
     assert no_project.returncode == 2 and "-P/--project" in no_project.stderr
     assert products(GOOD_JOBMON) == [] and not bridged_runs(GOOD_STATE)
@@ -1019,7 +1025,7 @@ else:
     broken_err, broken_out = (WORK / "broken.err").read_text(), (WORK / "broken.out").read_text()
     print("[stderr]\n" + broken_err.rstrip())
     print("[end of pytask's report on stdout]\n" + "\n".join(broken_out.rstrip().splitlines()[-25:]))
-    show_runs(bridged_runs(BROKEN_JOBMON / "state_stable"))
+    show_runs(bridged_runs(BROKEN_JOBMON / "output/.dagger/walk-stable"))
     for expected in (
         "Step 'coverage_kenya' failed: KeyError: 'coverag'",
         "Step 'coverage_nigeria' failed: KeyError: 'coverag'",
@@ -1043,7 +1049,7 @@ else:
             ),
         ],
     )
-    LOCK_DEF, LOCK_STATE = "jobmon_lock/pipeline.py:stable", LOCKED / "state_stable"
+    LOCK_DEF, LOCK_STATE = "jobmon_lock/pipeline.py:stable", LOCKED / "output/.dagger/walk-stable"
     argv = [str(DAGGER), "run", "-c", LOCK_DEF, "-P", PROJECT]
     print(f"$ dagger {shlex.join(argv[1:])} &    # started in the background")
     # Its output goes to files, which nothing has to read while it runs.

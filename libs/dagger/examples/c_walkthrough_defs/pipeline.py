@@ -9,16 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.backend.task import Task
-from vivarium.dagger.frontend import (
-    ArtifactRegistry,
-    Pipeline,
-    command_step,
-    handoff_inputs,
-    handoff_key,
-    notebook_step,
-    python_step,
-)
+from vivarium.dagger.frontend import Pipeline, Workflow, handoff_inputs, handoff_key
 from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
@@ -48,73 +39,61 @@ def mean_coverage(coverage: Path) -> pd.DataFrame:
     return pd.DataFrame({"mean_coverage": [pd.read_csv(coverage)["coverage"].mean()]})
 
 
-def _tasks() -> tuple[list[Task], ArtifactRegistry]:
-    """Compile the walkthrough's steps."""
-    registry = ArtifactRegistry(
+def _workflow(state: Path | None = None) -> Workflow:
+    """Add the walkthrough's steps to a workflow."""
+    wf = Workflow(
         HERE / "output",
         run_name="walk",
         root_inputs=handoff_inputs(HERE / "handoff", LOCATIONS, PRIMARY_DATA),
+        state=state,
     )
-    tasks = [
-        python_step(
-            make_population,
-            inputs={},
-            produces="population.parquet",
-            registry=registry,
-            name="population",
-        ),
-        python_step(
-            select_adults,
-            inputs={"population": "population.parquet"},
-            produces="adults.parquet",
-            registry=registry,
-            name="adults",
-        ),
-        python_step(
-            total_adults,
-            inputs={"adults": "adults.parquet"},
-            produces="summary.csv",
-            registry=registry,
-            name="summary",
-        ),
-        *(
-            python_step(
-                mean_coverage,
-                inputs={"coverage": handoff_key(location, "coverage.csv")},
-                produces=f"{location}/mean_coverage.parquet",
-                registry=registry,
-                name=f"coverage_{location}",
-            )
-            for location in LOCATIONS
-        ),
-        notebook_step(
-            HERE / "report.ipynb",
-            executed="report_executed.ipynb",
-            registry=registry,
-            env=sys.prefix,
-            inputs={"summary": "summary.csv"},
-            produces={"report": "report.csv"},
-            parameters={"title": "Adults"},
-            name="report",
-        ),
-        command_step(
-            "cp {report} {copy}",
-            inputs={"report": "report.csv"},
-            produces={"copy": "archive/report.csv"},
-            registry=registry,
-            name="archive",
-        ),
-    ]
-    return tasks, registry
+    wf.python_step(
+        make_population, inputs={}, produces="population.parquet", name="population"
+    )
+    wf.python_step(
+        select_adults,
+        inputs={"population": "population.parquet"},
+        produces="adults.parquet",
+        name="adults",
+    )
+    wf.python_step(
+        total_adults,
+        inputs={"adults": "adults.parquet"},
+        produces="summary.csv",
+        name="summary",
+    )
+    for location in LOCATIONS:
+        wf.python_step(
+            mean_coverage,
+            inputs={"coverage": handoff_key(location, "coverage.csv")},
+            produces=f"{location}/mean_coverage.parquet",
+            name=f"coverage_{location}",
+        )
+    wf.notebook_step(
+        HERE / "report.ipynb",
+        executed="report_executed.ipynb",
+        env=sys.prefix,
+        inputs={"summary": "summary.csv"},
+        produces={"report": "report.csv"},
+        parameters={"title": "Adults"},
+        name="report",
+    )
+    wf.command_step(
+        "cp {report} {copy}",
+        inputs={"report": "report.csv"},
+        produces={"copy": "archive/report.csv"},
+        name="archive",
+    )
+    return wf
 
 
 def pipeline() -> Pipeline:
     """Return the walkthrough pipeline built with the public API only."""
-    tasks, registry = _tasks()
-    return Pipeline(tasks, HERE / "state", registry)
+    return _workflow().pipeline()
 
 
 def stable() -> Pipeline:
     """Return the walkthrough pipeline with the code-fingerprint stand-in on every step."""
-    tasks, registry = _tasks()
-    return Pipeline([with_stable_code_id(t) for t in tasks], HERE / "state_stable", registry)
+    built = _workflow(state=HERE / "output" / ".dagger" / "walk-stable").pipeline()
+    tasks = tuple(with_stable_code_id(task) for task in built.tasks)
+    return Pipeline(tasks, built.root, built.registry)
