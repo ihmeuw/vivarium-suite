@@ -4,15 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.backend.task import Task
-from vivarium.dagger.frontend import (
-    ArtifactRegistry,
-    handoff_inputs,
-    handoff_key,
-    python_step,
-)
+from vivarium.dagger.frontend import Pipeline, Workflow, handoff_inputs, handoff_key
 
-HANDOFF_ROOT = Path(__file__).parent / "handoff"
+HERE = Path(__file__).resolve().parent
+HANDOFF_ROOT = HERE / "handoff"
 LOCATIONS = ["example_location"]
 PRIMARY_DATA = {"coverage.csv": ["location_id", "year_id", "coverage"]}
 
@@ -23,19 +18,19 @@ def mean_coverage(coverage: Path) -> pd.DataFrame:
     return pd.DataFrame({"mean_coverage": [frame["coverage"].mean()]})
 
 
-def build_tasks(output_root: Path, handoff_root: Path = HANDOFF_ROOT) -> list[Task]:
-    """Validate the handoff and compile one mean-coverage step per location."""
-    registry = ArtifactRegistry(
+def pipeline(
+    output_root: Path = HERE / "output", handoff_root: Path = HANDOFF_ROOT
+) -> Pipeline:
+    """Validate the handoff and add one mean-coverage step per location."""
+    wf = Workflow(
         output_root,
         run_name="example",
         root_inputs=handoff_inputs(handoff_root, LOCATIONS, PRIMARY_DATA),
     )
-    return [
-        python_step(
+    for location in LOCATIONS:
+        wf.python_step(
             mean_coverage,
             inputs={"coverage": handoff_key(location, "coverage.csv")},
             produces=f"{location}/mean_coverage.parquet",
-            registry=registry,
         )
-        for location in LOCATIONS
-    ]
+    return wf.pipeline()
