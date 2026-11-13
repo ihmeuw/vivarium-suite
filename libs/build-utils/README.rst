@@ -109,7 +109,7 @@ before.
   that repo bumps build-utils and relocks.
 
 In a standalone repo with a ``uv.lock``, ``make install`` outside Jenkins refuses
-and points to ``source environment.sh`` (or ``uv sync``), because it would install
+and points to ``make build-env`` (or ``uv sync --locked``), because it would install
 outside the lock.
 
 Tag prefix

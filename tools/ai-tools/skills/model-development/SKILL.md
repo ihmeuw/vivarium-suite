@@ -68,7 +68,7 @@ finalize & PR = finalize_core         # Finalize: artifacts held out; user-gated
    e.g. `vivarium_gates_mncnh`) and `cd` there. This workflow runs in the model
    repo, not in `vivarium-suite`.
 2. Activate the repo's environment. Use the `environments` skill: in a repo with a
-   `uv.lock` that means `source environment.sh` (or `uv sync --locked`) and the
+   `uv.lock` that means `make build-env` (or `uv sync --locked`), then activating the
    checkout's `.venv`, not a conda env.
 3. Create a **feature branch** for the iteration.
 

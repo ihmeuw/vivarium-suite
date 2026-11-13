@@ -1,7 +1,7 @@
 **0.32.0 - 11/05/26**
 
 - ``environments``: add a first section for repos with a committed ``uv.lock``, which use
-  the checkout's ``.venv`` through ``environment.sh`` or ``uv sync --locked``
+  the checkout's ``.venv`` through ``make build-env`` or ``uv sync --locked``
 - ``make-commands``, ``framework-clis`` and ``model-development``: describe how uv repos
   build and activate their environment
 

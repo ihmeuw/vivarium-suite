@@ -13,11 +13,11 @@ Running tests, linting, importing the package, executing scripts — all of it n
 
 If the repo root has a committed `uv.lock`, the environment is the checkout's own `.venv`, built from the lock. Do not look for conda envs or `.venv/<repo>_<type>` overlays, and do not pick a leftover conda env with the repo's name: it is not what CI or the team uses.
 
-- Run `source environment.sh` if the repo has one. It syncs `.venv` from the lock and activates it.
+- Run `make build-env` if the Makefile has it, then `source .venv/bin/activate`. It syncs `.venv` from the lock.
 - Otherwise run `uv sync --locked`, then use `.venv/bin/python` or `source .venv/bin/activate`.
 - If the sync fails because the lock is out of date, do not run `uv lock` on your own. Tell the user, since the lock is committed.
 - `make install` refuses in these repos. Don't work around it with `pip install`, which installs outside the lock. uv venvs have no `pip`.
-- An old `.venv` that holds overlays from before the switch is not a venv. `environment.sh` says how to remove it. Ask the user before deleting it.
+- An old `.venv` that holds overlays from before the switch is not a venv. `make build-env` says how to remove it. Ask the user before deleting it.
 
 ## Discovering the right environment
 
