@@ -30,7 +30,7 @@ The only target that lives in the *downstream* `Makefile` itself is `build-env` 
 
 - **`lint` doesn't fix anything.** It checks. To actually format, run `format`.
 - **`make` with no args runs `list`**, not `help`. `.DEFAULT_GOAL := list` is set in `base.mk`.
-- **`make install` refuses in a standalone repo with a `uv.lock`**, outside Jenkins. It would install outside the lock, so it points to `source environment.sh` (or `uv sync`) instead. Monorepo libs and Jenkins builds are not affected.
+- **`make install` refuses in a standalone repo with a `uv.lock`**, outside Jenkins. It would install outside the lock, so it points to `make build-env` (or `uv sync --locked`) instead. Monorepo libs and Jenkins builds are not affected.
 - **`make install` re-runs `setup-slack` every time.** Idempotent, but expect to see Slack bot config output.
 - **`build-env` deletes the env if any step fails.** It runs the create/bootstrap/install steps through the `_build-env` sub-make, then `conda env remove`s the env on failure, so a broken dependency pin leaves you with no env rather than one that activates with nothing installed. Pass `keep_env=yes` to keep the partial env for inspection.
 - **`build-env` on a name that already exists silently wipes that env.** `conda create` installs into an existing prefix instead of erroring, clearing its pip- and conda-installed packages before the rebuild starts. Pre-existing behavior, not something the fail-fast change introduced — but worth knowing before you re-run `build-env` to "refresh" an env you've added anything to by hand. The model-template refuses unless `force=yes`.

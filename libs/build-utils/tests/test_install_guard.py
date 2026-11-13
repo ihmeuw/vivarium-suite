@@ -52,7 +52,7 @@ def test_refuses_in_standalone_repo_with_lock(
     result = _make_install(tmp_path / "repo", stub_env, with_lock=True)
     assert result.returncode != 0
     assert GUARD_MESSAGE in result.stdout
-    assert "source environment.sh" in result.stdout
+    assert "make build-env" in result.stdout
     assert STUB_MARKER not in result.stdout
 
 

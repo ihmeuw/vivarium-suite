@@ -111,8 +111,8 @@ help: # Curated help message
 	echo; \
 	echo "Run the following targets (in order) to mimic a Jenkins build:"; \
 	if [ "$(USES_UV_LOCK)" = "yes" ]; then \
-	echo "  1. uv sync --locked                 Build .venv from uv.lock"; \
-	echo "                                      (or 'source environment.sh')"; \
+	echo "  1. build-env                        Build .venv from uv.lock"; \
+	echo "                                      (or 'uv sync --locked')"; \
 	echo "  2. lint                             Check for formatting errors"; \
 	echo "  3. mypy                             (optional) Check for type hinting errors"; \
 	echo "  4. test-<test-type>                 Run specific tests unit, integration,"; \
@@ -195,7 +195,7 @@ install: # Install package and dependencies
 # or a stray lock in libs/<pkg>, still builds.
 	@if [ "$(USES_UV_LOCK)" = "yes" ] && [ -z "$${JENKINS_URL}" ]; then \
 		echo "ERROR: this repo builds its environment from uv.lock, so 'make install' is disabled."; \
-		echo "Run 'source environment.sh' (or 'uv sync') instead."; \
+		echo "Run 'make build-env' (or 'uv sync --locked') instead."; \
 		exit 1; \
 	fi
 	pip install uv
