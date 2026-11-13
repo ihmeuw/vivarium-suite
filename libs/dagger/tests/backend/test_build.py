@@ -1,17 +1,24 @@
 import re
+import signal
 import subprocess
 from collections.abc import Callable, Mapping
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from pytask import PNode, PythonNode, TaskOutcome
+from pytask import ExitCode, PNode, PythonNode, TaskOutcome
 
+import vivarium.dagger.backend.build as build_module
 from vivarium.dagger.backend.build import (
+    BRIDGE_PLUGIN,
     CODE_ID_KEY,
     COMMAND_KEY,
     TASK_KEY,
+    TaskExited,
     build,
+    describe_exit,
+    failure_message,
     outcomes,
     to_pytask_task,
 )
@@ -303,3 +310,235 @@ def test_build_rejects_duplicate_task_names(tmp_path: Path) -> None:
 
     assert calls == []
     assert not root.exists()
+
+
+def test_selected_runs_the_named_tasks_and_their_ancestors_and_skips_the_rest(
+    tmp_path: Path,
+) -> None:
+    """build(selected=[name]) runs that task and its ancestors; every other task is SKIP."""
+    src = _write(tmp_path / "src", "x")
+    a, b, c, d = tmp_path / "a", tmp_path / "b", tmp_path / "c", tmp_path / "d"
+    tasks = [_copy("a", src, a), _copy("b", a, b), _copy("c", b, c), _copy("d", src, d)]
+
+    assert outcomes(build(tasks, tmp_path / "state", selected=["b"])) == {
+        "a": TaskOutcome.SUCCESS,
+        "b": TaskOutcome.SUCCESS,
+        "c": TaskOutcome.SKIP,
+        "d": TaskOutcome.SKIP,
+    }
+    assert b.read_text() == "x"
+    assert not c.exists()
+    assert not d.exists()
+
+
+def test_an_empty_selection_runs_no_task(tmp_path: Path) -> None:
+    """build(selected=[]) reports every task as SKIP and exits OK."""
+    src = _write(tmp_path / "src", "x")
+    a, b = tmp_path / "a", tmp_path / "b"
+    tasks = [_copy("a", src, a), _copy("b", src, b)]
+
+    session = build(tasks, tmp_path / "state", selected=[])
+
+    assert session.exit_code == ExitCode.OK
+    assert outcomes(session) == _every(tasks, TaskOutcome.SKIP)
+    assert not a.exists()
+    assert not b.exists()
+
+
+def test_selected_rejects_a_name_that_is_not_a_task(tmp_path: Path) -> None:
+    """build(selected=[...]) with a name that is not a task raises ValueError naming it."""
+    tasks = [_copy("a", _write(tmp_path / "src", "x"), tmp_path / "a")]
+
+    with pytest.raises(ValueError, match="no_such_task"):
+        build(tasks, tmp_path / "state", selected=["a", "no_such_task"])
+
+
+def test_a_selection_of_more_than_a_thousand_tasks_builds(tmp_path: Path) -> None:
+    """Selecting over a thousand tasks builds without error, since one shared marker selects them all."""
+    tasks = [_task(f"task_{index}", _noop) for index in range(1200)]
+    chosen, rest = tasks[:1100], tasks[1100:]
+    names = [task.name for task in chosen]
+
+    session = build(tasks, tmp_path / "state", selected=names, dry_run=True)
+
+    assert session.exit_code == ExitCode.OK
+    expected = _every(chosen, TaskOutcome.WOULD_BE_EXECUTED)
+    expected.update(_every(rest, TaskOutcome.SKIP))
+    assert outcomes(session) == expected
+
+
+def test_failure_message_names_the_exit_code_and_pytasks_error(tmp_path: Path) -> None:
+    """failure_message of a session where two tasks produce one file names DAG_FAILED and pytask's message."""
+    product = file_node(tmp_path / "out")
+    tasks = [_task(name, "true", outputs={"out": product}) for name in ("a", "b")]
+
+    session = build(tasks, tmp_path / "state")
+    message = failure_message(session)
+
+    assert session.exit_code == ExitCode.DAG_FAILED
+    assert message.startswith(ExitCode.DAG_FAILED.name)
+    assert "There are some tasks which produce the same output" in message
+
+
+def test_failure_message_of_a_failed_step_is_the_exit_code_name(tmp_path: Path) -> None:
+    """failure_message of a session that failed only because a step failed is the exit code's name."""
+    tasks = [_task("fail", "exit 1", outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert session.exit_code == ExitCode.FAILED
+    assert failure_message(session) == session.exit_code.name
+
+
+# How a failed command's exit reads (MIC-7785)
+
+
+@pytest.mark.parametrize(
+    "returncode, expected",
+    [
+        (1, "the command exited with status 1"),
+        (2, "the command exited with status 2"),
+        (3, "the command exited with status 3"),
+        (128, "the command exited with status 128"),
+        (137, "the command exited with status 137 (signal SIGKILL)"),
+        (143, "the command exited with status 143 (signal SIGTERM)"),
+        (255, "the command exited with status 255"),
+        (-9, "the command was stopped by signal SIGKILL"),
+        (-15, "the command was stopped by signal SIGTERM"),
+    ],
+)
+def test_describe_exit_wording(returncode: int, expected: str) -> None:
+    """A code of 128+n names signal n after the status when Python has a name for it; a negative code names the signal that stopped the command."""
+    assert describe_exit(returncode) == expected
+
+
+def test_signal_127_has_no_name_so_status_255_is_the_status_alone() -> None:
+    """Status 255 has no signal suffix because Python names no signal 127."""
+    with pytest.raises(ValueError):
+        signal.Signals(127)
+
+
+def test_describe_exit_gives_the_number_of_a_signal_python_has_no_name_for() -> None:
+    """describe_exit with a negative code that no signal Python knows has, such as -200, is 'the command was stopped by signal 200'."""
+    with pytest.raises(ValueError):
+        signal.Signals(200)
+
+    assert describe_exit(-200) == "the command was stopped by signal 200"
+
+
+def test_a_command_killed_by_a_signal_has_a_negative_return_code_that_describe_exit_names(
+    tmp_path: Path,
+) -> None:
+    """A command task that kills its own shell with SIGKILL fails with a CalledProcessError whose return code describe_exit words as stopped by signal SIGKILL."""
+    tasks = [_task("killed", "kill -9 $$", outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert outcomes(session) == {"killed": TaskOutcome.FAIL}
+    [report] = session.execution_reports
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert error.returncode == -signal.SIGKILL
+    assert describe_exit(error.returncode) == "the command was stopped by signal SIGKILL"
+
+
+def test_a_shell_whose_child_is_killed_exits_137_and_describe_exit_names_sigkill(
+    tmp_path: Path,
+) -> None:
+    """A command whose child shell is killed with SIGKILL fails with return code 137, which describe_exit words with SIGKILL."""
+    command = "sh -c 'kill -9 $$'; exit $?"
+    tasks = [_task("child_killed", command, outputs={"out": file_node(tmp_path / "out")})]
+
+    session = build(tasks, tmp_path / "state")
+
+    assert outcomes(session) == {"child_killed": TaskOutcome.FAIL}
+    [report] = session.execution_reports
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert isinstance(error, subprocess.CalledProcessError)
+    assert error.returncode == 128 + signal.SIGKILL
+    assert "SIGKILL" in describe_exit(error.returncode)
+
+
+# A task that exits (MIC-7785)
+
+
+def _exit_three(**kwargs: Any) -> None:
+    """End the process with code 3, as a task body that calls sys.exit does."""
+    raise SystemExit(3)
+
+
+def test_a_task_that_raises_system_exit_makes_build_raise_task_exited_naming_it(
+    tmp_path: Path,
+) -> None:
+    """A callable task 'leave' that raises SystemExit(3) makes build raise TaskExited, a SystemExit whose task is 'leave' and code is 3, chained from the task's own SystemExit."""
+    tasks = [_task("leave", _exit_three, outputs={"out": file_node(tmp_path / "out")})]
+
+    with pytest.raises(TaskExited) as info:
+        build(tasks, tmp_path / "state")
+
+    exited = info.value
+    assert isinstance(exited, SystemExit)
+    assert exited.task == "leave"
+    assert exited.code == 3
+    cause = exited.__cause__
+    assert type(cause) is SystemExit
+    assert cause.code == 3
+
+
+def test_bridge_plugin_names_the_module_of_the_bridge_entry_point() -> None:
+    """BRIDGE_PLUGIN is the value of vivarium-dagger's ``pytask`` entry point for the bridge."""
+    assert BRIDGE_PLUGIN in {point.value for point in entry_points(group="pytask")}
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+def test_build_with_jobmon_but_no_bridge_plugin_raises_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """build(jobmon=True) without the bridge's plugin raises ValueError before the root exists."""
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+
+    with pytest.raises(ValueError, match="its pytask plugin is not registered") as excinfo:
+        build([_copy("a", src, a)], tmp_path / "state", jobmon=True)
+
+    assert BRIDGE_PLUGIN in str(excinfo.value)
+    assert "pip install -e" in str(excinfo.value)
+    assert not (tmp_path / "state").exists()
+    assert not a.exists()
+
+
+@pytest.mark.usefixtures("without_bridge_plugin")
+@pytest.mark.parametrize("mode", ["dry_run", "explain"])
+def test_a_local_only_build_with_jobmon_is_not_refused_without_the_bridge_plugin(
+    tmp_path: Path, mode: str
+) -> None:
+    """With dry_run or explain the bridge keeps steps local anyway, so jobmon=True is not refused."""
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+    flags: dict[str, Any] = {"jobmon": True, mode: True}
+
+    session = build([_copy("a", src, a)], tmp_path / "state", **flags)
+
+    assert session.exit_code == ExitCode.OK
+    assert not a.exists()
+
+
+@pytest.mark.parametrize("jobmon", [{}, {"jobmon": False}], ids=["unset", "false"])
+def test_build_without_jobmon_does_not_look_for_the_bridge_plugin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, jobmon: dict[str, Any]
+) -> None:
+    """A build that does not ask for Jobmon never reads the entry points and runs locally."""
+
+    def fail(**kwargs: Any) -> list[Any]:
+        raise AssertionError("entry_points was read")
+
+    monkeypatch.setattr(build_module, "entry_points", fail)
+    src = _write(tmp_path / "src", "x")
+    a = tmp_path / "a"
+
+    assert outcomes(build([_copy("a", src, a)], tmp_path / "state", **jobmon)) == {
+        "a": TaskOutcome.SUCCESS
+    }
+    assert a.read_text() == "x"

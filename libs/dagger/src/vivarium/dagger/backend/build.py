@@ -3,9 +3,11 @@
 import inspect
 import keyword
 import os
+import signal
 import socket
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +15,7 @@ import pytask
 
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task, check_unique_task_names
+from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
 
 CODE_ID_KEY = "__code_id__"
 """Reserved ``depends_on`` key under which a task's ``code_id`` node is attached."""
@@ -22,6 +25,46 @@ COMMAND_KEY = "__command__"
 
 TASK_KEY = "task"
 """Key under which a pytask task's attributes hold its shared-representation task."""
+
+SELECTED_MARKER = "dagger_selected"
+"""Marker :func:`build` attaches to each task named in its ``selected`` argument."""
+
+BRIDGE_PLUGIN = "vivarium.dagger.bridge.plugin"
+"""The module of the Jobmon bridge's pytask plugin, as its ``pytask`` entry point names it."""
+
+COLLECT_SIMULATION_VARIABLE = "DAGGER_COLLECT_SIMULATION"
+"""Environment variable that gives a simulation step's command the path of its check."""
+
+COLLECT_SIMULATION_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "frontend" / "_collect_simulation.py"
+)
+"""The check a simulation step's command runs, found without importing the frontend."""
+
+
+class TaskExited(SystemExit):
+    """A task raised :class:`SystemExit`, as ``sys.exit`` does, while :func:`build` ran it.
+
+    pytask records a task's ``Exception`` or ``KeyboardInterrupt`` but lets a
+    ``SystemExit`` end the build, so this error names the task. It keeps the task's exit
+    code, so unless it is caught it ends the process as the task's own ``SystemExit``
+    would have, and it is chained from that ``SystemExit``. Only a task that pytask runs
+    in this process through :func:`to_pytask_task` raises it; the Jobmon bridge's node
+    runner runs a step's body itself and does not.
+
+    Parameters
+    ----------
+    task
+        The name of the task that exited.
+    code
+        The task's exit code, as its ``SystemExit`` held it.
+    """
+
+    task: str
+    """The name of the task that exited."""
+
+    def __init__(self, task: str, code: str | int | None) -> None:
+        super().__init__(code)
+        self.task = task
 
 
 def run_command(command: str, env: str | None) -> None:
@@ -57,8 +100,10 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
     This is :func:`run_command` after its env is resolved, for a caller that resolved the
     env elsewhere, such as a compute node running a step the controller planned. The
     directories are set on the child process's ``PATH``, so they apply to every part of a
-    compound command such as ``a && b``, and no empty entry is added to ``PATH``. Output
-    goes to this process's standard output and standard error.
+    compound command such as ``a && b``, and no empty entry is added to ``PATH``. The
+    command's environment also sets ``DAGGER_COLLECT_SIMULATION`` to the path of the check
+    that a simulation step's command runs. Output goes to this process's standard output
+    and standard error.
 
     Parameters
     ----------
@@ -79,8 +124,9 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
     subprocess.CalledProcessError
         If the command exits with a non-zero status.
     """
+    child_env = {**os.environ, COLLECT_SIMULATION_VARIABLE: str(COLLECT_SIMULATION_SCRIPT)}
     if bin_path is None:
-        subprocess.run(command, shell=True, check=True)
+        subprocess.run(command, shell=True, check=True, env=child_env)
         return
     env_bin = bin_path.split(":")[0]
     if not os.path.isdir(env_bin):
@@ -92,7 +138,41 @@ def run_command_with_bin_path(command: str, bin_path: str | None) -> None:
         )
     parts = [*bin_path.split(":"), os.environ.get("PATH", "")]
     path = ":".join(part for part in parts if part)
-    subprocess.run(command, shell=True, check=True, env={**os.environ, "PATH": path})
+    subprocess.run(command, shell=True, check=True, env={**child_env, "PATH": path})
+
+
+def describe_exit(returncode: int) -> str:
+    """Return how a failed command's exit reads in a step's failure message.
+
+    Parameters
+    ----------
+    returncode
+        The return code of a command that failed, as
+        :class:`subprocess.CalledProcessError` holds it: not zero, and negative when a
+        signal stopped the command.
+
+    Returns
+    -------
+        ``"the command exited with status <N>"`` for a positive code, or ``"the command
+        was stopped by signal <NAME>"`` for a negative one, where ``<NAME>`` is the
+        signal's name, such as ``SIGKILL``, or its number when Python has no name for it.
+        A positive code ``128 + n``, which a shell gives when signal ``n`` stopped its
+        child, also names the signal when Python has a name for it, as in ``"the command
+        exited with status 137 (signal SIGKILL)"``.
+    """
+    if returncode >= 0:
+        shell_signal = _signal_name(returncode - 128) if returncode > 128 else None
+        named = f" (signal {shell_signal})" if shell_signal is not None else ""
+        return f"the command exited with status {returncode}{named}"
+    return f"the command was stopped by signal {_signal_name(-returncode) or -returncode}"
+
+
+def _signal_name(number: int) -> str | None:
+    """Return the name of signal ``number``, or None when Python has no name for it."""
+    try:
+        return signal.Signals(number).name
+    except ValueError:
+        return None
 
 
 def _check_envs(tasks: Iterable[Task]) -> None:
@@ -121,7 +201,8 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     and on a command-string ``run`` under ``COMMAND_KEY``. It produces ``task.outputs``
     and keeps ``task`` in its attributes under ``TASK_KEY``. Running it calls a callable
     ``run`` with each loaded input and output by name, or runs a command-string ``run``
-    through :func:`run_command` under the task's ``env``.
+    through :func:`run_command` under the task's ``env``. A ``SystemExit`` from either
+    is raised again as :class:`TaskExited`.
 
     Parameters
     ----------
@@ -150,13 +231,16 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
         raise ValueError(f"Task '{task.name}': names {shared} are both inputs and outputs.")
 
     def _run(**kwargs: Any) -> None:
-        """Run ``task`` with its loaded inputs and outputs."""
+        """Run ``task`` with its loaded inputs and outputs; raise TaskExited on SystemExit."""
         __tracebackhide__ = True
         kwargs.pop(CODE_ID_KEY, None)
-        if isinstance(task.run, str):
-            run_command(task.run, task.env)
-        else:
-            task.run(**kwargs)
+        try:
+            if isinstance(task.run, str):
+                run_command(task.run, task.env)
+            else:
+                task.run(**kwargs)
+        except SystemExit as error:
+            raise TaskExited(task.name, error.code) from error
 
     if callable(task.run):
         for key in task.outputs:
@@ -192,7 +276,13 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     )
 
 
-def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
+def build(
+    tasks: Iterable[Task],
+    root: Path,
+    *,
+    selected: Iterable[str] | None = None,
+    **kwargs: Any,
+) -> pytask.Session:
     """Build ``tasks`` with pytask, keeping its state under ``root``.
 
     Parameters
@@ -202,6 +292,12 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     root
         Directory for pytask's configuration, state database, and lockfile; created if
         missing.
+    selected
+        Names of the tasks to run. Each named task gets the ``SELECTED_MARKER`` mark and
+        pytask is given that marker as its marker expression, so it runs the named tasks
+        and their ancestors and reports every other task as ``SKIP``. The expression is
+        the same however many tasks are named. An empty selection runs no task. ``None``
+        runs every task.
     kwargs
         Extra keyword arguments passed to ``pytask.build``, including the Jobmon
         bridge's options, which :mod:`~vivarium.dagger.bridge.plugin` lists.
@@ -213,23 +309,113 @@ def build(tasks: Iterable[Task], root: Path, **kwargs: Any) -> pytask.Session:
     Raises
     ------
     ValueError
-        If two tasks share a name, a task cannot be converted, or a declared env does not
-        resolve. Envs are checked before any task runs. The error has one line per env that
-        does not resolve, naming that env once, the tasks that declare it, and why.
+        If two tasks share a name, a task cannot be converted, a declared env does not
+        resolve, ``selected`` names a task that is not in ``tasks``, or ``jobmon`` is
+        set but the bridge's pytask plugin is not registered (see
+        :func:`check_bridge_registered`). Envs are checked before any task runs. The
+        error has one line per env that does not resolve, naming that env once, the
+        tasks that declare it, and why. Nothing is written under ``root`` for any of
+        these.
+    TaskExited
+        If a task raises ``SystemExit``, which stops the build.
     """
+    check_bridge_registered(kwargs)
     tasks = list(tasks)
     check_unique_task_names(tasks)
     _check_envs(tasks)
     pytask_tasks = [to_pytask_task(task) for task in tasks]
+    selection: dict[str, Any] = {}
+    if selected is not None:
+        _mark_selected(pytask_tasks, selected)
+        selection["marker_expression"] = SELECTED_MARKER
     root.mkdir(parents=True, exist_ok=True)
     # pytasks uses whatever .git repo is upstream of root by default,
     # but will use the true root dir if you pass a pytask.toml config file.
     config = root / "pytask.toml"
     if not config.exists():
         config.write_text("[tool.pytask.ini_options]\n")
-    return pytask.build(tasks=pytask_tasks, config=config, task_files=(), **kwargs)
+    return pytask.build(
+        tasks=pytask_tasks, config=config, task_files=(), **selection, **kwargs
+    )
+
+
+def check_bridge_registered(build_kwargs: Mapping[str, Any]) -> None:
+    """Raise if a build asks for Jobmon but the bridge's pytask plugin is not registered.
+
+    pytask loads the bridge only through vivarium-dagger's ``pytask`` entry point, and
+    without it pytask ignores ``jobmon=True`` and runs every step in the build's own
+    process. An editable install made before the bridge existed has no such entry point.
+    Only the ``jobmon`` keyword argument is checked, and a build in one of the bridge's
+    :data:`~vivarium.dagger.bridge.plugin.LOCAL_ONLY_MODES` is not checked, because it
+    stays in its own process with the plugin too.
+
+    Parameters
+    ----------
+    build_kwargs
+        The keyword arguments a build passes to ``pytask.build``.
+
+    Raises
+    ------
+    ValueError
+        If ``build_kwargs`` sets ``jobmon`` to a true value, sets none of the local-only
+        modes, and no ``pytask`` entry point names :data:`BRIDGE_PLUGIN`.
+    """
+    if not build_kwargs.get("jobmon"):
+        return
+    if any(build_kwargs.get(mode) for mode in LOCAL_ONLY_MODES):
+        return
+    if any(point.value == BRIDGE_PLUGIN for point in entry_points(group="pytask")):
+        return
+    raise ValueError(
+        "jobmon=True needs the Jobmon bridge, but its pytask plugin is not registered in "
+        f"this environment: no 'pytask' entry point names {BRIDGE_PLUGIN}, so every step "
+        "would run in this process. Reinstall vivarium-dagger; for an editable install, "
+        "run `pip install -e` on libs/dagger again, because one made before the bridge "
+        "existed lacks the entry point."
+    )
+
+
+def _mark_selected(
+    pytask_tasks: list[pytask.TaskWithoutPath], selected: Iterable[str]
+) -> None:
+    """Attach ``SELECTED_MARKER`` to each task in ``selected``; reject unknown names."""
+    names = set(selected)
+    unknown = sorted(names.difference(task.name for task in pytask_tasks))
+    if unknown:
+        raise ValueError(f"Selected names are not task names: {unknown}.")
+    for task in pytask_tasks:
+        if task.name in names:
+            task.markers.append(pytask.Mark(SELECTED_MARKER, (), {}))
 
 
 def outcomes(session: pytask.Session) -> dict[str, pytask.TaskOutcome]:
     """Return the outcome of each executed task, keyed by task name."""
     return {report.task.name: report.outcome for report in session.execution_reports}
+
+
+def failure_message(session: pytask.Session) -> str:
+    """Return why ``session``'s build did not finish, in pytask's words.
+
+    Parameters
+    ----------
+    session
+        A session whose ``exit_code`` is not ``OK``.
+
+    Returns
+    -------
+        The name of the session's exit code, followed by the message of each collection
+        or DAG error pytask recorded, for example ``"DAG_FAILED: There are some tasks
+        which produce the same output. ..."``. A session that failed only because steps
+        failed gives the exit code's name alone.
+    """
+    errors = [
+        report.exc_info[1]
+        for report in session.collection_reports
+        if report.exc_info is not None
+    ]
+    if session.dag_report is not None and session.dag_report.exc_info is not None:
+        errors.append(session.dag_report.exc_info[1])
+    messages = [str(error) for error in errors if error is not None]
+    if not messages:
+        return session.exit_code.name
+    return f"{session.exit_code.name}: " + "\n".join(messages)

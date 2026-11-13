@@ -2,6 +2,7 @@
 
 import dataclasses
 import functools
+import importlib
 import json
 import re
 import subprocess
@@ -507,6 +508,100 @@ def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Pat
     assert "_builds_a_frame" in message
     stripped = _without_identity(message, _builds_a_frame)
     assert "None" in stripped, message
-    assert re.search(r"\breturn\b", stripped), message
+    assert "Check for a missing return statement." in message, message
     assert not reg.path_for("out.parquet").exists()
     assert not direct.exists()
+
+
+def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) -> None:
+    """A python_step named 'b' whose input key has no producer raises WiringError whose message starts with "Step 'b': " and names the key and the did-you-mean key."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg.register_output("caps/ethiopia.csv")
+
+    with pytest.raises(WiringError) as info:
+        python_step(
+            _read_frame,
+            inputs={"data": "caps/ethiopa.csv"},
+            produces="out.parquet",
+            registry=reg,
+            name="b",
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'b': "), message
+    assert "'caps/ethiopa.csv'" in message
+    assert "Did you mean 'caps/ethiopia.csv'" in message
+
+
+def test_producing_a_root_input_error_names_the_step(tmp_path: Path) -> None:
+    """A python_step named 'b' whose produces key is a declared root input raises WiringError whose message starts with "Step 'b': "."""
+    source = tmp_path / "src.parquet"
+    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src.parquet": source})
+
+    with pytest.raises(WiringError) as info:
+        python_step(_constant, inputs={}, produces="src.parquet", registry=reg, name="b")
+
+    message = str(info.value)
+    assert message.startswith("Step 'b': "), message
+    assert "'src.parquet'" in message
+
+
+def test_the_step_name_prefix_defaults_to_the_produces_key(tmp_path: Path) -> None:
+    """Without name=, the WiringError message for an unresolved input starts with "Step '<produces key>': "."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError) as info:
+        python_step(
+            _read_frame,
+            inputs={"data": "missing.parquet"},
+            produces="out.parquet",
+            registry=reg,
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'out.parquet': "), message
+
+
+def _returns_a_dict() -> Any:
+    """Return a dict where a DataFrame is expected."""
+    return {"value": [1]}
+
+
+def test_a_target_that_returns_another_type_gets_no_missing_return_hint(
+    tmp_path: Path,
+) -> None:
+    """A target that returns a dict fails naming dict, without the missing-return hint that only None gets."""
+    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    step_run = python_step(
+        _returns_a_dict, inputs={}, produces="out.parquet", registry=reg
+    ).run
+    assert isinstance(step_run, PythonStepRun)
+
+    with pytest.raises(TypeError) as info:
+        step_run(product=tmp_path / "direct.parquet")
+
+    assert "returned dict" in str(info.value)
+    assert "missing return" not in str(info.value)
+
+
+def test_target_reference_names_a_reloaded_module_and_says_to_rebuild_the_steps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A top-level function whose module was reloaded after it was taken raises ValueError that says the module was reloaded and to build the steps again, without the top-level advice."""
+    (tmp_path / "reloaded_steps_mod.py").write_text("def make():\n    return 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    module = importlib.import_module("reloaded_steps_mod")
+    try:
+        target = module.make
+        assert target_reference(target) == "reloaded_steps_mod:make"
+        importlib.reload(module)
+
+        with pytest.raises(ValueError) as info:
+            target_reference(target)
+    finally:
+        sys.modules.pop("reloaded_steps_mod", None)
+
+    message = str(info.value)
+    assert "reloaded" in message, message
+    assert "Build the steps again after reloading the module." in message
+    assert "top level" not in message

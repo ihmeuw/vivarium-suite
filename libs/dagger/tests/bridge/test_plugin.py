@@ -254,8 +254,9 @@ def test_a_dry_run_or_explanation_with_jobmon_stays_local(
 ) -> None:
     """A build with jobmon=True and dry_run or explain set (explain without dry_run) binds no plan, writes no product, and creates no run directory."""
     fx = build_fixture(tmp_path)
+    flags: dict[str, Any] = {mode: True}
 
-    build(fx.tasks, fx.state, jobmon=True, **{mode: True})
+    build(fx.tasks, fx.state, jobmon=True, **flags)
 
     assert fake_jobmon.plans == []
     assert not any(fx.registry.path_for(step).exists() for step in fx.steps)

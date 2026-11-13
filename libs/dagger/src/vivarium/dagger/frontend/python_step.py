@@ -2,13 +2,12 @@
 
 A step is a function that reads its declared inputs and returns a ``pandas``
 DataFrame. :func:`python_step` compiles one such function into a single backend
-:class:`~vivarium.dagger.backend.task.Task`, resolving the step's
-inputs and its product through the shared
-:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` so pytask
-draws the producer-to-consumer edges from node identity. Each input reaches the
-target as its resolved file path, which the target reads itself; only the
-returned DataFrame is autosaved, to the product's path, in the format named by
-the product key's suffix.
+:class:`~vivarium.dagger.backend.task.Task`, resolving the step's inputs and its product
+through the shared :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`, so each
+input is the producer's own node and pytask draws the producer-to-consumer edge from its
+path. Each input reaches the target as its resolved file path, which the target reads
+itself; only the returned DataFrame is autosaved, to the product's path, in the format
+named by the product key's suffix.
 
 The task's ``run`` is a :class:`PythonStepRun`, a data-only object rather than a
 closure, so the same step can be rebuilt in another process from the target's
@@ -19,6 +18,7 @@ so in this cut a step re-runs on every build.
 """
 
 import importlib
+import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +27,7 @@ from typing import Any, cast
 import pandas as pd
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry
+from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
 
 _PRODUCT_ARG = "product"
 """Parameter name under which the loaded product path reaches the run wrapper."""
@@ -127,12 +127,15 @@ def target_reference(target: Callable[..., Any]) -> str:
         a function wrapped by a decorator that does not use ``functools.wraps``), has no
         module or qualified name (a ``functools.partial`` or a callable instance), its
         reference cannot be imported, or its reference imports a different object (a bound
-        method or a classmethod). The message names the case and says to define the
-        function at the top level of an importable module.
+        method or a classmethod, or a function whose module was reloaded after the step
+        was built). The message names the case and says what to do: rebuild the steps
+        after a reload, and otherwise define the function at the top level of an
+        importable module.
     """
     module = getattr(target, "__module__", None)
     qualname = getattr(target, "__qualname__", None)
     cause: Exception | None = None
+    advice = "Define the function at the top level of an importable module."
     if not isinstance(module, str) or not isinstance(qualname, str):
         reason = (
             "it has no module or qualified name, as with a functools.partial or a "
@@ -160,14 +163,29 @@ def target_reference(target: Callable[..., Any]) -> str:
         else:
             if resolved is target:
                 return reference
-            reason = (
-                f"its reference {reference!r} imports a different object (as for a "
-                "bound method or a classmethod)"
-            )
-    raise ValueError(
-        f"Cannot import {target!r} by reference: {reason}. Define the function at the top "
-        "level of an importable module."
-    ) from cause
+            if _is_reloaded(target, resolved):
+                reason = (
+                    f"its reference {reference!r} imports a newer copy of it: its module "
+                    "was reloaded after the step was built (importlib.reload or IPython's "
+                    "autoreload)"
+                )
+                advice = "Build the steps again after reloading the module."
+            else:
+                reason = (
+                    f"its reference {reference!r} imports a different object (as for a "
+                    "bound method or a classmethod)"
+                )
+    raise ValueError(f"Cannot import {target!r} by reference: {reason}. {advice}") from cause
+
+
+def _is_reloaded(target: Callable[..., Any], resolved: Callable[..., Any]) -> bool:
+    """Return whether ``resolved`` is a reloaded module's copy of the plain function ``target``."""
+    return (
+        inspect.isfunction(target)
+        and inspect.isfunction(resolved)
+        and resolved.__module__ == target.__module__
+        and resolved.__qualname__ == target.__qualname__
+    )
 
 
 def resolve_reference(reference: str) -> Callable[..., Any]:
@@ -213,7 +231,7 @@ def python_step(
     """Compile ``target`` into one backend task wired through ``registry``.
 
     The step runs in the pipeline's own environment; a step that needs another
-    environment is a command step.
+    environment is a :func:`~vivarium.dagger.frontend.command_step.command_step`.
 
     Parameters
     ----------
@@ -247,12 +265,14 @@ def python_step(
     Raises
     ------
     vivarium.dagger.backend.wiring.WiringError
-        If an input key resolves to no producer and no root input.
+        If an input key resolves to no producer and no root input, or ``produces`` is a
+        declared root input. The message starts with ``Step '<name>':``, followed by the
+        registry's message, which names the artifact key.
     ValueError
         If ``produces`` has an unsupported suffix (the message names the step and the
-        produces key), the product's
-        parameter name collides with one of ``target``'s input parameter names, or
-        ``name`` is empty. Every one of these is raised before anything is registered.
+        produces key), the product's parameter name collides with one of ``target``'s
+        input parameter names, or ``name`` is empty. Every one of these is raised before
+        anything is registered.
     """
     task_name = produces if name is None else name
     if not task_name:
@@ -265,8 +285,11 @@ def python_step(
             f"Task '{task_name}': input parameter name {_PRODUCT_ARG!r} collides with the "
             "parameter name reserved for the product."
         )
-    dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
-    product = registry.register_output(produces)
+    try:
+        dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
+        product = registry.register_output(produces)
+    except WiringError as error:
+        raise WiringError(f"Step {task_name!r}: {error}") from None
     # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
     # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(

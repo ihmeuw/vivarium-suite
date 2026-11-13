@@ -14,8 +14,40 @@ from typing import Any
 
 import pytask
 
-from vivarium.dagger.backend.build import build
+from vivarium.dagger.backend.build import build, failure_message
 from vivarium.dagger.backend.task import Task
+
+
+@dataclass(frozen=True)
+class Reason:
+    """One reason pytask gave for a step being stale.
+
+    ``str(reason)`` is a short phrase. The phrases are ``"<node> changed"``, ``"<node> is
+    missing"``, ``"<node> has no recorded state"`` (``not_in_db``), ``"first run"``,
+    ``"forced"``, and ``"<node> would run first"`` (``cascade``). Any other kind reads
+    ``"<node>: <kind>"``.
+    """
+
+    node: str
+    """The node pytask compared. The backend preview names it as pytask does, which is an
+    absolute path for a file, the code identity's name (``'<step>::code'`` by default),
+    ``'<step>::__command__'`` for a command, a step name, or ``''`` for ``forced``.
+    :func:`vivarium.dagger.frontend.pipeline.preview` replaces it with a label."""
+    kind: str
+    """pytask's reason, one of ``changed``, ``missing``, ``not_in_db``, ``first_run``,
+    ``forced``, or ``cascade``."""
+
+    def __str__(self) -> str:
+        """Return the reason as a short phrase."""
+        phrases = {
+            "changed": f"{self.node} changed",
+            "missing": f"{self.node} is missing",
+            "not_in_db": f"{self.node} has no recorded state",
+            "first_run": "first run",
+            "forced": "forced",
+            "cascade": f"{self.node} would run first",
+        }
+        return phrases.get(self.kind, f"{self.node}: {self.kind}")
 
 
 @dataclass
@@ -26,13 +58,32 @@ class StepPreview:
     """The task name, which is the step name the frontend gave it."""
     outcome: pytask.TaskOutcome
     """pytask's dry-run outcome for the step."""
-    reasons: list[str] = field(default_factory=list)
+    reasons: list[Reason] = field(default_factory=list)
     """Why the step would run, from pytask's ``--explain``; empty for a skip."""
 
     @property
     def would_run(self) -> bool:
         """Whether the step would execute, as opposed to being skipped."""
         return self.outcome == pytask.TaskOutcome.WOULD_BE_EXECUTED
+
+
+class PlanFailed(RuntimeError):
+    """pytask could not build the plan for a preview.
+
+    Parameters
+    ----------
+    message
+        Why the plan could not be built.
+    exit_code
+        The exit code of pytask's dry run.
+    """
+
+    exit_code: pytask.ExitCode
+    """The exit code of pytask's dry run."""
+
+    def __init__(self, message: str, *, exit_code: pytask.ExitCode) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
 
 
 def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPreview]:
@@ -59,18 +110,21 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
 
     Raises
     ------
-    RuntimeError
-        If the build does not complete (a collection or DAG failure), since the
-        session's reports are then empty or partial and would misreport as an
-        all-skip plan.
+    PlanFailed
+        If the build does not complete (for example a collection or DAG failure), since
+        the session's reports are then empty or partial and would misreport as an
+        all-skip plan. The message carries pytask's reason, as
+        :func:`~vivarium.dagger.backend.build.failure_message` gives it, and
+        ``exit_code`` is pytask's exit code. It is a ``RuntimeError``.
     ValueError
         For any of the reasons :func:`~vivarium.dagger.backend.build.build` raises it,
         including a declared env that does not resolve.
     """
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
     if session.exit_code != pytask.ExitCode.OK:
-        raise RuntimeError(
-            f"preview could not build the plan: pytask exited with {session.exit_code!r}."
+        raise PlanFailed(
+            f"preview could not build the plan: {failure_message(session)}",
+            exit_code=session.exit_code,
         )
     return [_step_preview(report) for report in session.execution_reports]
 
@@ -84,8 +138,9 @@ def _step_preview(report: pytask.ExecutionReport) -> StepPreview:
     )
 
 
-def _reasons(explanation: Any) -> list[str]:
-    """Pull the human-readable reasons off a pytask explanation object."""
-    if explanation is None:
-        return []
-    return [str(reason) for reason in getattr(explanation, "reasons", [])]
+def _reasons(explanation: Any) -> list[Reason]:
+    """Read the structured reasons off a pytask explanation object."""
+    return [
+        Reason(node=reason.node_name, kind=reason.reason)
+        for reason in getattr(explanation, "reasons", ())
+    ]
