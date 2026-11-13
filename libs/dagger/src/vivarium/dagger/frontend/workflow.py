@@ -81,13 +81,15 @@ class Workflow:
     Raises
     ------
     ValueError
-        If the run's output directory, ``<output root>/<run name>`` with ``.`` and ``..``
-        collapsed (symlinks are not followed), is not strictly inside the output root
-        (as for an empty run name, ``.``, ``..`` or an absolute path), or is
-        :data:`STATE_DIR` or a directory inside it (as for the run name ``.dagger``),
-        since the run's products would then share a directory with the state of every
-        run; or if ``state`` is a relative path, which would move the run's state with
-        the current directory. The message names the run name or the state path.
+        If ``run_name`` is an absolute path, even one inside the output root, since the
+        default state directory is built from the run name; if the run's output
+        directory, ``<output root>/<run name>`` with ``.`` and ``..`` collapsed
+        (symlinks are not followed), is not strictly inside the output root (as for an
+        empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a directory inside
+        it (as for the run name ``.dagger``), since the run's products would then share
+        a directory with the state of every run; or if ``state`` is a relative path,
+        which would move the run's state with the current directory. The message names
+        the run name or the state path.
     TypeError
         If ``resources`` is not a mapping.
     """
@@ -496,8 +498,6 @@ class Workflow:
 
 def _check_run_name(root: Path, run_name: str) -> None:
     """Refuse a run name whose output directory is not its own directory under ``root``."""
-    # Normalize lexically, not with resolve(), so a run directory that is a symlink to
-    # another place is still accepted, as ArtifactRegistry accepts it.
     if Path(run_name).is_absolute():
         # An absolute name inside the root would make the default state, built from the
         # run name, a directory inside the run's own output directory.
@@ -506,6 +506,8 @@ def _check_run_name(root: Path, run_name: str) -> None:
             "name, such as 'run1', that names a directory under the output root "
             f"{root}."
         )
+    # Normalize lexically, not with resolve(), so a run directory that is a symlink to
+    # another place is still accepted, as ArtifactRegistry accepts it.
     run_dir = Path(os.path.normpath(root / run_name))
     state_root = root / STATE_DIR
     if root not in run_dir.parents:

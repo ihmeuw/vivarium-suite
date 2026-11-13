@@ -220,6 +220,17 @@ def test_a_run_name_whose_output_directory_is_not_a_separate_directory_under_the
     assert repr(run_name) in str(info.value), str(info.value)
 
 
+def test_an_absolute_run_name_inside_the_output_root_is_refused(tmp_path: Path) -> None:
+    """An absolute run name that names a directory inside the output root raises ValueError naming the run name."""
+    run_name = str(tmp_path.resolve() / "run1")
+
+    with pytest.raises(ValueError) as info:
+        Workflow(tmp_path, run_name)
+
+    assert repr(run_name) in str(info.value), str(info.value)
+    assert "absolute" in str(info.value), str(info.value)
+
+
 def test_a_nested_run_name_is_accepted(tmp_path: Path) -> None:
     """Workflow(tmp_path, "study/run1") is accepted, with products under tmp_path/study/run1 and state tmp_path/.dagger/study/run1."""
     root = tmp_path.resolve()
@@ -750,6 +761,18 @@ def test_a_later_change_to_the_resources_passed_in_does_not_reach_a_pipeline(
 
     for resources in (wf.resources, before.resources, after.resources):
         assert dict(resources) == {"project": "proj_a"}
+
+
+def test_changing_the_resources_a_workflow_returns_does_not_reach_it(tmp_path: Path) -> None:
+    """Changing the mapping wf.resources returns changes neither a later wf.resources nor a later pipeline's resources."""
+    wf = Workflow(tmp_path / "out", "run1", resources={"project": "proj_a"})
+
+    returned = wf.resources
+    assert isinstance(returned, dict)
+    returned["project"] = "proj_b"
+
+    assert dict(wf.resources) == {"project": "proj_a"}
+    assert dict(wf.pipeline().resources) == {"project": "proj_a"}
 
 
 def test_a_workflow_with_no_steps_gives_a_pipeline_with_no_tasks(tmp_path: Path) -> None:

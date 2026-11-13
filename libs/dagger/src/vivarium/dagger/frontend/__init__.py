@@ -2,7 +2,7 @@
 
 A pipeline definition makes a :class:`~vivarium.dagger.frontend.workflow.Workflow`, adds
 its steps to it, and returns the pipeline it builds, so it needs no import from the
-backend. The step functions it calls, such as
+backend. The step functions that the workflow's methods call, such as
 :func:`~vivarium.dagger.frontend.python_step.python_step`, are the lower layer, imported
 from their own modules.
 """
