@@ -131,9 +131,16 @@ def _add(wf: Workflow, kind: str, arguments: Mapping[str, Any]) -> object:
     return method(**arguments)
 
 
+def _registry_of(wf: Workflow) -> ArtifactRegistry:
+    """Return the registry of the pipelines ``wf`` returns."""
+    registry = wf.pipeline().registry
+    assert registry is not None
+    return registry
+
+
 def _registered(wf: Workflow, key: str) -> bool:
     """Return whether ``key``'s path is registered in ``wf``'s registry."""
-    return wf.registry.key_for(wf.registry.path_for(key)) is not None
+    return _registry_of(wf).key_for(_registry_of(wf).path_for(key)) is not None
 
 
 # Construction and the run's paths
@@ -147,8 +154,8 @@ def test_a_workflow_holds_its_output_root_run_name_registry_and_state(tmp_path: 
 
     assert wf.output_root == output_root
     assert wf.run_name == "run1"
-    assert isinstance(wf.registry, ArtifactRegistry)
-    assert wf.registry.path_for("x.csv") == output_root / "run1" / "x.csv"
+    assert isinstance(wf.pipeline().registry, ArtifactRegistry)
+    assert _registry_of(wf).path_for("x.csv") == output_root / "run1" / "x.csv"
     assert STATE_DIR == ".dagger"
     assert wf.state == output_root / ".dagger" / "run1"
     assert wf.state.is_absolute()
@@ -169,7 +176,7 @@ def test_a_relative_output_root_is_resolved_against_the_current_directory(
     assert wf.output_root == output_root
     assert wf.state == output_root / ".dagger" / "run1"
     assert wf.state.is_absolute()
-    assert wf.registry.path_for("x.csv") == output_root / "run1" / "x.csv"
+    assert _registry_of(wf).path_for("x.csv") == output_root / "run1" / "x.csv"
     assert wf.pipeline().root == output_root / ".dagger" / "run1"
 
 
@@ -237,7 +244,7 @@ def test_a_nested_run_name_is_accepted(tmp_path: Path) -> None:
 
     wf = Workflow(tmp_path, "study/run1")
 
-    assert wf.registry.path_for("x.csv") == root / "study" / "run1" / "x.csv"
+    assert _registry_of(wf).path_for("x.csv") == root / "study" / "run1" / "x.csv"
     assert wf.state == root / ".dagger" / "study" / "run1"
 
 
@@ -252,7 +259,7 @@ def test_a_run_directory_that_is_a_symlink_is_accepted(tmp_path: Path) -> None:
 
     assert wf.run_name == "run1"
     assert wf.state == (tmp_path / "out").resolve() / ".dagger" / "run1"
-    assert wf.registry.path_for("x.csv") == elsewhere.resolve() / "x.csv"
+    assert _registry_of(wf).path_for("x.csv") == elsewhere.resolve() / "x.csv"
 
 
 def test_resources_that_are_not_a_mapping_raise_type_error(tmp_path: Path) -> None:
@@ -285,7 +292,7 @@ def test_two_workflows_with_different_run_names_write_under_different_paths(
 
     for name, wf in workflows.items():
         wf.python_step(_constant, inputs={}, produces="table.parquet")
-        assert wf.registry.path_for("table.parquet") == root / name / "table.parquet"
+        assert _registry_of(wf).path_for("table.parquet") == root / name / "table.parquet"
     for wf in workflows.values():
         assert run(wf.pipeline()) == {"table.parquet": TaskOutcome.SUCCESS}
 
@@ -418,7 +425,7 @@ def test_a_pipeline_of_all_four_step_kinds_matches_one_assembled_by_hand(
     assert dict(built.resources) == dict(by_hand.resources)
     built_registry = built.registry
     assert built_registry is not None
-    assert built_registry is wf.registry
+    assert built_registry is wf.pipeline().registry
     for task in built.tasks:
         for node in (*task.inputs.values(), *task.outputs.values()):
             if isinstance(node, PathNode):
@@ -655,7 +662,7 @@ def test_a_refused_step_registers_nothing_and_is_not_added(tmp_path: Path) -> No
     with pytest.raises(WiringError):
         wf.command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"}, name="pair")
 
-    assert wf.registry.key_for(wf.registry.path_for("b.csv")) is None
+    assert _registry_of(wf).key_for(_registry_of(wf).path_for("b.csv")) is None
     assert [task.name for task in wf.pipeline().tasks] == ["first"]
 
 
@@ -692,16 +699,21 @@ def test_pipeline_returns_the_tasks_in_the_order_added_as_a_tuple(tmp_path: Path
 
 
 def test_pipeline_root_registry_and_resources_come_from_the_workflow(tmp_path: Path) -> None:
-    """wf.pipeline() has root wf.state, registry wf.registry, and resources equal to the resources given to the workflow."""
+    """wf.pipeline() has root wf.state, the same registry as every other pipeline the workflow returns, and resources equal to the resources given to the workflow."""
     resources = {"project": "proj_test", "memory": 8}
     wf = Workflow(tmp_path / "out", "run1", resources=resources)
 
     pipeline = wf.pipeline()
 
     assert pipeline.root == wf.state
-    assert pipeline.registry is wf.registry
+    assert pipeline.registry is wf.pipeline().registry
     assert dict(pipeline.resources) == {"project": "proj_test", "memory": 8}
     assert dict(wf.resources) == {"project": "proj_test", "memory": 8}
+
+
+def test_the_workflow_does_not_hand_out_its_registry(tmp_path: Path) -> None:
+    """A Workflow has no public registry attribute, so a step function cannot be wired to it by hand without the workflow knowing."""
+    assert not hasattr(Workflow(tmp_path / "out", "run1"), "registry")
 
 
 def test_a_workflow_without_resources_gives_a_pipeline_with_empty_resources(
