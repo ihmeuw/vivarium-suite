@@ -33,7 +33,7 @@ from tests.frontend.simulations import (
     write_spec,
 )
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.payload import payload_for
 from vivarium.dagger.frontend import Pipeline, StepFailed, run
@@ -84,9 +84,9 @@ class _Simulation:
         """Return the scratch directory psimulate writes to."""
         return scratch_for(self.run_dir)
 
-    def registry(self) -> ArtifactRegistry:
+    def registry(self) -> FileRegistry:
         """Return a new registry whose products go under ``base / "out"``."""
-        return ArtifactRegistry(self.base / "out", "run1")
+        return FileRegistry(self.base / "out", "run1")
 
     def calls(self) -> list[list[str]]:
         """Return the arguments of each call of the stub psimulate, in call order."""

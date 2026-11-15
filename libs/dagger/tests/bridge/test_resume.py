@@ -41,7 +41,7 @@ from tests.bridge.helpers import (
 )
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import plugin as bridge_plugin
 from vivarium.dagger.bridge._jobmon_adapter import JobmonBindError, JobmonRun, PlanEntry
 from vivarium.dagger.bridge.state import (
@@ -166,7 +166,7 @@ class _ReadsTheStateWhileRunning(FakeJobmon):
         super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
 
 
-def _missing_input_steps(directory: Path) -> tuple[ArtifactRegistry, list[Task]]:
+def _missing_input_steps(directory: Path) -> tuple[FileRegistry, list[Task]]:
     """Return x -> y and an unrelated step u under ``directory``, with x's input deleted.
 
     Step x reads the root input ``raw``, which exists while the steps are wired and is
@@ -175,7 +175,7 @@ def _missing_input_steps(directory: Path) -> tuple[ArtifactRegistry, list[Task]]
     raw = directory / "raw.parquet"
     raw.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(directory / "out", "run1", root_inputs={"raw": raw})
     tasks = [
         python_step(
             step_targets.stack,

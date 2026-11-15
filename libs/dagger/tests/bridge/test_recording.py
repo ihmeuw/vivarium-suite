@@ -40,7 +40,7 @@ from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import execute
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.execute import RemoteTaskFailed, _record_available
@@ -103,7 +103,7 @@ def _stable_fixture(directory: Path) -> Fixture:
 
 
 def _steps_without_inputs(
-    artifacts: ArtifactRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
+    artifacts: FileRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
 ) -> list[Task]:
     """Return one python step per product key in ``targets``, running its target."""
     return [
@@ -112,12 +112,12 @@ def _steps_without_inputs(
     ]
 
 
-def _constant_steps(artifacts: ArtifactRegistry, names: Sequence[str]) -> list[Task]:
+def _constant_steps(artifacts: FileRegistry, names: Sequence[str]) -> list[Task]:
     """Return one independent python step per name, each writing a constant frame."""
     return _steps_without_inputs(artifacts, dict.fromkeys(names, step_targets.constant))
 
 
-def _two_step_chain(artifacts: ArtifactRegistry) -> list[Task]:
+def _two_step_chain(artifacts: FileRegistry) -> list[Task]:
     """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
     first = python_step(
         step_targets.constant, inputs={}, produces="first.parquet", registry=artifacts

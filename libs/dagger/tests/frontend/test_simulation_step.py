@@ -49,7 +49,7 @@ from vivarium.dagger.backend.build import (
 from vivarium.dagger.backend.nodes import AlwaysStaleNode, RunDirectoryNode, file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import (
     Pipeline,
@@ -127,9 +127,9 @@ class _Model:
         """Return the scratch directory psimulate writes to."""
         return scratch_for(self.run_dir)
 
-    def registry(self, root_inputs: Mapping[str, Path] | None = None) -> ArtifactRegistry:
+    def registry(self, root_inputs: Mapping[str, Path] | None = None) -> FileRegistry:
         """Return a new registry whose products go under ``base / "out"``."""
-        return ArtifactRegistry(self.base / "out", "run1", root_inputs=root_inputs)
+        return FileRegistry(self.base / "out", "run1", root_inputs=root_inputs)
 
     def calls(self) -> list[list[str]]:
         """Return the arguments of each call of the stub psimulate, in call order."""
@@ -162,7 +162,7 @@ def model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Model:
     return _make_model(tmp_path.resolve(), monkeypatch)
 
 
-def _step(model: _Model, registry: ArtifactRegistry, **overrides: Any) -> Task:
+def _step(model: _Model, registry: FileRegistry, **overrides: Any) -> Task:
     """Return the simulation step of ``model``, with ``overrides`` of its arguments."""
     arguments: dict[str, Any] = {
         "spec": model.spec,
@@ -884,8 +884,8 @@ def test_definition_errors_register_nothing(model: _Model, case: str) -> None:
     assert registry.key_for(registry.path_for(_KEY)) is None
 
 
-def test_an_unknown_artifact_key_raises_a_wiring_error_naming_the_step(model: _Model) -> None:
-    """An artifact key with no producer and no root input raises WiringError starting "Step '<name>':" and naming the key."""
+def test_an_unknown_file_key_raises_a_wiring_error_naming_the_step(model: _Model) -> None:
+    """A file key with no producer and no root input raises WiringError starting "Step '<name>':" and naming the key."""
     with pytest.raises(WiringError) as excinfo:
         _step(model, model.registry(), artifact="artifacts/missing.hdf")
 
@@ -1399,7 +1399,7 @@ def test_removing_the_sentinel_runs_the_simulation_and_its_consumer_again(
 def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_cascade(
     model: _Model,
 ) -> None:
-    """After other content is written to the sentinel, preview reports both steps would run, the simulation step's reasons include Reason("artifact 'sims/toy'", "changed"), the consumer's are [Reason("step 'sims/toy'", "cascade")], and no reason holds the run directory's path."""
+    """After other content is written to the sentinel, preview reports both steps would run, the simulation step's reasons include Reason("run directory 'sims/toy'", "changed"), the consumer's are [Reason("step 'sims/toy'", "cascade")], and no reason holds the run directory's path."""
     pipeline = _pipeline(model, stable=True)
     _first_run(model, pipeline)
     (model.run_dir / _SENTINEL).write_text('{"run_id": "written by hand"}')
@@ -1408,7 +1408,7 @@ def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_casc
 
     reasons = _reasons(plan)
     assert _would_run(plan) == {_KEY, _CONSUMER}
-    assert Reason(f"artifact {_KEY!r}", "changed") in reasons[_KEY]
+    assert Reason(f"run directory {_KEY!r}", "changed") in reasons[_KEY]
     assert reasons[_CONSUMER] == [Reason(f"step {_KEY!r}", "cascade")]
     for step in plan:
         for reason in step.reasons:

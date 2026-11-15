@@ -19,7 +19,7 @@ from vivarium.dagger.backend.build import TaskExited
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend import (
     Pipeline,
     PipelineError,
@@ -106,7 +106,7 @@ def _side_step(fixture: Fixture) -> Task:
 
 def _failing_pipeline(tmp_path: Path) -> Pipeline:
     """Return a raising step with two descendants and one independent step as a pipeline."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(_explode, inputs={}, produces="broken.parquet", registry=registry),
         python_step(
@@ -224,7 +224,7 @@ def test_run_only_selects_exactly_so_a_parquet_does_not_run_data_parquet(
     tmp_path: Path,
 ) -> None:
     """With steps 'a.parquet' and 'data.parquet', only=['a.parquet'] never runs data.parquet."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(_constant, inputs={}, produces=key, registry=registry)
         for key in ("a.parquet", "data.parquet")
@@ -402,7 +402,7 @@ def test_two_failing_steps_are_both_reported_and_the_first_is_the_cause(
     tmp_path: Path,
 ) -> None:
     """Two independent failures both appear in StepFailed.failures; __cause__ is the first in report order."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(_explode, inputs={}, produces="first.parquet", registry=registry),
         python_step(
@@ -536,7 +536,7 @@ def test_run_passes_build_keyword_arguments_to_the_backend_build(tmp_path: Path)
     assert not any(fixture.registry.path_for(step).exists() for step in fixture.steps)
 
 
-def test_preview_names_reasons_by_artifact_key_and_step_label(tmp_path: Path) -> None:
+def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> None:
     """A registry-wired preview names reasons as artifact, code of, command of, or step labels, with no absolute path."""
     fixture = build_fixture(tmp_path)
     registry = fixture.registry
@@ -554,10 +554,10 @@ def test_preview_names_reasons_by_artifact_key_and_step_label(tmp_path: Path) ->
     first = preview(pipeline)
 
     reasons = _reasons(first)
-    expected = {"artifact 'raw'", "artifact 'mid.parquet'", "code of 'mid.parquet'"}
+    expected = {"file 'raw'", "file 'mid.parquet'", "code of 'mid.parquet'"}
     assert expected <= _nodes(reasons["mid.parquet"])
     assert reasons["final.parquet"] == [Reason("step 'mid.parquet'", "cascade")]
-    expected = {"artifact 'raw'", "command of 'copy'", "artifact 'raw_copy.parquet'"}
+    expected = {"file 'raw'", "command of 'copy'", "file 'raw_copy.parquet'"}
     assert expected <= _nodes(reasons["copy"])
     _assert_no_path(first, tmp_path)
 
@@ -565,7 +565,7 @@ def test_preview_names_reasons_by_artifact_key_and_step_label(tmp_path: Path) ->
     pd.DataFrame({"n": [4, 5, 6]}).to_parquet(fixture.inputs["raw"])
     edited = preview(pipeline)
 
-    assert Reason("artifact 'raw'", "changed") in _reasons(edited)["mid.parquet"]
+    assert Reason("file 'raw'", "changed") in _reasons(edited)["mid.parquet"]
     _assert_no_path(edited, tmp_path)
 
 
@@ -738,7 +738,7 @@ def test_run_force_with_an_unreadable_lockfile_raises_pipeline_error(
 
 def test_an_interrupt_raised_in_a_step_propagates_as_itself(tmp_path: Path) -> None:
     """A python_step target that raises KeyboardInterrupt makes run() raise KeyboardInterrupt, not StepFailed."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(_interrupt, inputs={}, produces="stop.parquet", registry=registry)
 
     with pytest.raises(KeyboardInterrupt):
@@ -826,7 +826,7 @@ def _notebook_pipeline(
     tmp_path: Path, body: str = _RAISES_KEY_ERROR, env: str = sys.prefix
 ) -> Pipeline:
     """Return a pipeline of the notebook step 'summarize', which runs ``body``."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(
         tmp_path / "notebooks" / "summarize.ipynb", "summary_path = 'unset'", body
     )
@@ -1015,7 +1015,7 @@ def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_messa
     tmp_path: Path,
 ) -> None:
     """A python_step whose own code raises CalledProcessError is described as 'CalledProcessError: <its message>', with its command, since that command is the user's own."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
         _run_own_command, inputs={}, produces="tool.parquet", registry=registry
     )
@@ -1031,7 +1031,7 @@ def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_messa
 
 def test_a_python_step_failure_is_still_described_by_type_and_message(tmp_path: Path) -> None:
     """A python_step that raises KeyError('no_such_column') is still described as "KeyError: 'no_such_column'"."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(_missing_column, inputs={}, produces="read.parquet", registry=registry)
 
     error = _step_failed(Pipeline([task], tmp_path / "state", registry))
@@ -1062,7 +1062,7 @@ def test_step_failed_uses_the_given_descriptions_and_defaults_the_rest() -> None
 
 def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> None:
     """A run in which a command step and a python step both fail gives one line per step, each described its own way, in pytask's report order."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         _command_step(tmp_path, "shout", "exit 3"),
         python_step(_explode, inputs={}, produces="broken.parquet", registry=registry),
@@ -1193,7 +1193,7 @@ def _leave_with_a_message() -> pd.DataFrame:
 
 def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> Pipeline:
     """Return a pipeline of one python step 'leave' that runs ``target``."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
         target, inputs={}, produces="leave.parquet", registry=registry, name="leave"
     )
@@ -1341,7 +1341,7 @@ def test_pipeline_resources_default_to_an_empty_mapping(tmp_path: Path) -> None:
 
 def test_pipeline_keeps_the_resources_it_is_given(tmp_path: Path) -> None:
     """Pipeline(tasks, root, registry, resources={'project': 'proj_a'}) has resources equal to {'project': 'proj_a'}."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
 
     pipeline = Pipeline([], tmp_path / "state", registry, resources={"project": "proj_a"})
 

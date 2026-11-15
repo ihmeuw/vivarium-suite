@@ -1,7 +1,7 @@
 """Author a pipeline by adding steps to one workflow object.
 
 A :class:`Workflow` holds a run's output root, its run name, the
-:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` that wires its steps, the
+:class:`~vivarium.dagger.backend.wiring.FileRegistry` that wires its steps, the
 directory for its pytask state, and the steps added so far. A pipeline definition makes
 one workflow, adds each step with a method such as :meth:`Workflow.python_step`, and
 ends with ``return wf.pipeline()``::
@@ -19,8 +19,8 @@ Each step method calls the step function of the same name, such as
 so a step added through the workflow is the same task, with the same checks and
 messages, as one compiled against the registry by hand. The workflow also refuses a step
 whose name, or one of whose products, another step in the workflow already has, when the
-step is added; when both apply, the error names the product. A step that reads an
-artifact must still be added after the step that produces it.
+step is added; when both apply, the error names the product. A step that reads a
+file must still be added after the step that produces it.
 
 By default the workflow keeps its pytask state in ``<output root>/.dagger/<run name>``,
 outside the run's output directory ``<output root>/<run name>``. Two workflows with
@@ -36,7 +36,7 @@ from typing import Any
 import pandas as pd
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend.command_step import command_step as compile_command_step
 from vivarium.dagger.frontend.notebook_step import NotebookParameter
 from vivarium.dagger.frontend.notebook_step import notebook_step as compile_notebook_step
@@ -63,9 +63,9 @@ class Workflow:
         Names the run's output directory and, by default, its state directory, so two
         runs under one output root do not collide.
     root_inputs
-        Source files the pipeline reads but does not produce, keyed by the artifact key
+        Source files the pipeline reads but does not produce, keyed by the file key
         a step names as an input, as for
-        :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`. The mapping that
+        :class:`~vivarium.dagger.backend.wiring.FileRegistry`. The mapping that
         :func:`~vivarium.dagger.frontend.handoff.handoff_inputs` returns can be passed
         here.
     state
@@ -98,7 +98,7 @@ class Workflow:
         self,
         output_root: Path | str,
         run_name: str,
-        root_inputs: Mapping[ArtifactKey, Path | str] | None = None,
+        root_inputs: Mapping[FileKey, Path | str] | None = None,
         state: Path | str | None = None,
         resources: Mapping[str, Any] | None = None,
     ) -> None:
@@ -121,10 +121,10 @@ class Workflow:
         self._output_root = root
         self._run_name = run_name
         self._state = state_dir
-        self._registry = ArtifactRegistry(root, run_name, root_inputs)
+        self._registry = FileRegistry(root, run_name, root_inputs)
         self._resources: dict[str, Any] = {} if resources is None else dict(resources)
         self._tasks: list[Task] = []
-        self._producers: dict[ArtifactKey, str] = {}
+        self._producers: dict[FileKey, str] = {}
 
     @property
     def output_root(self) -> Path:
@@ -150,8 +150,8 @@ class Workflow:
         self,
         target: Callable[..., pd.DataFrame],
         *,
-        inputs: Mapping[str, ArtifactKey],
-        produces: ArtifactKey,
+        inputs: Mapping[str, FileKey],
+        produces: FileKey,
         resources: dict[str, Any] | None = None,
         name: str | None = None,
     ) -> None:
@@ -171,10 +171,10 @@ class Workflow:
             importable module. Each input reaches it, under its parameter name, as the
             input's file path.
         inputs
-            Maps each of ``target``'s parameter names to the artifact key of a product
+            Maps each of ``target``'s parameter names to the file key of a product
             of a step already added, or of a root input.
         produces
-            The artifact key of the step's product. Its suffix, ``.parquet`` or
+            The file key of the step's product. Its suffix, ``.parquet`` or
             ``.csv``, names the format the returned DataFrame is saved in.
         resources
             Compute resources for this step in a run through Jobmon, such as
@@ -216,10 +216,10 @@ class Workflow:
         self,
         notebook: Path | str,
         *,
-        executed: ArtifactKey,
+        executed: FileKey,
         env: str,
-        inputs: Mapping[str, ArtifactKey] | None = None,
-        produces: Mapping[str, ArtifactKey] | None = None,
+        inputs: Mapping[str, FileKey] | None = None,
+        produces: Mapping[str, FileKey] | None = None,
         parameters: Mapping[str, NotebookParameter] | None = None,
         resources: dict[str, Any] | None = None,
         name: str | None = None,
@@ -241,17 +241,17 @@ class Workflow:
             in ``inputs``, ``produces`` or ``parameters`` must be assigned in its first
             cell tagged ``parameters``.
         executed
-            The artifact key, ending in ``.ipynb``, of the executed notebook, which is a
+            The file key, ending in ``.ipynb``, of the executed notebook, which is a
             product of the step.
         env
             The environment the notebook runs in: a conda env or venv name, or a path to
             its prefix. It must have ``papermill`` and ``ipykernel`` installed.
         inputs
-            Maps notebook parameter names to the artifact keys of products of steps
+            Maps notebook parameter names to the file keys of products of steps
             already added, or of root inputs. Each reaches the notebook as its path, as
             a ``str``.
         produces
-            Maps notebook parameter names to the artifact keys of the data files the
+            Maps notebook parameter names to the file keys of the data files the
             notebook writes. Each reaches the notebook as its path, as a ``str``.
         parameters
             Maps notebook parameter names to scalar values: a ``str``, a real number, a
@@ -296,8 +296,8 @@ class Workflow:
         self,
         command: str,
         *,
-        produces: Mapping[str, ArtifactKey],
-        inputs: Mapping[str, ArtifactKey] | None = None,
+        produces: Mapping[str, FileKey],
+        inputs: Mapping[str, FileKey] | None = None,
         env: str | None = None,
         resources: dict[str, Any] | None = None,
         name: str | None = None,
@@ -318,10 +318,10 @@ class Workflow:
             The shell command, with a ``{name}`` placeholder for each input or product
             path it uses. Write ``{{`` and ``}}`` for a literal brace.
         produces
-            Maps placeholder names to the artifact keys of the files the command writes.
+            Maps placeholder names to the file keys of the files the command writes.
             It must have at least one entry.
         inputs
-            Maps placeholder names to the artifact keys of products of steps already
+            Maps placeholder names to the file keys of products of steps already
             added, or of root inputs.
         env
             The environment whose ``bin`` directories go first on ``PATH`` while the
@@ -370,10 +370,10 @@ class Workflow:
         *,
         spec: Path | str,
         branches: Path | str,
-        produces: ArtifactKey,
+        produces: FileKey,
         env: str,
         options: Mapping[str, str | int | float | bool],
-        artifact: ArtifactKey | None = None,
+        artifact: FileKey | None = None,
         resources: dict[str, Any] | None = None,
         name: str | None = None,
     ) -> None:
@@ -394,7 +394,7 @@ class Workflow:
         branches
             Path to the branches file, an existing file.
         produces
-            The artifact key of the run directory, the step's product. A step that names
+            The file key of the run directory, the step's product. A step that names
             this key as an input receives the run directory's path.
         env
             The environment psimulate runs in: a conda env or venv name, or a path to
@@ -404,7 +404,7 @@ class Workflow:
             The options of ``psimulate run``, keyed by long option name with ``_`` for
             ``-``, such as ``peak_memory``. ``project`` is required.
         artifact
-            The artifact key of the model's artifact, a product of a step already added
+            The file key of the model's artifact, a product of a step already added
             or a root input. Without it, psimulate reads the artifact the model
             specification names.
         resources
@@ -464,7 +464,7 @@ class Workflow:
             resources=dict(self._resources),
         )
 
-    def _check_new(self, step: str | None, products: Iterable[ArtifactKey]) -> None:
+    def _check_new(self, step: str | None, products: Iterable[FileKey]) -> None:
         """Refuse a step whose name or one of whose products an added step already has."""
         # A missing or empty name is the step function's error to report.
         if not step:
@@ -476,7 +476,7 @@ class Workflow:
             if producer is not None:
                 raise WiringError(
                     f"Step {step!r}: output {key!r} is already produced by step "
-                    f"{producer!r}; each artifact key can have only one producing step."
+                    f"{producer!r}; each file key can have only one producing step."
                 )
         if any(task.name == step for task in self._tasks):
             raise ValueError(
@@ -484,7 +484,7 @@ class Workflow:
                 "give each step a different name= to tell them apart."
             )
 
-    def _add(self, task: Task, products: Iterable[ArtifactKey]) -> None:
+    def _add(self, task: Task, products: Iterable[FileKey]) -> None:
         """Append ``task`` and record it as the producer of each of ``products``."""
         self._tasks.append(task)
         for key in products:
@@ -502,7 +502,7 @@ def _check_run_name(root: Path, run_name: str) -> None:
             f"{root}."
         )
     # Normalize lexically, not with resolve(), so a run directory that is a symlink to
-    # another place is still accepted, as ArtifactRegistry accepts it.
+    # another place is still accepted, as FileRegistry accepts it.
     run_dir = Path(os.path.normpath(root / run_name))
     state_root = root / STATE_DIR
     if root not in run_dir.parents:

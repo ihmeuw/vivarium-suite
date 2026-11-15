@@ -1,9 +1,9 @@
-"""Producer/consumer wiring: resolve declared artifact keys to shared nodes.
+"""Producer/consumer wiring: resolve declared file keys to shared nodes.
 
-A pipeline names each artifact with a logical key. An output registers its key
+A pipeline names each file it reads or writes with a logical key. An output registers its key
 against one resolved file node under the run's output directory, or against a run
 directory node for a key registered by
-:meth:`~vivarium.dagger.backend.wiring.ArtifactRegistry.register_directory_output`.
+:meth:`~vivarium.dagger.backend.wiring.FileRegistry.register_directory_output`.
 An input naming that key resolves to the producer's own node. pytask draws the
 producer-to-consumer edge from the node's path: a path node's signature is a hash of its
 path, and pytask's graph keeps one node per signature. Sharing the producer's node keeps
@@ -32,11 +32,11 @@ from pytask import PathNode
 
 from vivarium.dagger.backend.nodes import RunDirectoryNode, file_node, run_directory_node
 
-ArtifactKey = str
-"""A logical artifact name, resolved to a node under the run's output directory.
+FileKey = str
+"""A logical file name, resolved to a node under the run's output directory.
 
 The node is a file node, or a run directory node for a key registered by
-:meth:`~vivarium.dagger.backend.wiring.ArtifactRegistry.register_directory_output`.
+:meth:`~vivarium.dagger.backend.wiring.FileRegistry.register_directory_output`.
 """
 
 _LISTED_KEYS = 10
@@ -44,11 +44,11 @@ _LISTED_KEYS = 10
 
 
 class WiringError(Exception):
-    """A definition-time error in how a pipeline's artifacts are wired or supplied."""
+    """A definition-time error in how a pipeline's files are wired or supplied."""
 
 
-class ArtifactRegistry:
-    """Resolve declared artifact keys to shared nodes for one run.
+class FileRegistry:
+    """Resolve declared file keys to shared nodes for one run.
 
     A key resolves to a file node, or to a run directory node when it is registered by
     :meth:`register_directory_output`.
@@ -56,7 +56,7 @@ class ArtifactRegistry:
     Parameters
     ----------
     output_root
-        Directory under which produced artifacts live.
+        Directory under which produced files live.
     run_name
         Names this run's output subdirectory, so two runs do not collide.
     root_inputs
@@ -68,22 +68,22 @@ class ArtifactRegistry:
         self,
         output_root: Path | str,
         run_name: str,
-        root_inputs: Mapping[ArtifactKey, Path | str] | None = None,
+        root_inputs: Mapping[FileKey, Path | str] | None = None,
     ) -> None:
         self._run_dir = Path(output_root).resolve() / run_name
         self._root_inputs = {key: Path(p).resolve() for key, p in (root_inputs or {}).items()}
-        self._producers: dict[ArtifactKey, PathNode] = {}
+        self._producers: dict[FileKey, PathNode] = {}
         # Seed the collision guard with root-input paths so an output cannot land on
         # one and be silently merged into it by pytask.
-        self._key_by_path: dict[Path, ArtifactKey] = {
+        self._key_by_path: dict[Path, FileKey] = {
             path: key for key, path in self._root_inputs.items()
         }
 
-    def path_for(self, key: ArtifactKey) -> Path:
+    def path_for(self, key: FileKey) -> Path:
         """Return the resolved path a produced ``key`` resolves to for this run."""
         return (self._run_dir / key).resolve()
 
-    def key_for(self, path: Path | str) -> ArtifactKey | None:
+    def key_for(self, path: Path | str) -> FileKey | None:
         """Return the key of the registered output or root input at ``path``, or ``None``.
 
         ``path`` is resolved first, so a relative path or one through a symlink still
@@ -101,7 +101,7 @@ class ArtifactRegistry:
         """
         return self._key_by_path.get(Path(path).resolve())
 
-    def register_output(self, key: ArtifactKey) -> PathNode:
+    def register_output(self, key: FileKey) -> PathNode:
         """Register ``key`` as produced by a step and return its file node.
 
         Registering the same key again returns the same node, so two tasks claiming
@@ -149,7 +149,7 @@ class ArtifactRegistry:
             self._key_by_path[resolved] = key
         return node
 
-    def register_directory_output(self, key: ArtifactKey, sentinel: str) -> RunDirectoryNode:
+    def register_directory_output(self, key: FileKey, sentinel: str) -> RunDirectoryNode:
         """Register ``key`` as a run directory produced by a step and return its node.
 
         The directory is at :meth:`path_for` of ``key``, and its state is the content of
@@ -193,7 +193,7 @@ class ArtifactRegistry:
             )
         return node
 
-    def _claim_output_path(self, key: ArtifactKey) -> Path:
+    def _claim_output_path(self, key: FileKey) -> Path:
         """Return ``key``'s path, refusing a root input's key or a path another key holds."""
         # The messages match register_output's, which keeps its own copy of these guards.
         source = self._root_inputs.get(key)
@@ -210,7 +210,7 @@ class ArtifactRegistry:
             )
         return resolved
 
-    def resolve_input(self, key: ArtifactKey) -> PathNode:
+    def resolve_input(self, key: FileKey) -> PathNode:
         """Resolve an input ``key`` to the node that produces it, or a root-input file.
 
         Parameters
@@ -264,7 +264,7 @@ class ArtifactRegistry:
         )
 
 
-def _closest_key(key: ArtifactKey, known: list[ArtifactKey]) -> ArtifactKey | None:
+def _closest_key(key: FileKey, known: list[FileKey]) -> FileKey | None:
     """Return the key in ``known`` closest to ``key``, comparing stems among its siblings."""
     path = PurePosixPath(key)
     # Filtering on parent and suffix makes each stem name exactly one key.
@@ -282,7 +282,7 @@ def _closest_key(key: ArtifactKey, known: list[ArtifactKey]) -> ArtifactKey | No
     return match[0] if match else None
 
 
-def _registered_keys(keys: list[ArtifactKey]) -> str:
+def _registered_keys(keys: list[FileKey]) -> str:
     """Return the sentence listing up to ``_LISTED_KEYS`` of the sorted ``keys``."""
     if not keys:
         return "No keys are registered so far."

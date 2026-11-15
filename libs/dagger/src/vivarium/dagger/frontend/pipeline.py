@@ -1,11 +1,11 @@
 """Run or preview a whole pipeline by step name.
 
 A :class:`Pipeline` holds a pipeline's compiled tasks, the directory for its pytask
-state, and the artifact registry its steps were wired through. A pipeline definition
+state, and the file registry its steps were wired through. A pipeline definition
 returns one, and the verbs here take one. :func:`run` builds the pipeline, or only the
 named steps and their ancestors, and can force named steps to run even when they are
 current. :func:`preview` returns the plan without running anything, with each reason
-naming, where it can, an artifact key or a step instead of a file path or a pytask node
+naming, where it can, a file key or a step instead of a file path or a pytask node
 name. :func:`run` describes a failed command or notebook step without its generated
 command and names a step that calls ``sys.exit``; both verbs report two steps that
 share a name with what to change.
@@ -41,10 +41,11 @@ from vivarium.dagger.backend.build import (
     outcomes,
 )
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RUN_REFUSED_KEY, RunLocked, run_lock
+from vivarium.dagger.backend.nodes import RunDirectoryNode
 from vivarium.dagger.backend.preview import PlanFailed, StepPreview
 from vivarium.dagger.backend.preview import preview as backend_preview
 from vivarium.dagger.backend.task import Task, check_unique_task_names
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
 from vivarium.dagger.bridge.state import RUN_STATE_KEY, RunState
 from vivarium.dagger.constants import DEFAULT_RESOURCES
@@ -79,9 +80,9 @@ class Pipeline:
     root: Path
     """Absolute directory for pytask's configuration, state database, and lockfile, as
     :func:`~vivarium.dagger.backend.build.build` uses it."""
-    registry: ArtifactRegistry | None = None
+    registry: FileRegistry | None = None
     """The registry the steps were wired through. With it, :func:`preview` names files by
-    artifact key; without it, by path."""
+    file key; without it, by path."""
     resources: Mapping[str, Any] = field(default_factory=dict)
     """The definition's default compute resources for a run through Jobmon, such as
     ``{"project": "proj_simscience", "memory": 4}``. They override
@@ -424,7 +425,8 @@ def preview(
 
     Like the backend :func:`~vivarium.dagger.backend.preview.preview`, this runs
     nothing and writes no product. Each reason's ``node`` is relabeled. A file the
-    pipeline's registry knows reads ``artifact '<key>'``, a step's code identity reads
+    pipeline's registry knows reads ``file '<key>'`` (``run directory '<key>'`` for a
+    simulation's run directory), a step's code identity reads
     ``code of '<step>'``, a step's command reads ``command of '<step>'``, and a step name
     reads ``step '<step>'``. Any other node, including every file when the pipeline has
     no registry, keeps pytask's name.
@@ -672,5 +674,6 @@ def _labels(pipeline: Pipeline) -> dict[str, str]:
             if isinstance(node, PathNode) and isinstance(node.path, Path):
                 key = registry.key_for(node.path)
                 if key is not None:
-                    labels[node.name] = f"artifact {key!r}"
+                    kind = "run directory" if isinstance(node, RunDirectoryNode) else "file"
+                    labels[node.name] = f"{kind} {key!r}"
     return labels

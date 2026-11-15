@@ -17,7 +17,7 @@ from pytask import PathNode, PNode, TaskOutcome
 
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend.python_step import (
     PythonStepRun,
     python_step,
@@ -170,7 +170,7 @@ def test_python_step_returns_a_task_wired_to_the_registry(tmp_path: Path) -> Non
     """python_step returns one Task whose product and inputs are the registry's nodes."""
     src = tmp_path / "src.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(src)
-    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
 
     task = python_step(
         _read_frame,
@@ -192,7 +192,7 @@ def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) 
     """Running the built task calls the target with loaded inputs and autosaves its DataFrame."""
     src = tmp_path / "src.parquet"
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(src)
-    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
     calls: list[str] = []
 
     def scale(data: Path) -> pd.DataFrame:
@@ -217,7 +217,7 @@ def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) 
 
 def test_python_step_carries_resources_and_runs_in_the_pipeline_env(tmp_path: Path) -> None:
     """The resources dict passed to python_step is carried on the Task, whose env is None."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
     resources = {"cores": 2, "memory": "4G"}
 
     task = python_step(
@@ -234,7 +234,7 @@ def test_python_step_carries_resources_and_runs_in_the_pipeline_env(tmp_path: Pa
 
 def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
     """A producer and a consumer wired through one key run in order and the data flows."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     def grow(mid: Path) -> pd.DataFrame:
         """Read the upstream product path and add ten to its column."""
@@ -262,7 +262,7 @@ def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
 
 def test_csv_product_round_trips(tmp_path: Path) -> None:
     """A ".csv" product is autosaved so it round-trips through pd.read_csv."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     task = python_step(_constant, inputs={}, produces="table.csv", registry=reg, resources={})
 
@@ -273,7 +273,7 @@ def test_csv_product_round_trips(tmp_path: Path) -> None:
 
 def test_unknown_input_key_surfaces_a_did_you_mean(tmp_path: Path) -> None:
     """An input key with no producer or root input raises the registry's did-you-mean."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
     reg.register_output("caps/ethiopia.csv")
 
     with pytest.raises(WiringError, match="Did you mean 'caps/ethiopia.csv'"):
@@ -288,7 +288,7 @@ def test_unknown_input_key_surfaces_a_did_you_mean(tmp_path: Path) -> None:
 
 def test_unsupported_product_suffix_is_rejected(tmp_path: Path) -> None:
     """A produces key whose suffix is not a supported save format is rejected."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError):
         python_step(
@@ -302,7 +302,7 @@ def test_unsupported_product_suffix_is_rejected(tmp_path: Path) -> None:
 
 def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
     """A target that fails to produce its product is reported a failure (via a raising target)."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     def boom() -> pd.DataFrame:
         """Raise before returning, so no product is written."""
@@ -315,7 +315,7 @@ def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
 
 def test_product_parameter_name_collision_is_rejected(tmp_path: Path) -> None:
     """An input whose parameter name is the reserved product name is rejected."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError, match=r"(?s)Task 'out\.parquet'.*collides"):
         python_step(
@@ -329,7 +329,7 @@ def test_product_parameter_name_collision_is_rejected(tmp_path: Path) -> None:
 
 def test_python_step_run_holds_the_target_and_product_suffix(tmp_path: Path) -> None:
     """python_step's Task.run is a PythonStepRun of the given target and the produces suffix."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     task = python_step(_constant, inputs={}, produces="tables/out.csv", registry=reg)
 
@@ -358,7 +358,7 @@ def test_python_step_run_rejects_an_unsupported_suffix() -> None:
 
 def test_unsupported_suffix_leaves_the_registry_unchanged(tmp_path: Path) -> None:
     """A rejected produces suffix registers nothing, so the key can still be registered afterwards."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError):
         python_step(_constant, inputs={}, produces="out.txt", registry=reg)
@@ -370,7 +370,7 @@ def test_unsupported_suffix_leaves_the_registry_unchanged(tmp_path: Path) -> Non
 
 def test_name_sets_the_task_name_and_defaults_to_the_produces_key(tmp_path: Path) -> None:
     """python_step(name=...) becomes Task.name; without name the task is named by its produces key."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     named = python_step(
         _constant, inputs={}, produces="a.parquet", registry=reg, name="make_a"
@@ -383,7 +383,7 @@ def test_name_sets_the_task_name_and_defaults_to_the_produces_key(tmp_path: Path
 
 def test_an_empty_name_is_rejected(tmp_path: Path) -> None:
     """python_step(name='') raises ValueError."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError, match="non-empty"):
         python_step(_constant, inputs={}, produces="a.parquet", registry=reg, name="")
@@ -480,7 +480,7 @@ def test_unsupported_suffix_error_names_the_step_and_produces_key(tmp_path: Path
     """python_step's error for an unsupported product suffix names the step and the produces key."""
     cases: list[tuple[str | None, str]] = [(None, "out.txt"), ("clean", "clean")]
     for name, step in cases:
-        reg = ArtifactRegistry(tmp_path / "out", "run1")
+        reg = FileRegistry(tmp_path / "out", "run1")
 
         with pytest.raises(ValueError) as info:
             python_step(_constant, inputs={}, produces="out.txt", registry=reg, name=name)
@@ -491,7 +491,7 @@ def test_unsupported_suffix_error_names_the_step_and_produces_key(tmp_path: Path
 
 def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Path) -> None:
     """Building a step whose target returns None fails with a TypeError that names the target, the returned type, and a missing return."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
     task = python_step(_builds_a_frame, inputs={}, produces="out.parquet", registry=reg)
     step_run, direct = task.run, tmp_path / "direct.parquet"
     assert isinstance(step_run, PythonStepRun)
@@ -515,7 +515,7 @@ def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Pat
 
 def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) -> None:
     """A python_step named 'b' whose input key has no producer raises WiringError whose message starts with "Step 'b': " and names the key and the did-you-mean key."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
     reg.register_output("caps/ethiopia.csv")
 
     with pytest.raises(WiringError) as info:
@@ -536,7 +536,7 @@ def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) ->
 def test_producing_a_root_input_error_names_the_step(tmp_path: Path) -> None:
     """A python_step named 'b' whose produces key is a declared root input raises WiringError whose message starts with "Step 'b': "."""
     source = tmp_path / "src.parquet"
-    reg = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"src.parquet": source})
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src.parquet": source})
 
     with pytest.raises(WiringError) as info:
         python_step(_constant, inputs={}, produces="src.parquet", registry=reg, name="b")
@@ -548,7 +548,7 @@ def test_producing_a_root_input_error_names_the_step(tmp_path: Path) -> None:
 
 def test_the_step_name_prefix_defaults_to_the_produces_key(tmp_path: Path) -> None:
     """Without name=, the WiringError message for an unresolved input starts with "Step '<produces key>': "."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(WiringError) as info:
         python_step(
@@ -571,7 +571,7 @@ def test_a_target_that_returns_another_type_gets_no_missing_return_hint(
     tmp_path: Path,
 ) -> None:
     """A target that returns a dict fails naming dict, without the missing-return hint that only None gets."""
-    reg = ArtifactRegistry(tmp_path / "out", "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
     step_run = python_step(
         _returns_a_dict, inputs={}, produces="out.parquet", registry=reg
     ).run

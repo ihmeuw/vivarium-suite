@@ -20,7 +20,7 @@ from pytask import NodeNotFoundError, PathNode, PNode, TaskOutcome
 
 from vivarium.dagger.backend.build import run_command
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import Pipeline, PipelineError, StepFailed, preview, run
 from vivarium.dagger.frontend.command_step import command_step
@@ -73,14 +73,14 @@ _DEFINITION = """
 from pathlib import Path
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.command_step import command_step
 
 HERE = Path(__file__).resolve().parent
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     task = command_step(
         COMMAND, produces={"out": "out.txt"}, registry=registry, env=ENV, name=NAME
     )
@@ -103,13 +103,13 @@ def _make_env(prefix: Path) -> Path:
     return prefix
 
 
-def _registry(tmp_path: Path) -> ArtifactRegistry:
+def _registry(tmp_path: Path) -> FileRegistry:
     """Return a registry under ``tmp_path`` with the root inputs _POPULATION and _SCRIPT."""
     supplied = tmp_path / "supplied"
     supplied.mkdir(parents=True, exist_ok=True)
     (supplied / "population.csv").write_text("age,count\n10,1\n40,2\n")
     (supplied / "tool.sh").write_text('cat "$1"\n')
-    return ArtifactRegistry(
+    return FileRegistry(
         tmp_path / "out",
         "run1",
         root_inputs={
@@ -119,7 +119,7 @@ def _registry(tmp_path: Path) -> ArtifactRegistry:
     )
 
 
-def _registered(registry: ArtifactRegistry) -> str:
+def _registered(registry: FileRegistry) -> str:
     """Return the registry's message for an unknown key, which lists every key it holds."""
     try:
         registry.resolve_input(_PROBE_KEY)
@@ -138,7 +138,7 @@ def _valid() -> dict[str, Any]:
     }
 
 
-def _refused(registry: ArtifactRegistry, **overrides: Any) -> str:
+def _refused(registry: FileRegistry, **overrides: Any) -> str:
     """Return the ValueError of a changed valid call, which must register nothing."""
     before = _registered(registry)
     arguments = {**_valid(), **overrides}
@@ -213,11 +213,11 @@ _HASH_SEED_SCRIPT = """
 import sys
 from pathlib import Path
 
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.command_step import command_step
 
 root, population, population_path, script, script_path, command, *pairs = sys.argv[1:]
-registry = ArtifactRegistry(
+registry = FileRegistry(
     Path(root),
     "run1",
     root_inputs={population: Path(population_path), script: Path(script_path)},
@@ -261,7 +261,7 @@ def _compiled_with_hash_seed(tmp_path: Path, seed: str) -> str:
 
 def _one_step(tmp_path: Path, command: str, **arguments: Any) -> tuple[Pipeline, Path]:
     """Return a pipeline of one step 'step' writing 'out.txt', and that product's path."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = command_step(
         command, produces={"out": "out.txt"}, registry=registry, name="step", **arguments
     )
@@ -282,7 +282,7 @@ def _copy_pipeline(tmp_path: Path, command: str) -> Pipeline:
     if not source.exists():
         source.parent.mkdir(parents=True)
         source.write_text("n\n1\n")
-    registry = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={_SOURCE: source})
+    registry = FileRegistry(tmp_path / "out", "run1", root_inputs={_SOURCE: source})
     task = command_step(
         command,
         inputs={"source": _SOURCE},
@@ -410,7 +410,7 @@ def test_inputs_env_and_resources_are_optional(tmp_path: Path) -> None:
 
 
 def test_name_defaults_to_the_single_produces_key(tmp_path: Path) -> None:
-    """With name=None and one product the task is named by that product's artifact key."""
+    """With name=None and one product the task is named by that product's file key."""
     task = command_step(
         "printf x > {out}", produces={"out": "tables/out.csv"}, registry=_registry(tmp_path)
     )
@@ -609,7 +609,7 @@ def test_a_root_input_at_a_product_path_is_refused(tmp_path: Path) -> None:
     handed_over = (tmp_path / "out").resolve() / "run1" / product_key
     handed_over.parent.mkdir(parents=True)
     handed_over.write_text("n\n1\n")
-    registry = ArtifactRegistry(
+    registry = FileRegistry(
         tmp_path / "out", "run1", root_inputs={"supplied_table": handed_over}
     )
     assert registry.path_for(product_key) == handed_over.resolve()
@@ -874,7 +874,7 @@ def test_placeholders_become_quoted_absolute_paths_that_the_shell_reads_back(
     source = tmp_path / "in put's {y}" / "source.txt"
     source.parent.mkdir()
     source.write_text("copied text\n")
-    registry = ArtifactRegistry(
+    registry = FileRegistry(
         tmp_path / "out root's {x}", "run1", root_inputs={"source.txt": source}
     )
     task = command_step(
@@ -947,7 +947,7 @@ def test_the_product_parent_directory_is_created_before_the_command_runs(
     tmp_path: Path,
 ) -> None:
     """Two product keys in different nested directories that do not exist yet, "a/b/out.txt" and "c/out.log", are both written by a command that does not create the directories."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = command_step(
         "printf made > {table} && printf log > {log}",
         produces={"table": "a/b/out.txt", "log": "c/out.log"},
@@ -971,7 +971,7 @@ def test_the_command_does_not_run_when_a_product_directory_cannot_be_created(
     tmp_path: Path,
 ) -> None:
     """When a product's parent path is an existing file, the step fails and the author's command, which would write a marker file, did not run."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     blocker = registry.path_for("blocked")
     blocker.parent.mkdir(parents=True)
     blocker.write_text("a file, not a directory\n")
@@ -1025,7 +1025,7 @@ def test_a_trailing_comment_and_a_heredoc_in_the_command_behave_as_written(
     tmp_path: Path,
 ) -> None:
     """A command that ends in a shell comment, and a command that writes its product from a heredoc, each run and write the expected product."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     commented = command_step(
         "printf done > {out} # a trailing comment",
         produces={"out": "commented.txt"},
@@ -1162,8 +1162,8 @@ def test_a_changed_command_makes_preview_report_the_command_of_the_step(
     assert "command of 'copy'" in [reason.node for reason in step.reasons], step.reasons
 
 
-def test_a_changed_input_file_makes_preview_report_the_input_artifact(tmp_path: Path) -> None:
-    """With a stable code identity, after a successful run a changed root input file makes preview() report that the step would run with "artifact '<key>'" among its reasons."""
+def test_a_changed_input_file_makes_preview_report_the_input_file(tmp_path: Path) -> None:
+    """With a stable code identity, after a successful run a changed root input file makes preview() report that the step would run with "file '<key>'" among its reasons."""
     command = "cp {source} {target}"
     assert run(_copy_pipeline(tmp_path, command)) == {"copy": TaskOutcome.SUCCESS}
 
@@ -1172,7 +1172,7 @@ def test_a_changed_input_file_makes_preview_report_the_input_artifact(tmp_path: 
 
     assert step.would_run
     nodes = [reason.node for reason in step.reasons]
-    assert f"artifact {_SOURCE!r}" in nodes, step.reasons
+    assert f"file {_SOURCE!r}" in nodes, step.reasons
 
 
 # Duplicate step names
@@ -1182,7 +1182,7 @@ def test_two_command_steps_with_one_name_make_run_raise_the_generic_message(
     tmp_path: Path,
 ) -> None:
     """Two command steps named 'dup' with different products make run() raise PipelineError "Two steps are named 'dup'; give each a different name= to tell them apart." before anything runs."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         command_step("printf x > {out}", produces={"out": key}, registry=registry, name="dup")
         for key in ("first.txt", "second.txt")
@@ -1228,7 +1228,7 @@ def test_an_env_that_does_not_resolve_makes_run_raise_a_pipeline_error_naming_th
 ) -> None:
     """A step whose env is a path with no bin/python makes run() raise PipelineError naming the step and the env, before any step runs or writes a product."""
     missing_env = str(tmp_path / "no_such_env")
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         command_step(
             "printf x > {out}",
@@ -1295,7 +1295,7 @@ def test_python_command_python_chain_runs_through_run_with_the_right_final_produ
     tmp_path: Path,
 ) -> None:
     """A python_step, then a command_step reading its product, then a python_step reading the command step's product all have outcome SUCCESS through run(), and the final product holds the expected values."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(
             _people, inputs={}, produces="people.csv", registry=registry, name="people"
