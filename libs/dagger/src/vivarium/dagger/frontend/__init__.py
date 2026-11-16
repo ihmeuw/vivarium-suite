@@ -19,11 +19,7 @@ from vivarium.dagger.frontend.execution import (
     preview,
     run,
 )
-from vivarium.dagger.frontend.location_inputs import (
-    LocationInputError,
-    location_inputs,
-    location_key,
-)
+from vivarium.dagger.frontend.inputs import LocationInputError, location_inputs, location_key
 
 __all__ = [
     "DefinitionError",

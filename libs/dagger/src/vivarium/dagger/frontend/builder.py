@@ -82,7 +82,7 @@ class Pipeline:
         a step names as an input, as for
         :class:`~vivarium.dagger.backend.wiring.FileRegistry`. Any such mapping can be
         passed here, such as the one that
-        :func:`~vivarium.dagger.frontend.location_inputs.location_inputs` returns or
+        :func:`~vivarium.dagger.frontend.inputs.location_inputs` returns or
         several merged into one.
     state
         Absolute directory for the run's pytask configuration, state database, lockfile

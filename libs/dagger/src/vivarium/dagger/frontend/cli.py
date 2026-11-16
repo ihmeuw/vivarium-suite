@@ -47,7 +47,7 @@ from vivarium.dagger.frontend.execution import (
     _preview,
     _run,
 )
-from vivarium.dagger.frontend.location_inputs import LocationInputError
+from vivarium.dagger.frontend.inputs import LocationInputError
 
 _FRAMEWORK_MODULES = (
     "vivarium.dagger",

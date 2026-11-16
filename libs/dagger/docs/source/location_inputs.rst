@@ -5,7 +5,7 @@ Root inputs and location inputs
 A pipeline often starts from files that no step produces, such as a coverage table
 that an analyst delivers for a new country. This page first describes how any such
 file reaches a step, through the pipeline's root inputs. It then describes
-:func:`~vivarium.dagger.frontend.location_inputs.location_inputs`, a function that
+:func:`~vivarium.dagger.frontend.inputs.location_inputs`, a function that
 finds and checks one set of input files per location and returns them as root inputs.
 
 Root inputs
@@ -102,7 +102,7 @@ must have, as a mapping from file name to column names. This mapping is the one 
 that defines what each file must contain. Extra columns are allowed and column order
 does not matter.
 
-:func:`~vivarium.dagger.frontend.location_inputs.location_inputs` checks every declared
+:func:`~vivarium.dagger.frontend.inputs.location_inputs` checks every declared
 file for every location before anything runs. It reads only the column names (the CSV
 header or the Parquet footer), so it is cheap even for large files. It does not check
 values, data types, row counts, or whether a ``location_id`` column matches the
@@ -110,7 +110,7 @@ location's directory. A Parquet column stored as the index counts as present; a 
 that reads the file with pandas gets that column as the index.
 
 All problems are reported together, grouped by location, as one
-:class:`~vivarium.dagger.frontend.location_inputs.LocationInputError` that names each
+:class:`~vivarium.dagger.frontend.inputs.LocationInputError` that names each
 file's expected path. Because the check runs when the pipeline is defined, one location
 whose data has not arrived means the pipeline cannot be defined, so nothing can be
 built or previewed until its data is delivered or the location is removed from the
@@ -119,10 +119,10 @@ list.
 Reading a file in a step
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Pass the mapping that :func:`~vivarium.dagger.frontend.location_inputs.location_inputs`
+Pass the mapping that :func:`~vivarium.dagger.frontend.inputs.location_inputs`
 returns as the ``root_inputs`` of the pipeline's ``Pipeline``, or merge it into them.
 Each key is the file's path relative to the inputs root, ``<location>/primary/<file>``,
-and :func:`~vivarium.dagger.frontend.location_inputs.location_key` builds it. A step
+and :func:`~vivarium.dagger.frontend.inputs.location_key` builds it. A step
 reads one of these files by naming that key as an input, as for any root input.
 
 Worked example
