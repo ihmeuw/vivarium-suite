@@ -1,6 +1,6 @@
-"""Write one location's rows of the MNCNH IFA coverage table as a handoff file.
+"""Write one location's rows of the MNCNH IFA coverage table as a location input file.
 
-Usage: python ifa_extract.py <handoff root> [location_id] [location name]
+Usage: python ifa_extract.py <inputs root> [location_id] [location name]
 
 This is the analyst's one-time step outside the pipeline: it reads the 795 MB all-location
 table that ``load_ifa_coverage`` hard-codes and writes ``<root>/<location>/primary/ifa_coverage.csv``.

@@ -5,7 +5,7 @@ that checkout's ``.venv/vivarium_gates_mncnh_artifact``. The pipeline's own env 
 ``vivarium_gates_mncnh``, because a ``python_step`` runs with that env's Python: in the
 ``dagger`` process with ``--local``, and on a compute node through Jobmon. The artifact step
 and the notebook step run in the artifact env, as ``make_artifacts`` does. Set
-``DAGGER_SLICE_ROOT`` to the folder that holds the slice's handoff and outputs; the
+``DAGGER_SLICE_ROOT`` to the folder that holds the slice's location inputs and outputs; the
 pipeline keeps its state under ``output/.dagger``.
 """
 
@@ -16,7 +16,7 @@ import pandas as pd
 from vivarium_gates_mncnh.constants import data_keys
 from vivarium_gates_mncnh.data import loader
 
-from vivarium.dagger.frontend import Pipeline, handoff_inputs, handoff_key
+from vivarium.dagger.frontend import Pipeline, location_inputs, location_key
 
 SLICE_ROOT = Path(os.environ["DAGGER_SLICE_ROOT"])
 SLICE_RESOURCES = {"memory": 8}
@@ -41,7 +41,7 @@ def demography() -> pd.DataFrame:
 
 
 def ifa_coverage(extract: Path) -> pd.DataFrame:
-    """Load IFA coverage with the model's loader, reading the handoff file."""
+    """Load IFA coverage with the model's loader, reading its location input file."""
     return loader.load_coverage_from_file(extract, LOCATION)
 
 
@@ -51,7 +51,7 @@ def pipeline() -> Pipeline:
         SLICE_ROOT / "output",
         run_name="nigeria",
         root_inputs={
-            **handoff_inputs(SLICE_ROOT / "handoff", [LOCATION], PRIMARY_DATA),
+            **location_inputs(SLICE_ROOT / "inputs", [LOCATION], PRIMARY_DATA),
             "write_artifact.py": HERE / "write_artifact.py",
         },
         resources=SLICE_RESOURCES,
@@ -65,7 +65,7 @@ def pipeline() -> Pipeline:
     p.python_step(demography, inputs={}, produces="demography.parquet", name="demography")
     p.python_step(
         ifa_coverage,
-        inputs={"extract": handoff_key(LOCATION, "ifa_coverage.csv")},
+        inputs={"extract": location_key(LOCATION, "ifa_coverage.csv")},
         produces="ifa_coverage.parquet",
         name="ifa_coverage",
     )

@@ -1,11 +1,11 @@
-"""Track C walkthrough definition: python steps, a handoff, a notebook step and a command step."""
+"""Track C walkthrough definition: python steps, location inputs, a notebook step and a command step."""
 
 import sys
 from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import Pipeline, handoff_inputs, handoff_key
+from vivarium.dagger.frontend import Pipeline, location_inputs, location_key
 
 HERE = Path(__file__).resolve().parent
 LOCATIONS = ["kenya", "nigeria"]
@@ -39,7 +39,7 @@ def pipeline() -> Pipeline:
     p = Pipeline(
         HERE / "output",
         run_name="walk",
-        root_inputs=handoff_inputs(HERE / "handoff", LOCATIONS, PRIMARY_DATA),
+        root_inputs=location_inputs(HERE / "inputs", LOCATIONS, PRIMARY_DATA),
     )
     p.python_step(
         make_population, inputs={}, produces="population.parquet", name="population"
@@ -59,7 +59,7 @@ def pipeline() -> Pipeline:
     for location in LOCATIONS:
         p.python_step(
             mean_coverage,
-            inputs={"coverage": handoff_key(location, "coverage.csv")},
+            inputs={"coverage": location_key(location, "coverage.csv")},
             produces=f"{location}/mean_coverage.parquet",
             name=f"coverage_{location}",
         )

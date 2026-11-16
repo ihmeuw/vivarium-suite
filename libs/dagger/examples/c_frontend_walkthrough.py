@@ -31,8 +31,7 @@
 # name. Almost every section runs the installed `dagger` command on one of them, in a
 # separate process, the way a modeler would type it in a shell. The exceptions are C2's
 # check that the command imports no Jobmon (it runs the command through click's test runner
-# in a child Python), C12 (which runs the docs test with pytest) and C17 (which loads a
-# definition in this process and reads its private snapshot to print a step's command).
+# in a child Python) and C12 (which runs the docs test with pytest).
 # Everything else in this notebook is machinery for showing many runs and many mistakes in
 # one place. A modeler would not write any of it:
 #
@@ -46,7 +45,7 @@
 #   would edit their file. Here `make_defs(name, edits=[(old, new)])` makes the copy,
 #   applies the edit and prints it as `- old` / `+ new`, so you can see exactly what changed
 #   before you read the message it causes.
-# - **A primary-data handoff.** `write_handoff` writes the files an analyst would deliver
+# - **Location inputs.** `write_inputs` writes the files an analyst would deliver
 #   for each location.
 # - **Running `dagger`.** `dagger(...)` runs the command, prints what a modeler would see in
 #   the terminal with its exit status and time, and returns the result so the cell can check
@@ -122,7 +121,7 @@ print(f"python {sys.version.split()[0]} at {sys.executable}; commit {commit()}")
 
 
 # %% [markdown]
-# Copies of the definitions, the one-line edits, and the analyst's handoff.
+# Copies of the definitions, the one-line edits, and the analyst's location inputs.
 
 # %%
 def edit(path, pairs):
@@ -139,18 +138,18 @@ def make_defs(name, edits=(), report_edits=()):
     """Copy the definitions into a new folder under WORK, apply one-line edits, and return it.
 
     Each edit is an (old, new) pair that must occur exactly once. The folder gets its own
-    handoff, outputs and state, so no case changes another.
+    location inputs, outputs and state, so no case changes another.
     """
     folder = WORK / name
     shutil.rmtree(folder, ignore_errors=True)
     shutil.copytree(EXAMPLES / "c_walkthrough_defs", folder)
-    write_handoff(folder / "handoff")
+    write_inputs(folder / "inputs")
     edit(folder / "pipeline.py", edits)
     edit(folder / "report.ipynb", report_edits)
     return folder
 
 
-def write_handoff(root, values=(0.5, 0.7), locations=LOCATIONS):
+def write_inputs(root, values=(0.5, 0.7), locations=LOCATIONS):
     """Write each location's primary coverage file, as an analyst would deliver it."""
     for number, location in enumerate(locations):
         path = root / location / "primary" / "coverage.csv"
@@ -241,7 +240,7 @@ def show_runs(runs):
 # %% [markdown]
 # ## C1 — One definition declares the steps; custom steps are first-class (local)
 #
-# The definition below has python steps, a fan-out over a two-location handoff, a
+# The definition below has python steps, a fan-out over two locations' input files, a
 # notebook step, and a command step, all added to one `Pipeline` and wired by file key. No
 # file path appears in the wiring. Loading the definition runs nothing, so `preview` plans
 # the whole DAG before any product exists, and names every file by its key.
@@ -367,7 +366,7 @@ for name in ("'adult'", "'sumary'", "Valid steps"):
     assert name in unknown.stderr, name
 
 # %% [markdown]
-# ## C10 — The primary-data handoff (local)
+# ## C10 — Location inputs (local)
 #
 # Each location's file sits at `<root>/<location>/primary/coverage.csv` and is checked
 # before anything runs. When the analyst delivers a new Nigeria file, preview gives the
@@ -376,15 +375,15 @@ for name in ("'adult'", "'sumary'", "Valid steps"):
 # (MIC-7760) on 2026-11-16.
 
 # %%
-HANDOFF = GOOD
-dagger("run", "-c", "pipeline.py", "--local", cwd=HANDOFF, stdout=False)
-write_handoff(HANDOFF / "handoff", values=(0.6, 0.8), locations=["nigeria"])
-redelivered = dagger("preview", "-c", "pipeline.py", cwd=HANDOFF)
+INPUTS_COPY = GOOD
+dagger("run", "-c", "pipeline.py", "--local", cwd=INPUTS_COPY, stdout=False)
+write_inputs(INPUTS_COPY / "inputs", values=(0.6, 0.8), locations=["nigeria"])
+redelivered = dagger("preview", "-c", "pipeline.py", cwd=INPUTS_COPY)
 nigeria_line = plan(redelivered)["coverage_nigeria"]
 assert nigeria_line.startswith("run"), nigeria_line
 assert "file 'nigeria/primary/coverage.csv' changed" in nigeria_line, nigeria_line
-dagger("run", "-c", "pipeline.py", "--local", cwd=HANDOFF, stdout=False)
-nigeria = pd.read_parquet(HANDOFF / "output/walk/nigeria/mean_coverage.parquet")
+dagger("run", "-c", "pipeline.py", "--local", cwd=INPUTS_COPY, stdout=False)
+nigeria = pd.read_parquet(INPUTS_COPY / "output/walk/nigeria/mean_coverage.parquet")
 print(nigeria)
 assert abs(nigeria["mean_coverage"][0] - 0.7) < 1e-9, "the run did not read the new file"
 
@@ -403,24 +402,24 @@ assert abs(nigeria["mean_coverage"][0] - 0.7) < 1e-9, "the run did not read the 
 # its reason, because they run first.
 
 # %%
-executed = json.loads((HANDOFF / "output/walk/report_executed.ipynb").read_text())
+executed = json.loads((INPUTS_COPY / "output/walk/report_executed.ipynb").read_text())
 print(
     "executed cells:",
     [c.get("execution_count") for c in executed["cells"] if c["cell_type"] == "code"],
 )
-print(pd.read_csv(HANDOFF / "output/walk/report.csv"))
-source = json.loads((HANDOFF / "report.ipynb").read_text())
+print(pd.read_csv(INPUTS_COPY / "output/walk/report.csv"))
+source = json.loads((INPUTS_COPY / "report.ipynb").read_text())
 assert all(not c.get("outputs") for c in source["cells"]), "the source notebook was changed"
 # A second definition file next to the first shares its outputs and state.
-retitled = HANDOFF / "retitled.py"
+retitled = INPUTS_COPY / "retitled.py"
 retitled.write_text(
-    (HANDOFF / "pipeline.py")
+    (INPUTS_COPY / "pipeline.py")
     .read_text()
     .replace('"title": "Adults"', '"title": "Adults 15+"')
 )
-retitled_run = dagger("run", "-c", "retitled.py", "--local", cwd=HANDOFF, stdout=False)
+retitled_run = dagger("run", "-c", "retitled.py", "--local", cwd=INPUTS_COPY, stdout=False)
 assert retitled_run.returncode == 0
-report_frame = pd.read_csv(HANDOFF / "output/walk/report.csv")
+report_frame = pd.read_csv(INPUTS_COPY / "output/walk/report.csv")
 print(report_frame)
 assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 
@@ -429,26 +428,18 @@ assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 #
 # The archive step is `command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
 # the absolute path of the input or product of that name, quoted for the shell, and the
-# product's folder is made before the command runs. The cell prints the command the step
-# ran, with this workspace's path shortened, and checks that the copy matches the report.
-# C1-real's artifact step is a command step that runs a script in the model's artifact
-# env. A misspelled placeholder and a failing command are in the plain-errors table below.
+# product's folder is made before the command runs. The cell checks that the copy matches
+# the report. C1-real's artifact step is a command step that runs a script in the model's
+# artifact env. A misspelled placeholder and a failing command are in the plain-errors
+# table below.
 #
-# A `Pipeline` has no public list of its steps, so to print the command the cell reads the
-# private snapshot that `dagger` freezes from the pipeline before a run
-# (`vivarium.dagger.frontend.builder.freeze`). A modeler would not do this.
+# A `Pipeline` has no public way to show a step's filled-in command yet. A planned
+# `dagger show` command will print each step's inputs, outputs and command without
+# running anything, and this section will use it; until then it checks the result only.
 
 # %%
-from vivarium.dagger.frontend import load_pipeline
-from vivarium.dagger.frontend.builder import freeze
-
-archive = next(
-    t
-    for t in freeze(load_pipeline(str(HANDOFF / "pipeline.py"))).tasks
-    if t.name == "archive"
-)
-print(archive.run.replace(str(WORK), "<workspace>"))
-copy, report = HANDOFF / "output/walk/archive/report.csv", HANDOFF / "output/walk/report.csv"
+copy = INPUTS_COPY / "output/walk/archive/report.csv"
+report = INPUTS_COPY / "output/walk/report.csv"
 assert copy.read_bytes() == report.read_bytes()
 
 # %% [markdown]
@@ -509,10 +500,10 @@ def show_error(
     return folder, proc
 
 
-def break_handoff(folder):
+def break_inputs(folder):
     """Drop Kenya's file and rename a column in Nigeria's."""
-    (folder / "handoff/kenya/primary/coverage.csv").unlink()
-    path = folder / "handoff/nigeria/primary/coverage.csv"
+    (folder / "inputs/kenya/primary/coverage.csv").unlink()
+    path = folder / "inputs/nigeria/primary/coverage.csv"
     path.write_text(path.read_text().replace("year_id", "year", 1))
 
 
@@ -576,17 +567,17 @@ show_error(
     names=["report", "report.ipynb", "parameters"],
 )
 show_error(
-    "H1+H2 handoff: a missing file and a renamed column",
-    setup=break_handoff,
+    "H1+H2 location inputs: a missing file and a renamed column",
+    setup=break_inputs,
     exit_code=2,
     names=["kenya", "coverage.csv", "nigeria", "year_id"],
     absent=["Traceback"],
 )
 
 
-def widen_handoff(folder):
+def widen_inputs(folder):
     """Give Nigeria's file 300 draw columns, as real model inputs have, and rename year_id."""
-    path = folder / "handoff/nigeria/primary/coverage.csv"
+    path = folder / "inputs/nigeria/primary/coverage.csv"
     frame = pd.read_csv(path).rename(columns={"year_id": "year"})
     frame = pd.concat(
         [frame, pd.DataFrame({f"draw_{i}": [0.5, 0.6] for i in range(300)})], axis=1
@@ -595,8 +586,8 @@ def widen_handoff(folder):
 
 
 _, wide = show_error(
-    "H2 a wide handoff file is missing a column",
-    setup=widen_handoff,
+    "H2 a wide location input file is missing a column",
+    setup=widen_inputs,
     exit_code=2,
     names=["nigeria", "year_id"],
     absent=["draw_299"],
@@ -764,7 +755,7 @@ assert docs.returncode == 0
 #
 # `c_walkthrough_defs/mncnh_slice.py` turns part of MNCNH's artifact build into steps:
 # three python steps call the model's own loader (`postpartum_fraction`, `demography`,
-# and `ifa_coverage`, which reads the analyst's Nigeria extract through the handoff); a
+# and `ifa_coverage`, which reads the analyst's Nigeria extract through its location inputs); a
 # command step runs `write_artifact.py` in the model's artifact env to write them into
 # `nigeria.hdf`, as `make_artifacts` does; and a notebook step runs the model's
 # `hemorrhage_split_proportions.ipynb` V&V notebook on that artifact in the same env.
@@ -779,7 +770,7 @@ assert docs.returncode == 0
 # `notebook_step` refuses such a notebook when the step passes it names (C18), so the demo
 # copy adds one; that change is what a modeler makes to adopt `notebook_step`.
 # The section ends with two mistakes on the real slice, each made in a copy of the
-# definition: a misspelled handoff file name, and a handoff whose IFA file renamed
+# definition: a misspelled input file name, and location inputs whose IFA file renamed
 # `year_id` (1007 columns, as the real extract has).
 #
 # The slice runs first in this process (`--local`). Then the same definition runs the slice
@@ -797,12 +788,12 @@ if not MNCNH:
 else:
     SLICE = Path(os.environ["DAGGER_SLICE_ROOT"])
     DEF = EXAMPLES / "c_walkthrough_defs" / "mncnh_slice.py"
-    if not (SLICE / "handoff/Nigeria/primary/ifa_coverage.csv").exists():
+    if not (SLICE / "inputs/Nigeria/primary/ifa_coverage.csv").exists():
         subprocess.run(
             [
                 sys.executable,
                 EXAMPLES / "c_walkthrough_defs/ifa_extract.py",
-                SLICE / "handoff",
+                SLICE / "inputs",
             ],
             check=True,
         )
@@ -850,24 +841,24 @@ else:
     mistakes = WORK / "slice_mistakes"
     mistakes.mkdir(exist_ok=True)
     source = DEF.read_text()
-    typo = 'handoff_key(LOCATION, "ifa_coverage.csv")'
+    typo = 'location_key(LOCATION, "ifa_coverage.csv")'
     assert source.count(typo) == 1
     key = mistakes / "mncnh_slice_misspelled_key.py"
-    key.write_text(source.replace(typo, 'handoff_key(LOCATION, "ifa_coverge.csv")'))
+    key.write_text(source.replace(typo, 'location_key(LOCATION, "ifa_coverge.csv")'))
     misspelled = dagger("preview", "-c", key, cwd=MNCNH)
     assert misspelled.returncode == 2 and "ifa_coverage.csv" in misspelled.stderr
 
-    renamed_csv = SLICE / "handoff_renamed/Nigeria/primary/ifa_coverage.csv"
+    renamed_csv = SLICE / "inputs_renamed/Nigeria/primary/ifa_coverage.csv"
     renamed_csv.parent.mkdir(parents=True, exist_ok=True)
     renamed_csv.write_text(
-        (SLICE / "handoff/Nigeria/primary/ifa_coverage.csv")
+        (SLICE / "inputs/Nigeria/primary/ifa_coverage.csv")
         .read_text()
         .replace("year_id", "year", 1)
     )
-    root = 'SLICE_ROOT / "handoff"'
+    root = 'SLICE_ROOT / "inputs"'
     assert source.count(root) == 1
     column = mistakes / "mncnh_slice_renamed_column.py"
-    column.write_text(source.replace(root, 'SLICE_ROOT / "handoff_renamed"'))
+    column.write_text(source.replace(root, 'SLICE_ROOT / "inputs_renamed"'))
     renamed = dagger("preview", "-c", column, cwd=MNCNH)
     assert renamed.returncode == 2 and "'year_id' may be 'year'" in renamed.stderr
     assert len(renamed.stderr) < 1500, len(renamed.stderr)
