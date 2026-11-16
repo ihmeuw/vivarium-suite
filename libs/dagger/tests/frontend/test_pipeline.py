@@ -20,16 +20,10 @@ from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import Reason, StepPreview
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
-from vivarium.dagger.frontend import (
-    Pipeline,
-    PipelineError,
-    StepExited,
-    StepFailed,
-    preview,
-    run,
-)
+from vivarium.dagger.frontend import PipelineError, StepExited, StepFailed, preview, run
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import (
     Fixture,
     build_fixture,
@@ -76,12 +70,12 @@ class _ReportedError(Exception):
         self.exc_message = exc_message
 
 
-def _pipeline(fixture: Fixture, *extra: Task, stable: bool = False) -> Pipeline:
+def _pipeline(fixture: Fixture, *extra: Task, stable: bool = False) -> PipelineSnapshot:
     """Return the fixture's steps and ``extra`` as a pipeline; ``stable`` fixes code ids."""
     tasks = [*fixture.tasks, *extra]
     if stable:
         tasks = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(tasks, fixture.state, fixture.registry)
+    return PipelineSnapshot(tasks, fixture.state, fixture.registry)
 
 
 def _report_step(fixture: Fixture) -> Task:
@@ -104,7 +98,7 @@ def _side_step(fixture: Fixture) -> Task:
     )
 
 
-def _failing_pipeline(tmp_path: Path) -> Pipeline:
+def _failing_pipeline(tmp_path: Path) -> PipelineSnapshot:
     """Return a raising step with two descendants and one independent step as a pipeline."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
@@ -123,10 +117,10 @@ def _failing_pipeline(tmp_path: Path) -> Pipeline:
         ),
         python_step(_constant, inputs={}, produces="independent.parquet", registry=registry),
     ]
-    return Pipeline(tasks, tmp_path / "state", registry)
+    return PipelineSnapshot(tasks, tmp_path / "state", registry)
 
 
-def _double_claimed(tmp_path: Path) -> Pipeline:
+def _double_claimed(tmp_path: Path) -> PipelineSnapshot:
     """Return a pipeline whose two command steps claim one product file."""
     out = tmp_path / "out.txt"
     tasks = [
@@ -140,19 +134,19 @@ def _double_claimed(tmp_path: Path) -> Pipeline:
         )
         for name in ("first", "second")
     ]
-    return Pipeline(tasks, tmp_path / "state")
+    return PipelineSnapshot(tasks, tmp_path / "state")
 
 
-def _duplicate_names(tmp_path: Path) -> Pipeline:
+def _duplicate_names(tmp_path: Path) -> PipelineSnapshot:
     """Return a pipeline whose two command steps share the name 'dup'."""
     tasks = [
         Task(name="dup", run="true", inputs={}, outputs={}, resources={}, env=None)
         for _ in range(2)
     ]
-    return Pipeline(tasks, tmp_path / "state")
+    return PipelineSnapshot(tasks, tmp_path / "state")
 
 
-def _errors_from_run_and_preview(pipeline: Pipeline) -> dict[str, PipelineError]:
+def _errors_from_run_and_preview(pipeline: PipelineSnapshot) -> dict[str, PipelineError]:
     """Return the PipelineError run() and preview() raise for ``pipeline``, keyed by verb."""
     with pytest.raises(PipelineError) as ran:
         run(pipeline)
@@ -229,7 +223,7 @@ def test_run_only_selects_exactly_so_a_parquet_does_not_run_data_parquet(
         python_step(_constant, inputs={}, produces=key, registry=registry)
         for key in ("a.parquet", "data.parquet")
     ]
-    pipeline = Pipeline(tasks, tmp_path / "state", registry)
+    pipeline = PipelineSnapshot(tasks, tmp_path / "state", registry)
 
     assert run(pipeline, only=["a.parquet"]) == {
         "a.parquet": TaskOutcome.SUCCESS,
@@ -411,7 +405,7 @@ def test_two_failing_steps_are_both_reported_and_the_first_is_the_cause(
     ]
 
     with pytest.raises(StepFailed) as info:
-        run(Pipeline(tasks, tmp_path / "state", registry))
+        run(PipelineSnapshot(tasks, tmp_path / "state", registry))
 
     error = info.value
     assert set(error.failures) == {"first.parquet", "second.parquet"}
@@ -473,7 +467,7 @@ def test_a_failing_command_step_surfaces_its_called_process_error(tmp_path: Path
     )
 
     with pytest.raises(StepFailed) as info:
-        run(Pipeline([task], tmp_path / "state"))
+        run(PipelineSnapshot([task], tmp_path / "state"))
 
     assert "shout" in str(info.value)
     cause = info.value.__cause__
@@ -573,7 +567,7 @@ def test_preview_without_a_registry_keeps_file_paths(tmp_path: Path) -> None:
     """With registry=None, preview does not fail and file reasons keep pytask's path names."""
     fixture = build_fixture(tmp_path)
 
-    plan = preview(Pipeline(fixture.tasks, fixture.state))
+    plan = preview(PipelineSnapshot(fixture.tasks, fixture.state))
 
     raw = fixture.inputs["raw"].resolve().as_posix()
     mid = fixture.registry.path_for("mid.parquet").as_posix()
@@ -633,10 +627,10 @@ def test_preview_raises_pipeline_error_for_an_unknown_step(tmp_path: Path) -> No
     assert all(step in message for step in fixture.steps), message
 
 
-def test_pipeline_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) -> None:
-    """Pipeline's fields cannot be reassigned, and registry defaults to None."""
+def test_snapshot_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) -> None:
+    """PipelineSnapshot's fields cannot be reassigned, and registry defaults to None."""
     fixture = build_fixture(tmp_path)
-    pipeline = Pipeline(fixture.tasks, fixture.state)
+    pipeline = PipelineSnapshot(fixture.tasks, fixture.state)
 
     assert pipeline.registry is None
     replacements: dict[str, object] = {
@@ -649,15 +643,15 @@ def test_pipeline_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) ->
             setattr(pipeline, field, value)
 
 
-def test_pipeline_stores_tasks_as_a_tuple_that_a_change_to_the_passed_list_does_not_reach(
+def test_snapshot_stores_tasks_as_a_tuple_that_a_change_to_the_passed_list_does_not_reach(
     tmp_path: Path,
 ) -> None:
-    """Pipeline(tasks_list, root).tasks is a tuple equal to tuple(tasks_list), and appending to or clearing tasks_list afterwards leaves it unchanged."""
+    """PipelineSnapshot(tasks_list, root).tasks is a tuple equal to tuple(tasks_list), and appending to or clearing tasks_list afterwards leaves it unchanged."""
     fixture = build_fixture(tmp_path)
     tasks_list = list(fixture.tasks)
     expected = tuple(tasks_list)
 
-    pipeline = Pipeline(tasks_list, fixture.state)
+    pipeline = PipelineSnapshot(tasks_list, fixture.state)
 
     assert isinstance(pipeline.tasks, tuple)
     assert pipeline.tasks == expected
@@ -742,24 +736,24 @@ def test_an_interrupt_raised_in_a_step_propagates_as_itself(tmp_path: Path) -> N
     task = python_step(_interrupt, inputs={}, produces="stop.parquet", registry=registry)
 
     with pytest.raises(KeyboardInterrupt):
-        run(Pipeline([task], tmp_path / "state", registry))
+        run(PipelineSnapshot([task], tmp_path / "state", registry))
 
 
-def test_pipeline_rejects_a_root_that_is_not_a_path(tmp_path: Path) -> None:
-    """Pipeline(tasks, str(tmp_path / 'state')) raises TypeError at construction, naming the type it got."""
+def test_snapshot_rejects_a_root_that_is_not_a_path(tmp_path: Path) -> None:
+    """PipelineSnapshot(tasks, str(tmp_path / 'state')) raises TypeError at construction, naming the type it got."""
     tasks = build_fixture(tmp_path).tasks
     root = str(tmp_path / "state")
 
     with pytest.raises(TypeError, match=r"\bstr\b"):
-        Pipeline(tasks, root)  # type: ignore[arg-type]
+        PipelineSnapshot(tasks, root)  # type: ignore[arg-type]
 
 
-def test_pipeline_rejects_a_relative_root(tmp_path: Path) -> None:
-    """Pipeline(tasks, Path('state')) raises ValueError at construction, saying the root must be absolute."""
+def test_snapshot_rejects_a_relative_root(tmp_path: Path) -> None:
+    """PipelineSnapshot(tasks, Path('state')) raises ValueError at construction, saying the root must be absolute."""
     tasks = build_fixture(tmp_path).tasks
 
     with pytest.raises(ValueError, match="(?i)absolute"):
-        Pipeline(tasks, Path("state"))
+        PipelineSnapshot(tasks, Path("state"))
 
 
 def test_pipeline_error_carries_pytasks_exit_code_when_pytask_stops(tmp_path: Path) -> None:
@@ -824,7 +818,7 @@ _REPORT = "its output is in pytask's report for the step."
 
 def _notebook_pipeline(
     tmp_path: Path, body: str = _RAISES_KEY_ERROR, env: str = sys.prefix
-) -> Pipeline:
+) -> PipelineSnapshot:
     """Return a pipeline of the notebook step 'summarize', which runs ``body``."""
     registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(
@@ -838,16 +832,16 @@ def _notebook_pipeline(
         produces={"summary_path": _SUMMARY_KEY},
         name="summarize",
     )
-    return Pipeline([task], tmp_path / "state", registry)
+    return PipelineSnapshot([task], tmp_path / "state", registry)
 
 
-def _executed(pipeline: Pipeline) -> Path:
+def _executed(pipeline: PipelineSnapshot) -> Path:
     """Return the path of the notebook step's executed notebook."""
     assert pipeline.registry is not None
     return pipeline.registry.path_for(_EXECUTED_KEY)
 
 
-def _key_error_line(pipeline: Pipeline) -> str:
+def _key_error_line(pipeline: PipelineSnapshot) -> str:
     """Return the StepFailed line for the notebook step that raised KeyError."""
     return (
         "Step 'summarize' failed: notebook summarize.ipynb raised KeyError: "
@@ -856,7 +850,7 @@ def _key_error_line(pipeline: Pipeline) -> str:
     )
 
 
-def _fallback_line(pipeline: Pipeline) -> str:
+def _fallback_line(pipeline: PipelineSnapshot) -> str:
     """Return the StepFailed line for the notebook step whose command exited 1 early."""
     return (
         "Step 'summarize' failed: notebook summarize.ipynb left no error in an executed "
@@ -865,7 +859,7 @@ def _fallback_line(pipeline: Pipeline) -> str:
     )
 
 
-def _step_failed(pipeline: Pipeline) -> StepFailed:
+def _step_failed(pipeline: PipelineSnapshot) -> StepFailed:
     """Run ``pipeline`` and return the StepFailed it raises."""
     with pytest.raises(StepFailed) as info:
         run(pipeline)
@@ -989,7 +983,7 @@ def test_a_failing_command_step_message_gives_the_exit_status_and_not_the_comman
     """A hand-built command step 'shout' running 'exit 3' makes StepFailed's message exactly "Step 'shout' failed: the command exited with status 3; its output is in pytask's report for the step.", while its cause is still the CalledProcessError naming the command."""
     task = _command_step(tmp_path, "shout", "exit 3")
 
-    error = _step_failed(Pipeline([task], tmp_path / "state"))
+    error = _step_failed(PipelineSnapshot([task], tmp_path / "state"))
 
     assert str(error) == f"Step 'shout' failed: the command exited with status 3; {_REPORT}"
     cause = error.__cause__
@@ -1004,7 +998,7 @@ def test_a_command_step_stopped_by_a_signal_is_described_by_the_signal(
     """A command step whose shell is killed with SIGKILL makes StepFailed's line say 'the command was stopped by signal SIGKILL'."""
     task = _command_step(tmp_path, "killed", "kill -9 $$")
 
-    error = _step_failed(Pipeline([task], tmp_path / "state"))
+    error = _step_failed(PipelineSnapshot([task], tmp_path / "state"))
 
     assert str(error) == (
         f"Step 'killed' failed: the command was stopped by signal SIGKILL; {_REPORT}"
@@ -1020,7 +1014,7 @@ def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_messa
         _run_own_command, inputs={}, produces="tool.parquet", registry=registry
     )
 
-    error = _step_failed(Pipeline([task], tmp_path / "state", registry))
+    error = _step_failed(PipelineSnapshot([task], tmp_path / "state", registry))
 
     failure = error.failures["tool.parquet"]
     assert isinstance(failure, subprocess.CalledProcessError)
@@ -1034,7 +1028,7 @@ def test_a_python_step_failure_is_still_described_by_type_and_message(tmp_path: 
     registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(_missing_column, inputs={}, produces="read.parquet", registry=registry)
 
-    error = _step_failed(Pipeline([task], tmp_path / "state", registry))
+    error = _step_failed(PipelineSnapshot([task], tmp_path / "state", registry))
 
     assert str(error) == "Step 'read.parquet' failed: KeyError: 'no_such_column'"
 
@@ -1072,7 +1066,7 @@ def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> 
         "broken.parquet": "Step 'broken.parquet' failed: ValueError: the step broke",
     }
 
-    error = _step_failed(Pipeline(tasks, tmp_path / "state", registry))
+    error = _step_failed(PipelineSnapshot(tasks, tmp_path / "state", registry))
 
     assert set(error.failures) == set(expected)
     failed_in_order = [
@@ -1085,7 +1079,7 @@ def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> 
 # Two steps with one name (MIC-7785)
 
 
-def _named(tmp_path: Path, *names: str) -> Pipeline:
+def _named(tmp_path: Path, *names: str) -> PipelineSnapshot:
     """Return a pipeline of command steps with ``names``, each writing its own file."""
     tasks = [
         Task(
@@ -1098,7 +1092,7 @@ def _named(tmp_path: Path, *names: str) -> Pipeline:
         )
         for index, name in enumerate(names)
     ]
-    return Pipeline(tasks, tmp_path / "state")
+    return PipelineSnapshot(tasks, tmp_path / "state")
 
 
 def _shared(name: str, count: str = "Two") -> str:
@@ -1191,13 +1185,13 @@ def _leave_with_a_message() -> pd.DataFrame:
     sys.exit("bye")
 
 
-def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> Pipeline:
+def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> PipelineSnapshot:
     """Return a pipeline of one python step 'leave' that runs ``target``."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
         target, inputs={}, produces="leave.parquet", registry=registry, name="leave"
     )
-    return Pipeline([task], tmp_path / "state", registry)
+    return PipelineSnapshot([task], tmp_path / "state", registry)
 
 
 def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
@@ -1277,7 +1271,7 @@ def test_a_middle_step_that_exits_stops_the_build_after_its_upstream_step(
         )
 
     out.mkdir()
-    pipeline = Pipeline(
+    pipeline = PipelineSnapshot(
         [
             _step("first", _write_first, {}),
             _step("leave", _read_and_leave, {"first": first}),
@@ -1326,43 +1320,45 @@ def test_run_with_jobmon_but_no_bridge_plugin_raises_before_force_touches_the_lo
     assert lockfile.read_bytes() == before
 
 
-# Pipeline resources and the bridge's errors (MIC-7752)
+# PipelineSnapshot resources and the bridge's errors (MIC-7752)
 
 
-def test_pipeline_resources_default_to_an_empty_mapping(tmp_path: Path) -> None:
-    """Pipeline(tasks, root) has resources equal to {}, and two pipelines made that way do not share one mapping object."""
-    first = Pipeline([], tmp_path / "first")
-    second = Pipeline([], tmp_path / "second")
+def test_snapshot_resources_default_to_an_empty_mapping(tmp_path: Path) -> None:
+    """PipelineSnapshot(tasks, root) has resources equal to {}, and two pipelines made that way do not share one mapping object."""
+    first = PipelineSnapshot([], tmp_path / "first")
+    second = PipelineSnapshot([], tmp_path / "second")
 
     assert first.resources == {}
     assert second.resources == {}
     assert first.resources is not second.resources
 
 
-def test_pipeline_keeps_the_resources_it_is_given(tmp_path: Path) -> None:
-    """Pipeline(tasks, root, registry, resources={'project': 'proj_a'}) has resources equal to {'project': 'proj_a'}."""
+def test_snapshot_keeps_the_resources_it_is_given(tmp_path: Path) -> None:
+    """PipelineSnapshot(tasks, root, registry, resources={'project': 'proj_a'}) has resources equal to {'project': 'proj_a'}."""
     registry = FileRegistry(tmp_path / "out", "run1")
 
-    pipeline = Pipeline([], tmp_path / "state", registry, resources={"project": "proj_a"})
+    pipeline = PipelineSnapshot(
+        [], tmp_path / "state", registry, resources={"project": "proj_a"}
+    )
 
     assert pipeline.resources == {"project": "proj_a"}
     assert pipeline.registry is registry
 
 
-def test_pipeline_rejects_resources_that_are_not_a_mapping(tmp_path: Path) -> None:
-    """Pipeline(tasks, root, resources=[('project', 'proj_a')]) raises TypeError naming the type it got."""
+def test_snapshot_rejects_resources_that_are_not_a_mapping(tmp_path: Path) -> None:
+    """PipelineSnapshot(tasks, root, resources=[('project', 'proj_a')]) raises TypeError naming the type it got."""
     pairs: Any = [("project", "proj_a")]
 
     with pytest.raises(TypeError, match=r"\blist\b"):
-        Pipeline([], tmp_path / "state", resources=pairs)
+        PipelineSnapshot([], tmp_path / "state", resources=pairs)
 
 
 def test_run_without_jobmon_ignores_pipeline_resources_and_needs_no_project(
     tmp_path: Path,
 ) -> None:
-    """run(pipeline) on a Pipeline with resources={'memory': 4} and no project anywhere runs every step locally and returns SUCCESS for each."""
+    """run(pipeline) on a PipelineSnapshot with resources={'memory': 4} and no project anywhere runs every step locally and returns SUCCESS for each."""
     fixture = build_fixture(tmp_path)
-    pipeline = Pipeline(
+    pipeline = PipelineSnapshot(
         fixture.tasks, fixture.state, fixture.registry, resources={"memory": 4}
     )
 

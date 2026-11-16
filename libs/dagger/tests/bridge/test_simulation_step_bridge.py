@@ -36,10 +36,11 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import Pipeline, StepFailed, run
+from vivarium.dagger.frontend import StepFailed, run
 from vivarium.dagger.frontend._collect_simulation import _MESSAGE_FILE, _SENTINEL
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.frontend.simulation_step import simulation_step
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 _KEY = "sims/toy"
@@ -112,7 +113,7 @@ def simulation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Simulation:
 
 def _pipeline(
     simulation: _Simulation, *, consumer: bool = False, stable_ids: bool = False
-) -> Pipeline:
+) -> PipelineSnapshot:
     """Return the simulation step and, with ``consumer``, a python step that reads its run."""
     registry = simulation.registry()
     tasks = [
@@ -137,15 +138,15 @@ def _pipeline(
         )
     if stable_ids:
         tasks = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(tasks, simulation.base / "state", registry)
+    return PipelineSnapshot(tasks, simulation.base / "state", registry)
 
 
-def _run_bridged(pipeline: Pipeline) -> dict[str, TaskOutcome]:
+def _run_bridged(pipeline: PipelineSnapshot) -> dict[str, TaskOutcome]:
     """Run ``pipeline`` with jobmon=True and a Jobmon project, and return its outcomes."""
     return run(pipeline, jobmon=True, jobmon_resources={"project": _JOBMON_PROJECT})
 
 
-def _failure_line(pipeline: Pipeline) -> str:
+def _failure_line(pipeline: PipelineSnapshot) -> str:
     """Run ``pipeline`` with jobmon=True; assert StepFailed and return its message."""
     with pytest.raises(StepFailed) as excinfo:
         _run_bridged(pipeline)

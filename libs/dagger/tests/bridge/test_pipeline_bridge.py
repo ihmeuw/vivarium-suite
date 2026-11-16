@@ -39,7 +39,6 @@ from vivarium.dagger.bridge.plugin import DEFAULT_MAX_ATTEMPTS
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE
 from vivarium.dagger.constants import DEFAULT_RESOURCES
 from vivarium.dagger.frontend import (
-    Pipeline,
     PipelineError,
     RunInterrupted,
     RunRefused,
@@ -47,6 +46,7 @@ from vivarium.dagger.frontend import (
     run,
 )
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import FakeJobmon
 
 _CHAIN = (A, B, C)
@@ -97,7 +97,7 @@ def _chain(
     resources: Mapping[str, Any] | None = None,
     own: Mapping[str, dict[str, Any]] | None = None,
     stable_ids: bool = False,
-) -> Pipeline:
+) -> PipelineSnapshot:
     """Return the chain a -> b -> c under ``tmp_path``; each step records its process id.
 
     ``resources`` is the pipeline's, ``own`` gives a step's own resources by step name, and
@@ -119,7 +119,7 @@ def _chain(
     if stable_ids:
         tasks = stable(tasks)
     layer: Mapping[str, Any] = {} if resources is None else resources
-    return Pipeline(tasks, build_root(tmp_path), artifacts, resources=layer)
+    return PipelineSnapshot(tasks, build_root(tmp_path), artifacts, resources=layer)
 
 
 def _defaults(jobmon: FakeJobmon) -> dict[str, Any]:
@@ -133,7 +133,7 @@ def _state_written(root: Path) -> list[str]:
     return [name for name in (LOCKFILE, RUN_LOCK_NAME, ".pytask") if (root / name).exists()]
 
 
-def _interrupted(pipeline: Pipeline, jobmon: FakeJobmon) -> RunInterrupted:
+def _interrupted(pipeline: PipelineSnapshot, jobmon: FakeJobmon) -> RunInterrupted:
     """Run ``pipeline`` through ``jobmon``; return the RunInterrupted that it raises."""
     raised: BaseException | None = None
     with jobmon:
@@ -146,7 +146,7 @@ def _interrupted(pipeline: Pipeline, jobmon: FakeJobmon) -> RunInterrupted:
     return raised
 
 
-def _project_error(pipeline: Pipeline, **build_kwargs: Any) -> PipelineError:
+def _project_error(pipeline: PipelineSnapshot, **build_kwargs: Any) -> PipelineError:
     """Return the PipelineError that ``run(pipeline, jobmon=True, ...)`` raises."""
     with pytest.raises(PipelineError) as info:
         run(pipeline, jobmon=True, **build_kwargs)
@@ -168,7 +168,7 @@ def test_the_default_resources_reach_the_adapter_when_no_layer_overrides_them(
 def test_pipeline_resources_override_the_defaults_key_by_key(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A Pipeline with resources={'project': 'proj_a', 'memory': 8} binds default_resources with memory 8, project 'proj_a', and the default queue, runtime and cores."""
+    """A PipelineSnapshot with resources={'project': 'proj_a', 'memory': 8} binds default_resources with memory 8, project 'proj_a', and the default queue, runtime and cores."""
     pipeline = _chain(tmp_path, resources={"project": "proj_a", "memory": 8})
 
     run(pipeline, jobmon=True)
@@ -182,7 +182,7 @@ def test_pipeline_resources_override_the_defaults_key_by_key(
 def test_given_jobmon_resources_override_pipeline_resources_key_by_key(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """jobmon_resources={'project': 'proj_b', 'queue': 'long.q'} given to run() on a Pipeline with resources={'project': 'proj_a', 'memory': 8} binds project 'proj_b', queue 'long.q' and memory 8."""
+    """jobmon_resources={'project': 'proj_b', 'queue': 'long.q'} given to run() on a PipelineSnapshot with resources={'project': 'proj_a', 'memory': 8} binds project 'proj_b', queue 'long.q' and memory 8."""
     pipeline = _chain(tmp_path, resources={"project": "proj_a", "memory": 8})
 
     run(pipeline, jobmon=True, jobmon_resources={"project": "proj_b", "queue": "long.q"})
@@ -224,7 +224,7 @@ def test_jobmon_max_attempts_passes_through_to_the_adapter_unchanged(tmp_path: P
 def test_the_callers_jobmon_resources_mapping_is_not_changed(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The jobmon_resources dict passed to run() and the Pipeline's resources mapping are equal to their originals after the run."""
+    """The jobmon_resources dict passed to run() and the PipelineSnapshot's resources mapping are equal to their originals after the run."""
     given = {"project": "proj_b", "queue": "long.q"}
     resources = {"memory": 8}
     pipeline = _chain(tmp_path, resources=resources)
@@ -289,7 +289,7 @@ def test_a_project_in_only_the_steps_own_resources_is_enough(
 def test_an_empty_project_counts_as_no_project(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A Pipeline with resources={'project': ''} and no other project raises the project PipelineError."""
+    """A PipelineSnapshot with resources={'project': ''} and no other project raises the project PipelineError."""
     pipeline = _chain(tmp_path, resources={"project": ""})
 
     error = _project_error(pipeline)
@@ -509,7 +509,7 @@ def test_a_node_failure_raises_step_failed_with_the_node_exception_type_and_mess
     """A python step whose target raises StepFailure on its node makes run(pipeline, jobmon=True) raise StepFailed whose message is "Step '<name>' failed: tests.bridge.step_targets.StepFailure: the step failed on purpose", and whose failure for the step has the node traceback."""
     artifacts = registry(tmp_path)
     tasks = chain_and_independent(artifacts, failing=(B,))
-    pipeline = Pipeline(tasks, build_root(tmp_path), artifacts)
+    pipeline = PipelineSnapshot(tasks, build_root(tmp_path), artifacts)
 
     with pytest.raises(StepFailed) as info:
         run(pipeline, jobmon=True, jobmon_resources=dict(_PROJECT))

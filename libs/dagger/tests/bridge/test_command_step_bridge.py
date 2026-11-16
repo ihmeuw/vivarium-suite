@@ -17,8 +17,9 @@ from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import Pipeline, StepFailed, run
+from vivarium.dagger.frontend import StepFailed, run
 from vivarium.dagger.frontend.command_step import command_step
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import FakeJobmon
 
 _TOOL = "vivarium_dagger_command_bridge_probe"
@@ -101,7 +102,7 @@ def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs
     )
 
     result = run(
-        Pipeline([first, second], tmp_path / "state", registry),
+        PipelineSnapshot([first, second], tmp_path / "state", registry),
         jobmon=True,
         jobmon_resources={"project": "proj_test"},
     )
@@ -134,7 +135,7 @@ def test_a_command_step_that_fails_on_its_node_is_described_as_a_local_failure(
 
     with pytest.raises(StepFailed) as info:
         run(
-            Pipeline([step], tmp_path / "state", registry),
+            PipelineSnapshot([step], tmp_path / "state", registry),
             jobmon=True,
             jobmon_resources={"project": "proj_test"},
         )

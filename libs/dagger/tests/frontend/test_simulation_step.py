@@ -52,7 +52,6 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import (
-    Pipeline,
     PipelineError,
     StepFailed,
     _collect_simulation,
@@ -66,6 +65,7 @@ from vivarium.dagger.frontend.simulation_step import (
     describe_simulation_failure,
     simulation_step,
 )
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _KEY = "sims/toy"
@@ -183,7 +183,7 @@ def _pipeline(
     consumer: bool = True,
     root_inputs: Mapping[str, Path] | None = None,
     **overrides: Any,
-) -> Pipeline:
+) -> PipelineSnapshot:
     """Return the simulation step and, with ``consumer``, a python step that reads its run.
 
     ``stable`` gives every step a stable code identity.
@@ -202,7 +202,7 @@ def _pipeline(
         )
     if stable:
         tasks = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(tasks, model.state, registry)
+    return PipelineSnapshot(tasks, model.state, registry)
 
 
 def _constant() -> pd.DataFrame:
@@ -256,14 +256,14 @@ def _summary(model: _Model) -> pd.DataFrame:
     return pd.read_parquet(model.registry().path_for(_SUMMARY_KEY))
 
 
-def _step_failed(pipeline: Pipeline) -> StepFailed:
+def _step_failed(pipeline: PipelineSnapshot) -> StepFailed:
     """Run ``pipeline`` and return the StepFailed it raises."""
     with pytest.raises(StepFailed) as excinfo:
         run(pipeline)
     return excinfo.value
 
 
-def _first_run(model: _Model, pipeline: Pipeline) -> dict[str, bytes]:
+def _first_run(model: _Model, pipeline: PipelineSnapshot) -> dict[str, bytes]:
     """Run ``pipeline`` successfully and return the bytes of the run directory's files."""
     assert run(pipeline) == {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
     assert (model.run_dir / _SENTINEL).is_file()
@@ -934,7 +934,7 @@ def test_a_simulation_step_sharing_a_name_with_another_step_is_reported_by_run(
     ]
 
     with pytest.raises(PipelineError) as excinfo:
-        run(Pipeline(tasks, model.state, registry))
+        run(PipelineSnapshot(tasks, model.state, registry))
 
     assert not isinstance(excinfo.value, StepFailed)
     assert f"Two steps are named {_KEY!r}" in str(excinfo.value)
@@ -1207,7 +1207,7 @@ def test_a_run_directory_without_a_sentinel_does_not_count_as_a_previous_run(
 
 
 def _fail_with_one_simulation_unfinished(
-    model: _Model, pipeline: Pipeline, monkeypatch: pytest.MonkeyPatch
+    model: _Model, pipeline: PipelineSnapshot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Run ``pipeline`` with one simulation unfinished so it fails, then unset the knob."""
     monkeypatch.setenv(UNFINISHED_VARIABLE, "1")

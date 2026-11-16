@@ -21,7 +21,9 @@ from pytask import TaskOutcome
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.cli import dagger
-from vivarium.dagger.frontend import Pipeline, load_pipeline, preview, run
+from vivarium.dagger.frontend import load_pipeline, preview, run
+from vivarium.dagger.frontend.builder import freeze
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import FakeJobmon, Perturbed, with_stable_code_id
 
 _HEADER = """\
@@ -33,8 +35,9 @@ import pandas as pd
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
-from vivarium.dagger.frontend import Pipeline, handoff_inputs
+from vivarium.dagger.frontend import handoff_inputs
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
@@ -93,7 +96,7 @@ def pipeline():
         step(make_b, "b", registry, source="a"),
         step(make_c, "c", registry, source="b"),
     ]
-    return Pipeline(stable(tasks), HERE / "state", registry)
+    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
 """
 )
 """A definition of the chain a -> b -> c with stable code identities."""
@@ -144,7 +147,7 @@ def pipeline():
         step(make_y, "y", registry, source="q"),
         step(make_z, "z", registry),
     ]
-    return Pipeline(stable(tasks), HERE / "state", registry)
+    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
 """
 )
 """A definition of the branches p -> x -> w and q -> y, and the lone step z."""
@@ -187,7 +190,7 @@ def pipeline():
         step(make_d, "d", registry, source="c"),
         step(make_side, "side", registry),
     ]
-    return Pipeline(stable(tasks), HERE / "state", registry)
+    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
 """
 )
 """A definition of a -> b -> c -> d, where b raises, and the independent step side."""
@@ -205,7 +208,7 @@ def pipeline():
         resources={},
         env=None,
     )
-    return Pipeline([task], HERE / "state")
+    return PipelineSnapshot([task], HERE / "state")
 """
 )
 """A definition of one command step that exits with status 3."""
@@ -221,7 +224,7 @@ def stop():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(stop, "stop", registry)], HERE / "state", registry)
+    return PipelineSnapshot([step(stop, "stop", registry)], HERE / "state", registry)
 """
 )
 """A definition of one step that raises KeyboardInterrupt, as Ctrl-C does."""
@@ -237,7 +240,7 @@ def leave():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(leave, "leave", registry)], HERE / "state", registry)
+    return PipelineSnapshot([step(leave, "leave", registry)], HERE / "state", registry)
 """
 )
 """A definition of one step that ends the process with sys.exit(0)."""
@@ -256,7 +259,7 @@ def pipeline():
         resources={},
         env=None,
     )
-    return Pipeline([task], HERE / "state")
+    return PipelineSnapshot([task], HERE / "state")
 """
 )
 """A definition of one hand-built command step and no registry."""
@@ -277,7 +280,7 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = python_step(make_a, inputs={}, produces="population.parquet", registry=reg)
     b = python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", registry=reg)
-    return Pipeline([a, b], HERE / "state", reg)
+    return PipelineSnapshot([a, b], HERE / "state", reg)
 """
 )
 """A definition whose step 'b.csv' reads a mistyped key, 'populaton.parquet'."""
@@ -296,7 +299,7 @@ def pipeline():
         python_step(make_shared, name=FIRST, **claim),
         python_step(make_shared, name=SECOND, **claim),
     ]
-    return Pipeline(tasks, HERE / "state", registry)
+    return PipelineSnapshot(tasks, HERE / "state", registry)
 """
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
 
@@ -310,7 +313,7 @@ _HANDOFF_NOT_READY = (
 def pipeline():
     inputs = handoff_inputs(HERE / "handoff", ["ethiopia"], {"coverage.csv": ["coverage"]})
     registry = FileRegistry(HERE / "out", "run1", root_inputs=inputs)
-    return Pipeline([], HERE / "state", registry)
+    return PipelineSnapshot([], HERE / "state", registry)
 """
 )
 """A definition whose handoff check fails because ethiopia's coverage.csv is missing."""
@@ -334,7 +337,7 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(make_a, "a", registry)], Path("state"), registry)
+    return PipelineSnapshot([step(make_a, "a", registry)], Path("state"), registry)
 """
 )
 """A definition whose pipeline has the relative root 'state'."""
@@ -353,7 +356,7 @@ def pipeline():
         resources={},
         env=str(HERE / "no_such_env"),
     )
-    return Pipeline([task], HERE / "state")
+    return PipelineSnapshot([task], HERE / "state")
 """
 )
 """A definition of one command step whose env is a path that does not exist."""
@@ -387,7 +390,7 @@ def pipeline():
         step(make_b, "b", registry, source="a"),
         step(make_c, "c", registry, source="b"),
     ]
-    return Pipeline(stable(tasks), HERE / "state", registry)
+    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
 """
 )
 """The chain a -> b -> c where b raises until ``_BROKEN`` is replaced by ``_FIXED``."""
@@ -402,7 +405,7 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(make_a, "a", registry)], HERE / "state", registry)
+    return PipelineSnapshot([step(make_a, "a", registry)], HERE / "state", registry)
 """
 )
 """A definition of one step that succeeds."""
@@ -417,7 +420,7 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(make_a, "a", registry)], HERE / "state", registry)
+    return PipelineSnapshot([step(make_a, "a", registry)], HERE / "state", registry)
 """
 )
 """A definition of one step that raises."""
@@ -474,7 +477,7 @@ def pipeline():
         resources={},
         env=None,
     )
-    return Pipeline([task], HERE / "state")
+    return PipelineSnapshot([task], HERE / "state")
 """
 )
 """A definition of one command step whose input file 'absent_input.txt' does not exist. The
@@ -495,7 +498,7 @@ def touch(name, node):
 
 
 def pipeline():
-    return Pipeline([touch(name, node) for name, node in STEPS], HERE / "state")
+    return PipelineSnapshot([touch(name, node) for name, node in STEPS], HERE / "state")
 """
 """The end of a definition, with no registry, whose command steps each touch the file of the
 output node that STEPS pairs with the step's name."""
@@ -517,7 +520,7 @@ def copy_step(name, source, target):
 
 def pipeline():
     x, y = HERE / "x.txt", HERE / "y.txt"
-    return Pipeline([copy_step("a", y, x), copy_step("b", x, y)], HERE / "state")
+    return PipelineSnapshot([copy_step("a", y, x), copy_step("b", x, y)], HERE / "state")
 """
 )
 """A definition, with no registry, of the command steps a, which reads y.txt and writes
@@ -535,7 +538,7 @@ def make_a():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     root = HERE / "blocker" / "state"
-    return Pipeline([step(make_a, "a", registry)], root, registry)
+    return PipelineSnapshot([step(make_a, "a", registry)], root, registry)
 """
 )
 """A definition of one step whose pipeline root is 'blocker/state' next to the definition."""
@@ -560,7 +563,7 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return Pipeline([step(make_a, "a", registry)], HERE.joinpath(*ROOT), registry)
+    return PipelineSnapshot([step(make_a, "a", registry)], HERE.joinpath(*ROOT), registry)
 """
 """The end of a definition of one step 'a' whose root is HERE joined with ROOT's parts."""
 
@@ -1124,7 +1127,7 @@ def test_an_error_with_no_user_frame_prints_the_full_traceback(tmp_path: Path) -
 
 
 def test_a_relative_pipeline_root_exits_two_naming_the_root(tmp_path: Path) -> None:
-    """A definition that returns Pipeline(tasks, Path('state')) exits 2 with a message saying the root must be absolute."""
+    """A definition that returns PipelineSnapshot(tasks, Path('state')) exits 2 with a message saying the root must be absolute."""
     path = _write_definition(tmp_path, _RELATIVE_ROOT)
 
     result = _invoke("run", str(path))
@@ -1676,7 +1679,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
@@ -1706,7 +1709,7 @@ def pipeline():
         registry=registry,
         name="report",
     )
-    return Pipeline([summarize, report], HERE / "state", registry)
+    return PipelineSnapshot([summarize, report], HERE / "state", registry)
 """
 """A definition of the notebook step 'summarize', which runs summarize.ipynb next to the
 definition under ENV and writes 'summary.csv', and the python step 'report' that reads it."""
@@ -1868,7 +1871,7 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = step(frame, "population", reg)
     nb = notebook_step(NOTEBOOK, executed="run.ipynb", registry=reg, env=ENV, inputs=INPUTS)
-    return Pipeline([a, nb], HERE / "state", reg)
+    return PipelineSnapshot([a, nb], HERE / "state", reg)
 """
 )
 """A definition whose notebook step, named by default 'run.ipynb', reads a mistyped key,
@@ -1894,7 +1897,7 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = step(make_a, "a", reg)
     nb = notebook_step(NOTEBOOK, executed=EXECUTED, registry=reg, env=ENV, parameters=PARAMS)
-    return Pipeline([a, nb], HERE / "state", reg)
+    return PipelineSnapshot([a, nb], HERE / "state", reg)
 """
 )
 """A definition whose notebook step, named by default 'run.ipynb', passes the misspelled
@@ -1914,7 +1917,7 @@ def pipeline():
         step(plus_one, "adults", reg, path="population"),
         python_step(plus_one, inputs=BAD, produces="s.csv", registry=reg, name="s"),
     ]
-    return Pipeline(tasks, HERE / "state", reg)
+    return PipelineSnapshot(tasks, HERE / "state", reg)
 """
 )
 """A definition whose step 's' reads the key 'zzz', which is unlike every registered key."""
@@ -1932,7 +1935,7 @@ def pipeline():
         python_step(frame, inputs={}, produces="a.parquet", registry=reg, name=NAME),
         python_step(frame, inputs={}, produces="b.parquet", registry=reg, name=NAME),
     ]
-    return Pipeline(tasks, HERE / "state", reg)
+    return PipelineSnapshot(tasks, HERE / "state", reg)
 """
 )
 """A definition of two steps with different products that are both named 'population'."""
@@ -2173,14 +2176,14 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
     return imported
 
 
-def test_the_example_definitions_use_workflow_and_import_no_registry() -> None:
-    """Each of the pipeline, handoff, command and simulation example definitions imports Workflow from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
+def test_the_example_definitions_use_pipeline_and_import_no_registry() -> None:
+    """Each of the pipeline, handoff, command and simulation example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
     backend_parts = ["vivarium", "dagger", "backend"]
     for example in ("pipeline", "handoff", "command", "simulation"):
         definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
         imported = _imported_modules(definition)
 
-        assert "Workflow" in imported.get("vivarium.dagger.frontend", set()), example
+        assert "Pipeline" in imported.get("vivarium.dagger.frontend", set()), example
         backend = [module for module in imported if module.split(".")[:3] == backend_parts]
         assert backend == [], (example, backend)
         source = definition.read_text()
@@ -2241,8 +2244,8 @@ def test_the_command_example_previews_every_step_before_its_first_run(tmp_path: 
 
 def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path) -> None:
     """With the copy's pipeline loaded by load_pipeline and each step given a stable code identity, after a successful run() an edit to the copied select_adults.py makes preview() report that adults would run with "artifact 'select_adults.py'" among its reasons."""
-    loaded = load_pipeline(str(_copy_command_example(tmp_path)))
-    pipeline = Pipeline(
+    loaded = freeze(load_pipeline(str(_copy_command_example(tmp_path))))
+    pipeline = PipelineSnapshot(
         [with_stable_code_id(task) for task in loaded.tasks], loaded.root, loaded.registry
     )
     assert run(pipeline) == dict.fromkeys(_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
@@ -2256,12 +2259,12 @@ def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path
     assert "file 'select_adults.py'" in nodes, adults.reasons
 
 
-# The Workflow object (MIC-7805)
+# The Pipeline builder (MIC-7805, MIC-7810)
 
-_WORKFLOW_HEADER = (
+_BUILDER_HEADER = (
     _HEADER
     + """
-from vivarium.dagger.frontend import Workflow
+from vivarium.dagger.frontend import Pipeline
 
 
 def make_a():
@@ -2274,21 +2277,21 @@ def make_b(x):
     return plus_one(x)
 """
 )
-"""The start of every Workflow definition: ``make_a`` and ``make_b`` log that they ran."""
+"""The start of every Pipeline definition: ``make_a`` and ``make_b`` log that they ran."""
 
-_FIRST_STEP = 'wf.python_step(make_a, inputs={}, produces="population.parquet", name="first")'
+_FIRST_STEP = 'p.python_step(make_a, inputs={}, produces="population.parquet", name="first")'
 """A step 'first' that produces 'population.parquet'."""
 
-_SAME_NAME_STEP = 'wf.python_step(make_a, inputs={}, produces="other.parquet", name="first")'
+_SAME_NAME_STEP = 'p.python_step(make_a, inputs={}, produces="other.parquet", name="first")'
 """A step with :data:`_FIRST_STEP`'s name and another product."""
 
 _SAME_KEY_STEP = (
-    'wf.python_step(make_a, inputs={}, produces="population.parquet", name="second")'
+    'p.python_step(make_a, inputs={}, produces="population.parquet", name="second")'
 )
 """A step 'second' with :data:`_FIRST_STEP`'s product."""
 
 _MISTYPED_STEP = (
-    'wf.python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
+    'p.python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
 )
 """A step 'b' that reads the mistyped key 'populaton.parquet'."""
 
@@ -2296,12 +2299,12 @@ _HIDDEN_FRAMES = re.compile(r"  \[\d+ framework frames? hidden\]")
 """The line a trimmed traceback shows in place of its framework frames."""
 
 
-def _workflow_definition(*steps: str) -> str:
-    """Return a definition that adds ``steps``, each one line of source, to one Workflow."""
+def _builder_definition(*steps: str) -> str:
+    """Return a definition that adds ``steps``, each one line of source, to one Pipeline."""
     added = "".join(f"    {step}\n" for step in steps)
     return (
-        f"{_WORKFLOW_HEADER}\n\ndef pipeline():\n"
-        f'    wf = Workflow(HERE / "out", "run1")\n{added}    return wf.pipeline()\n'
+        f"{_BUILDER_HEADER}\n\ndef pipeline():\n"
+        f'    p = Pipeline(HERE / "out", "run1")\n{added}    return p\n'
     )
 
 
@@ -2312,11 +2315,11 @@ def _last_frame(lines: list[str]) -> int:
     return frames[-1]
 
 
-def test_a_workflow_step_with_a_name_already_added_exits_two_with_the_definitions_line(
+def test_a_pipeline_step_with_a_name_already_added_exits_two_with_the_definitions_line(
     tmp_path: Path,
 ) -> None:
-    """'dagger preview' and 'dagger run --local' of a definition that adds a second step named like the first through a Workflow exit 2; stderr names the step, its traceback's last frame is the definition's second wf.python_step( line, no frame of vivarium.dagger is shown, and no step body runs."""
-    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _SAME_NAME_STEP))
+    """'dagger preview' and 'dagger run --local' of a definition that adds a second step named like the first through a Pipeline exit 2; stderr names the step, its traceback's last frame is the definition's second p.python_step( line, no frame of vivarium.dagger is shown, and no step body runs."""
+    path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, _SAME_NAME_STEP))
 
     for verb in ("preview", "run"):
         result = _invoke(verb, str(path))
@@ -2334,11 +2337,11 @@ def test_a_workflow_step_with_a_name_already_added_exits_two_with_the_definition
     assert _calls(tmp_path) == []
 
 
-def test_a_workflow_step_producing_a_key_already_produced_exits_two_naming_both_steps_and_the_key(
+def test_a_pipeline_step_producing_a_key_already_produced_exits_two_naming_both_steps_and_the_key(
     tmp_path: Path,
 ) -> None:
-    """'dagger run --local' of a definition whose second Workflow step produces the first step's key exits 2, stderr names both steps and the key, and no step body runs."""
-    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _SAME_KEY_STEP))
+    """'dagger run --local' of a definition whose second Pipeline step produces the first step's key exits 2, stderr names both steps and the key, and no step body runs."""
+    path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, _SAME_KEY_STEP))
 
     result = _invoke("run", str(path))
 
@@ -2352,11 +2355,11 @@ def test_a_workflow_step_producing_a_key_already_produced_exits_two_naming_both_
     assert _calls(tmp_path) == []
 
 
-def test_a_definition_time_error_in_a_workflow_method_points_at_the_modelers_line(
+def test_a_definition_time_error_in_a_pipeline_method_points_at_the_modelers_line(
     tmp_path: Path,
 ) -> None:
-    """'dagger preview' of a definition whose wf.python_step names an input key no step produces exits 2; the trimmed traceback's last frame is the definition's wf.python_step( line, followed by the hidden-frames line and the WiringError naming the step and the key."""
-    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP, _MISTYPED_STEP))
+    """'dagger preview' of a definition whose p.python_step names an input key no step produces exits 2; the trimmed traceback's last frame is the definition's p.python_step( line, followed by the hidden-frames line and the WiringError naming the step and the key."""
+    path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, _MISTYPED_STEP))
 
     result = _invoke("preview", str(path))
 
@@ -2378,9 +2381,9 @@ def test_a_definition_time_error_in_a_workflow_method_points_at_the_modelers_lin
     assert _calls(tmp_path) == []
 
 
-def test_a_preview_of_a_workflow_definition_does_not_import_jobmon(tmp_path: Path) -> None:
-    """In a fresh interpreter, 'dagger preview -c def.py' of a definition built with Workflow exits 0 and leaves jobmon out of sys.modules."""
-    path = _write_definition(tmp_path, _workflow_definition(_FIRST_STEP))
+def test_a_preview_of_a_pipeline_definition_does_not_import_jobmon(tmp_path: Path) -> None:
+    """In a fresh interpreter, 'dagger preview -c def.py' of a definition built with Pipeline exits 0 and leaves jobmon out of sys.modules."""
+    path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP))
 
     completed = subprocess.run(
         [sys.executable, "-c", _HELP_AND_PREVIEW, str(path)],
@@ -2411,3 +2414,33 @@ def test_the_pipeline_example_keeps_its_state_under_the_output_roots_dagger_dire
     assert (tmp_path / "output" / ".dagger" / "example" / "pytask.lock").is_file()
     assert not (products / "pytask.lock").exists()
     assert not (tmp_path / "state").exists()
+
+
+def test_dagger_preview_run_and_force_of_a_definition_that_returns_its_pipeline_exit_zero(
+    tmp_path: Path,
+) -> None:
+    """For a definition that makes a Pipeline, adds two steps and returns it, 'dagger preview' lists both steps as would-run, 'dagger run --local' runs both and exits 0, and 'dagger force --local first' runs 'first' again and exits 0."""
+    second = (
+        'p.python_step(make_b, inputs={"x": "population.parquet"}, produces="b.csv", '
+        'name="b")'
+    )
+    path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, second))
+    products = tmp_path / "out" / "run1"
+
+    previewed = _invoke("preview", str(path))
+
+    assert previewed.exit_code == 0, _describe(previewed)
+    assert _would_run(previewed) == ["first", "b"]
+    assert _calls(tmp_path) == []
+
+    ran = _invoke("run", str(path))
+
+    assert ran.exit_code == 0, _describe(ran)
+    assert _calls(tmp_path) == ["a", "b"]
+    assert (products / "population.parquet").is_file()
+    assert (products / "b.csv").is_file()
+
+    forced = _invoke("force", str(path), "first")
+
+    assert forced.exit_code == 0, _describe(forced)
+    assert _calls(tmp_path)[2:3] == ["a"]
