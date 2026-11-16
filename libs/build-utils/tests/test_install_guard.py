@@ -104,6 +104,6 @@ def test_help_lists_the_build_steps_for_the_repo(
         text=True,
     )
     assert result.returncode == 0
-    assert ("uv sync --locked" in result.stdout) is uv_steps
+    assert ("Build .venv from uv.lock" in result.stdout) is uv_steps
     assert ("create-env" in result.stdout) is not uv_steps
     assert "including this repo's own" in result.stdout

@@ -16,8 +16,8 @@ If the repo root has a committed `uv.lock`, the environment is the checkout's ow
 - Run `make build-env` if the Makefile has it, then `source .venv/bin/activate`. It syncs `.venv` from the lock.
 - Otherwise run `uv sync --locked`, then use `.venv/bin/python` or `source .venv/bin/activate`.
 - If the sync fails because the lock is out of date, do not run `uv lock` on your own. Tell the user, since the lock is committed.
-- `make install` refuses in these repos. Don't work around it with `pip install`, which installs outside the lock. uv venvs have no `pip`.
-- If `make build-env` stops because a conda environment is active, run `conda deactivate` first.
+- `make install` errors in these repos. Don't work around it with `pip install`, which installs outside the lock. uv venvs have no `pip`.
+- If a conda environment is active, including `base`, run `conda deactivate` until none is active before you build or activate `.venv`. `make build-env` stops for a named environment and warns for `base`.
 - An old `.venv` that holds overlays from before the switch is not a venv. `make build-env` says how to remove it. Ask the user before deleting it.
 
 ## Discovering the right environment
