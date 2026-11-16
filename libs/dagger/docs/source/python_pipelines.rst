@@ -400,7 +400,7 @@ Each of these exits with status 2 before any step runs:
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the location inputs check (see
-  :doc:`root_inputs`).
+  :ref:`location-inputs-helper`).
   ``dagger`` prints only the check's message, which lists each problem by location.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints

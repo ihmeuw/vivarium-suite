@@ -93,6 +93,8 @@ the location inputs described below:
         ...
         return p
 
+.. _location-inputs-helper:
+
 location_inputs, one input helper
 ---------------------------------
 

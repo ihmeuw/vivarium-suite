@@ -1,4 +1,4 @@
-"""Name the root inputs a pipeline reads, and find and check them with input helpers.
+"""Define the root inputs a pipeline reads and the location_inputs input helper.
 
 A :class:`~vivarium.dagger.frontend.builder.Pipeline` reads files that no step produces
 through its root inputs, a :data:`RootInputs` mapping from file key to path. A model may
