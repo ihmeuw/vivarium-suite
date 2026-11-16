@@ -1,4 +1,4 @@
-"""Tests for the pipeline verbs (``frontend.pipeline``)."""
+"""Tests for the pipeline verbs (``frontend.execution``)."""
 
 import dataclasses
 import re
@@ -13,7 +13,7 @@ import pandas as pd
 import pytest
 from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
-import vivarium.dagger.frontend.pipeline
+import vivarium.dagger.frontend.execution
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from vivarium.dagger.backend.build import TaskExited
 from vivarium.dagger.backend.nodes import file_node
@@ -1293,10 +1293,10 @@ def test_a_middle_step_that_exits_stops_the_build_after_its_upstream_step(
 
 
 def test_step_exited_is_exported_from_the_frontend() -> None:
-    """vivarium.dagger.frontend.StepExited is the pipeline module's StepExited, and 'StepExited' is in vivarium.dagger.frontend.__all__."""
+    """vivarium.dagger.frontend.StepExited is the execution module's StepExited, and 'StepExited' is in vivarium.dagger.frontend.__all__."""
     frontend = vivarium.dagger.frontend
 
-    assert frontend.StepExited is vivarium.dagger.frontend.pipeline.StepExited
+    assert frontend.StepExited is vivarium.dagger.frontend.execution.StepExited
     assert "StepExited" in frontend.__all__
 
 
@@ -1369,7 +1369,7 @@ def test_run_without_jobmon_ignores_pipeline_resources_and_needs_no_project(
 def test_run_refused_and_run_interrupted_are_exported_pipeline_errors() -> None:
     """RunRefused and RunInterrupted are subclasses of PipelineError, are importable from vivarium.dagger.frontend, and are in its __all__."""
     frontend = vivarium.dagger.frontend
-    module = vivarium.dagger.frontend.pipeline
+    module = vivarium.dagger.frontend.execution
 
     assert frontend.RunRefused is module.RunRefused
     assert frontend.RunInterrupted is module.RunInterrupted

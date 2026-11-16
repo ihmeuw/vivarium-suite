@@ -23,8 +23,8 @@ step is added; when both apply, the error names the product. A step that reads a
 file must still be added after the step that produces it.
 
 A pipeline can still change after it is made, so
-:func:`~vivarium.dagger.frontend.pipeline.run`,
-:func:`~vivarium.dagger.frontend.pipeline.preview` and the ``dagger`` command first
+:func:`~vivarium.dagger.frontend.execution.run`,
+:func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command first
 :func:`freeze` it into a
 :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` of the steps added so far.
 A step added after a run has started is in the next run, not that one.
@@ -60,8 +60,8 @@ STATE_DIR = ".dagger"
 class Pipeline:
     """Collect the steps of one run, to run or preview them as a pipeline.
 
-    Pass the pipeline to :func:`~vivarium.dagger.frontend.pipeline.run` or
-    :func:`~vivarium.dagger.frontend.pipeline.preview`, or return it from a pipeline
+    Pass the pipeline to :func:`~vivarium.dagger.frontend.execution.run` or
+    :func:`~vivarium.dagger.frontend.execution.preview`, or return it from a pipeline
     definition for the ``dagger`` command.
 
     Parameters
@@ -486,8 +486,8 @@ class Pipeline:
 def freeze(pipeline: Pipeline | PipelineSnapshot) -> PipelineSnapshot:
     """Return a snapshot of the steps added to ``pipeline`` so far.
 
-    :func:`~vivarium.dagger.frontend.pipeline.run`,
-    :func:`~vivarium.dagger.frontend.pipeline.preview` and the ``dagger`` command call
+    :func:`~vivarium.dagger.frontend.execution.run`,
+    :func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command call
     this before they read a pipeline's steps, so that each call reads one fixed set of
     steps. A step added to ``pipeline`` after this call does not reach the snapshot it
     returned.

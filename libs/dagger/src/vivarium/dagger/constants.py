@@ -7,7 +7,7 @@ layers, each of which overrides the one before it key by key:
 2. The definition's own defaults,
    :attr:`Pipeline.resources <vivarium.dagger.frontend.builder.Pipeline.resources>`.
 3. The ``dagger`` command's ``-P/--project`` and ``-q/--queue`` options, or the
-   ``jobmon_resources`` keyword argument of :func:`vivarium.dagger.frontend.pipeline.run`.
+   ``jobmon_resources`` keyword argument of :func:`vivarium.dagger.frontend.execution.run`.
 4. The step's own ``resources=``, kept on
    :attr:`Task.resources <vivarium.dagger.backend.task.Task.resources>`.
 

@@ -17,8 +17,8 @@ from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
+from vivarium.dagger.frontend.execution import run
 from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
-from vivarium.dagger.frontend.pipeline import run
 from vivarium.dagger.frontend.python_step import python_step
 
 _COLUMNS = ["location_id", "year_id", "coverage"]

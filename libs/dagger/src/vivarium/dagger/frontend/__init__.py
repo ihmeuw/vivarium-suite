@@ -10,8 +10,7 @@ lower layer, imported from their own modules.
 
 from vivarium.dagger.frontend.builder import Pipeline
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
-from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
-from vivarium.dagger.frontend.pipeline import (
+from vivarium.dagger.frontend.execution import (
     PipelineError,
     RunInterrupted,
     RunRefused,
@@ -20,6 +19,7 @@ from vivarium.dagger.frontend.pipeline import (
     preview,
     run,
 )
+from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
 
 __all__ = [
     "DefinitionError",

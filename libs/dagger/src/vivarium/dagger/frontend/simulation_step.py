@@ -275,8 +275,8 @@ def describe_simulation_failure(task: Task, error: BaseException) -> str | None:
 
     Only the standard library reads the scratch directory, so this works in the
     pipeline's own environment, and the generated command is never part of the
-    description. :func:`~vivarium.dagger.frontend.pipeline.run` uses it in the message of
-    :class:`~vivarium.dagger.frontend.pipeline.StepFailed`.
+    description. :func:`~vivarium.dagger.frontend.execution.run` uses it in the message of
+    :class:`~vivarium.dagger.frontend.execution.StepFailed`.
 
     The command ran and failed when ``error`` is a
     :class:`subprocess.CalledProcessError`, from a local build, or when its ``exc_type``

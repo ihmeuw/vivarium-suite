@@ -10,7 +10,7 @@ Each function loads a definition with
 :func:`~vivarium.dagger.frontend.definition.load_pipeline`, freezes the pipeline it
 returns with :func:`~vivarium.dagger.frontend.builder.freeze`, checks on that snapshot
 that no output has more than one producing step and that the pipeline's root can be
-used, and calls one verb of :mod:`~vivarium.dagger.frontend.pipeline` with the snapshot.
+used, and calls one verb of :mod:`~vivarium.dagger.frontend.execution` with the snapshot.
 A run or a force goes through the Jobmon bridge unless ``local`` is set; Jobmon is then
 checked before anything is written and imported only when the bridge runs the workflow,
 so a preview and a local run never import it. :doc:`/python_pipelines` shows an example
@@ -37,16 +37,16 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
 from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
-from vivarium.dagger.frontend.handoff import HandoffError
-from vivarium.dagger.frontend.pipeline import (
+from vivarium.dagger.frontend.execution import (
     PipelineError,
     RunInterrupted,
     RunRefused,
     StepExited,
     StepFailed,
 )
-from vivarium.dagger.frontend.pipeline import preview as preview_pipeline
-from vivarium.dagger.frontend.pipeline import run as run_pipeline
+from vivarium.dagger.frontend.execution import preview as preview_pipeline
+from vivarium.dagger.frontend.execution import run as run_pipeline
+from vivarium.dagger.frontend.handoff import HandoffError
 from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 _FRAMEWORK_MODULES = (
@@ -279,12 +279,12 @@ def _verb_errors(
 ) -> Iterator[None]:
     """Report an error raised by a verb as a click error with the command's exit status.
 
-    A :class:`~vivarium.dagger.frontend.pipeline.StepExited` is reported as ``Step
+    A :class:`~vivarium.dagger.frontend.execution.StepExited` is reported as ``Step
     '<name>' exited with code <code> before the build finished.``, with the code as
     ``repr`` gives it, and exits with status 1. A
-    :class:`~vivarium.dagger.frontend.pipeline.RunRefused` is reported with its own
+    :class:`~vivarium.dagger.frontend.execution.RunRefused` is reported with its own
     message, which names the lock file and its holder, and exits with status 1. A
-    :class:`~vivarium.dagger.frontend.pipeline.RunInterrupted` is reported by
+    :class:`~vivarium.dagger.frontend.execution.RunInterrupted` is reported by
     :func:`_interrupted` with its workflow id and exits with status 130.
     """
     try:

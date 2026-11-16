@@ -1,4 +1,4 @@
-"""Tests for ``frontend.pipeline.run`` with ``jobmon=True``, under the fake Jobmon adapter.
+"""Tests for ``frontend.execution.run`` with ``jobmon=True``, under the fake Jobmon adapter.
 
 These cover what the frontend adds to a bridged build: the compute-resource layers, the
 project check, the run lock around ``force``, and the errors for a refused or interrupted

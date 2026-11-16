@@ -2,8 +2,8 @@
 
 A :class:`PipelineSnapshot` is the lower layer under the
 :class:`~vivarium.dagger.frontend.builder.Pipeline` that a definition builds:
-:func:`~vivarium.dagger.frontend.pipeline.run` and
-:func:`~vivarium.dagger.frontend.pipeline.preview` freeze a pipeline into one with
+:func:`~vivarium.dagger.frontend.execution.run` and
+:func:`~vivarium.dagger.frontend.execution.preview` freeze a pipeline into one with
 :func:`~vivarium.dagger.frontend.builder.freeze` before they read its steps, so a step
 added to the pipeline later does not change a run that has started. Code that compiles
 tasks with the step functions directly, such as the tests, can make a snapshot itself
@@ -42,7 +42,7 @@ class PipelineSnapshot:
     :func:`~vivarium.dagger.backend.build.build` uses it."""
     registry: FileRegistry | None = None
     """The registry the steps were wired through. With it,
-    :func:`~vivarium.dagger.frontend.pipeline.preview` names files by file key; without
+    :func:`~vivarium.dagger.frontend.execution.preview` names files by file key; without
     it, by path."""
     resources: Mapping[str, Any] = field(default_factory=dict)
     """The definition's default compute resources for a run through Jobmon, such as
