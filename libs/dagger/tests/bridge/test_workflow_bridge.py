@@ -105,7 +105,9 @@ def test_a_workflow_pipeline_runs_through_fake_jobmon_and_the_real_runner(
 
     assert result == dict.fromkeys(CHAIN, TaskOutcome.SUCCESS)
     assert bound_names(fake_jobmon) == [list(CHAIN)]
-    pids = recorded_pids(wf.registry, CHAIN)
+    registry = wf.pipeline().registry
+    assert registry is not None
+    pids = recorded_pids(registry, CHAIN)
     assert pids, "no step recorded its process id"
     assert os.getpid() not in pids
     for name in CHAIN:
@@ -169,7 +171,9 @@ def test_two_workflows_with_different_run_names_do_not_share_a_run_lock(
     assert result == dict.fromkeys(CHAIN, TaskOutcome.SUCCESS)
     assert str(lock) in str(info.value), str(info.value)
     assert bound_names(fake_jobmon) == [list(CHAIN)]
-    assert recorded_pids(first.registry, CHAIN) == set()
+    first_registry = first.pipeline().registry
+    assert first_registry is not None
+    assert recorded_pids(first_registry, CHAIN) == set()
 
 
 @pytest.mark.usefixtures("node_pythonpath")

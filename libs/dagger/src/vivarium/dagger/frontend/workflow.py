@@ -142,11 +142,6 @@ class Workflow:
         return self._state
 
     @property
-    def registry(self) -> ArtifactRegistry:
-        """The registry that wires the workflow's steps, for the run's output directory."""
-        return self._registry
-
-    @property
     def resources(self) -> Mapping[str, Any]:
         """A copy of the definition's default compute resources, empty if none were given."""
         return dict(self._resources)
@@ -460,7 +455,7 @@ class Workflow:
             A :class:`~vivarium.dagger.frontend.pipeline.Pipeline` whose ``tasks`` are
             the tasks of the steps added so far, as a tuple in the order they were
             added, whose ``root`` is :attr:`state`, whose ``registry`` is
-            :attr:`registry`, and whose ``resources`` are a copy of :attr:`resources`.
+            the workflow's registry, and whose ``resources`` are a copy of :attr:`resources`.
         """
         return Pipeline(
             tuple(self._tasks),
