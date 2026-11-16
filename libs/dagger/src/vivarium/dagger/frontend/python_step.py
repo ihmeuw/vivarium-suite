@@ -3,7 +3,7 @@
 A step is a function that reads its declared inputs and returns a ``pandas``
 DataFrame. :func:`python_step` compiles one such function into a single backend
 :class:`~vivarium.dagger.backend.task.Task`, resolving the step's inputs and its product
-through the shared :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`, so each
+through the shared :class:`~vivarium.dagger.backend.wiring.FileRegistry`, so each
 input is the producer's own node and pytask draws the producer-to-consumer edge from its
 path. Each input reaches the target as its resolved file path, which the target reads
 itself; only the returned DataFrame is autosaved, to the product's path, in the format
@@ -27,7 +27,7 @@ from typing import Any, cast
 import pandas as pd
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 
 _PRODUCT_ARG = "product"
 """Parameter name under which the loaded product path reaches the run wrapper."""
@@ -222,9 +222,9 @@ def resolve_reference(reference: str) -> Callable[..., Any]:
 def python_step(
     target: Callable[..., pd.DataFrame],
     *,
-    inputs: Mapping[str, ArtifactKey],
-    produces: ArtifactKey,
-    registry: ArtifactRegistry,
+    inputs: Mapping[str, FileKey],
+    produces: FileKey,
+    registry: FileRegistry,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
 ) -> Task:
@@ -240,10 +240,10 @@ def python_step(
         its parameter name, as the input's resolved file path; the function reads
         the path itself.
     inputs
-        Maps each of ``target``'s parameter names to the artifact key the registry
+        Maps each of ``target``'s parameter names to the file key the registry
         resolves to the producing step's node (or a declared root input).
     produces
-        The artifact key for ``target``'s product. Its suffix names the save
+        The file key for ``target``'s product. Its suffix names the save
         format (``.parquet`` or ``.csv``). Registered with ``registry`` so a
         downstream step naming this key gets a real edge to this step. The
         product's parent directory is created when the step runs.
@@ -267,7 +267,7 @@ def python_step(
     vivarium.dagger.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or ``produces`` is a
         declared root input. The message starts with ``Step '<name>':``, followed by the
-        registry's message, which names the artifact key.
+        registry's message, which names the file key.
     ValueError
         If ``produces`` has an unsupported suffix (the message names the step and the
         produces key), the product's parameter name collides with one of ``target``'s

@@ -18,7 +18,7 @@ from tests.bridge import step_targets
 from vivarium.dagger.backend.build import build
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE, RunState, read_run_state
 from vivarium.dagger.frontend.python_step import python_step
@@ -53,9 +53,9 @@ _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 """An ANSI escape sequence, which pytask's console writes when it styles its output."""
 
 
-def registry(tmp_path: Path) -> ArtifactRegistry:
+def registry(tmp_path: Path) -> FileRegistry:
     """Return a registry whose products go under ``tmp_path / "out"``."""
-    return ArtifactRegistry(output_root=tmp_path / "out", run_name="run1")
+    return FileRegistry(output_root=tmp_path / "out", run_name="run1")
 
 
 def make_dir(path: Path) -> Path:
@@ -70,7 +70,7 @@ def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
 
 
 def chain_and_independent(
-    artifacts: ArtifactRegistry,
+    artifacts: FileRegistry,
     *,
     failing: Collection[str] = (),
     killed: Collection[str] = (),
@@ -95,7 +95,7 @@ def chain_and_independent(
     return tasks
 
 
-def recorded_pids(artifacts: ArtifactRegistry, names: Collection[str]) -> set[int]:
+def recorded_pids(artifacts: FileRegistry, names: Collection[str]) -> set[int]:
     """Return every process id recorded in the products of ``names`` that exist."""
     pids: set[int] = set()
     for name in names:

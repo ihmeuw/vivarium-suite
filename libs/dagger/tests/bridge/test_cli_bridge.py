@@ -36,7 +36,7 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
 
@@ -69,7 +69,7 @@ def make_c(source):
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     first, second, _ = NAMES
     targets = [make_a, explode_on_node if FAILING else make_b, make_c]
     sources = [{}, {"source": f"{first}.parquet"}, {"source": f"{second}.parquet"}]
@@ -85,7 +85,12 @@ def pipeline():
         for name, target, inputs in zip(NAMES, targets, sources)
     ]
     stable = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(stable, HERE / "state", registry, resources=PIPELINE_RESOURCES)
+    p = Pipeline(
+        HERE / "out", "run1", state=HERE / "state", resources=PIPELINE_RESOURCES
+    )
+    for task in stable:
+        p.add_task(task)
+    return p
 """
 """The start of a definition of the chain NAMES[0] -> NAMES[1] -> NAMES[2] with stable code
 identities. Each step body logs its position ('a', 'b' or 'c') and its process id. The
@@ -103,7 +108,7 @@ import os
 from pathlib import Path
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 
 import HELPER as helper
@@ -118,11 +123,13 @@ def make_table():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     step = python_step(
         make_table, inputs={}, produces="table.parquet", registry=registry, name="table"
     )
-    return Pipeline([step], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
 """
 """A definition of one step whose function, defined in the file, calls a helper module
 named HELPER that sits beside the file, and writes its process id and PYTHONPATH to

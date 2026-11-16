@@ -4,8 +4,8 @@ A data analyst delivers a location's primary data as files under a handoff root,
 ``<root>/<location>/primary/<file>``. A pipeline declares which files every location
 must supply and the columns each file must have. :func:`handoff_inputs` checks every
 declared file before anything runs, reading only column names, and returns the files
-keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.workflow.Workflow`
-or an :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`. A step reads a handoff
+keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.builder.Pipeline`
+or an :class:`~vivarium.dagger.backend.wiring.FileRegistry`. A step reads a handoff
 file by naming the key that :func:`handoff_key` returns as an input, and the step's
 function receives the file's path.
 """
@@ -18,7 +18,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from vivarium.dagger.backend.wiring import ArtifactKey, WiringError
+from vivarium.dagger.backend.wiring import FileKey, WiringError
 
 PRIMARY_DIR = "primary"
 """Subdirectory of each location's directory that holds its primary data."""
@@ -31,8 +31,8 @@ class HandoffError(WiringError):
     """A declared handoff file is missing, unreadable, or lacks a required column."""
 
 
-def handoff_key(location: str, filename: str) -> ArtifactKey:
-    """Return the artifact key a step names to read ``filename`` for ``location``.
+def handoff_key(location: str, filename: str) -> FileKey:
+    """Return the file key a step names to read ``filename`` for ``location``.
 
     The key is the file's path relative to the handoff root,
     ``<location>/primary/<filename>``.
@@ -158,7 +158,7 @@ def _close_matches(
 
 def handoff_inputs(
     root: Path | str, locations: Iterable[str], files: Mapping[str, Sequence[str]]
-) -> dict[ArtifactKey, Path]:
+) -> dict[FileKey, Path]:
     """Validate each location's primary-data files and return them as root inputs.
 
     Every declared file of every location is checked before anything is returned: it
@@ -183,8 +183,8 @@ def handoff_inputs(
     -------
         Each file's path under the resolved root, keyed by :func:`handoff_key`, to
         pass as, or merge into, the ``root_inputs`` of a
-        :class:`~vivarium.dagger.frontend.workflow.Workflow` or an
-        ``ArtifactRegistry``.
+        :class:`~vivarium.dagger.frontend.builder.Pipeline` or an
+        ``FileRegistry``.
 
     Raises
     ------
@@ -210,7 +210,7 @@ def handoff_inputs(
     _check_declaration(unique_locations, files)
     root_dir = Path(root).resolve()
 
-    found: dict[ArtifactKey, Path] = {}
+    found: dict[FileKey, Path] = {}
     problems: list[str] = []
     for location in unique_locations:
         for filename, columns in files.items():

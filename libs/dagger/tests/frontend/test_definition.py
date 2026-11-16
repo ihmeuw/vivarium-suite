@@ -9,12 +9,12 @@ from pathlib import Path
 import pytask
 import pytest
 
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.definition import (
     DEFAULT_FUNCTION,
     DefinitionError,
     load_pipeline,
 )
-from vivarium.dagger.frontend.pipeline import Pipeline
 from vivarium.dagger.frontend.python_step import (
     PythonStepRun,
     resolve_reference,
@@ -32,7 +32,9 @@ HERE = Path(__file__).resolve().parent
 
 def one_step(name):
     task = Task(name=name, run="true", inputs={}, outputs={}, resources={}, env=None)
-    return Pipeline([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 
 
 def pipeline():
@@ -49,9 +51,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.backend.wiring import ArtifactRegistry
-from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
@@ -61,9 +63,11 @@ def make_table():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     task = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
-    return Pipeline([task], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 """A definition whose one python_step would write 'table.parquet' if it ran."""
 
@@ -113,7 +117,7 @@ def _one_step(name: str) -> str:
 
 def _step_names(pipeline: Pipeline) -> list[str]:
     """Return the names of ``pipeline``'s steps."""
-    return [task.name for task in pipeline.tasks]
+    return [task.name for task in freeze(pipeline).tasks]
 
 
 def _loaded_from(module: object, directory: Path) -> bool:
@@ -200,7 +204,7 @@ def test_load_pipeline_builds_nothing_and_writes_no_state(tmp_path: Path) -> Non
     """After loading a definition whose steps would write products, the root has no pytask.lock, no .pytask directory and no pytask.toml, and no product file exists."""
     path = _write(tmp_path, _PRODUCING)
 
-    pipeline = load_pipeline(str(path))
+    pipeline = freeze(load_pipeline(str(path)))
 
     for name in ("pytask.lock", ".pytask", "pytask.toml"):
         assert not (pipeline.root / name).exists(), name
@@ -215,7 +219,7 @@ def test_a_file_is_imported_as_a_module_named_by_its_stem(tmp_path: Path) -> Non
     """After loading def_x.py by path, sys.modules['def_x'].__file__ is that file and a step function defined in it has __module__ == 'def_x'."""
     path = _write(tmp_path, _PRODUCING)
 
-    [task] = load_pipeline(str(path)).tasks
+    [task] = freeze(load_pipeline(str(path))).tasks
 
     module = sys.modules[path.stem]
     assert module.__file__ is not None
@@ -230,7 +234,7 @@ def test_a_step_function_in_a_file_definition_is_importable_by_reference(
 ) -> None:
     """target_reference of a function defined in a path-loaded file succeeds and resolve_reference returns that same function."""
     path = _write(tmp_path, _PRODUCING)
-    [task] = load_pipeline(str(path)).tasks
+    [task] = freeze(load_pipeline(str(path))).tasks
     run = task.run
     assert isinstance(run, PythonStepRun)
 
@@ -367,3 +371,113 @@ def test_a_file_that_fails_to_import_leaves_no_module_behind(tmp_path: Path) -> 
         load_pipeline(str(path))
 
     assert path.stem not in sys.modules
+
+
+# The Pipeline builder (MIC-7810)
+
+_BUILDER = """\
+from pathlib import Path
+
+import pandas as pd
+
+from vivarium.dagger.frontend import Pipeline
+
+HERE = Path(__file__).resolve().parent
+
+
+def make_table():
+    return pd.DataFrame({"n": [1, 2, 3]})
+
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1")
+    p.python_step(make_table, inputs={}, produces="table.parquet", name="table")
+    return p
+"""
+"""A definition that makes a Pipeline, adds one step named 'table', and returns it."""
+
+_KEEPS = """
+
+KEPT = []
+
+
+def kept():
+    built = pipeline()
+    KEPT.append(built)
+    return built
+"""
+"""The end of a definition whose kept() returns what pipeline() returns and keeps it in
+KEPT, so a test can tell whether load_pipeline returned that very object."""
+
+
+def _kept(path: Path) -> list[object]:
+    """Return what kept() kept in the definition loaded from ``path``."""
+    return list(sys.modules[path.stem].KEPT)
+
+
+def _written(directory: Path, definition: Path) -> list[Path]:
+    """Return the files under ``directory`` other than ``definition`` and its bytecode."""
+    return [
+        path
+        for path in directory.rglob("*")
+        if path.is_file() and path != definition and "__pycache__" not in path.parts
+    ]
+
+
+def test_load_pipeline_returns_the_pipeline_the_function_built_without_freezing_it(
+    tmp_path: Path,
+) -> None:
+    """load_pipeline of a definition that returns its Pipeline returns that Pipeline object, not a snapshot; freezing it gives one step named 'table' and writes nothing under the definition's directory."""
+    path = _write(tmp_path, _BUILDER + _KEEPS)
+
+    loaded = load_pipeline(f"{path}:kept")
+
+    assert isinstance(loaded, Pipeline)
+    assert not isinstance(loaded, _PipelineSnapshot)
+    [kept] = _kept(path)
+    assert kept is loaded
+    assert _step_names(loaded) == ["table"]
+    assert _written(tmp_path, path) == []
+
+
+def test_load_pipeline_refuses_a_snapshot_the_function_returns(tmp_path: Path) -> None:
+    """load_pipeline of a definition that returns a frozen _PipelineSnapshot instead of its Pipeline raises DefinitionError naming _PipelineSnapshot and saying a Pipeline is expected."""
+    source = (
+        _one_step("from_kept")
+        .replace(
+            "    return p\n",
+            "    return freeze(p)\n",
+        )
+        .replace(
+            "from vivarium.dagger.frontend import Pipeline\n",
+            "from vivarium.dagger.frontend import Pipeline\n"
+            "from vivarium.dagger.frontend.builder import freeze\n",
+        )
+    )
+    path = _write(tmp_path, source)
+
+    with pytest.raises(DefinitionError) as info:
+        load_pipeline(str(path))
+
+    message = str(info.value)
+    assert "returned _PipelineSnapshot" in message, message
+    assert message.endswith("not a Pipeline."), message
+
+
+def test_the_message_for_a_wrong_return_value_names_the_function_and_says_a_pipeline_is_expected(
+    tmp_path: Path,
+) -> None:
+    """A function named other that returns a dict raises DefinitionError whose one-line message names the spec, other(), the type dict, and says a Pipeline is expected; it names no snapshot class."""
+    path = _write(tmp_path, 'def other():\n    return {"step": "a"}\n')
+    spec = f"{path}:other"
+
+    with pytest.raises(DefinitionError) as info:
+        load_pipeline(spec)
+
+    message = str(info.value)
+    assert len(message.splitlines()) == 1, message
+    assert spec in message, message
+    assert "other()" in message, message
+    assert "dict" in message, message
+    assert message.endswith("not a Pipeline."), message
+    assert "Snapshot" not in message, message

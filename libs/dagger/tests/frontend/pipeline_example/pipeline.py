@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import Pipeline, Workflow
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
@@ -28,20 +28,20 @@ def total_adults(adults: Path) -> pd.DataFrame:
 
 def pipeline() -> Pipeline:
     """Add the three steps, with their outputs and state under ``output`` next to this file."""
-    wf = Workflow(HERE / "output", run_name="example")
-    wf.python_step(
+    p = Pipeline(HERE / "output", run_name="example")
+    p.python_step(
         make_population, inputs={}, produces="population.parquet", name="population"
     )
-    wf.python_step(
+    p.python_step(
         select_adults,
         inputs={"population": "population.parquet"},
         produces="adults.parquet",
         name="adults",
     )
-    wf.python_step(
+    p.python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
         produces="summary.csv",
         name="summary",
     )
-    return wf.pipeline()
+    return p

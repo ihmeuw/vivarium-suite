@@ -30,7 +30,7 @@ from tests.frontend.notebooks import (
 from vivarium.dagger.backend.build import build, outcomes, run_command
 from vivarium.dagger.backend.preview import Reason, preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend.notebook_step import (
     KERNEL_NAME,
     NotebookParameter,
@@ -413,23 +413,23 @@ def _stream_text(notebook: Path) -> str:
     return "".join(text if isinstance(text, str) else "".join(text) for text in texts)
 
 
-def _registry(tmp_path: Path) -> ArtifactRegistry:
+def _registry(tmp_path: Path) -> FileRegistry:
     """Return a registry under ``tmp_path`` with the root inputs ``raw`` and ``lookup``."""
     roots: dict[str, Path] = {}
     for key in ("raw", "lookup"):
         roots[key] = tmp_path / f"{key}.csv"
         roots[key].write_text("n\n1\n")
-    return ArtifactRegistry(tmp_path / "out", "run1", root_inputs=roots)
+    return FileRegistry(tmp_path / "out", "run1", root_inputs=roots)
 
 
-def _root_input_registry(tmp_path: Path) -> ArtifactRegistry:
+def _root_input_registry(tmp_path: Path) -> FileRegistry:
     """Return a registry with a table and a notebook as root inputs, under ``tmp_path``."""
     # Neither key is part of its file's path, so a message naming only the file does not
     # count as naming the key.
     notebook = _write_notebook(tmp_path / "handed_over" / "report.ipynb")
     table = tmp_path / "handed_over" / "table.csv"
     table.write_text("n\n1\n")
-    return ArtifactRegistry(
+    return FileRegistry(
         tmp_path / "out",
         "run1",
         root_inputs={_ROOT_TABLE_KEY: table, _ROOT_NOTEBOOK_KEY: notebook},
@@ -479,7 +479,7 @@ def _recording_env(prefix: Path, log: Path) -> Path:
     return prefix
 
 
-def _recording_step(tmp_path: Path, registry: ArtifactRegistry, log: Path) -> Task:
+def _recording_step(tmp_path: Path, registry: FileRegistry, log: Path) -> Task:
     """Compile a step with nested output keys under an env that logs to ``log``."""
     return notebook_step(
         _source(tmp_path),
@@ -506,7 +506,7 @@ class _SharedRun:
     """Task names in the order pytask reported them executed."""
     notebook: Task
     downstream: Task
-    registry: ArtifactRegistry
+    registry: FileRegistry
     source: Path
     source_bytes: bytes
     """The source notebook's bytes just before the build."""
@@ -536,7 +536,7 @@ def shared_run(tmp_path_factory: pytest.TempPathFactory) -> _SharedRun:
     values = ", ".join(f"{name}={name}" for name in names)
     body = _RECORDING_BODY.replace("__VALUES__", values).replace("__MARKER__", _MARKER)
     source = _write_notebook(base / "notebooks" / "report.ipynb", defaults, body)
-    registry = ArtifactRegistry(base / "out root", "run1", root_inputs={"raw": raw})
+    registry = FileRegistry(base / "out root", "run1", root_inputs={"raw": raw})
     notebook = notebook_step(
         source,
         executed=_EXECUTED_KEY,
@@ -628,7 +628,7 @@ class _Converged:
         task = notebook_step(
             self.source,
             executed="executed/stale.ipynb",
-            registry=ArtifactRegistry(self.output_root, "run1"),
+            registry=FileRegistry(self.output_root, "run1"),
             env=sys.prefix,
             produces={"table_path": "tables/stale.csv"},
             parameters={"location": location, "draws": 3},
@@ -1034,7 +1034,7 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A notebook that raises makes the step FAIL and its downstream step SKIP_PREVIOUS_FAILED, leaves the executed notebook with the error at its product path, and leaves nothing in TMPDIR."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = _write_notebook(
         tmp_path / "notebooks" / "fails.ipynb",
         "table_path = 'unset'",
@@ -1075,7 +1075,7 @@ def test_notebook_that_does_not_write_a_declared_product_fails_the_step(
     tmp_path: Path,
 ) -> None:
     """A notebook that finishes without writing one of its declared products makes the step FAIL."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = _write_notebook(
         tmp_path / "notebooks" / "partial.ipynb",
         "written_path = 'unset'\nskipped_path = 'unset'",
@@ -1098,7 +1098,7 @@ def test_notebook_that_does_not_write_a_declared_product_fails_the_step(
 def test_unresolved_env_is_refused_before_anything_runs(tmp_path: Path) -> None:
     """build raises ValueError naming the step and the env when the declared env does not resolve, and no executed notebook is written."""
     missing_env = str(tmp_path / "no_such_env")
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     task = notebook_step(
         _source(tmp_path),
         executed=_EXECUTED_KEY,
@@ -1259,7 +1259,7 @@ def test_unknown_input_key_raises_wiring_error(tmp_path: Path) -> None:
         )
 
 
-def _base_call(registry: ArtifactRegistry, notebook: Path) -> dict[str, Any]:
+def _base_call(registry: FileRegistry, notebook: Path) -> dict[str, Any]:
     """Return the keyword arguments of the valid call the definition-error tests override."""
     return {
         "notebook": notebook,
@@ -1451,7 +1451,7 @@ def test_an_executed_notebook_left_by_an_earlier_run_is_removed_before_the_noteb
     tmp_path: Path,
 ) -> None:
     """When an executed notebook from an earlier run is at the executed path and the step's env fails before papermill starts, the step fails and no executed notebook is left at that path."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(tmp_path / "notebooks" / "stale.ipynb", "table_path = 1")
     task = notebook_step(
         source,
@@ -1473,7 +1473,7 @@ def test_the_command_still_runs_and_succeeds_when_no_executed_notebook_exists(
     tmp_path: Path,
 ) -> None:
     """A notebook step whose executed notebook has never been written runs and succeeds, so removing a previous one does not fail when there is none."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(
         tmp_path / "notebooks" / "fresh.ipynb",
         "table_path = 'unset'",
@@ -1551,7 +1551,7 @@ class _FailedStep:
 
 def _failed_step(tmp_path: Path) -> _FailedStep:
     """Compile a notebook step 'summarize' whose executed notebook is not yet written."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(
         tmp_path / "notebooks" / "summarize.ipynb", "table_path = 'unset'"
     )
@@ -1801,7 +1801,7 @@ def test_describe_notebook_failure_is_none_for_a_task_that_is_not_a_notebook_ste
     tmp_path: Path,
 ) -> None:
     """A python_step task and a hand-built command task, each with a CalledProcessError, are described as None."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     python_task = python_step(
         _offset_table, inputs={}, produces="offset.parquet", registry=registry
     )
@@ -1832,7 +1832,7 @@ def test_describe_notebook_failure_is_none_without_a_recorded_error_or_a_called_
 
 def test_describe_notebook_failure_reads_a_real_failing_notebook(tmp_path: Path) -> None:
     """After a build in which a notebook's body cell raises KeyError, describe_notebook_failure with the step's CalledProcessError names the source notebook, 'KeyError', the cell's execution count as papermill numbered it, and the executed notebook's path."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     source = write_source_notebook(
         tmp_path / "notebooks" / "summarize.ipynb",
         "table_path = 'unset'",

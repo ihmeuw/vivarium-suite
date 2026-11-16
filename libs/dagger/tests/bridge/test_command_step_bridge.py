@@ -13,11 +13,12 @@ import pytest
 from pytask import TaskOutcome
 
 from tests.bridge.helpers import bound_names
+from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import Pipeline, StepFailed, run
+from vivarium.dagger.frontend import StepFailed, run
 from vivarium.dagger.frontend.command_step import command_step
 from vivarium.dagger.harness import FakeJobmon
 
@@ -47,7 +48,7 @@ def test_payload_for_a_command_step_carries_its_command_and_the_env_bin_path(
     task = command_step(
         _TOOL + " ran {out}",
         produces={"out": "out.txt"},
-        registry=ArtifactRegistry(tmp_path / "out", "run1"),
+        registry=FileRegistry(tmp_path / "out", "run1"),
         env=env,
         name="tooled",
     )
@@ -67,7 +68,7 @@ def test_payload_for_a_command_step_without_an_env_has_no_env_path(
     task = command_step(
         "printf x > {out}",
         produces={"out": "out.txt"},
-        registry=ArtifactRegistry(tmp_path / "out", "run1"),
+        registry=FileRegistry(tmp_path / "out", "run1"),
         name="plain",
     )
 
@@ -84,7 +85,7 @@ def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs
 ) -> None:
     """frontend.run(pipeline, jobmon=True) under FakeJobmon on two chained command steps, the second under a fake env given by its prefix path, gives SUCCESS for both, writes both products, and the second product records that the env's tool ran."""
     env = _make_env(tmp_path / "env")
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     first = command_step(
         "printf 'first\\n' > {first}",
         produces={"first": "chain/first.txt"},
@@ -101,7 +102,7 @@ def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs
     )
 
     result = run(
-        Pipeline([first, second], tmp_path / "state", registry),
+        pipeline_of([first, second], tmp_path / "state"),
         jobmon=True,
         jobmon_resources={"project": "proj_test"},
     )
@@ -124,7 +125,7 @@ def test_a_command_step_that_fails_on_its_node_is_described_as_a_local_failure(
     tmp_path: Path, fake_jobmon: FakeJobmon, command: str, exit_text: str
 ) -> None:
     """A command step that exits 3, or is killed by SIGKILL, on its node through FakeJobmon makes run() raise StepFailed whose line gives the exit as a local failure does and leaves the generated command out."""
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     step = command_step(
         command + " && printf 'never' > {out}",
         produces={"out": "out.txt"},
@@ -134,7 +135,7 @@ def test_a_command_step_that_fails_on_its_node_is_described_as_a_local_failure(
 
     with pytest.raises(StepFailed) as info:
         run(
-            Pipeline([step], tmp_path / "state", registry),
+            pipeline_of([step], tmp_path / "state"),
             jobmon=True,
             jobmon_resources={"project": "proj_test"},
         )

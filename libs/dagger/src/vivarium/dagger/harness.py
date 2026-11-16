@@ -35,7 +35,7 @@ from pytask import PNode, TaskOutcome
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.frontend.python_step import python_step
@@ -120,7 +120,7 @@ class Fixture:
 
     tasks: list[Task]
     """The compiled pipeline, ready for ``build`` or ``preview``."""
-    registry: ArtifactRegistry
+    registry: FileRegistry
     """The registry the steps were wired through."""
     state: Path
     """Directory holding pytask's state for this fixture."""
@@ -155,7 +155,7 @@ def build_fixture(tmp_path: Path) -> Fixture:
     raw_path = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(raw_path)
 
-    registry = ArtifactRegistry(
+    registry = FileRegistry(
         output_root=tmp_path / "out",
         run_name="run1",
         root_inputs={"raw": raw_path},

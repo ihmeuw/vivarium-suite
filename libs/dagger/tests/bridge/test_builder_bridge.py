@@ -1,4 +1,4 @@
-"""Tests for a Workflow's pipeline run through the Jobmon bridge (MIC-7805).
+"""Tests for a Pipeline run through the Jobmon bridge (MIC-7805, MIC-7810).
 
 Each test runs its steps through ``FakeJobmon`` and the real node runner, so every step
 runs in a child process; the step functions come from ``tests.bridge.step_targets``.
@@ -31,31 +31,32 @@ from tests.bridge.helpers import (
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.constants import DEFAULT_RESOURCES
-from vivarium.dagger.frontend import PipelineError, RunRefused, Workflow, run
+from vivarium.dagger.frontend import Pipeline, PipelineError, RunRefused, run
+from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.harness import FakeJobmon
 
 _PROJECT: Mapping[str, Any] = {"project": "proj_test"}
-"""Workflow resources that give every step a project."""
+"""Pipeline resources that give every step a project."""
 
 _DEFINITION = """\
 from pathlib import Path
 
 from tests.bridge import step_targets
-from vivarium.dagger.frontend import Pipeline, Workflow
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
 
 def pipeline() -> Pipeline:
-    wf = Workflow(HERE / "out", run_name="run1")
-    wf.python_step(step_targets.record_pid, inputs={}, produces="a.parquet")
-    wf.python_step(
+    p = Pipeline(HERE / "out", run_name="run1")
+    p.python_step(step_targets.record_pid, inputs={}, produces="a.parquet")
+    p.python_step(
         step_targets.record_pid, inputs={"upstream": "a.parquet"}, produces="b.parquet"
     )
-    return wf.pipeline()
+    return p
 """
-"""A definition that adds the chain a.parquet -> b.parquet to a Workflow and returns its
-pipeline, with the products under ``out/run1`` beside the file."""
+"""A definition that adds the chain a.parquet -> b.parquet to a Pipeline and returns it,
+with the products under ``out/run1`` beside the file."""
 
 
 @pytest.fixture(autouse=True)
@@ -71,18 +72,18 @@ def _forget_loaded_definitions(tmp_path: Path) -> Iterator[None]:
             del sys.modules[name]
 
 
-def _chain(wf: Workflow, own: Mapping[str, dict[str, Any]] | None = None) -> Workflow:
-    """Add the chain a -> b -> c, each step recording its process id, to ``wf``; return it.
+def _chain(p: Pipeline, own: Mapping[str, dict[str, Any]] | None = None) -> Pipeline:
+    """Add the chain a -> b -> c, each step recording its process id, to ``p``; return it.
 
     ``own`` gives a step's own resources by step name.
     """
     given: Mapping[str, dict[str, Any]] = {} if own is None else own
     sources: dict[str, dict[str, str]] = {A: {}, B: {"upstream": A}, C: {"upstream": B}}
     for name, inputs in sources.items():
-        wf.python_step(
+        p.python_step(
             step_targets.record_pid, inputs=inputs, produces=name, resources=given.get(name)
         )
-    return wf
+    return p
 
 
 def _describe(result: Result) -> str:
@@ -94,24 +95,26 @@ def _describe(result: Result) -> str:
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_a_workflow_pipeline_runs_through_fake_jobmon_and_the_real_runner(
+def test_a_pipeline_runs_through_fake_jobmon_and_the_real_runner(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: a three-step chain added to a Workflow with a project in its resources runs with run(pipeline, jobmon=True); every step succeeds in a process other than the test's, the products are under output_root/run_name, one plan is bound with the three steps, and the run's state and run lock are under output_root/.dagger/run_name."""
+    """End to end: a three-step chain added to a Pipeline with a project in its resources runs with run(p, jobmon=True); every step succeeds in a process other than the test's, the products are under output_root/run_name, one plan is bound with the three steps, and the run's state and run lock are under output_root/.dagger/run_name."""
     output_root = (tmp_path / "out").resolve()
-    wf = _chain(Workflow(tmp_path / "out", "run1", resources=_PROJECT))
+    p = _chain(Pipeline(tmp_path / "out", "run1", resources=_PROJECT))
 
-    result = run(wf.pipeline(), jobmon=True)
+    result = run(p, jobmon=True)
 
     assert result == dict.fromkeys(CHAIN, TaskOutcome.SUCCESS)
     assert bound_names(fake_jobmon) == [list(CHAIN)]
-    pids = recorded_pids(wf.registry, CHAIN)
+    registry = freeze(p).registry
+    assert registry is not None
+    pids = recorded_pids(registry, CHAIN)
     assert pids, "no step recorded its process id"
     assert os.getpid() not in pids
     for name in CHAIN:
         assert (output_root / "run1" / name).is_file(), name
     state = output_root / ".dagger" / "run1"
-    assert wf.state == state
+    assert p.state == state
     assert (state / LOCKFILE).is_file()
     assert (state / RUN_LOCK_NAME).is_file()
     assert not (output_root / "run1" / RUN_LOCK_NAME).exists()
@@ -121,27 +124,26 @@ def test_a_workflow_pipeline_runs_through_fake_jobmon_and_the_real_runner(
 def test_the_jobmon_workflow_is_named_after_the_run_name(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With the default state, the bind of a run through Jobmon gets the workflow's run name as its workflow_name."""
-    wf = _chain(Workflow(tmp_path / "out", "study_run", resources=_PROJECT))
+    """With the default state, the bind of a run through Jobmon gets the pipeline's run name as its workflow_name."""
+    p = _chain(Pipeline(tmp_path / "out", "study_run", resources=_PROJECT))
 
-    run(wf.pipeline(), jobmon=True)
+    run(p, jobmon=True)
 
     [options] = fake_jobmon.options
     assert options["workflow_name"] == "study_run"
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_the_workflow_resources_reach_the_bound_plan(
+def test_the_pipeline_resources_reach_the_bound_plan(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """Resources given to the Workflow reach Pipeline.resources and the bound plan's default resources, and a step's own resources= overrides them key by key."""
+    """Resources given to the Pipeline reach its snapshot's resources and the bound plan's default resources, and a step's own resources= overrides them key by key."""
     resources = {"project": "proj_wf", "memory": 8}
-    wf = Workflow(tmp_path / "out", "run1", resources=resources)
-    _chain(wf, own={B: {"memory": 16}})
-    pipeline = wf.pipeline()
-    assert dict(pipeline.resources) == {"project": "proj_wf", "memory": 8}
+    p = Pipeline(tmp_path / "out", "run1", resources=resources)
+    _chain(p, own={B: {"memory": 16}})
+    assert dict(freeze(p).resources) == {"project": "proj_wf", "memory": 8}
 
-    run(pipeline, jobmon=True)
+    run(p, jobmon=True)
 
     [options] = fake_jobmon.options
     defaults = dict(options["default_resources"])
@@ -152,47 +154,49 @@ def test_the_workflow_resources_reach_the_bound_plan(
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_two_workflows_with_different_run_names_do_not_share_a_run_lock(
+def test_two_pipelines_with_different_run_names_do_not_share_a_run_lock(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """While another process holds the run lock of workflow 'a' under one output root, a run through Jobmon of workflow 'b' under the same output root succeeds, and a run of 'a' is refused with RunRefused naming a's lock file."""
-    first = _chain(Workflow(tmp_path, "a", resources=_PROJECT))
-    second = _chain(Workflow(tmp_path, "b", resources=_PROJECT))
+    """While another process holds the run lock of pipeline 'a' under one output root, a run through Jobmon of pipeline 'b' under the same output root succeeds, and a run of 'a' is refused with RunRefused naming a's lock file."""
+    first = _chain(Pipeline(tmp_path, "a", resources=_PROJECT))
+    second = _chain(Pipeline(tmp_path, "b", resources=_PROJECT))
     assert first.state != second.state
     lock = make_dir(first.state) / RUN_LOCK_NAME
 
     with held_lock(lock):
-        result = run(second.pipeline(), jobmon=True)
+        result = run(second, jobmon=True)
         with pytest.raises(RunRefused) as info:
-            run(first.pipeline(), jobmon=True)
+            run(first, jobmon=True)
 
     assert result == dict.fromkeys(CHAIN, TaskOutcome.SUCCESS)
     assert str(lock) in str(info.value), str(info.value)
     assert bound_names(fake_jobmon) == [list(CHAIN)]
-    assert recorded_pids(first.registry, CHAIN) == set()
+    first_registry = freeze(first).registry
+    assert first_registry is not None
+    assert recorded_pids(first_registry, CHAIN) == set()
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_the_missing_project_message_names_the_workflows_resources(
+def test_the_missing_project_message_names_the_pipelines_resources_and_not_workflow(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A run through Jobmon of a Workflow's pipeline with no project in any layer raises PipelineError whose message names Workflow(resources={'project': ...}) as well as Pipeline(resources=, and binds nothing."""
-    wf = _chain(Workflow(tmp_path / "out", "run1"))
+    """A run through Jobmon of a Pipeline with no project in any layer raises PipelineError whose message names Pipeline(resources={'project': ...}) and does not name Workflow, and binds nothing."""
+    p = _chain(Pipeline(tmp_path / "out", "run1"))
 
     with pytest.raises(PipelineError) as info:
-        run(wf.pipeline(), jobmon=True)
+        run(p, jobmon=True)
 
     message = str(info.value)
-    assert "Workflow(resources={'project': ...})" in message, message
-    assert "Pipeline(resources=" in message, message
+    assert "Pipeline(resources={'project': ...})" in message, message
+    assert "Workflow" not in message, message
     assert fake_jobmon.plans == []
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_dagger_run_of_a_workflow_definition_through_fake_jobmon_exits_zero(
+def test_dagger_run_of_a_pipeline_definition_through_fake_jobmon_exits_zero(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """'dagger run -c def.py -P proj' on a definition that returns wf.pipeline() exits 0 under FakeJobmon, binds one plan with the definition's steps, and writes every product under output_root/run_name."""
+    """'dagger run -c def.py -P proj' on a definition that returns its Pipeline p exits 0 under FakeJobmon, binds one plan with the definition's steps, and writes every product under output_root/run_name."""
     path = tmp_path / f"def_{uuid.uuid4().hex[:12]}.py"
     path.write_text(_DEFINITION)
 
@@ -203,3 +207,28 @@ def test_dagger_run_of_a_workflow_definition_through_fake_jobmon_exits_zero(
     run_directory = tmp_path.resolve() / "out" / "run1"
     for name in (A, B):
         assert (run_directory / name).is_file(), name
+
+
+@pytest.mark.usefixtures("node_pythonpath")
+def test_a_step_added_after_a_run_through_jobmon_is_in_the_next_run_and_not_the_finished_one(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """End to end: after run(p, jobmon=True) of a two-step chain returns its two outcomes and binds a plan of those two steps, a third step added to p does not change that result; a second run(p, jobmon=True) binds a plan that has the third step, returns SUCCESS for all three steps, and writes the third step's product."""
+    p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
+    p.python_step(step_targets.record_pid, inputs={}, produces=A)
+    p.python_step(step_targets.record_pid, inputs={"upstream": A}, produces=B)
+    third = p.output_root / "run1" / C
+
+    finished = run(p, jobmon=True)
+    p.python_step(step_targets.record_pid, inputs={"upstream": B}, produces=C)
+
+    assert finished == {A: TaskOutcome.SUCCESS, B: TaskOutcome.SUCCESS}
+    assert bound_names(fake_jobmon) == [[A, B]]
+    assert not third.exists()
+
+    again = run(p, jobmon=True)
+
+    assert again == dict.fromkeys(CHAIN, TaskOutcome.SUCCESS)
+    assert len(fake_jobmon.plans) == 2
+    assert C in bound_names(fake_jobmon)[1]
+    assert third.is_file()

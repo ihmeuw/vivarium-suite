@@ -16,9 +16,9 @@ from tests.frontend.handoff_example import pipeline
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
+from vivarium.dagger.frontend.execution import run
 from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
-from vivarium.dagger.frontend.pipeline import run
 from vivarium.dagger.frontend.python_step import python_step
 
 _COLUMNS = ["location_id", "year_id", "coverage"]
@@ -122,7 +122,7 @@ def _mean_coverage(coverage: Path) -> pd.DataFrame:
 def _mean_step(root: Path, key: str) -> Task:
     """Validate ethiopia's handoff under ``root`` and return a step averaging ``key``."""
     inputs = handoff_inputs(root, ["ethiopia"], _FILES)
-    registry = ArtifactRegistry(root / "out", "run1", root_inputs=inputs)
+    registry = FileRegistry(root / "out", "run1", root_inputs=inputs)
     return python_step(
         _mean_coverage, inputs={"coverage": key}, produces="mean.parquet", registry=registry
     )

@@ -6,7 +6,7 @@ command runs ``python -m papermill`` in the step's declared environment, which
 :func:`~vivarium.dagger.backend.build.run_command` puts first on ``PATH``. The source
 notebook is a declared input file. The executed notebook, written to its own path, and
 the data files named in ``produces`` are the step's products, registered through the
-shared :class:`~vivarium.dagger.backend.wiring.ArtifactRegistry` so downstream steps
+shared :class:`~vivarium.dagger.backend.wiring.FileRegistry` so downstream steps
 get real edges to them. If the notebook raises, the step fails and the executed notebook,
 with the error in it, stays at its path. The command removes an executed notebook left by
 an earlier run before the notebook runs, so an executed notebook found after a failure is
@@ -56,7 +56,7 @@ from pytask import PathNode
 from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY, describe_exit
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 
 NotebookParameter = str | int | float | bool | None
 """A scalar notebook parameter, which reaches the notebook with this Python type.
@@ -88,11 +88,11 @@ _LISTED_NAMES = 10
 def notebook_step(
     notebook: Path | str,
     *,
-    executed: ArtifactKey,
-    registry: ArtifactRegistry,
+    executed: FileKey,
+    registry: FileRegistry,
     env: str,
-    inputs: Mapping[str, ArtifactKey] | None = None,
-    produces: Mapping[str, ArtifactKey] | None = None,
+    inputs: Mapping[str, FileKey] | None = None,
+    produces: Mapping[str, FileKey] | None = None,
     parameters: Mapping[str, NotebookParameter] | None = None,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
@@ -106,7 +106,7 @@ def notebook_step(
         input of the step and is never written; the notebook runs with its own directory
         as the working directory.
     executed
-        The artifact key for the executed notebook, which must end in ``.ipynb``.
+        The file key for the executed notebook, which must end in ``.ipynb``.
         Registered with ``registry`` as a product.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
@@ -116,11 +116,11 @@ def notebook_step(
         pipeline is built or previewed, not here. Pass ``sys.prefix`` to run the notebook
         in the pipeline's own environment.
     inputs
-        Maps notebook parameter names to the artifact keys the registry resolves to the
+        Maps notebook parameter names to the file keys the registry resolves to the
         producing step's node (or a declared root input). Each input's resolved path
         reaches the notebook as a ``str`` under its parameter name.
     produces
-        Maps notebook parameter names to artifact keys for the data files the notebook
+        Maps notebook parameter names to file keys for the data files the notebook
         writes. Each key is registered with ``registry`` as a product, and its path reaches
         the notebook as a ``str`` under its parameter name. The parent directory of each
         product, and of the executed notebook, is created before the notebook runs.
@@ -154,7 +154,7 @@ def notebook_step(
         ``produces`` key is a declared root input or resolves to the path of a different
         key that is already registered (another step's output) or of a root input. The
         message starts with ``Step '<name>':``, followed by the registry's message, which
-        names the artifact key. The same key claimed by two steps is left for the build
+        names the file key. The same key claimed by two steps is left for the build
         to reject.
     ValueError
         If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``produces`` or
@@ -181,8 +181,8 @@ def notebook_step(
         raise ValueError(f"Task name must be a non-empty string, got {task_name!r}.")
     if not env:
         raise ValueError(f"Task '{task_name}': env must be a non-empty string, got {env!r}.")
-    input_keys: dict[str, ArtifactKey] = dict(inputs or {})
-    product_keys: dict[str, ArtifactKey] = dict(produces or {})
+    input_keys: dict[str, FileKey] = dict(inputs or {})
+    product_keys: dict[str, FileKey] = dict(produces or {})
     scalars: dict[str, NotebookParameter] = dict(parameters or {})
     groups: dict[str, Iterable[str]] = {
         "inputs": input_keys,
@@ -233,8 +233,8 @@ def describe_notebook_failure(task: Task, error: BaseException) -> str | None:
 
     The executed notebook is read as JSON with the standard library, so the pipeline's
     own environment needs neither papermill nor nbformat.
-    :func:`~vivarium.dagger.frontend.pipeline.run` uses this description in the message
-    of :class:`~vivarium.dagger.frontend.pipeline.StepFailed`.
+    :func:`~vivarium.dagger.frontend.execution.run` uses this description in the message
+    of :class:`~vivarium.dagger.frontend.execution.StepFailed`.
 
     Parameters
     ----------
@@ -383,7 +383,7 @@ def _type_name(value: object) -> str:
     return f"{kind.__module__}.{kind.__qualname__}"
 
 
-def _check_paths(task_name: str, source: Path, executed: ArtifactKey) -> None:
+def _check_paths(task_name: str, source: Path, executed: FileKey) -> None:
     """Reject a source that is not an existing .ipynb file, or a bad executed key."""
     if source.suffix != ".ipynb":
         raise ValueError(
@@ -402,9 +402,9 @@ def _check_paths(task_name: str, source: Path, executed: ArtifactKey) -> None:
 def _check_collisions(
     task_name: str,
     source: Path,
-    executed: ArtifactKey,
-    products: Mapping[str, ArtifactKey],
-    registry: ArtifactRegistry,
+    executed: FileKey,
+    products: Mapping[str, FileKey],
+    registry: FileRegistry,
 ) -> None:
     """Reject two of the source, the executed notebook and the products at one path."""
     claimed = {source: f"source notebook {str(source)!r}"}
