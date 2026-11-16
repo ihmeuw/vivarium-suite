@@ -4,7 +4,7 @@ A data analyst delivers a location's primary data as files under a handoff root,
 ``<root>/<location>/primary/<file>``. A pipeline declares which files every location
 must supply and the columns each file must have. :func:`handoff_inputs` checks every
 declared file before anything runs, reading only column names, and returns the files
-keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.workflow.Workflow`
+keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.builder.Pipeline`
 or an :class:`~vivarium.dagger.backend.wiring.FileRegistry`. A step reads a handoff
 file by naming the key that :func:`handoff_key` returns as an input, and the step's
 function receives the file's path.
@@ -183,7 +183,7 @@ def handoff_inputs(
     -------
         Each file's path under the resolved root, keyed by :func:`handoff_key`, to
         pass as, or merge into, the ``root_inputs`` of a
-        :class:`~vivarium.dagger.frontend.workflow.Workflow` or an
+        :class:`~vivarium.dagger.frontend.builder.Pipeline` or an
         ``FileRegistry``.
 
     Raises

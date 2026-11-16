@@ -20,6 +20,7 @@ from click.testing import CliRunner, Result
 from pytask import PathNode, TaskOutcome
 
 from tests.frontend.notebooks import write_source_notebook
+from tests.frontend.pipelines import pipeline_of, stable_snapshot
 from tests.frontend.simulations import (
     COMMAND_FRAGMENTS,
     EXIT_VARIABLE,
@@ -52,7 +53,6 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import (
-    Pipeline,
     PipelineError,
     StepFailed,
     _collect_simulation,
@@ -60,6 +60,8 @@ from vivarium.dagger.frontend import (
     run,
 )
 from vivarium.dagger.frontend._collect_simulation import _MESSAGE_FILE, _SENTINEL
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
+from vivarium.dagger.frontend.execution import _preview, _run
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.frontend.simulation_step import (
@@ -202,7 +204,7 @@ def _pipeline(
         )
     if stable:
         tasks = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(tasks, model.state, registry)
+    return pipeline_of(tasks, model.state)
 
 
 def _constant() -> pd.DataFrame:
@@ -924,7 +926,7 @@ def test_produces_already_registered_as_a_file_output_raises_a_wiring_error_nami
 def test_a_simulation_step_sharing_a_name_with_another_step_is_reported_by_run(
     model: _Model,
 ) -> None:
-    """run() of a pipeline with a simulation step and a python step of the same name raises PipelineError from the existing duplicate-name check, before anything runs."""
+    """_run() of a snapshot, made directly since a Pipeline refuses the second step, with a simulation step and a python step of the same name raises PipelineError from the existing duplicate-name check, before anything runs."""
     registry = model.registry()
     tasks = [
         _step(model, registry),
@@ -934,7 +936,7 @@ def test_a_simulation_step_sharing_a_name_with_another_step_is_reported_by_run(
     ]
 
     with pytest.raises(PipelineError) as excinfo:
-        run(Pipeline(tasks, model.state, registry))
+        _run(_PipelineSnapshot(tasks, model.state))
 
     assert not isinstance(excinfo.value, StepFailed)
     assert f"Two steps are named {_KEY!r}" in str(excinfo.value)
@@ -994,7 +996,7 @@ def test_a_downstream_python_step_receives_the_run_directory_and_reads_the_resul
 ) -> None:
     """A python_step that names produces runs after the simulation step, its target receives a Path equal to registry.path_for(produces), and its summary is computed from the stub's parquet files."""
     pipeline = _pipeline(model)
-    simulation, consumer = pipeline.tasks
+    simulation, consumer = freeze(pipeline).tasks
 
     assert run(pipeline) == {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
 
@@ -1400,11 +1402,24 @@ def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_casc
     model: _Model,
 ) -> None:
     """After other content is written to the sentinel, preview reports both steps would run, the simulation step's reasons include Reason("run directory 'sims/toy'", "changed"), the consumer's are [Reason("step 'sims/toy'", "cascade")], and no reason holds the run directory's path."""
-    pipeline = _pipeline(model, stable=True)
-    _first_run(model, pipeline)
+    p = Pipeline(model.base / "out", "run1", state=model.state)
+    p.simulation_step(
+        spec=model.spec,
+        branches=model.branches,
+        produces=_KEY,
+        env=str(model.env),
+        options=_OPTIONS,
+    )
+    p.python_step(
+        summarize_run, inputs={"simulation": _KEY}, produces=_SUMMARY_KEY, name=_CONSUMER
+    )
+    # The step methods wire the steps through the pipeline's registry, so the preview
+    # names the run directory by key.
+    pipeline = stable_snapshot(p)
+    assert _run(pipeline) == {_KEY: TaskOutcome.SUCCESS, _CONSUMER: TaskOutcome.SUCCESS}
     (model.run_dir / _SENTINEL).write_text('{"run_id": "written by hand"}')
 
-    plan = preview(pipeline)
+    plan = _preview(pipeline)
 
     reasons = _reasons(plan)
     assert _would_run(plan) == {_KEY, _CONSUMER}

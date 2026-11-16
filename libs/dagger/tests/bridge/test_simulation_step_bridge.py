@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 from pytask import TaskOutcome
 
+from tests.frontend.pipelines import pipeline_of
 from tests.frontend.simulations import (
     EXIT_VARIABLE,
     KNOB_VARIABLES,
@@ -36,8 +37,9 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.payload import payload_for
-from vivarium.dagger.frontend import Pipeline, StepFailed, run
+from vivarium.dagger.frontend import StepFailed, run
 from vivarium.dagger.frontend._collect_simulation import _MESSAGE_FILE, _SENTINEL
+from vivarium.dagger.frontend.builder import Pipeline, freeze
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.frontend.simulation_step import simulation_step
 from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
@@ -137,7 +139,7 @@ def _pipeline(
         )
     if stable_ids:
         tasks = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(tasks, simulation.base / "state", registry)
+    return pipeline_of(tasks, simulation.base / "state")
 
 
 def _run_bridged(pipeline: Pipeline) -> dict[str, TaskOutcome]:
@@ -170,7 +172,7 @@ def test_payload_for_a_simulation_step_is_a_command_with_the_env_bin_path(
     simulation: _Simulation, pytask_kwargs: Callable[[Task], dict[str, Any]]
 ) -> None:
     """payload_for on a simulation_step task gives kind 'command', a command equal to the task's run, and an env_path equal to the stub env's resolved bin path."""
-    [task] = _pipeline(simulation).tasks
+    [task] = freeze(_pipeline(simulation)).tasks
 
     recipe = dict(payload_for(task, pytask_kwargs(task)))
 

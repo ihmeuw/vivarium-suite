@@ -85,7 +85,12 @@ def pipeline():
         for name, target, inputs in zip(NAMES, targets, sources)
     ]
     stable = [with_stable_code_id(task) for task in tasks]
-    return Pipeline(stable, HERE / "state", registry, resources=PIPELINE_RESOURCES)
+    p = Pipeline(
+        HERE / "out", "run1", state=HERE / "state", resources=PIPELINE_RESOURCES
+    )
+    for task in stable:
+        p.add_task(task)
+    return p
 """
 """The start of a definition of the chain NAMES[0] -> NAMES[1] -> NAMES[2] with stable code
 identities. Each step body logs its position ('a', 'b' or 'c') and its process id. The
@@ -122,7 +127,9 @@ def pipeline():
     step = python_step(
         make_table, inputs={}, produces="table.parquet", registry=registry, name="table"
     )
-    return Pipeline([step], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
 """
 """A definition of one step whose function, defined in the file, calls a helper module
 named HELPER that sits beside the file, and writes its process id and PYTHONPATH to

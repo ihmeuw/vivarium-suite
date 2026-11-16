@@ -1,4 +1,4 @@
-"""Tests for ``frontend.pipeline.run`` with ``jobmon=True``, under the fake Jobmon adapter.
+"""Tests for ``frontend.execution.run`` with ``jobmon=True``, under the fake Jobmon adapter.
 
 These cover what the frontend adds to a bridged build: the compute-resource layers, the
 project check, the run lock around ``force``, and the errors for a refused or interrupted
@@ -32,6 +32,7 @@ from tests.bridge.helpers import (
     registry,
     stable,
 )
+from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RunLocked
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
@@ -39,13 +40,14 @@ from vivarium.dagger.bridge.plugin import DEFAULT_MAX_ATTEMPTS
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE
 from vivarium.dagger.constants import DEFAULT_RESOURCES
 from vivarium.dagger.frontend import (
-    Pipeline,
     PipelineError,
     RunInterrupted,
     RunRefused,
     StepFailed,
     run,
 )
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
+from vivarium.dagger.frontend.execution import _run
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon
 
@@ -119,7 +121,7 @@ def _chain(
     if stable_ids:
         tasks = stable(tasks)
     layer: Mapping[str, Any] = {} if resources is None else resources
-    return Pipeline(tasks, build_root(tmp_path), artifacts, resources=layer)
+    return pipeline_of(tasks, build_root(tmp_path), resources=layer)
 
 
 def _defaults(jobmon: FakeJobmon) -> dict[str, Any]:
@@ -224,16 +226,23 @@ def test_jobmon_max_attempts_passes_through_to_the_adapter_unchanged(tmp_path: P
 def test_the_callers_jobmon_resources_mapping_is_not_changed(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The jobmon_resources dict passed to run() and the Pipeline's resources mapping are equal to their originals after the run."""
+    """The jobmon_resources dict passed to run() and the resources dict a snapshot holds are equal to their originals after the run.
+
+    The snapshot is built around the caller's dict, because a Pipeline and freeze() each
+    copy the resources, so a change made by the run could not reach the caller's dict
+    through them.
+    """
     given = {"project": "proj_b", "queue": "long.q"}
     resources = {"memory": 8}
-    pipeline = _chain(tmp_path, resources=resources)
+    frozen = freeze(_chain(tmp_path))
+    snapshot = _PipelineSnapshot(
+        tasks=frozen.tasks, root=frozen.root, registry=frozen.registry, resources=resources
+    )
 
-    run(pipeline, jobmon=True, jobmon_resources=given)
+    _run(snapshot, jobmon=True, jobmon_resources=given)
 
     assert given == {"project": "proj_b", "queue": "long.q"}
     assert resources == {"memory": 8}
-    assert pipeline.resources == {"memory": 8}
     assert len(fake_jobmon.plans) == 1
 
 
@@ -252,7 +261,7 @@ def test_a_step_without_a_project_raises_before_anything_is_written(
     assert error.exit_code is None
     assert fake_jobmon.plans == []
     assert recorded_pids(registry(tmp_path), _CHAIN) == set()
-    assert _state_written(pipeline.root) == []
+    assert _state_written(pipeline.state) == []
 
 
 def test_the_project_error_names_each_step_without_a_project_and_the_three_ways(
@@ -318,7 +327,7 @@ def test_a_steps_own_empty_project_is_no_project_even_when_another_layer_sets_on
     assert C not in message, message
     assert fake_jobmon.plans == []
     assert recorded_pids(registry(tmp_path), _CHAIN) == set()
-    assert _state_written(pipeline.root) == []
+    assert _state_written(pipeline.state) == []
 
 
 def test_the_project_check_covers_steps_that_would_not_run(
@@ -372,7 +381,7 @@ def test_a_held_run_lock_raises_run_refused_naming_the_lock_file_and_holder(
 ) -> None:
     """While another process holds <root>/run.lock, run(pipeline, jobmon=True) raises RunRefused, a PipelineError with exit_code FAILED chained from RunLocked, whose message names the lock file and the holder; nothing is bound and no step body runs."""
     pipeline = _chain(tmp_path)
-    lock = make_dir(pipeline.root) / RUN_LOCK_NAME
+    lock = make_dir(pipeline.state) / RUN_LOCK_NAME
 
     with held_lock(lock) as child:
         with pytest.raises(RunRefused) as info:
@@ -397,10 +406,10 @@ def test_force_under_a_held_run_lock_raises_run_refused_and_keeps_pytask_lock(
     """While another process holds the run lock, run(pipeline, force=[step], jobmon=True) on a root with a recorded run raises RunRefused and leaves pytask.lock byte-identical."""
     pipeline = _chain(tmp_path, stable_ids=True)
     run(pipeline, jobmon=True, jobmon_resources=dict(_PROJECT))
-    lockfile = pipeline.root / LOCKFILE
+    lockfile = pipeline.state / LOCKFILE
     before = lockfile.read_bytes()
 
-    with held_lock(pipeline.root / RUN_LOCK_NAME):
+    with held_lock(pipeline.state / RUN_LOCK_NAME):
         with pytest.raises(RunRefused):
             run(pipeline, force=[A], jobmon=True, jobmon_resources=dict(_PROJECT))
 
@@ -422,7 +431,7 @@ def test_force_through_the_bridge_releases_the_run_lock_before_the_build_takes_i
     assert len(plans) == 2, plans
     assert plans[1][0] == A, plans
     assert os.getpid() not in recorded_pids(registry(tmp_path), [A])
-    assert lock_is_free(pipeline.root / RUN_LOCK_NAME)
+    assert lock_is_free(pipeline.state / RUN_LOCK_NAME)
 
 
 def test_a_local_force_takes_no_run_lock(tmp_path: Path) -> None:
@@ -430,7 +439,7 @@ def test_a_local_force_takes_no_run_lock(tmp_path: Path) -> None:
     pipeline = _chain(tmp_path, stable_ids=True)
     run(pipeline)
 
-    with held_lock(pipeline.root / RUN_LOCK_NAME):
+    with held_lock(pipeline.state / RUN_LOCK_NAME):
         result = run(pipeline, force=[A])
 
     assert result[A] == TaskOutcome.SUCCESS
@@ -449,7 +458,7 @@ def test_sigterm_while_jobmon_runs_raises_run_interrupted_with_the_workflow_id(
     error = _interrupted(pipeline, FakeJobmon(workflow_id=WORKFLOW_ID, interrupt_after=1))
 
     assert error.workflow_id == WORKFLOW_ID
-    runs = (pipeline.root / RUNS_DIR).resolve()
+    runs = (pipeline.state / RUNS_DIR).resolve()
     assert error.run_directory.resolve().parent == runs
     assert (error.run_directory / STATE_FILE).is_file()
     assert error.outcomes[A] == TaskOutcome.SUCCESS
@@ -509,7 +518,7 @@ def test_a_node_failure_raises_step_failed_with_the_node_exception_type_and_mess
     """A python step whose target raises StepFailure on its node makes run(pipeline, jobmon=True) raise StepFailed whose message is "Step '<name>' failed: tests.bridge.step_targets.StepFailure: the step failed on purpose", and whose failure for the step has the node traceback."""
     artifacts = registry(tmp_path)
     tasks = chain_and_independent(artifacts, failing=(B,))
-    pipeline = Pipeline(tasks, build_root(tmp_path), artifacts)
+    pipeline = pipeline_of(tasks, build_root(tmp_path))
 
     with pytest.raises(StepFailed) as info:
         run(pipeline, jobmon=True, jobmon_resources=dict(_PROJECT))
