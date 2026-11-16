@@ -57,11 +57,11 @@ Reading a file in a step
 
 Pass the mapping that :func:`~vivarium.dagger.frontend.handoff.handoff_inputs`
 returns as the ``root_inputs`` of the pipeline's
-:class:`~vivarium.dagger.frontend.workflow.Workflow`. Each key is the file's path
+:class:`~vivarium.dagger.frontend.builder.Pipeline`. Each key is the file's path
 relative to the handoff root, ``<location>/primary/<file>``, and
 :func:`~vivarium.dagger.frontend.handoff.handoff_key` builds it. A step reads a
 handoff file by naming that key as an input, and the step's function receives the
-file's path. A step cannot also produce a handoff key: the ``Workflow`` refuses an
+file's path. A step cannot also produce a handoff key: the ``Pipeline`` refuses an
 output whose key is a declared root input.
 
 Worked example

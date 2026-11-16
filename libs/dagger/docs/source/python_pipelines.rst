@@ -31,7 +31,7 @@ Pipeline definitions
 --------------------
 
 A pipeline definition is a Python file or module with a function that takes no
-arguments and returns a :class:`~vivarium.dagger.frontend.pipeline.Pipeline`. The
+arguments and returns a :class:`~vivarium.dagger.frontend.builder.Pipeline`. The
 function is named ``pipeline`` unless you name another one. Every command takes the
 definition with ``-c``, in one of these forms::
 
@@ -54,14 +54,14 @@ A file path works from any directory. A dotted module name must be importable wh
 directory on ``PYTHONPATH``. ``dagger`` does not add the current directory to
 ``sys.path``.
 
-A definition makes a :class:`~vivarium.dagger.frontend.workflow.Workflow` with an output
+A definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline` with an output
 root and a run name, adds each step to it with a method such as
-:meth:`~vivarium.dagger.frontend.workflow.Workflow.python_step`, and returns
-``wf.pipeline()``. Add a step after the steps that produce the artifacts it reads. A
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`, and returns the
+pipeline. Add a step after the steps that produce the artifacts it reads. A
 step's products go under ``<output root>/<run name>``. The pipeline's root, the directory
 that holds its pytask state, is ``<output root>/.dagger/<run name>``, so two runs with
 different run names under one output root keep separate state. Pass ``state=`` to the
-``Workflow`` to put the root somewhere else; it must be an absolute path, so that the
+``Pipeline`` to put the root somewhere else; it must be an absolute path, so that the
 state does not depend on the directory ``dagger`` is run from. Building the output root
 from the definition file's own location, as the example below does, keeps the outputs
 and the state next to the definition.
@@ -194,20 +194,20 @@ before it, key by key:
 1. ``dagger``'s defaults, :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES`: the
    ``all.q`` queue, 1 GB of memory, a runtime of 3600 seconds, and 1 core. There is no
    default project.
-2. The definition's defaults, given as ``resources`` to its ``Workflow``. A model can
+2. The definition's defaults, given as ``resources`` to its ``Pipeline``. A model can
    keep them in its own constants module, for example
-   ``Workflow(HERE / "output", run_name="example", resources=PIPELINE_RESOURCES)``
+   ``Pipeline(HERE / "output", run_name="example", resources=PIPELINE_RESOURCES)``
    with ``PIPELINE_RESOURCES = {"project": "proj_example", "memory": 4}``.
 3. The command's options: ``-P/--project`` and ``-q/--queue``.
 4. The step's own ``resources=``, such as
-   ``wf.python_step(..., resources={"memory": 16, "runtime": 7200})``.
+   ``p.python_step(..., resources={"memory": 16, "runtime": 7200})``.
 
 Memory is in gigabytes and runtime in seconds. ``-m/--max-attempts`` sets how many times
 Jobmon tries each step; the default is 2. Jobmon raises a step's memory and runtime by
 half when it retries a step that ran out of them.
 
 Every step needs a project. If some step would have none, ``dagger`` names each such step
-and the three ways to set a project (``-P``, ``Workflow(resources=...)``, and the step's
+and the three ways to set a project (``-P``, ``Pipeline(resources=...)``, and the step's
 ``resources=``), and exits with status 2 before anything is written.
 
 When a run through Jobmon stops
@@ -234,7 +234,7 @@ if you confirm, the run stops in the same way.
 Simulation steps
 ----------------
 
-:meth:`~vivarium.dagger.frontend.workflow.Workflow.simulation_step` adds a step that runs
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.simulation_step` adds a step that runs
 a vivarium simulation with ``psimulate run`` in the environment named by ``env``, which
 needs ``vivarium-psimulate`` installed with its ``cluster`` extra. psimulate runs only
 on a cluster compute node: it refuses to start on a submit host or outside the cluster.
@@ -259,7 +259,7 @@ psimulate's run, with one file per simulation for each metric in
 ``results/<metric>/*.parquet``, the simulations' metadata in ``metadata/``, and
 psimulate's logs in ``logs/``. The step counts as done only when every simulation
 finished and wrote every metric, so a consumer never reads a partial run. The
-``Workflow``'s output root must be on storage that every node sees, because
+``Pipeline``'s output root must be on storage that every node sees, because
 psimulate's workers write the results.
 
 When a simulation does not finish, the step fails with how many of the simulations
@@ -385,21 +385,21 @@ Each of these exits with status 2 before any step runs:
   A notebook step that passes a name its notebook's ``parameters`` cell does not
   assign, or passes names to a notebook with no such cell, is rejected with an error
   that names the step, the notebook and each name.
-- A step is added to a ``Workflow`` with the name of a step already added, or with a
-  product that a step already added produces. The ``Workflow`` refuses the step when it
+- A step is added to a ``Pipeline`` with the name of a step already added, or with a
+  product that a step already added produces. The ``Pipeline`` refuses the step when it
   is added, so the traceback ends on the line of the definition that adds it, and the
   message names the step and, for a product, the file key and the step that already
   produces it. When both apply, the message is the one for the product.
-- For a ``Pipeline`` built from tasks directly, two steps produce the same output.
-  ``dagger`` names the file key and the steps.
+- For a pipeline of tasks compiled with the step functions directly, two steps produce
+  the same output. ``dagger`` names the file key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
-- For a ``Pipeline`` built from tasks directly, two steps have the same name. ``dagger``
-  names it and says to give each step a different ``name=`` to tell the steps apart.
-  This is reported first, even when ``--until`` or ``dagger force`` also names a step
-  that does not exist.
+- For a pipeline of tasks compiled with the step functions directly, two steps have the
+  same name. ``dagger`` names it and says to give each step a different ``name=`` to
+  tell the steps apart. This is reported first, even when ``--until`` or
+  ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
   the reason.
@@ -423,11 +423,11 @@ The full reference for the command and its options is in :mod:`vivarium.dagger.c
 Steps that run a command
 ------------------------
 
-:meth:`~vivarium.dagger.frontend.workflow.Workflow.command_step` adds a step that runs a
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.command_step` adds a step that runs a
 shell command. Use it when the step needs another environment than the pipeline's, or
 when the work is already a command-line tool or a script. A Python step always runs in
 the pipeline's own process, so it cannot use another environment. For any other step,
-use :meth:`~vivarium.dagger.frontend.workflow.Workflow.python_step`.
+use :meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`.
 
 This example puts a command step between two Python steps. The ``population`` step
 writes a table, ``adults`` runs a script on it, and ``summary`` reads the script's
