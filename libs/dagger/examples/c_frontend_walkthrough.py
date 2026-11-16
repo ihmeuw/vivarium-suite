@@ -786,9 +786,9 @@ assert docs.returncode == 0
 # again through Jobmon, the command's default: the step functions are imported on the nodes
 # from a definition file outside the folder `dagger` runs from, the artifact and notebook
 # steps run in the model's env there, and the slice's `Pipeline(resources=...)` gives every
-# step more memory than dagger's default. The project comes from `-P`. The preview after
-# the local run that showed every step skipped moved to the caching sub-epic (MIC-7760) on
-# 2026-11-16.
+# step more memory than dagger's default. The project comes from `-P`. A preview after the
+# Jobmon run shows every step would run again. The preview after the local run that showed
+# every step skipped moved to the caching sub-epic (MIC-7760) on 2026-11-16.
 
 # %%
 MNCNH = os.environ.get("C_WALKTHROUGH_MNCNH")
@@ -844,6 +844,8 @@ else:
     show_runs(bridged_runs(SLICE / "output/.dagger/nigeria"))
     assert real_jobmon.returncode == 0
     assert len(bridged_runs(SLICE / "output/.dagger/nigeria")) == 1
+    real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
+    assert all(l.startswith("run") for l in plan(real_public).values())
 
     mistakes = WORK / "slice_mistakes"
     mistakes.mkdir(exist_ok=True)
@@ -890,9 +892,9 @@ else:
 # 2. The good copy runs through Jobmon. The preview after it that skipped every step, and
 #    the same command again binding no workflow, moved to the caching sub-epic on
 #    2026-11-16 (MIC-7760, and MIC-7763 for a run through Jobmon).
-# 3. `dagger force ... adults` runs through Jobmon. The bridge also submits the steps after
-#    adults, because it has no early cutoff (MIC-7763). The preview after it that skipped
-#    every step moved with the others.
+# 3. `dagger force ... adults` runs through Jobmon. The bridge submits every step, not only
+#    adults, because no step counts as unchanged until the caching sub-epic lands. The
+#    preview after it that skipped every step moved with the others.
 # 4. A copy of the definition next to it, `failing_archive.py`, whose archive command fails
 #    on its node: exit 1, and dagger's line for the step.
 # 5. A broken copy, in which a python step and the notebook fail, runs with `-m 1` behind
