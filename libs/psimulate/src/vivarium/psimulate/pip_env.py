@@ -21,6 +21,13 @@ def validate(environment_file: Path) -> None:
 
     Packages are read from the running interpreter, not with ``pip``, so this
     works in venvs that have no ``pip``, such as those uv builds.
+
+    Parameters
+    ----------
+    environment_file
+        The file that records the run's packages. The first run writes it. A
+        restart compares the installed packages with it and asks whether to
+        continue if they differ.
     """
     current_environment_list = _list_installed_packages()
 

@@ -1,4 +1,4 @@
-**4.14.0 - 11/05/26**
+**4.15.0 - 11/05/26**
 
 - Add a ``uv_lock`` option to ``reusable_pipeline`` that builds each Python version's
   environment from the repo's ``uv.lock`` with ``uv sync --locked --no-editable``, using
@@ -8,8 +8,9 @@
 - Make ``get_vbu_version`` load the build-utils version that a standalone repo's
   ``uv.lock`` pins, as a release or a commit
 - Make ``make install`` refuse in a standalone repo with a ``uv.lock`` outside Jenkins,
-  and point to ``environment.sh``
-- Drop ``ln -F`` from ``make deploy-docs``, which newer ``ln`` versions reject
+  and point to ``make build-env``
+- Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
+  point to ``make list`` for a repo's own targets
 - Describe uv environments in the README
 - Install uv in Jenkins with Astral's install script instead of pip, through a new
   ``install_uv`` step. Conda builds get uv in the environment's ``bin``

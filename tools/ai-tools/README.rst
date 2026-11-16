@@ -68,8 +68,7 @@ It includes:
   ``pytest-vivarium``, and where baked-in coverage output lands.
 - ``framework-clis`` — reference for the vivarium-ecosystem console scripts
   (``simulate``, ``psimulate``, ``vipin``, per-repo ``make_artifacts``,
-  ``update_gbd_round``) available in a standard model-repo env, including a uv
-  ``.venv``.
+  ``update_gbd_round``) available in a standard model-repo env.
 - ``environments`` — discovery-first guidance for picking up the right Python
   environment in a vivarium repo. In a repo with a ``uv.lock``, it points to the
   checkout's ``.venv``.

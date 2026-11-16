@@ -46,6 +46,11 @@ def _get_package_subdir() -> str:
 def _get_locked_vbu_version(lock_path: str = "uv.lock") -> Optional[str]:
     """Return the vivarium-build-utils pin in ``lock_path``, or None if it has none.
 
+    Parameters
+    ----------
+    lock_path
+        The path to the uv lock file, relative to the working directory.
+
     Returns
     -------
         ``vivarium-build-utils-v<X.Y.Z>`` for a registry pin, or the full commit SHA

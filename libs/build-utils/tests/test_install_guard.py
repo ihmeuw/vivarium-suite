@@ -1,7 +1,7 @@
-"""Tests for the ``uv.lock`` guard on the ``install`` target in ``base.mk``.
+"""Tests for the targets in ``base.mk`` that change in a repo with ``uv.lock``.
 
-A stub ``uv`` comes first on ``PATH``, so a run that gets past the guard stops at its
-first ``uv`` call and installs nothing.
+In the ``install`` tests, a stub ``uv`` comes first on ``PATH``, so a run that gets
+past the guard stops at its first ``uv`` call and installs nothing.
 """
 
 import os
@@ -60,7 +60,7 @@ def test_refuses_in_standalone_repo_with_lock(
     result = _make_install(tmp_path / "repo", stub_env, with_lock=True)
     assert result.returncode != 0
     assert GUARD_MESSAGE in result.stdout
-    assert "source environment.sh" in result.stdout
+    assert "make build-env" in result.stdout
     assert STUB_MARKER not in result.stdout
 
 
@@ -97,3 +97,32 @@ def test_fails_clearly_without_uv(tmp_path: Path) -> None:
     result = _make_install(tmp_path / "repo", env, with_lock=False)
     assert result.returncode != 0
     assert "uv is not on PATH" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "subdir, with_lock, uv_steps",
+    [
+        ("repo", True, True),
+        ("repo", False, False),
+        ("libs/engine", True, False),
+    ],
+    ids=["uv-repo", "conda-repo", "monorepo-lib"],
+)
+def test_help_lists_the_build_steps_for_the_repo(
+    tmp_path: Path, subdir: str, with_lock: bool, uv_steps: bool
+) -> None:
+    """``make help`` gives the uv steps only in a standalone repo with ``uv.lock``."""
+    directory = tmp_path / subdir
+    directory.mkdir(parents=True)
+    if with_lock:
+        (directory / "uv.lock").write_text("version = 1\n")
+    result = subprocess.run(
+        ["make", "-s", "-f", str(BASE_MK), "help"],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert ("Build .venv from uv.lock" in result.stdout) is uv_steps
+    assert ("create-env" in result.stdout) is not uv_steps
+    assert "including this repo's own" in result.stdout
