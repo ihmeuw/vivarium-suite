@@ -469,14 +469,16 @@ class Pipeline:
         function directly, such as
         :func:`~vivarium.dagger.frontend.python_step.python_step`, or built by hand as a
         :class:`~vivarium.dagger.backend.task.Task`. The pipeline's registry is private
-        and knows only the file keys of steps added with the step methods, so
-        :func:`~vivarium.dagger.frontend.execution.preview` names such a task's files by
-        path, and a step added with a step method cannot name one of its files as an
-        input.
+        and knows only the root inputs and the products of steps added with the step
+        methods. So :func:`~vivarium.dagger.frontend.execution.preview` names by path
+        each output of such a task and each input whose key the pipeline does not know,
+        and a step added with a step method cannot name one of its outputs as an input.
 
         The pipeline checks the task before anything changes, and a task that is refused
         is not added. Each output that is a file path node is compared, by its resolved
-        path, with the outputs of the steps already added; any other output is not.
+        path, with the outputs of the steps already added; any other output is not. The
+        ``dagger`` command refuses a pipeline in which two steps have an output that is
+        not a path node with the same node name.
 
         Parameters
         ----------

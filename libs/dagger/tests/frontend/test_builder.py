@@ -891,9 +891,7 @@ def test_freeze_of_a_snapshot_raises_type_error(tmp_path: Path) -> None:
     with pytest.raises(TypeError) as info:
         freeze(given)
 
-    message = str(info.value)
-    assert "_PipelineSnapshot" in message, message
-    assert "Pipeline" in message, message
+    assert str(info.value) == "Expected a Pipeline, got _PipelineSnapshot."
 
 
 @pytest.mark.parametrize("value", ["pipeline.py", None, ()])
@@ -1076,7 +1074,7 @@ def test_only_and_force_on_a_pipeline_name_the_steps_added_so_far(tmp_path: Path
     assert "'b'" in message, message
 
 
-# The private snapshot (moved here from the verbs' tests with the class)
+# The private snapshot
 
 
 def test_snapshot_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) -> None:
@@ -1267,15 +1265,24 @@ def test_a_step_method_refuses_an_output_add_task_produces(tmp_path: Path) -> No
 def test_add_task_refuses_an_output_another_added_task_produces_naming_its_path(
     tmp_path: Path,
 ) -> None:
-    """add_task of a task 'second' whose output is the file of an added task 'first', written through another spelling of the path, raises WiringError starting "Step 'second':" that names the resolved path and 'first'; with its name also taken, the error is still the WiringError."""
+    """add_task of a task 'second' whose output is an unresolved PathNode on another spelling of the file of an added task 'first' raises WiringError starting "Step 'second':" that names the resolved path and 'first'; with its name also taken, the error is still the WiringError."""
     p = Pipeline(tmp_path / "out", "run1")
     out = tmp_path / "out.txt"
     p.add_task(_command_task("first", out))
-    other_spelling = tmp_path / "sub" / ".." / "out.txt"
+    (tmp_path / "sub").mkdir()
+    other_spelling = PathNode(path=tmp_path / "sub" / ".." / "out.txt")
 
     for name in ("second", "first"):
+        task = Task(
+            name=name,
+            run=f"echo {name} > {out}",
+            inputs={},
+            outputs={"out": other_spelling},
+            resources={},
+            env=None,
+        )
         with pytest.raises(WiringError) as info:
-            p.add_task(_command_task(name, other_spelling))
+            p.add_task(task)
 
         message = str(info.value)
         assert message.startswith(f"Step {name!r}:"), message

@@ -46,7 +46,8 @@ from vivarium.dagger.frontend import (
     StepFailed,
     run,
 )
-from vivarium.dagger.frontend.builder import Pipeline
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
+from vivarium.dagger.frontend.execution import _run
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon
 
@@ -225,16 +226,23 @@ def test_jobmon_max_attempts_passes_through_to_the_adapter_unchanged(tmp_path: P
 def test_the_callers_jobmon_resources_mapping_is_not_changed(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The jobmon_resources dict passed to run() and the Pipeline's resources mapping are equal to their originals after the run."""
+    """The jobmon_resources dict passed to run() and the resources dict a snapshot holds are equal to their originals after the run.
+
+    The snapshot is built around the caller's dict, because a Pipeline and freeze() each
+    copy the resources, so a change made by the run could not reach the caller's dict
+    through them.
+    """
     given = {"project": "proj_b", "queue": "long.q"}
     resources = {"memory": 8}
-    pipeline = _chain(tmp_path, resources=resources)
+    frozen = freeze(_chain(tmp_path))
+    snapshot = _PipelineSnapshot(
+        tasks=frozen.tasks, root=frozen.root, registry=frozen.registry, resources=resources
+    )
 
-    run(pipeline, jobmon=True, jobmon_resources=given)
+    _run(snapshot, jobmon=True, jobmon_resources=given)
 
     assert given == {"project": "proj_b", "queue": "long.q"}
     assert resources == {"memory": 8}
-    assert pipeline.resources == {"memory": 8}
     assert len(fake_jobmon.plans) == 1
 
 

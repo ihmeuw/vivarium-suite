@@ -270,21 +270,21 @@ def run(
         instead of :class:`StepFailed`, although the steps that had not finished are
         reported as failed.
     PipelineError
-        If ``jobmon=True`` is given but the bridge's pytask plugin is not registered, ``only`` or ``force`` names a step that is not in the
-        pipeline, the run goes through Jobmon and some step would have no project,
-        ``force`` is given and ``pytask.lock`` is not a lockfile pytask accepts, the
-        backend rejects the tasks (for example, a declared env does not resolve), or
-        pytask stops before any step fails. A missing bridge plugin, an unknown step and
-        a step without a project are reported in that order, before anything is built
-        or written. A step has no project when neither
-        ``jobmon_resources`` as described under ``build_kwargs`` nor the step's own
-        resources give a non-empty ``"project"``. Every step of the pipeline is checked,
-        not only the steps that would run, and the message names each step without a
-        project and the three ways to set one: the ``dagger`` command's ``-P/--project``
-        (``jobmon_resources={"project": ...}`` when calling this function), the
-        definition's ``Pipeline(resources={"project": ...})``, and the step's own
-        ``resources=``. An unknown step is
-        reported with the valid step names and the closest match. A rejection by the
+        If ``jobmon=True`` is given but the bridge's pytask plugin is not registered,
+        ``only`` or ``force`` names a step that is not in the pipeline, the run goes
+        through Jobmon and some step would have no project, ``force`` is given and
+        ``pytask.lock`` is not a lockfile pytask accepts, the backend rejects the tasks
+        (for example, a declared env does not resolve), or pytask stops before any step
+        fails. A missing bridge plugin, an unknown step and a step without a project are
+        reported in that order, before anything is built or written. A step has no
+        project when neither ``jobmon_resources`` as described under ``build_kwargs``
+        nor the step's own resources give a non-empty ``"project"``. Every step of the
+        pipeline is checked, not only the steps that would run, and the message names
+        each step without a project and the three ways to set one: the ``dagger``
+        command's ``-P/--project`` (``jobmon_resources={"project": ...}`` when calling
+        this function), the definition's ``Pipeline(resources={"project": ...})``, and
+        the step's own ``resources=``. An unknown step is reported with the valid step
+        names and the closest match. A rejection by the
         backend is chained from its ``ValueError``, and an invalid lockfile from
         pytask's lockfile error. When pytask stops, the message is
         :func:`~vivarium.dagger.backend.build.failure_message`'s; for a cause pytask
@@ -393,9 +393,11 @@ def preview(
     ``file '<key>'`` (``run directory '<key>'`` for a simulation's run directory), a
     step's code identity reads ``code of '<step>'``, a step's command reads
     ``command of '<step>'``, and a step name reads ``step '<step>'``. Any other node
-    keeps pytask's name, which for a file is its path. The registry knows the key of
-    each file of a step added with a step method, but not of a step added with
-    :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`.
+    keeps pytask's name, which for a file is its path. The registry knows only the
+    pipeline's root inputs and the products of steps added with the step methods, so
+    each output of a step added with
+    :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, and each of its inputs
+    whose key the pipeline does not know, is named by path.
 
     Parameters
     ----------

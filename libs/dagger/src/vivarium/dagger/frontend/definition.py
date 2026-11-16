@@ -62,9 +62,9 @@ def load_pipeline(spec: str) -> Pipeline:
         is already imported (the message says to rename the file), the dotted module or
         one of its parent packages does not exist, the module has no attribute of the
         function's name, that attribute is not callable, or the function returns
-        something other than a ``Pipeline``. The message is
-        one line and names the spec; for a wrong return value it names the function,
-        the type it returned, and says that a ``Pipeline`` is expected.
+        something other than a ``Pipeline``. The message is one line and names the spec;
+        for a wrong return value it names the function, the type it returned, and says
+        that a ``Pipeline`` is expected.
     Exception
         Any other exception raised while importing the definition or calling its
         function, including an import error raised inside the module, propagates

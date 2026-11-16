@@ -182,8 +182,9 @@ def _load(definition: str) -> _PipelineSnapshot:
             f"Could not load the definition {definition!r}; the traceback above shows why."
         ) from None
     pipeline = freeze(loaded)
-    # A Pipeline refuses a second producer of an output when the step is added, so this
-    # check only guards against a snapshot that holds one some other way.
+    # A Pipeline refuses a second producer of a file path when the step is added. This
+    # check still catches two added tasks that share an output that is not a path node,
+    # by its node name, since add_task does not compare those.
     _check_single_producers(pipeline)
     _check_root(pipeline.root)
     return pipeline

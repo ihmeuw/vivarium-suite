@@ -68,8 +68,8 @@ and the state next to the definition.
 
 Write a definition with the step methods. The lower layer under them,
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, adds a task that was compiled
-with a step function directly or built by hand, and ``dagger preview`` names such a
-task's files by path, not by file key.
+with a step function directly or built by hand, and ``dagger preview`` names each output
+of such a task, and each input whose file key the pipeline does not know, by path.
 
 This example has three steps in a chain. The ``population`` step writes a table,
 ``adults`` reads it, and ``summary`` reads the output of ``adults``. Everything a
