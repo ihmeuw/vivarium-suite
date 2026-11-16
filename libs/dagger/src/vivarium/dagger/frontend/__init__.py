@@ -3,9 +3,9 @@
 A pipeline definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline`, adds
 its steps to it, and returns it, so it needs no import from the backend. The step
 functions that the pipeline's methods call, such as
-:func:`~vivarium.dagger.frontend.python_step.python_step`, and the
-:class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` that a run reads, are the
-lower layer, imported from their own modules.
+:func:`~vivarium.dagger.frontend.python_step.python_step`, are the lower layer, imported
+from their own modules; a task compiled with one is added with
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`.
 """
 
 from vivarium.dagger.frontend.builder import Pipeline

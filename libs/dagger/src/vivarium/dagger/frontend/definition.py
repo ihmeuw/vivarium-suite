@@ -19,7 +19,6 @@ from pathlib import Path
 from types import ModuleType
 
 from vivarium.dagger.frontend.builder import Pipeline
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 DEFAULT_FUNCTION = "pipeline"
 """Name of the function :func:`load_pipeline` calls when the spec names none."""
@@ -29,7 +28,7 @@ class DefinitionError(Exception):
     """A definition spec names no loadable file, module, or pipeline function."""
 
 
-def load_pipeline(spec: str) -> Pipeline | PipelineSnapshot:
+def load_pipeline(spec: str) -> Pipeline:
     """Import the definition ``spec`` names and return the pipeline its function builds.
 
     Parameters
@@ -54,9 +53,7 @@ def load_pipeline(spec: str) -> Pipeline | PipelineSnapshot:
     Returns
     -------
         The :class:`~vivarium.dagger.frontend.builder.Pipeline` the function returns,
-        as it returned it, not frozen. A function may instead return a
-        :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` of tasks compiled
-        with the step functions directly, which is returned as it is.
+        as it returned it, not frozen.
 
     Raises
     ------
@@ -65,7 +62,7 @@ def load_pipeline(spec: str) -> Pipeline | PipelineSnapshot:
         is already imported (the message says to rename the file), the dotted module or
         one of its parent packages does not exist, the module has no attribute of the
         function's name, that attribute is not callable, or the function returns
-        something other than a ``Pipeline`` or a ``PipelineSnapshot``. The message is
+        something other than a ``Pipeline``. The message is
         one line and names the spec; for a wrong return value it names the function,
         the type it returned, and says that a ``Pipeline`` is expected.
     Exception
@@ -92,7 +89,7 @@ def load_pipeline(spec: str) -> Pipeline | PipelineSnapshot:
             "function."
         )
     pipeline = function()
-    if not isinstance(pipeline, (Pipeline, PipelineSnapshot)):
+    if not isinstance(pipeline, Pipeline):
         raise DefinitionError(
             f"Definition {spec!r}: {function_name}() returned {type(pipeline).__name__}, "
             "not a Pipeline."

@@ -20,14 +20,15 @@ so a step added through the pipeline is the same task, with the same checks and
 messages, as one compiled against the registry by hand. The pipeline also refuses a step
 whose name, or one of whose products, another step in the pipeline already has, when the
 step is added; when both apply, the error names the product. A step that reads a
-file must still be added after the step that produces it.
+file must still be added after the step that produces it. :meth:`Pipeline.add_task` is
+the lower layer: it adds a task that was compiled with a step function directly or built
+by hand.
 
 A pipeline can still change after it is made, so
 :func:`~vivarium.dagger.frontend.execution.run`,
 :func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command first
-:func:`freeze` it into a
-:class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` of the steps added so far.
-A step added after a run has started is in the next run, not that one.
+freeze it into a private snapshot of the steps added so far, and read only that
+snapshot. A step added after a run has started is in the next run, not that one.
 
 By default the pipeline keeps its pytask state in ``<output root>/.dagger/<run name>``,
 outside the run's output directory ``<output root>/<run name>``. Two pipelines with
@@ -36,11 +37,13 @@ directories and keep separate state, so they do not share a lock.
 """
 
 import os
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from pytask import PathNode
 
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
@@ -51,7 +54,8 @@ from vivarium.dagger.frontend.python_step import python_step as compile_python_s
 from vivarium.dagger.frontend.simulation_step import (
     simulation_step as compile_simulation_step,
 )
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+
+__all__ = ["STATE_DIR", "Pipeline"]
 
 STATE_DIR = ".dagger"
 """The directory under the output root that holds each run's default state directory."""
@@ -81,9 +85,8 @@ class Pipeline:
         here.
     state
         Absolute directory for the run's pytask configuration, state database, lockfile
-        and run lock, which becomes the snapshot's :attr:`root
-        <vivarium.dagger.frontend.snapshot.PipelineSnapshot.root>`. Defaults to
-        ``<output root>/.dagger/<run name>``, with the output root resolved.
+        and run lock. Defaults to ``<output root>/.dagger/<run name>``, with the output
+        root resolved.
     resources
         The definition's default compute resources for a run through Jobmon, such as
         ``{"project": "proj_simscience", "memory": 4}``. They override
@@ -138,6 +141,9 @@ class Pipeline:
         self._resources: dict[str, Any] = {} if resources is None else dict(resources)
         self._tasks: list[Task] = []
         self._producers: dict[FileKey, str] = {}
+        # Outputs of steps added with add_task, by resolved path: the registry does not
+        # know their keys.
+        self._task_outputs: dict[Path, str] = {}
 
     @property
     def output_root(self) -> Path:
@@ -456,6 +462,55 @@ class Pipeline:
         )
         self._add(task, products)
 
+    def add_task(self, task: Task) -> None:
+        """Add ``task``, a step that is already compiled, to the end of the pipeline.
+
+        This is the lower layer under the step methods, for a task compiled with a step
+        function directly, such as
+        :func:`~vivarium.dagger.frontend.python_step.python_step`, or built by hand as a
+        :class:`~vivarium.dagger.backend.task.Task`. The pipeline's registry is private
+        and knows only the file keys of steps added with the step methods, so
+        :func:`~vivarium.dagger.frontend.execution.preview` names such a task's files by
+        path, and a step added with a step method cannot name one of its files as an
+        input.
+
+        The pipeline checks the task before anything changes, and a task that is refused
+        is not added. Each output that is a file path node is compared, by its resolved
+        path, with the outputs of the steps already added; any other output is not.
+
+        Parameters
+        ----------
+        task
+            The task to add. Its name is the step's name.
+
+        Raises
+        ------
+        ValueError
+            If the task's name is the name of a step already added; the message starts
+            with ``Step '<name>':`` and says to give each step a different ``name=``.
+        vivarium.dagger.backend.wiring.WiringError
+            If one of the task's output paths is an output of a step already added,
+            whichever way that step was added; the message starts with
+            ``Step '<name>':`` and names the output, by its file key if the pipeline's
+            registry knows the path and otherwise by path, and the step that produces
+            it. If the task's name and one of its outputs are both already in the
+            pipeline, this error is raised, not the ``ValueError`` for the name.
+        """
+        paths = _output_paths(task)
+        for path in paths:
+            producer = self._producer_of(path)
+            if producer is not None:
+                key = self._registry.key_for(path)
+                output = repr(key) if key is not None else repr(str(path))
+                raise WiringError(
+                    f"Step {task.name!r}: output {output} is already produced by step "
+                    f"{producer!r}; each output can have only one producing step."
+                )
+        self._check_name(task.name)
+        self._tasks.append(task)
+        for path in paths:
+            self._task_outputs[path] = task.name
+
     def _check_new(self, step: str | None, products: Iterable[FileKey]) -> None:
         """Refuse a step whose name or one of whose products an added step already has."""
         # A missing or empty name is the step function's error to report.
@@ -465,16 +520,29 @@ class Pipeline:
         # name, and a different name= would not fix that.
         for key in products:
             producer = self._producers.get(key)
+            if producer is None and self._task_outputs:
+                producer = self._task_outputs.get(self._registry.path_for(key))
             if producer is not None:
                 raise WiringError(
                     f"Step {step!r}: output {key!r} is already produced by step "
                     f"{producer!r}; each file key can have only one producing step."
                 )
+        self._check_name(step)
+
+    def _check_name(self, step: str) -> None:
+        """Refuse a step named like a step already added."""
         if any(task.name == step for task in self._tasks):
             raise ValueError(
                 f"Step {step!r}: a step named {step!r} was already added to the pipeline; "
                 "give each step a different name= to tell them apart."
             )
+
+    def _producer_of(self, path: Path) -> str | None:
+        """Return the name of the step already added that produces ``path``, if any."""
+        key = self._registry.key_for(path)
+        if key is not None and key in self._producers:
+            return self._producers[key]
+        return self._task_outputs.get(path)
 
     def _add(self, task: Task, products: Iterable[FileKey]) -> None:
         """Append ``task`` and record it as the producer of each of ``products``."""
@@ -483,48 +551,78 @@ class Pipeline:
             self._producers[key] = task.name
 
 
-def freeze(pipeline: Pipeline | PipelineSnapshot) -> PipelineSnapshot:
+@dataclass(frozen=True)
+class _PipelineSnapshot:
+    """Hold the fixed tasks, state directory, registry and resources that one run reads."""
+
+    tasks: Sequence[Task]
+    # The absolute directory for pytask's configuration, state database and lockfile.
+    root: Path
+    # Without a registry, preview names files by path.
+    registry: FileRegistry | None = None
+    resources: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Store ``tasks`` as a tuple; reject a relative root or non-mapping resources."""
+        object.__setattr__(self, "tasks", tuple(self.tasks))
+        if not isinstance(self.root, Path):
+            raise TypeError(
+                f"Pipeline root must be a pathlib.Path, got {type(self.root).__name__} "
+                f"{self.root!r}."
+            )
+        if not self.root.is_absolute():
+            raise ValueError(
+                f"Pipeline root must be absolute, got the relative path {str(self.root)!r}."
+            )
+        if not isinstance(self.resources, Mapping):
+            raise TypeError(
+                "Pipeline resources must be a mapping, got "
+                f"{type(self.resources).__name__} {self.resources!r}."
+            )
+
+
+def freeze(pipeline: Pipeline) -> _PipelineSnapshot:
     """Return a snapshot of the steps added to ``pipeline`` so far.
 
-    :func:`~vivarium.dagger.frontend.execution.run`,
-    :func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command call
-    this before they read a pipeline's steps, so that each call reads one fixed set of
-    steps. A step added to ``pipeline`` after this call does not reach the snapshot it
-    returned.
+    The verbs and the ``dagger`` command call this before they read a pipeline's steps,
+    so that each call reads one fixed set of steps. A step added to ``pipeline`` after
+    this call does not reach the snapshot it returned.
 
     Parameters
     ----------
     pipeline
-        The pipeline to freeze. A
-        :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` is accepted too, for
-        code that compiles its tasks with the step functions directly.
+        The pipeline to freeze.
 
     Returns
     -------
-        ``pipeline`` itself if it is a snapshot. Otherwise a new
-        :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` on each call, whose
-        ``tasks`` are the tasks of the steps added so far, as a tuple in the order they
-        were added, whose ``root`` is :attr:`Pipeline.state`, whose ``registry`` is the
-        pipeline's registry, and whose ``resources`` are a copy of
-        :attr:`Pipeline.resources`.
+        A new snapshot on each call, whose ``tasks`` are the tasks of the steps added so
+        far, as a tuple in the order they were added, whose ``root`` is
+        :attr:`Pipeline.state`, whose ``registry`` is the pipeline's registry, and whose
+        ``resources`` are a copy of :attr:`Pipeline.resources`.
 
     Raises
     ------
     TypeError
-        If ``pipeline`` is neither a :class:`Pipeline` nor a
-        :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot`. The message names
-        the type it got and says that a ``Pipeline`` is expected.
+        If ``pipeline`` is not a :class:`Pipeline`. The message names the type it got
+        and says that a ``Pipeline`` is expected.
     """
-    if isinstance(pipeline, PipelineSnapshot):
-        return pipeline
-    if isinstance(pipeline, Pipeline):
-        return PipelineSnapshot(
-            tasks=tuple(pipeline._tasks),
-            root=pipeline.state,
-            registry=pipeline._registry,
-            resources=pipeline.resources,
-        )
-    raise TypeError(f"Expected a Pipeline, got {type(pipeline).__name__}.")
+    if not isinstance(pipeline, Pipeline):
+        raise TypeError(f"Expected a Pipeline, got {type(pipeline).__name__}.")
+    return _PipelineSnapshot(
+        tasks=tuple(pipeline._tasks),
+        root=pipeline.state,
+        registry=pipeline._registry,
+        resources=pipeline.resources,
+    )
+
+
+def _output_paths(task: Task) -> list[Path]:
+    """Return the resolved path of each of ``task``'s outputs that is a file path node."""
+    return [
+        node.path.resolve()
+        for node in task.outputs.values()
+        if isinstance(node, PathNode) and isinstance(node.path, Path)
+    ]
 
 
 def _check_run_name(root: Path, run_name: str) -> None:
