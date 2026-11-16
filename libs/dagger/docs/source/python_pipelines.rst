@@ -57,10 +57,12 @@ directory on ``PYTHONPATH``. ``dagger`` does not add the current directory to
 A definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline` with an output
 root and a run name, adds each step to it with a method such as
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`, and returns the
-pipeline. Add a step after the steps that produce the artifacts it reads. A
-step's products go under ``<output root>/<run name>``. The pipeline's root, the directory
-that holds its pytask state, is ``<output root>/.dagger/<run name>``, so two runs with
-different run names under one output root keep separate state. Pass ``state=`` to the
+pipeline. Add a step after the steps that produce the artifacts it reads. A step
+reads a file that no step produces through the pipeline's root inputs (see
+:doc:`location_inputs`). A step's products go under ``<output root>/<run name>``. The
+pipeline's root, the directory that holds its pytask state, is
+``<output root>/.dagger/<run name>``, so two runs with different run names under one
+output root keep separate state. Pass ``state=`` to the
 ``Pipeline`` to put the root somewhere else; it must be an absolute path, so that the
 state does not depend on the directory ``dagger`` is run from. Building the output root
 from the definition file's own location, as the example below does, keeps the outputs
