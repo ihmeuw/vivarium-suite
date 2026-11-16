@@ -1,9 +1,3 @@
-import groovy.transform.Field
-
-// The uv that builds environments from uv.lock. Pinned so a uv release cannot change
-// how CI resolves or installs.
-@Field final String UV_VERSION = "0.13.6"
-
 def call() {
     // Return a map of functions that can be accessed
     return [
@@ -102,6 +96,8 @@ def buildEnvironment() {
             // here just to be safe.
             sh "rm -rf ${CONDA_ENV_PATH}"
             sh "${env.ACTIVATE_BASE} && make create-env PYTHON_VERSION=${PYTHON_VERSION}"
+            // In the env's bin, so ACTIVATE puts uv on PATH for make install and later stages.
+            install_uv("${CONDA_ENV_PATH}/bin")
             // open permissions for test users to create file in workspace
             sh "chmod 777 ${WORKSPACE}"
         }
@@ -137,14 +133,13 @@ def syncEnvironment(String env_reqs = "", boolean useCache = false, String gitCr
     String extras = env_reqs.split(',').collect { it.trim() }.findAll { it }.collect { "--extra ${it}" }.join(' ')
     String noCache = useCache ? "" : "--no-cache"
     String uvDir = "${WORKSPACE}@tmp/uv-${PYTHON_VERSION}"
-    String uv = "${uvDir}/bin/uv"
     stage("Sync Environment - Python ${PYTHON_VERSION}") {
         withWorkingDirectory {
             if (!fileExists('uv.lock')) {
                 error("uv_lock is set, but there is no uv.lock in ${pwd()}.")
             }
             sh "rm -rf ${CONDA_ENV_PATH} ${uvDir}"
-            sh "/svc-simsci/miniconda3/bin/python -m pip install --quiet --target ${uvDir} uv==${UV_VERSION}"
+            String uv = install_uv(uvDir)
             withEnv([
                 "UV_PROJECT_ENVIRONMENT=${CONDA_ENV_PATH}",
                 // The cache and the venv can be on different filesystems.

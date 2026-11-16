@@ -12,6 +12,12 @@
 - Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
   point to ``make list`` for a repo's own targets
 - Describe uv environments in the README
+- Install uv in Jenkins with Astral's install script instead of pip, through a new
+  ``install_uv`` step. Conda builds get uv in the environment's ``bin``
+- Make ``make install`` require ``uv`` on ``PATH`` instead of installing it with pip
+- Build with ``uv build`` and upload to Artifactory with ``uv publish``, in place of
+  ``build`` and ``twine``
+- Run conda-pack with ``uvx`` in the shared environment job
 
 **4.13.0 - 11/04/26**
 

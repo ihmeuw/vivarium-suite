@@ -130,7 +130,7 @@ help: # Curated help message
 	echo "  7. test-docs                        Test documentation examples"; \
 	echo "  8. Deploy the package (Artifactory only)"; \
 	echo "     a. tag-version                   Tag current version and push to git"; \
-	echo "     b. build-package                 Build pip wheel package"; \
+	echo "     b. build-package                 Build the sdist and wheel with uv"; \
 	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
 	echo "  9. deploy-docs                      Deploy documentation to shared server"; \
 	echo " 10. clean                            Clean build artifacts and temporary files"; \
@@ -197,7 +197,10 @@ install: # Install package and dependencies
 		echo "Run 'make build-env' instead."; \
 		exit 1; \
 	fi
-	pip install uv
+	@command -v uv > /dev/null || { \
+		echo "ERROR: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/"; \
+		exit 1; \
+	}
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
 	@if [ -z "$(strip $(CHANGED_LIBS))" ]; then \
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
@@ -306,17 +309,16 @@ check-release-tag: # Fail if this version was already released from another comm
 	fi
 
 .PHONY: build-package
-build-package: # Build pip wheel package
-	pip install build
-	python -m build
+build-package: # Build the sdist and wheel with uv
+	uv build
 
 .PHONY: deploy-package-artifactory
 deploy-package-artifactory: # Deploy the package to Artifactory
 	@[ "${IHME_PYPI}" ] && echo "" > /dev/null || ( echo "IHME_PYPI is empty; cannot upload. This target is Jenkins/internal-only."; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
-	pip install twine
-	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
+	UV_PUBLISH_USERNAME="$${PYPI_ARTIFACTORY_CREDENTIALS_USR}" UV_PUBLISH_PASSWORD="$${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" \
+		uv publish --publish-url ${IHME_PYPI} dist/*
 
 .PHONY: deploy-docs
 deploy-docs: # Deploy documentation to shared server

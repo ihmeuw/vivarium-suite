@@ -43,10 +43,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up uv
+        # The dependency_graph CLI runs from in-tree source, so each call brings its own
+        # runtime dependency with `uv run --with packaging`.
+        uses: astral-sh/setup-uv@v4
+
       - name: Detect releasing libraries and their downstream dependents
         id: detect
         run: |
-          pip install packaging
           CHANGED_FILES="${RUNNER_TEMP}/changed-files.txt"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE_REF="${{ github.event.pull_request.base.ref }}"
@@ -59,7 +63,7 @@ jobs:
           fi
 
           # A lib is pending release when its CHANGELOG.rst changed in this PR.
-          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph \
             classify-changes --changed-files "$CHANGED_FILES")
           PENDING_RELEASE_LIBS=$(jq -r '.["pending-release"] | join(" ")' <<< "$CLASSIFIED_CHANGES")
           echo "pending-release-libs=${PENDING_RELEASE_LIBS}" >> $GITHUB_OUTPUT
@@ -67,7 +71,7 @@ jobs:
 
           # An empty --released yields an empty include, so no short-circuit is needed.
           # has-downstream gates the fan-out job: an empty matrix would fail it, not skip it.
-          DOWNSTREAM_MATRIX=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+          DOWNSTREAM_MATRIX=$(PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph \
             build-downstream-matrix --released "$PENDING_RELEASE_LIBS")
           echo "Downstream matrix: ${DOWNSTREAM_MATRIX}"
           echo "downstream-matrix=${DOWNSTREAM_MATRIX}" >> $GITHUB_OUTPUT

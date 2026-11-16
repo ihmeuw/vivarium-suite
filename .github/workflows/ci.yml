@@ -29,21 +29,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install dependency-graph requirements
-        # The dependency_graph CLI is run from in-tree source (see below), so its
-        # own runtime dependency has to be installed by hand.
-        run: pip install packaging
+      - name: Set up uv
+        # The dependency_graph CLI runs from in-tree source, so each call brings its own
+        # runtime dependency with `uv run --with packaging`.
+        uses: astral-sh/setup-uv@v4
 
       - name: Validate candidate python declarations
         # Catches a promotion that added a version to python_versions.json but left it
         # in [tool.vivarium.python-support] candidates. Candidates themselves run only
         # in the Candidate Check workflow; this is the one place they touch a PR.
-        run: PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph validate-candidates
+        run: PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph validate-candidates
 
       - name: Validate dependency graph is acyclic
         # Full-graph pre-merge guard: fails the PR if libs/*/pyproject runtime deps
         # form a cycle (the release workflow orders the graph too, but only post-merge).
-        run: PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph check-acyclic
+        run: PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph check-acyclic
 
       - name: Detect changed packages
         id: detect
@@ -72,7 +72,7 @@ jobs:
           echo "Changed files:"
           cat "$CHANGED_FILES"
 
-          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src python -m vivarium.build_utils.dependency_graph \
+          CLASSIFIED_CHANGES=$(PYTHONPATH=libs/build-utils/src uv run --no-project --with packaging python -m vivarium.build_utils.dependency_graph \
             classify-changes --changed-files "$CHANGED_FILES")
           echo "Classification:"
           jq . <<< "$CLASSIFIED_CHANGES"
