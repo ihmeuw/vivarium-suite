@@ -36,7 +36,7 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
 
@@ -69,7 +69,7 @@ def make_c(source):
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     first, second, _ = NAMES
     targets = [make_a, explode_on_node if FAILING else make_b, make_c]
     sources = [{}, {"source": f"{first}.parquet"}, {"source": f"{second}.parquet"}]
@@ -103,7 +103,7 @@ import os
 from pathlib import Path
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 
 import HELPER as helper
@@ -118,7 +118,7 @@ def make_table():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     step = python_step(
         make_table, inputs={}, produces="table.parquet", registry=registry, name="table"
     )

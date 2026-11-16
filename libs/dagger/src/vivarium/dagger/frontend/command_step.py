@@ -8,7 +8,7 @@ command-line tool or a script; otherwise use
 pipeline's own process.
 
 The step's inputs and products are wired through the shared
-:class:`~vivarium.dagger.backend.wiring.ArtifactRegistry`, so downstream steps get real
+:class:`~vivarium.dagger.backend.wiring.FileRegistry`, so downstream steps get real
 edges to its products, and each one reaches the command as its absolute path through a
 named ``{placeholder}``. With an ``env``,
 :func:`~vivarium.dagger.backend.build.run_command` puts that environment's ``bin``
@@ -31,16 +31,16 @@ from typing import Any
 from pytask import PathNode
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend.notebook_step import _RESERVED_NAMES
 
 
 def command_step(
     command: str,
     *,
-    produces: Mapping[str, ArtifactKey],
-    registry: ArtifactRegistry,
-    inputs: Mapping[str, ArtifactKey] | None = None,
+    produces: Mapping[str, FileKey],
+    registry: FileRegistry,
+    inputs: Mapping[str, FileKey] | None = None,
     env: str | None = None,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
@@ -72,13 +72,13 @@ def command_step(
         The shell command, with a ``{name}`` placeholder for each input or product path
         it uses.
     produces
-        Maps placeholder names to the artifact keys of the files the command writes. Each
+        Maps placeholder names to the file keys of the files the command writes. Each
         key is registered with ``registry`` as a product of the step. It must have at
         least one entry, and each key must resolve to its own path.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
     inputs
-        Maps placeholder names to the artifact keys the registry resolves to the producing
+        Maps placeholder names to the file keys the registry resolves to the producing
         step's node (or a declared root input). An input that the command does not name
         still orders the step after its producer and marks the step stale when its file
         changes. To make an edit to a script that the command runs mark the step stale,
@@ -117,7 +117,7 @@ def command_step(
         is a declared root input or resolves to the path of a different key that is
         already registered (another step's product or a root input). The message starts
         with ``Step '<name>':``, followed by the registry's message, which names the
-        artifact key. The same key claimed by two steps is left for the build to reject.
+        file key. The same key claimed by two steps is left for the build to reject.
     ValueError
         If ``command`` is empty or only whitespace; ``name`` or ``env`` is given and
         empty; ``produces`` is empty; ``name`` is ``None`` and ``produces`` has more than
@@ -125,7 +125,7 @@ def command_step(
         is a Python keyword, is reserved (``__code_id__``, ``__command__``,
         ``__executed__``, ``__notebook__``) or appears in both; two ``produces`` keys
         resolve to one path (the message names both); an input and a product are one
-        artifact, by key or by resolved path (the message names both, with their keys);
+        file, by key or by resolved path (the message names both, with their keys);
         a placeholder in ``command`` is not exactly an input or product name, as for an
         unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute or an
         index; or ``command`` has a single ``{`` or ``}`` that is not part of a
@@ -154,8 +154,8 @@ def command_step(
         )
     if not produces:
         raise ValueError(_no_product(f"Step {task_name!r}"))
-    input_keys: dict[str, ArtifactKey] = dict(inputs or {})
-    product_keys: dict[str, ArtifactKey] = dict(produces)
+    input_keys: dict[str, FileKey] = dict(inputs or {})
+    product_keys: dict[str, FileKey] = dict(produces)
     _check_names(task_name, input_keys, product_keys)
     segments = _parse_command(task_name, command, sorted({*input_keys, *product_keys}))
     _check_shared_keys(task_name, input_keys, product_keys)
@@ -197,7 +197,7 @@ def _no_product(prefix: str) -> str:
     )
 
 
-def _step_name(produces: Mapping[str, ArtifactKey], name: str | None) -> str:
+def _step_name(produces: Mapping[str, FileKey], name: str | None) -> str:
     """Return the step's name; raise the errors that have no name to report."""
     if name is not None:
         if not name:
@@ -223,7 +223,7 @@ def _quoted(names: Sequence[str]) -> str:
 
 
 def _check_names(
-    task_name: str, inputs: Mapping[str, ArtifactKey], produces: Mapping[str, ArtifactKey]
+    task_name: str, inputs: Mapping[str, FileKey], produces: Mapping[str, FileKey]
 ) -> None:
     """Reject a name that is not an identifier, is a keyword or reserved, or is used twice."""
     for group, names in (("inputs", inputs), ("produces", produces)):
@@ -318,25 +318,25 @@ def _placeholder_error(step: str, written: str, field: str, names: Sequence[str]
 
 
 def _check_shared_keys(
-    task_name: str, inputs: Mapping[str, ArtifactKey], produces: Mapping[str, ArtifactKey]
+    task_name: str, inputs: Mapping[str, FileKey], produces: Mapping[str, FileKey]
 ) -> None:
-    """Reject an input and a product that name the same artifact key."""
+    """Reject an input and a product that name the same file key."""
     pairs = [
         f"input {name!r} (key {key!r}) and product {product!r} (key {product_key!r}) are "
-        "one artifact"
+        "one file"
         for name, key in inputs.items()
         for product, product_key in produces.items()
         if key == product_key
     ]
     if pairs:
-        raise ValueError(_one_artifact_message(task_name, pairs))
+        raise ValueError(_same_file_message(task_name, pairs))
 
 
 def _check_paths(
     task_name: str,
-    inputs: Mapping[str, ArtifactKey],
+    inputs: Mapping[str, FileKey],
     dependencies: Mapping[str, PathNode],
-    produces: Mapping[str, ArtifactKey],
+    produces: Mapping[str, FileKey],
     product_paths: Mapping[str, Path],
 ) -> None:
     """Reject two products at one path, or an input at a product's path."""
@@ -355,17 +355,17 @@ def _check_paths(
         if path in claimed:
             pairs.append(
                 f"input {name!r} (key {inputs[name]!r}) and {claimed[path]} are one "
-                f"artifact at {str(path)!r}"
+                f"file at {str(path)!r}"
             )
     if pairs:
-        raise ValueError(_one_artifact_message(task_name, pairs))
+        raise ValueError(_same_file_message(task_name, pairs))
 
 
-def _one_artifact_message(task_name: str, pairs: Iterable[str]) -> str:
-    """Return the message for inputs and products that are one artifact."""
+def _same_file_message(task_name: str, pairs: Iterable[str]) -> str:
+    """Return the message for inputs and products that are one file."""
     return (
         f"Step {task_name!r}: {'; '.join(pairs)}; a step cannot read and write the same "
-        "artifact."
+        "file."
     )
 
 

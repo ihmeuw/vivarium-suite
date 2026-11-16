@@ -492,7 +492,7 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 
 HERE = Path(__file__).resolve().parent
@@ -503,7 +503,7 @@ def make_table():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     step = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
     return Pipeline([step], HERE / "state", registry)
 """

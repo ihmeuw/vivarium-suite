@@ -15,7 +15,7 @@ from tests.bridge.helpers import lockfile_entries
 from tests.frontend.notebooks import write_source_notebook
 from tests.frontend.simulations import write_branches, write_spec
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend import Pipeline, run
 from vivarium.dagger.frontend.command_step import command_step
 from vivarium.dagger.frontend.notebook_step import notebook_step
@@ -131,7 +131,7 @@ def _add(wf: Workflow, kind: str, arguments: Mapping[str, Any]) -> object:
     return method(**arguments)
 
 
-def _registry_of(wf: Workflow) -> ArtifactRegistry:
+def _registry_of(wf: Workflow) -> FileRegistry:
     """Return the registry of the pipelines ``wf`` returns."""
     registry = wf.pipeline().registry
     assert registry is not None
@@ -147,14 +147,14 @@ def _registered(wf: Workflow, key: str) -> bool:
 
 
 def test_a_workflow_holds_its_output_root_run_name_registry_and_state(tmp_path: Path) -> None:
-    """Workflow(tmp_path / "out", "run1") has output_root tmp_path/out resolved, run_name 'run1', an ArtifactRegistry whose path_for('x.csv') is tmp_path/out/run1/x.csv, and state tmp_path/out/.dagger/run1."""
+    """Workflow(tmp_path / "out", "run1") has output_root tmp_path/out resolved, run_name 'run1', an FileRegistry whose path_for('x.csv') is tmp_path/out/run1/x.csv, and state tmp_path/out/.dagger/run1."""
     output_root = (tmp_path / "out").resolve()
 
     wf = Workflow(tmp_path / "out", "run1")
 
     assert wf.output_root == output_root
     assert wf.run_name == "run1"
-    assert isinstance(wf.pipeline().registry, ArtifactRegistry)
+    assert isinstance(wf.pipeline().registry, FileRegistry)
     assert _registry_of(wf).path_for("x.csv") == output_root / "run1" / "x.csv"
     assert STATE_DIR == ".dagger"
     assert wf.state == output_root / ".dagger" / "run1"
@@ -329,7 +329,7 @@ def test_each_step_method_adds_the_task_its_step_function_compiles(
     """Each of python_step, notebook_step, command_step and simulation_step, given every argument of its step function except registry, adds a task equal to the one the step function compiles with the same arguments against a registry made from the same output root, run name and root inputs."""
     root_inputs = _root_inputs(tmp_path)
     wf = Workflow(tmp_path / "out", "run1", root_inputs=root_inputs)
-    registry = ArtifactRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+    registry = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
     arguments = _arguments(kind, tmp_path, "only", name=f"{kind}_step")
 
     _add(wf, kind, arguments)
@@ -354,7 +354,7 @@ def test_each_step_methods_parameters_are_its_step_functions_without_registry(
 def test_a_pipeline_of_all_four_step_kinds_matches_one_assembled_by_hand(
     tmp_path: Path,
 ) -> None:
-    """A workflow of a python step, a notebook step reading its product, a command step and a simulation step, each with resources and a name, gives wf.pipeline().tasks equal, in order, to the tasks compiled by hand against an ArtifactRegistry and passed to Pipeline, with the same root, resources and registry keys."""
+    """A workflow of a python step, a notebook step reading its product, a command step and a simulation step, each with resources and a name, gives wf.pipeline().tasks equal, in order, to the tasks compiled by hand against an FileRegistry and passed to Pipeline, with the same root, resources and registry keys."""
     notebook = write_source_notebook(
         tmp_path / "report.ipynb", "population = 'unset'\nlocation = 'unset'"
     )
@@ -412,7 +412,7 @@ def test_a_pipeline_of_all_four_step_kinds_matches_one_assembled_by_hand(
 
     built = wf.pipeline()
 
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         _STEP_FUNCTIONS[kind](**arguments, registry=registry) for kind, arguments in steps
     ]
@@ -451,7 +451,7 @@ def test_a_step_method_keeps_the_step_functions_messages(tmp_path: Path) -> None
         "inputs": {"source": "populaton.parquet"},
         "produces": "b.parquet",
     }
-    registry = ArtifactRegistry(tmp_path / "out", "run1")
+    registry = FileRegistry(tmp_path / "out", "run1")
     python_step(_constant, registry=registry, **producer)
     with pytest.raises(WiringError) as expected:
         python_step(_increment, registry=registry, **consumer)
@@ -817,14 +817,14 @@ def test_a_workflow_pipeline_runs_locally_and_writes_under_the_run_directory(
 
 
 def test_the_frontend_exports_workflow_and_not_the_step_functions_or_the_registry() -> None:
-    """vivarium.dagger.frontend.Workflow is the class in vivarium.dagger.frontend.workflow and is in __all__, and none of ArtifactRegistry, python_step, notebook_step, command_step and simulation_step is in __all__."""
+    """vivarium.dagger.frontend.Workflow is the class in vivarium.dagger.frontend.workflow and is in __all__, and none of FileRegistry, python_step, notebook_step, command_step and simulation_step is in __all__."""
     exported = vivarium.dagger.frontend.__all__
 
     assert vivarium.dagger.frontend.Workflow is Workflow
     assert Workflow.__module__ == "vivarium.dagger.frontend.workflow"
     assert "Workflow" in exported
     lower_layer = (
-        "ArtifactRegistry",
+        "FileRegistry",
         "python_step",
         "notebook_step",
         "command_step",
@@ -834,13 +834,13 @@ def test_the_frontend_exports_workflow_and_not_the_step_functions_or_the_registr
 
 
 def test_the_step_functions_and_the_registry_stay_importable_from_their_modules() -> None:
-    """python_step, notebook_step, command_step and simulation_step import from their own frontend modules, and ArtifactRegistry from vivarium.dagger.backend.wiring."""
+    """python_step, notebook_step, command_step and simulation_step import from their own frontend modules, and FileRegistry from vivarium.dagger.backend.wiring."""
     locations = {
         "python_step": "vivarium.dagger.frontend.python_step",
         "notebook_step": "vivarium.dagger.frontend.notebook_step",
         "command_step": "vivarium.dagger.frontend.command_step",
         "simulation_step": "vivarium.dagger.frontend.simulation_step",
-        "ArtifactRegistry": "vivarium.dagger.backend.wiring",
+        "FileRegistry": "vivarium.dagger.backend.wiring",
     }
 
     for name, module in locations.items():
