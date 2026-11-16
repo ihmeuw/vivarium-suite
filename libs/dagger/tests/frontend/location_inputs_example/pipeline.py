@@ -1,13 +1,13 @@
-"""An illustrative primary-data handoff: one location's coverage file, averaged by one step."""
+"""Illustrative location inputs: one location's coverage file, averaged by one step."""
 
 from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import Pipeline, handoff_inputs, handoff_key
+from vivarium.dagger.frontend import Pipeline, location_inputs, location_key
 
 HERE = Path(__file__).resolve().parent
-HANDOFF_ROOT = HERE / "handoff"
+INPUTS_ROOT = HERE / "inputs"
 LOCATIONS = ["example_location"]
 PRIMARY_DATA = {"coverage.csv": ["location_id", "year_id", "coverage"]}
 
@@ -19,18 +19,18 @@ def mean_coverage(coverage: Path) -> pd.DataFrame:
 
 
 def pipeline(
-    output_root: Path = HERE / "output", handoff_root: Path = HANDOFF_ROOT
+    output_root: Path = HERE / "output", inputs_root: Path = INPUTS_ROOT
 ) -> Pipeline:
-    """Validate the handoff and add one mean-coverage step per location."""
+    """Check the location inputs and add one mean-coverage step per location."""
     p = Pipeline(
         output_root,
         run_name="example",
-        root_inputs=handoff_inputs(handoff_root, LOCATIONS, PRIMARY_DATA),
+        root_inputs=location_inputs(inputs_root, LOCATIONS, PRIMARY_DATA),
     )
     for location in LOCATIONS:
         p.python_step(
             mean_coverage,
-            inputs={"coverage": handoff_key(location, "coverage.csv")},
+            inputs={"coverage": location_key(location, "coverage.csv")},
             produces=f"{location}/mean_coverage.parquet",
         )
     return p
