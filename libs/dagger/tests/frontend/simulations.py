@@ -28,7 +28,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend.builder import Pipeline, freeze
 
 LOG_VARIABLE = "STUB_PSIMULATE_LOG"
 """The file the stub appends its arguments to, as one JSON list per call. Unset, the
@@ -270,9 +270,9 @@ def snapshot(directory: Path) -> dict[str, bytes]:
     }
 
 
-def assert_no_command(text: str, pipeline: PipelineSnapshot, step: str) -> None:
+def assert_no_command(text: str, pipeline: Pipeline, step: str) -> None:
     """Assert that ``text`` holds neither the command of ``pipeline``'s ``step`` nor a part of it."""
-    [task] = [task for task in pipeline.tasks if task.name == step]
+    [task] = [task for task in freeze(pipeline).tasks if task.name == step]
     assert isinstance(task.run, str), task.run
     assert task.run not in text
     for fragment in COMMAND_FRAGMENTS:

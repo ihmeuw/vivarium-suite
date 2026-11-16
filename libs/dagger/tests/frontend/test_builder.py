@@ -1,6 +1,7 @@
-"""Tests for the Pipeline builder (MIC-7805, MIC-7810) and freezing it into a snapshot."""
+"""Tests for the Pipeline builder (MIC-7805, MIC-7810) and freezing it into a private snapshot."""
 
 import copy
+import dataclasses
 import importlib
 import inspect
 from collections.abc import Callable, Mapping
@@ -9,21 +10,22 @@ from typing import Any
 
 import pandas as pd
 import pytest
-from pytask import PathNode, TaskOutcome
+from pytask import PathNode, PythonNode, TaskOutcome
 
 import vivarium.dagger.frontend
 from tests.bridge.helpers import lockfile_entries
 from tests.frontend.notebooks import write_source_notebook
 from tests.frontend.simulations import write_branches, write_spec
+from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend import PipelineError, preview, run
-from vivarium.dagger.frontend.builder import STATE_DIR, Pipeline, freeze
+from vivarium.dagger.frontend.builder import STATE_DIR, Pipeline, _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.command_step import command_step
+from vivarium.dagger.frontend.execution import _preview, _run
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.frontend.simulation_step import simulation_step
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 _STEP_KINDS = ("python", "notebook", "command", "simulation")
 """The four step methods, by the kind of step each adds."""
@@ -356,7 +358,7 @@ def test_each_step_methods_parameters_are_its_step_functions_without_registry(
 def test_a_pipeline_of_all_four_step_kinds_matches_one_assembled_by_hand(
     tmp_path: Path,
 ) -> None:
-    """A pipeline of a python step, a notebook step reading its product, a command step and a simulation step, each with resources and a name, gives freeze(p).tasks equal, in order, to the tasks compiled by hand against an FileRegistry and passed to PipelineSnapshot, with the same root, resources and registry keys."""
+    """A pipeline of a python step, a notebook step reading its product, a command step and a simulation step, each with resources and a name, gives freeze(p).tasks equal, in order, to the tasks compiled by hand against an FileRegistry and passed to _PipelineSnapshot, with the same root, resources and registry keys."""
     notebook = write_source_notebook(
         tmp_path / "report.ipynb", "population = 'unset'\nlocation = 'unset'"
     )
@@ -419,7 +421,7 @@ def test_a_pipeline_of_all_four_step_kinds_matches_one_assembled_by_hand(
         _STEP_FUNCTIONS[kind](**arguments, registry=registry) for kind, arguments in steps
     ]
     state = (tmp_path / "out").resolve() / ".dagger" / "run1"
-    by_hand = PipelineSnapshot(tasks, state, registry, resources=resources)
+    by_hand = _PipelineSnapshot(tasks, state, registry, resources=resources)
     assert list(built.tasks) == list(by_hand.tasks)
     names = [task.name for task in built.tasks]
     assert names == ["population", "report", "copy", "simulate"]
@@ -749,7 +751,7 @@ def test_a_step_added_after_freeze_does_not_reach_the_returned_snapshot(
 
 
 def test_each_call_of_freeze_returns_a_new_equal_snapshot(tmp_path: Path) -> None:
-    """Two calls of freeze(p) with no step added between them return two distinct PipelineSnapshot objects with equal tasks, root, registry and resources."""
+    """Two calls of freeze(p) with no step added between them return two distinct _PipelineSnapshot objects with equal tasks, root, registry and resources."""
     p = Pipeline(tmp_path / "out", "run1", resources={"project": "proj_test"})
     p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
 
@@ -795,10 +797,10 @@ def test_changing_the_resources_a_pipeline_returns_does_not_reach_it(tmp_path: P
 
 
 def test_a_pipeline_with_no_steps_freezes_to_a_snapshot_with_no_tasks(tmp_path: Path) -> None:
-    """freeze(p) before any step is added returns a PipelineSnapshot whose tasks are an empty tuple."""
+    """freeze(p) before any step is added returns a _PipelineSnapshot whose tasks are an empty tuple."""
     pipeline = freeze(Pipeline(tmp_path / "out", "run1"))
 
-    assert isinstance(pipeline, PipelineSnapshot)
+    assert isinstance(pipeline, _PipelineSnapshot)
     assert pipeline.tasks == ()
 
 
@@ -824,7 +826,7 @@ def test_a_pipeline_runs_locally_and_writes_under_the_run_directory(
 
 
 def test_the_frontend_exports_the_pipeline_builder_and_not_the_lower_layer() -> None:
-    """vivarium.dagger.frontend.Pipeline is the builder class in vivarium.dagger.frontend.builder and is in __all__, and none of FileRegistry, python_step, notebook_step, command_step, simulation_step, PipelineSnapshot and freeze is in __all__."""
+    """vivarium.dagger.frontend.Pipeline is the builder class in vivarium.dagger.frontend.builder and is in __all__, and none of FileRegistry, python_step, notebook_step, command_step, simulation_step, _PipelineSnapshot and freeze is in __all__."""
     exported = vivarium.dagger.frontend.__all__
 
     assert vivarium.dagger.frontend.Pipeline is Pipeline
@@ -836,7 +838,7 @@ def test_the_frontend_exports_the_pipeline_builder_and_not_the_lower_layer() -> 
         "notebook_step",
         "command_step",
         "simulation_step",
-        "PipelineSnapshot",
+        "_PipelineSnapshot",
         "freeze",
     )
     assert [name for name in lower_layer if name in exported] == []
@@ -881,19 +883,17 @@ def _two_steps(tmp_path: Path) -> Pipeline:
     return p
 
 
-def test_freeze_returns_a_snapshot_itself() -> None:
-    """freeze(snapshot) returns the very PipelineSnapshot object it was given, unchanged."""
-    task = Task(name="a", run="true", inputs={}, outputs={}, resources={}, env=None)
-    root = Path(__file__).resolve().parent / "state"
-    snapshot = PipelineSnapshot([task], root, resources={"project": "proj_test"})
+def test_freeze_of_a_snapshot_raises_type_error(tmp_path: Path) -> None:
+    """freeze() takes only a Pipeline, so freeze() of a _PipelineSnapshot raises TypeError naming _PipelineSnapshot and saying a Pipeline is expected."""
+    snapshot = freeze(Pipeline(tmp_path / "out", "run1"))
+    given: Any = snapshot
 
-    frozen = freeze(snapshot)
+    with pytest.raises(TypeError) as info:
+        freeze(given)
 
-    assert frozen is snapshot
-    assert frozen.tasks == (task,)
-    assert frozen.root == root
-    assert frozen.registry is None
-    assert dict(frozen.resources) == {"project": "proj_test"}
+    message = str(info.value)
+    assert "_PipelineSnapshot" in message, message
+    assert "Pipeline" in message, message
 
 
 @pytest.mark.parametrize("value", ["pipeline.py", None, ()])
@@ -930,17 +930,17 @@ def test_workflow_no_longer_exists() -> None:
         importlib.import_module("vivarium.dagger.frontend.workflow")
 
 
-def test_the_snapshot_is_not_exported_but_stays_importable_from_its_module() -> None:
-    """PipelineSnapshot is not an attribute of vivarium.dagger.frontend and not in its __all__, and it imports from vivarium.dagger.frontend.snapshot, whose class has that module as __module__; freeze imports from vivarium.dagger.frontend.builder."""
-    snapshot_module = "vivarium.dagger.frontend.snapshot"
-    builder_module = "vivarium.dagger.frontend.builder"
+def test_the_package_exports_no_snapshot_class() -> None:
+    """vivarium.dagger.frontend has no attribute and no __all__ entry whose name holds 'Snapshot', the module vivarium.dagger.frontend.snapshot cannot be imported, and the private _PipelineSnapshot and freeze live in vivarium.dagger.frontend.builder, outside its __all__."""
+    builder_module = importlib.import_module("vivarium.dagger.frontend.builder")
 
-    assert not hasattr(vivarium.dagger.frontend, "PipelineSnapshot")
-    assert "PipelineSnapshot" not in vivarium.dagger.frontend.__all__
-    assert importlib.import_module(snapshot_module).PipelineSnapshot is PipelineSnapshot
-    assert PipelineSnapshot.__module__ == snapshot_module
-    assert importlib.import_module(builder_module).freeze is freeze
-    assert freeze.__module__ == builder_module
+    assert [name for name in dir(vivarium.dagger.frontend) if "Snapshot" in name] == []
+    assert [name for name in vivarium.dagger.frontend.__all__ if "Snapshot" in name] == []
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("vivarium.dagger.frontend.snapshot")
+    assert _PipelineSnapshot.__module__ == builder_module.__name__
+    assert freeze.__module__ == builder_module.__name__
+    assert builder_module.__all__ == ["STATE_DIR", "Pipeline"]
 
 
 def test_a_step_added_after_run_is_in_the_next_run_and_not_the_finished_one(
@@ -979,7 +979,7 @@ def test_a_step_added_while_run_is_building_is_not_in_that_run(tmp_path: Path) -
 
 
 def test_preview_of_a_pipeline_plans_the_steps_added_so_far(tmp_path: Path) -> None:
-    """preview(p) returns one StepPreview per step added to p so far, in order, each would-run before the first run, with reasons naming file keys as for a snapshot with the same registry."""
+    """preview(p) returns one StepPreview per step added to p so far, in order, each would-run before the first run, with reasons naming file keys as _preview() does for a snapshot with the same registry."""
     root_inputs = _root_inputs(tmp_path)
     steps: list[tuple[Callable[..., pd.DataFrame], dict[str, Any]]] = [
         (_read_raw, {"inputs": {"raw": _RAW}, "produces": "a.parquet", "name": "a"}),
@@ -995,13 +995,13 @@ def test_preview_of_a_pipeline_plans_the_steps_added_so_far(tmp_path: Path) -> N
     tasks = [
         python_step(target, **arguments, registry=registry) for target, arguments in steps
     ]
-    by_hand = PipelineSnapshot(tasks, tmp_path / "by_hand", registry)
+    by_hand = _PipelineSnapshot(tasks, tmp_path / "by_hand", registry)
 
     plan = preview(p)
 
     assert [step.name for step in plan] == ["a", "b"]
     assert all(step.would_run for step in plan), plan
-    assert plan == preview(by_hand)
+    assert plan == _preview(by_hand)
     nodes = {reason.node for reason in plan[0].reasons}
     assert {"file 'raw.csv'", "file 'a.parquet'"} <= nodes, plan[0].reasons
 
@@ -1025,12 +1025,12 @@ def test_a_step_added_after_preview_is_in_the_next_preview_only(tmp_path: Path) 
 def test_run_and_preview_of_a_pipeline_match_run_and_preview_of_its_snapshot(
     tmp_path: Path,
 ) -> None:
-    """preview(p) and preview(freeze(p)) return the same plan, and after run(p) a run(freeze(p)) with nothing changed reports the same step names, so passing the builder or its snapshot is the same call."""
+    """preview(p) and _preview(freeze(p)) return the same plan, and after run(p) a _run(freeze(p)) with nothing changed reports the same step names, so the public verbs read the snapshot that freeze() makes."""
     p = _two_steps(tmp_path)
 
-    assert preview(p) == preview(freeze(p))
+    assert preview(p) == _preview(freeze(p))
     ran = run(p)
-    again = run(freeze(p))
+    again = _run(freeze(p))
 
     assert set(ran) == {"a", "b"}
     assert list(again) == list(ran)
@@ -1074,3 +1074,266 @@ def test_only_and_force_on_a_pipeline_name_the_steps_added_so_far(tmp_path: Path
     message = str(info.value)
     assert "'a'" in message, message
     assert "'b'" in message, message
+
+
+# The private snapshot (moved here from the verbs' tests with the class)
+
+
+def test_snapshot_is_frozen_and_its_registry_defaults_to_none(tmp_path: Path) -> None:
+    """_PipelineSnapshot's fields cannot be reassigned, and registry defaults to None."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    task = python_step(_constant, inputs={}, produces="a.parquet", registry=registry)
+    snapshot = _PipelineSnapshot([task], tmp_path / "state")
+
+    assert snapshot.registry is None
+    replacements: dict[str, object] = {
+        "tasks": [],
+        "root": tmp_path,
+        "registry": registry,
+    }
+    for name, value in replacements.items():
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            setattr(snapshot, name, value)
+
+
+def test_snapshot_stores_tasks_as_a_tuple_that_a_change_to_the_passed_list_does_not_reach(
+    tmp_path: Path,
+) -> None:
+    """_PipelineSnapshot(tasks_list, root).tasks is a tuple equal to tuple(tasks_list), and appending to or clearing tasks_list afterwards leaves it unchanged."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    tasks_list = [
+        python_step(_constant, inputs={}, produces=key, registry=registry)
+        for key in ("a.parquet", "b.parquet")
+    ]
+    expected = tuple(tasks_list)
+
+    snapshot = _PipelineSnapshot(tasks_list, tmp_path / "state")
+
+    assert isinstance(snapshot.tasks, tuple)
+    assert snapshot.tasks == expected
+    tasks_list.append(tasks_list[0])
+    assert snapshot.tasks == expected
+    tasks_list.clear()
+    assert snapshot.tasks == expected
+
+
+def test_snapshot_rejects_a_root_that_is_not_a_path(tmp_path: Path) -> None:
+    """_PipelineSnapshot(tasks, str(tmp_path / 'state')) raises TypeError at construction, naming the type it got."""
+    root: Any = str(tmp_path / "state")
+
+    with pytest.raises(TypeError, match=r"\bstr\b"):
+        _PipelineSnapshot([], root)
+
+
+def test_snapshot_rejects_a_relative_root() -> None:
+    """_PipelineSnapshot(tasks, Path('state')) raises ValueError at construction, saying the root must be absolute."""
+    with pytest.raises(ValueError, match="(?i)absolute"):
+        _PipelineSnapshot([], Path("state"))
+
+
+def test_snapshot_resources_default_to_an_empty_mapping(tmp_path: Path) -> None:
+    """_PipelineSnapshot(tasks, root) has resources equal to {}, and two snapshots made that way do not share one mapping object."""
+    first = _PipelineSnapshot([], tmp_path / "first")
+    second = _PipelineSnapshot([], tmp_path / "second")
+
+    assert first.resources == {}
+    assert second.resources == {}
+    assert first.resources is not second.resources
+
+
+def test_snapshot_keeps_the_resources_it_is_given(tmp_path: Path) -> None:
+    """_PipelineSnapshot(tasks, root, registry, resources={'project': 'proj_a'}) has resources equal to {'project': 'proj_a'} and that registry."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+
+    snapshot = _PipelineSnapshot(
+        [], tmp_path / "state", registry, resources={"project": "proj_a"}
+    )
+
+    assert snapshot.resources == {"project": "proj_a"}
+    assert snapshot.registry is registry
+
+
+def test_snapshot_rejects_resources_that_are_not_a_mapping(tmp_path: Path) -> None:
+    """_PipelineSnapshot(tasks, root, resources=[('project', 'proj_a')]) raises TypeError naming the type it got."""
+    pairs: Any = [("project", "proj_a")]
+
+    with pytest.raises(TypeError, match=r"\blist\b"):
+        _PipelineSnapshot([], tmp_path / "state", resources=pairs)
+
+
+# MIC-7810: add_task, the lower layer under the step methods
+
+
+def _command_task(name: str, out: Path, command: str | None = None) -> Task:
+    """Return a hand-built command task ``name`` whose one output is the file ``out``."""
+    return Task(
+        name=name,
+        run=f"echo {name} > {out}" if command is None else command,
+        inputs={},
+        outputs={"out": file_node(out)},
+        resources={},
+        env=None,
+    )
+
+
+def test_add_task_appends_the_tasks_in_order_and_they_run(tmp_path: Path) -> None:
+    """A python step added with the method, then two tasks compiled with python_step against another registry and added with add_task, the second reading the first's product, freeze in that order and all run with SUCCESS."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.python_step(_constant, inputs={}, produces="method.parquet", name="method")
+    registry = FileRegistry(tmp_path / "out", "run1")
+    first = python_step(_constant, inputs={}, produces="a.parquet", registry=registry)
+    second = python_step(
+        _increment, inputs={"source": "a.parquet"}, produces="b.parquet", registry=registry
+    )
+
+    p.add_task(first)
+    p.add_task(second)
+
+    assert freeze(p).tasks[1:] == (first, second)
+    assert [task.name for task in freeze(p).tasks] == ["method", "a.parquet", "b.parquet"]
+    assert run(p) == dict.fromkeys(("method", "a.parquet", "b.parquet"), TaskOutcome.SUCCESS)
+    frame = pd.read_parquet(registry.path_for("b.parquet"))
+    assert frame["n"].tolist() == [2, 3, 4]
+
+
+def test_add_task_refuses_a_name_a_step_method_added(tmp_path: Path) -> None:
+    """After a python step named 'dup', add_task of a task named 'dup' with another output raises ValueError with the step methods' message, and the task is not added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.python_step(_constant, inputs={}, produces="first.parquet", name="dup")
+
+    with pytest.raises(ValueError) as info:
+        p.add_task(_command_task("dup", tmp_path / "other.txt"))
+
+    assert str(info.value) == (
+        "Step 'dup': a step named 'dup' was already added to the pipeline; give each "
+        "step a different name= to tell them apart."
+    )
+    assert [task.name for task in freeze(p).tasks] == ["dup"]
+
+
+def test_a_step_method_refuses_a_name_add_task_added(tmp_path: Path) -> None:
+    """After add_task of a task named 'dup', a python step named 'dup' with another product raises ValueError starting "Step 'dup':" that says to give each step a different name=, and is not added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_task(_command_task("dup", tmp_path / "first.txt"))
+
+    with pytest.raises(ValueError) as info:
+        p.python_step(_constant, inputs={}, produces="second.parquet", name="dup")
+
+    message = str(info.value)
+    assert message.startswith("Step 'dup':"), message
+    assert "name=" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["dup"]
+    assert not _registered(p, "second.parquet")
+
+
+def test_add_task_refuses_an_output_a_step_method_produces_naming_its_key(
+    tmp_path: Path,
+) -> None:
+    """After a python step 'first' produces 'shared.parquet', add_task of a task 'second' whose output is that file, compiled against another registry, raises WiringError starting "Step 'second':" that names the key 'shared.parquet' and the step 'first', and the task is not added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.python_step(_constant, inputs={}, produces="shared.parquet", name="first")
+    registry = FileRegistry(tmp_path / "out", "run1")
+    task = python_step(
+        _constant, inputs={}, produces="shared.parquet", registry=registry, name="second"
+    )
+
+    with pytest.raises(WiringError) as info:
+        p.add_task(task)
+
+    message = str(info.value)
+    assert message.startswith("Step 'second':"), message
+    assert "output 'shared.parquet'" in message, message
+    assert "'first'" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+
+
+def test_a_step_method_refuses_an_output_add_task_produces(tmp_path: Path) -> None:
+    """After add_task of a task 'first' whose output is the file of the key 'shared.parquet', a python step 'second' producing 'shared.parquet' raises WiringError starting "Step 'second':" that names the key and 'first', and is not added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    shared = p.output_root / "run1" / "shared.parquet"
+    p.add_task(_command_task("first", shared))
+
+    with pytest.raises(WiringError) as info:
+        p.python_step(_constant, inputs={}, produces="shared.parquet", name="second")
+
+    message = str(info.value)
+    assert message.startswith("Step 'second':"), message
+    assert "'shared.parquet'" in message, message
+    assert "'first'" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+    assert not _registered(p, "shared.parquet")
+
+
+def test_add_task_refuses_an_output_another_added_task_produces_naming_its_path(
+    tmp_path: Path,
+) -> None:
+    """add_task of a task 'second' whose output is the file of an added task 'first', written through another spelling of the path, raises WiringError starting "Step 'second':" that names the resolved path and 'first'; with its name also taken, the error is still the WiringError."""
+    p = Pipeline(tmp_path / "out", "run1")
+    out = tmp_path / "out.txt"
+    p.add_task(_command_task("first", out))
+    other_spelling = tmp_path / "sub" / ".." / "out.txt"
+
+    for name in ("second", "first"):
+        with pytest.raises(WiringError) as info:
+            p.add_task(_command_task(name, other_spelling))
+
+        message = str(info.value)
+        assert message.startswith(f"Step {name!r}:"), message
+        assert repr(str(out.resolve())) in message, message
+        assert "step 'first'" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+
+
+def test_add_task_does_not_compare_outputs_that_are_not_path_nodes(tmp_path: Path) -> None:
+    """Two tasks whose only outputs are PythonNodes of one name are both added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    tasks = [
+        Task(
+            name=name,
+            run="true",
+            inputs={},
+            outputs={"value": PythonNode(name="value")},
+            resources={},
+            env=None,
+        )
+        for name in ("a", "b")
+    ]
+
+    for task in tasks:
+        p.add_task(task)
+
+    assert freeze(p).tasks == tuple(tasks)
+
+
+def test_a_hand_built_task_with_a_shell_command_runs_through_run(tmp_path: Path) -> None:
+    """A backend Task built by hand, whose shell command copies a file node it reads to the file node it writes, added with add_task, runs with SUCCESS through run() and writes its output."""
+    source = tmp_path / "source.txt"
+    source.write_text("hello\n")
+    target = tmp_path / "target.txt"
+    task = Task(
+        name="copy",
+        run=f"cp {source} {target}",
+        inputs={"source": file_node(source)},
+        outputs={"target": file_node(target)},
+        resources={},
+        env=None,
+    )
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_task(task)
+
+    assert run(p) == {"copy": TaskOutcome.SUCCESS}
+    assert target.read_text() == "hello\n"
+
+
+def test_preview_names_the_files_of_an_added_task_by_path(tmp_path: Path) -> None:
+    """preview(p) of a hand-built task added with add_task names its output by the file's path, not as "file '<key>'", and still names the step's command in step terms."""
+    out = tmp_path / "out.txt"
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_task(_command_task("touch", out))
+
+    [step] = preview(p)
+
+    nodes = {reason.node for reason in step.reasons}
+    assert out.resolve().as_posix() in nodes, step.reasons
+    assert "command of 'touch'" in nodes, step.reasons
+    assert not any(node.startswith("file ") for node in nodes), step.reasons

@@ -16,6 +16,7 @@ pytest.importorskip("jobmon")
 
 import vivarium.psimulate.cli
 
+from tests.frontend.pipelines import pipeline_of
 from tests.frontend.simulations import (
     KNOB_VARIABLES,
     LOG_VARIABLE,
@@ -27,7 +28,6 @@ from tests.frontend.simulations import (
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend import run
 from vivarium.dagger.frontend.simulation_step import simulation_step
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 _KEY = "sims/toy"
 """The simulation step's produces key."""
@@ -58,7 +58,7 @@ def _recorded_argv(
         options=options,
         artifact=None if artifact is None else "artifact",
     )
-    run(PipelineSnapshot([task], base / "state", registry))
+    run(pipeline_of([task], base / "state"))
     [argv] = read_argv_log(log)
     return argv
 

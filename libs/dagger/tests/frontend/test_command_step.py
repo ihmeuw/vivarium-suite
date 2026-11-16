@@ -18,14 +18,16 @@ import pytest
 from click.testing import CliRunner, Result
 from pytask import NodeNotFoundError, PathNode, PNode, TaskOutcome
 
+from tests.frontend.pipelines import pipeline_of, stable_snapshot
 from vivarium.dagger.backend.build import run_command
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import PipelineError, StepFailed, preview, run
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.command_step import command_step
+from vivarium.dagger.frontend.execution import _preview, _run
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _V = TypeVar("_V")
@@ -73,7 +75,7 @@ _FORMATTER_MESSAGES = (
 _DEFINITION = """
 from pathlib import Path
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.command_step import command_step
 
@@ -85,7 +87,9 @@ def pipeline():
     task = command_step(
         COMMAND, produces={"out": "out.txt"}, registry=registry, env=ENV, name=NAME
     )
-    return PipelineSnapshot([task], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 """A definition of one command step writing 'out.txt'; COMMAND, ENV and NAME go before it."""
 
@@ -260,26 +264,24 @@ def _compiled_with_hash_seed(tmp_path: Path, seed: str) -> str:
     return result.stdout
 
 
-def _one_step(
-    tmp_path: Path, command: str, **arguments: Any
-) -> tuple[PipelineSnapshot, Path]:
+def _one_step(tmp_path: Path, command: str, **arguments: Any) -> tuple[Pipeline, Path]:
     """Return a pipeline of one step 'step' writing 'out.txt', and that product's path."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = command_step(
         command, produces={"out": "out.txt"}, registry=registry, name="step", **arguments
     )
-    pipeline = PipelineSnapshot([task], tmp_path / "state", registry)
+    pipeline = pipeline_of([task], tmp_path / "state")
     return pipeline, registry.path_for("out.txt")
 
 
-def _step_failed(pipeline: PipelineSnapshot) -> StepFailed:
+def _step_failed(pipeline: Pipeline) -> StepFailed:
     """Run ``pipeline`` and return the StepFailed it raises."""
     with pytest.raises(StepFailed) as info:
         run(pipeline)
     return info.value
 
 
-def _copy_pipeline(tmp_path: Path, command: str) -> PipelineSnapshot:
+def _copy_pipeline(tmp_path: Path, command: str) -> Pipeline:
     """Return a pipeline of one step 'copy', with a stable code identity, reading _SOURCE."""
     source = tmp_path / "supplied" / "source.txt"
     if not source.exists():
@@ -293,7 +295,25 @@ def _copy_pipeline(tmp_path: Path, command: str) -> PipelineSnapshot:
         registry=registry,
         name="copy",
     )
-    return PipelineSnapshot([with_stable_code_id(task)], tmp_path / "state", registry)
+    return pipeline_of([with_stable_code_id(task)], tmp_path / "state")
+
+
+def _keyed_copy(tmp_path: Path, command: str) -> _PipelineSnapshot:
+    """Return the step of :func:`_copy_pipeline` added with the step method, frozen with a stable code identity, so a preview names its files by key."""
+    source = tmp_path / "supplied" / "source.txt"
+    if not source.exists():
+        source.parent.mkdir(parents=True)
+        source.write_text("n\n1\n")
+    p = Pipeline(
+        tmp_path / "out", "run1", root_inputs={_SOURCE: source}, state=tmp_path / "state"
+    )
+    p.command_step(
+        command,
+        inputs={"source": _SOURCE},
+        produces={"target": "copies/source.txt"},
+        name="copy",
+    )
+    return stable_snapshot(p)
 
 
 def _write_definition(directory: Path, command: str, env: str | None, name: str) -> Path:
@@ -890,7 +910,7 @@ def test_placeholders_become_quoted_absolute_paths_that_the_shell_reads_back(
     target = registry.path_for("copies/target.txt")
     assert all(char in str(path) for path in (source, target) for char in " '{")
 
-    result = run(PipelineSnapshot([task], tmp_path / "state", registry))
+    result = run(pipeline_of([task], tmp_path / "state"))
 
     assert result == {"copy": TaskOutcome.SUCCESS}
     assert target.read_text() == "copied text\n"
@@ -1042,7 +1062,7 @@ def test_a_trailing_comment_and_a_heredoc_in_the_command_behave_as_written(
         name="heredoc",
     )
 
-    result = run(PipelineSnapshot([commented, heredoc], tmp_path / "state", registry))
+    result = run(pipeline_of([commented, heredoc], tmp_path / "state"))
 
     assert result == {"commented": TaskOutcome.SUCCESS, "heredoc": TaskOutcome.SUCCESS}
     assert registry.path_for("commented.txt").read_text() == "done"
@@ -1101,7 +1121,7 @@ def test_a_command_stopped_by_a_signal_is_described_by_the_signal(tmp_path: Path
 def test_the_failure_line_does_not_contain_the_generated_command(tmp_path: Path) -> None:
     """The StepFailed message of a failing command step does not contain the command text, which stays in the CalledProcessError cause."""
     pipeline, _ = _one_step(tmp_path, "echo distinctive-command-text && exit 4")
-    [task] = pipeline.tasks
+    [task] = freeze(pipeline).tasks
 
     error = _step_failed(pipeline)
 
@@ -1168,10 +1188,10 @@ def test_a_changed_command_makes_preview_report_the_command_of_the_step(
 def test_a_changed_input_file_makes_preview_report_the_input_file(tmp_path: Path) -> None:
     """With a stable code identity, after a successful run a changed root input file makes preview() report that the step would run with "file '<key>'" among its reasons."""
     command = "cp {source} {target}"
-    assert run(_copy_pipeline(tmp_path, command)) == {"copy": TaskOutcome.SUCCESS}
+    assert _run(_keyed_copy(tmp_path, command)) == {"copy": TaskOutcome.SUCCESS}
 
     with Perturbed(tmp_path / "supplied" / "source.txt", b"2\n"):
-        [step] = preview(_copy_pipeline(tmp_path, command))
+        [step] = _preview(_keyed_copy(tmp_path, command))
 
     assert step.would_run
     nodes = [reason.node for reason in step.reasons]
@@ -1184,7 +1204,7 @@ def test_a_changed_input_file_makes_preview_report_the_input_file(tmp_path: Path
 def test_two_command_steps_with_one_name_make_run_raise_the_generic_message(
     tmp_path: Path,
 ) -> None:
-    """Two command steps named 'dup' with different products make run() raise PipelineError "Two steps are named 'dup'; give each a different name= to tell them apart." before anything runs."""
+    """Two command steps named 'dup' with different products, in a snapshot made directly since a Pipeline refuses the second, make _run() raise PipelineError "Two steps are named 'dup'; give each a different name= to tell them apart." before anything runs."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         command_step("printf x > {out}", produces={"out": key}, registry=registry, name="dup")
@@ -1192,7 +1212,7 @@ def test_two_command_steps_with_one_name_make_run_raise_the_generic_message(
     ]
 
     with pytest.raises(PipelineError) as info:
-        run(PipelineSnapshot(tasks, tmp_path / "state", registry))
+        _run(_PipelineSnapshot(tasks, tmp_path / "state"))
 
     error = info.value
     assert not isinstance(error, StepFailed)
@@ -1249,7 +1269,7 @@ def test_an_env_that_does_not_resolve_makes_run_raise_a_pipeline_error_naming_th
     ]
 
     with pytest.raises(PipelineError) as info:
-        run(PipelineSnapshot(tasks, tmp_path / "state", registry))
+        run(pipeline_of(tasks, tmp_path / "state"))
 
     error = info.value
     assert not isinstance(error, StepFailed)
@@ -1319,7 +1339,7 @@ def test_python_command_python_chain_runs_through_run_with_the_right_final_produ
         ),
     ]
 
-    result = run(PipelineSnapshot(tasks, tmp_path / "state", registry))
+    result = run(pipeline_of(tasks, tmp_path / "state"))
 
     assert result == dict.fromkeys(["people", "adults", "total"], TaskOutcome.SUCCESS)
     total = pd.read_csv(registry.path_for("total.csv"))

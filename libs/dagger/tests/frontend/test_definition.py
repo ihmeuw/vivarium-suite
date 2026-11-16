@@ -9,7 +9,7 @@ from pathlib import Path
 import pytask
 import pytest
 
-from vivarium.dagger.frontend.builder import Pipeline, freeze
+from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.definition import (
     DEFAULT_FUNCTION,
     DefinitionError,
@@ -20,20 +20,21 @@ from vivarium.dagger.frontend.python_step import (
     resolve_reference,
     target_reference,
 )
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 _TWO_FUNCTIONS = """\
 from pathlib import Path
 
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
 
 def one_step(name):
     task = Task(name=name, run="true", inputs={}, outputs={}, resources={}, env=None)
-    return PipelineSnapshot([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 
 
 def pipeline():
@@ -52,7 +53,7 @@ import pandas as pd
 
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
@@ -64,7 +65,9 @@ def make_table():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     task = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
-    return PipelineSnapshot([task], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 """A definition whose one python_step would write 'table.parquet' if it ran."""
 
@@ -112,7 +115,7 @@ def _one_step(name: str) -> str:
     return _TWO_FUNCTIONS.replace('"from_pipeline"', f'"{name}"')
 
 
-def _step_names(pipeline: Pipeline | PipelineSnapshot) -> list[str]:
+def _step_names(pipeline: Pipeline) -> list[str]:
     """Return the names of ``pipeline``'s steps."""
     return [task.name for task in freeze(pipeline).tasks]
 
@@ -148,7 +151,7 @@ def _forget_loaded_definitions(tmp_path: Path) -> Iterator[None]:
 def test_load_pipeline_accepts_a_file_or_a_dotted_module_with_an_optional_function(
     tmp_path: Path, form: str
 ) -> None:
-    """load_pipeline returns the PipelineSnapshot built by the named function for each of path/to/file.py, file.py:other, pkg.mod and pkg.mod:other."""
+    """load_pipeline returns the Pipeline built by the named function for each of path/to/file.py, file.py:other, pkg.mod and pkg.mod:other."""
     if form.startswith("file"):
         base = str(_write(tmp_path / "path" / "to", _TWO_FUNCTIONS))
     else:
@@ -157,7 +160,7 @@ def test_load_pipeline_accepts_a_file_or_a_dotted_module_with_an_optional_functi
 
     pipeline = load_pipeline(f"{base}:other" if named else base)
 
-    assert isinstance(pipeline, PipelineSnapshot)
+    assert isinstance(pipeline, Pipeline)
     assert _step_names(pipeline) == ["from_other" if named else "from_pipeline"]
 
 
@@ -430,29 +433,41 @@ def test_load_pipeline_returns_the_pipeline_the_function_built_without_freezing_
     loaded = load_pipeline(f"{path}:kept")
 
     assert isinstance(loaded, Pipeline)
-    assert not isinstance(loaded, PipelineSnapshot)
+    assert not isinstance(loaded, _PipelineSnapshot)
     [kept] = _kept(path)
     assert kept is loaded
     assert _step_names(loaded) == ["table"]
     assert _written(tmp_path, path) == []
 
 
-def test_load_pipeline_returns_a_snapshot_the_function_built_as_it_is(tmp_path: Path) -> None:
-    """load_pipeline of a definition that returns a PipelineSnapshot of hand-compiled tasks returns that snapshot itself."""
-    path = _write(tmp_path, _one_step("from_kept") + _KEEPS)
+def test_load_pipeline_refuses_a_snapshot_the_function_returns(tmp_path: Path) -> None:
+    """load_pipeline of a definition that returns a frozen _PipelineSnapshot instead of its Pipeline raises DefinitionError naming _PipelineSnapshot and saying a Pipeline is expected."""
+    source = (
+        _one_step("from_kept")
+        .replace(
+            "    return p\n",
+            "    return freeze(p)\n",
+        )
+        .replace(
+            "from vivarium.dagger.frontend import Pipeline\n",
+            "from vivarium.dagger.frontend import Pipeline\n"
+            "from vivarium.dagger.frontend.builder import freeze\n",
+        )
+    )
+    path = _write(tmp_path, source)
 
-    loaded = load_pipeline(f"{path}:kept")
+    with pytest.raises(DefinitionError) as info:
+        load_pipeline(str(path))
 
-    assert isinstance(loaded, PipelineSnapshot)
-    [kept] = _kept(path)
-    assert kept is loaded
-    assert _step_names(loaded) == ["from_kept"]
+    message = str(info.value)
+    assert "returned _PipelineSnapshot" in message, message
+    assert message.endswith("not a Pipeline."), message
 
 
 def test_the_message_for_a_wrong_return_value_names_the_function_and_says_a_pipeline_is_expected(
     tmp_path: Path,
 ) -> None:
-    """A function named other that returns a dict raises DefinitionError whose one-line message names the spec, other(), the type dict, and says a Pipeline is expected; it does not name PipelineSnapshot."""
+    """A function named other that returns a dict raises DefinitionError whose one-line message names the spec, other(), the type dict, and says a Pipeline is expected; it names no snapshot class."""
     path = _write(tmp_path, 'def other():\n    return {"step": "a"}\n')
     spec = f"{path}:other"
 
@@ -465,4 +480,4 @@ def test_the_message_for_a_wrong_return_value_names_the_function_and_says_a_pipe
     assert "other()" in message, message
     assert "dict" in message, message
     assert message.endswith("not a Pipeline."), message
-    assert "PipelineSnapshot" not in message, message
+    assert "Snapshot" not in message, message

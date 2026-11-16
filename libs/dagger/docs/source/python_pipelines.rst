@@ -66,6 +66,11 @@ state does not depend on the directory ``dagger`` is run from. Building the outp
 from the definition file's own location, as the example below does, keeps the outputs
 and the state next to the definition.
 
+Write a definition with the step methods. The lower layer under them,
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, adds a task that was compiled
+with a step function directly or built by hand, and ``dagger preview`` names such a
+task's files by path, not by file key.
+
 This example has three steps in a chain. The ``population`` step writes a table,
 ``adults`` reads it, and ``summary`` reads the output of ``adults``. Everything a
 definition needs is imported from ``vivarium.dagger.frontend``:
@@ -390,16 +395,10 @@ Each of these exits with status 2 before any step runs:
   is added, so the traceback ends on the line of the definition that adds it, and the
   message names the step and, for a product, the file key and the step that already
   produces it. When both apply, the message is the one for the product.
-- For a pipeline of tasks compiled with the step functions directly, two steps produce
-  the same output. ``dagger`` names the file key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
   ``dagger`` prints only the check's message, which lists each problem by location.
-- For a pipeline of tasks compiled with the step functions directly, two steps have the
-  same name. ``dagger`` names it and says to give each step a different ``name=`` to
-  tell the steps apart. This is reported first, even when ``--until`` or
-  ``dagger force`` also names a step that does not exist.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints
   the reason.

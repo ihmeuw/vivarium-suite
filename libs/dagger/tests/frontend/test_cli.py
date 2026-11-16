@@ -10,21 +10,29 @@ import subprocess
 import sys
 import traceback
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import click
+import pandas as pd
+import pytask
 import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
 
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
+from tests.frontend.pipelines import stable_snapshot
 from vivarium.dagger.backend.nodes import file_node
+from vivarium.dagger.backend.task import Task
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.cli import dagger
-from vivarium.dagger.frontend import load_pipeline, preview, run
-from vivarium.dagger.frontend.builder import freeze
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
-from vivarium.dagger.harness import FakeJobmon, Perturbed, with_stable_code_id
+from vivarium.dagger.frontend import cli as frontend_cli
+from vivarium.dagger.frontend import load_pipeline
+from vivarium.dagger.frontend.builder import _PipelineSnapshot
+from vivarium.dagger.frontend.execution import _preview, _run
+from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.harness import FakeJobmon, Perturbed
 
 _HEADER = """\
 import sys
@@ -35,9 +43,8 @@ import pandas as pd
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
-from vivarium.dagger.frontend import handoff_inputs
+from vivarium.dagger.frontend import Pipeline, handoff_inputs
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 from vivarium.dagger.harness import with_stable_code_id
 
 HERE = Path(__file__).resolve().parent
@@ -96,12 +103,28 @@ def pipeline():
         step(make_b, "b", registry, source="a"),
         step(make_c, "c", registry, source="b"),
     ]
-    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for task in stable(tasks):
+        p.add_task(task)
+    return p
 """
 )
 """A definition of the chain a -> b -> c with stable code identities."""
 
 _CHAIN_STEPS = ("a", "b", "c")
+
+_KEYED_CHAIN = _CHAIN.replace(
+    _CHAIN[_CHAIN.index("def pipeline():") :],
+    """def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.python_step(make_a, inputs={}, produces="a.parquet", name="a")
+    p.python_step(make_b, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
+    p.python_step(make_c, inputs={"source": "b.parquet"}, produces="c.parquet", name="c")
+    return p
+""",
+)
+"""The chain of :data:`_CHAIN` added with the step methods, so the pipeline knows each
+step's file key; its steps have no stable code identity."""
 
 _BRANCHES = (
     _HEADER
@@ -147,7 +170,10 @@ def pipeline():
         step(make_y, "y", registry, source="q"),
         step(make_z, "z", registry),
     ]
-    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for task in stable(tasks):
+        p.add_task(task)
+    return p
 """
 )
 """A definition of the branches p -> x -> w and q -> y, and the lone step z."""
@@ -190,7 +216,10 @@ def pipeline():
         step(make_d, "d", registry, source="c"),
         step(make_side, "side", registry),
     ]
-    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for task in stable(tasks):
+        p.add_task(task)
+    return p
 """
 )
 """A definition of a -> b -> c -> d, where b raises, and the independent step side."""
@@ -208,7 +237,9 @@ def pipeline():
         resources={},
         env=None,
     )
-    return PipelineSnapshot([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 )
 """A definition of one command step that exits with status 3."""
@@ -224,7 +255,9 @@ def stop():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(stop, "stop", registry)], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step(stop, "stop", registry))
+    return p
 """
 )
 """A definition of one step that raises KeyboardInterrupt, as Ctrl-C does."""
@@ -240,7 +273,9 @@ def leave():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(leave, "leave", registry)], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step(leave, "leave", registry))
+    return p
 """
 )
 """A definition of one step that ends the process with sys.exit(0)."""
@@ -259,7 +294,9 @@ def pipeline():
         resources={},
         env=None,
     )
-    return PipelineSnapshot([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 )
 """A definition of one hand-built command step and no registry."""
@@ -280,7 +317,10 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = python_step(make_a, inputs={}, produces="population.parquet", registry=reg)
     b = python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", registry=reg)
-    return PipelineSnapshot([a, b], HERE / "state", reg)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(a)
+    p.add_task(b)
+    return p
 """
 )
 """A definition whose step 'b.csv' reads a mistyped key, 'populaton.parquet'."""
@@ -293,18 +333,15 @@ def make_shared():
 
 
 def pipeline():
-    registry = FileRegistry(HERE / "out", "run1")
-    claim = {"inputs": {}, "produces": "shared.parquet", "registry": registry}
-    tasks = [
-        python_step(make_shared, name=FIRST, **claim),
-        python_step(make_shared, name=SECOND, **claim),
-    ]
-    return PipelineSnapshot(tasks, HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.python_step(make_shared, inputs={}, produces="shared.parquet", name=FIRST)
+    p.python_step(make_shared, inputs={}, produces="shared.parquet", name=SECOND)
+    return p
 """
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
 
-_CLAIMED = "Output 'shared.parquet' is produced by more than one step"
-"""The start of dagger's message for the artifact that both _DOUBLE_CLAIM steps produce."""
+_CLAIMED = "output 'shared.parquet' is already produced by step"
+"""The middle of the Pipeline's message for the second step of _DOUBLE_CLAIM."""
 
 _HANDOFF_NOT_READY = (
     _HEADER
@@ -312,8 +349,7 @@ _HANDOFF_NOT_READY = (
 
 def pipeline():
     inputs = handoff_inputs(HERE / "handoff", ["ethiopia"], {"coverage.csv": ["coverage"]})
-    registry = FileRegistry(HERE / "out", "run1", root_inputs=inputs)
-    return PipelineSnapshot([], HERE / "state", registry)
+    return Pipeline(HERE / "out", "run1", root_inputs=inputs, state=HERE / "state")
 """
 )
 """A definition whose handoff check fails because ethiopia's coverage.csv is missing."""
@@ -337,7 +373,9 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(make_a, "a", registry)], Path("state"), registry)
+    p = Pipeline(HERE / "out", "run1", state=Path("state"))
+    p.add_task(step(make_a, "a", registry))
+    return p
 """
 )
 """A definition whose pipeline has the relative root 'state'."""
@@ -356,7 +394,9 @@ def pipeline():
         resources={},
         env=str(HERE / "no_such_env"),
     )
-    return PipelineSnapshot([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 )
 """A definition of one command step whose env is a path that does not exist."""
@@ -390,7 +430,10 @@ def pipeline():
         step(make_b, "b", registry, source="a"),
         step(make_c, "c", registry, source="b"),
     ]
-    return PipelineSnapshot(stable(tasks), HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for task in stable(tasks):
+        p.add_task(task)
+    return p
 """
 )
 """The chain a -> b -> c where b raises until ``_BROKEN`` is replaced by ``_FIXED``."""
@@ -405,7 +448,9 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(make_a, "a", registry)], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step(make_a, "a", registry))
+    return p
 """
 )
 """A definition of one step that succeeds."""
@@ -420,7 +465,9 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(make_a, "a", registry)], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step(make_a, "a", registry))
+    return p
 """
 )
 """A definition of one step that raises."""
@@ -477,7 +524,9 @@ def pipeline():
         resources={},
         env=None,
     )
-    return PipelineSnapshot([task], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
 """
 )
 """A definition of one command step whose input file 'absent_input.txt' does not exist. The
@@ -498,7 +547,10 @@ def touch(name, node):
 
 
 def pipeline():
-    return PipelineSnapshot([touch(name, node) for name, node in STEPS], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for name, node in STEPS:
+        p.add_task(touch(name, node))
+    return p
 """
 """The end of a definition, with no registry, whose command steps each touch the file of the
 output node that STEPS pairs with the step's name."""
@@ -520,7 +572,10 @@ def copy_step(name, source, target):
 
 def pipeline():
     x, y = HERE / "x.txt", HERE / "y.txt"
-    return PipelineSnapshot([copy_step("a", y, x), copy_step("b", x, y)], HERE / "state")
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(copy_step("a", y, x))
+    p.add_task(copy_step("b", x, y))
+    return p
 """
 )
 """A definition, with no registry, of the command steps a, which reads y.txt and writes
@@ -538,7 +593,9 @@ def make_a():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     root = HERE / "blocker" / "state"
-    return PipelineSnapshot([step(make_a, "a", registry)], root, registry)
+    p = Pipeline(HERE / "out", "run1", state=root)
+    p.add_task(step(make_a, "a", registry))
+    return p
 """
 )
 """A definition of one step whose pipeline root is 'blocker/state' next to the definition."""
@@ -563,7 +620,9 @@ def make_a():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    return PipelineSnapshot([step(make_a, "a", registry)], HERE.joinpath(*ROOT), registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE.joinpath(*ROOT))
+    p.add_task(step(make_a, "a", registry))
+    return p
 """
 """The end of a definition of one step 'a' whose root is HERE joined with ROOT's parts."""
 
@@ -867,8 +926,8 @@ def test_pytask_stopping_without_a_recorded_error_exits_one_with_a_readable_mess
 
 
 def test_preview_prints_one_line_per_step_in_file_key_terms(tmp_path: Path) -> None:
-    """'dagger preview -c def.py' exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
-    path = _write_definition(tmp_path, _CHAIN)
+    """'dagger preview -c def.py' of a chain added with the step methods exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
+    path = _write_definition(tmp_path, _KEYED_CHAIN)
 
     result = _invoke("preview", str(path))
 
@@ -1056,13 +1115,13 @@ def test_a_missing_producer_exits_two_naming_the_step_and_the_key(tmp_path: Path
 def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
     tmp_path: Path,
 ) -> None:
-    """Two python_steps with different names and the same produces key exit 2 with a message naming the file key and both step names, before any build."""
+    """Two python steps with different names and the same produces key exit 2 when the Pipeline refuses the second, with a message naming the second step, the file key and the first step, before any build."""
     path = _write_definition(tmp_path, _double_claim("first", "second"))
 
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    assert f"{_CLAIMED}: 'first', 'second'." in result.stderr
+    assert f"Step 'second': {_CLAIMED} 'first'" in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
     assert _calls(tmp_path) == []
 
@@ -1070,13 +1129,14 @@ def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
 def test_the_same_produces_key_with_default_names_is_reported_as_a_double_claim(
     tmp_path: Path,
 ) -> None:
-    """Two python_steps with the same produces key and default names exit 2 with the double-claim message naming the key, not the backend's duplicate-task-name message."""
+    """Two python steps with the same produces key and default names exit 2 with the Pipeline's message naming the key as already produced, not the message for a name already added or the backend's duplicate-task-name message."""
     path = _write_definition(tmp_path, _double_claim(None, None))
 
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    assert _CLAIMED in result.stderr
+    assert _CLAIMED in result.stderr, result.stderr
+    assert "already added" not in result.stderr, result.stderr
     assert "Task names must be unique" not in result.output
 
 
@@ -1127,7 +1187,7 @@ def test_an_error_with_no_user_frame_prints_the_full_traceback(tmp_path: Path) -
 
 
 def test_a_relative_pipeline_root_exits_two_naming_the_root(tmp_path: Path) -> None:
-    """A definition that returns PipelineSnapshot(tasks, Path('state')) exits 2 with a message saying the root must be absolute."""
+    """A definition that makes Pipeline(..., state=Path('state')) exits 2 with a message saying the state must be absolute."""
     path = _write_definition(tmp_path, _RELATIVE_ROOT)
 
     result = _invoke("run", str(path))
@@ -1340,7 +1400,7 @@ def test_unnamed_path_nodes_on_different_files_are_not_a_double_claim(tmp_path: 
 def test_two_nodes_on_one_file_with_different_names_are_a_double_claim(
     tmp_path: Path,
 ) -> None:
-    """Two hand-built command steps whose outputs are a file_node and a PathNode named 'custom' on the same file exit 2 with dagger's double-claim message naming both steps."""
+    """Two hand-built command steps whose outputs are a file_node and a PathNode named 'custom' on the same file exit 2 when add_task refuses the second, with a message naming 'two', the file's path and 'one'."""
     definition = _touches(
         ("one", 'file_node(HERE / "same.txt")'),
         ("two", 'pytask.PathNode(name="custom", path=HERE / "same.txt")'),
@@ -1350,14 +1410,15 @@ def test_two_nodes_on_one_file_with_different_names_are_a_double_claim(
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    claimed = "is produced by more than one step: 'one', 'two'."
+    same = repr(str((tmp_path / "same.txt").resolve()))
+    claimed = f"Step 'two': output {same} is already produced by step 'one'"
     assert claimed in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "same.txt").exists()
 
 
-def test_a_double_claim_without_a_registry_names_the_node(tmp_path: Path) -> None:
-    """Two hand-built command steps 'one' and 'two' that both output file_node(<tmp>/same.txt), with no registry, exit 2 with "Output '<that node's name>' is produced by more than one step: 'one', 'two'."."""
+def test_a_double_claim_of_added_tasks_names_the_path(tmp_path: Path) -> None:
+    """Two hand-built command steps 'one' and 'two' that both output file_node(<tmp>/same.txt), added with add_task, exit 2 with "Step 'two': output '<that path>' is already produced by step 'one'"."""
     definition = _touches(
         ("one", 'file_node(HERE / "same.txt")'),
         ("two", 'file_node(HERE / "same.txt")'),
@@ -1367,8 +1428,8 @@ def test_a_double_claim_without_a_registry_names_the_node(tmp_path: Path) -> Non
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    key = file_node(tmp_path / "same.txt").name
-    claimed = f"Output '{key}' is produced by more than one step: 'one', 'two'."
+    same = repr(str((tmp_path / "same.txt").resolve()))
+    claimed = f"Step 'two': output {same} is already produced by step 'one'"
     assert claimed in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
 
@@ -1455,7 +1516,7 @@ def test_a_kept_frame_prints_as_python_prints_it(tmp_path: Path) -> None:
 
 
 def test_a_double_claim_through_two_spellings_of_one_path_is_caught(tmp_path: Path) -> None:
-    """Two hand-built command steps whose outputs are unnamed PathNodes on HERE / 'sub' / '..' / 'x.txt' and HERE / 'x.txt' (with HERE / 'sub' existing) exit 2 with dagger's double-claim message naming both steps."""
+    """Two hand-built command steps whose outputs are unnamed PathNodes on HERE / 'sub' / '..' / 'x.txt' and HERE / 'x.txt' (with HERE / 'sub' existing) exit 2 when add_task refuses the second, with a message naming 'two', the resolved path and 'one'."""
     (tmp_path / "sub").mkdir()
     definition = _touches(
         ("one", 'pytask.PathNode(path=HERE / "sub" / ".." / "x.txt")'),
@@ -1466,7 +1527,8 @@ def test_a_double_claim_through_two_spellings_of_one_path_is_caught(tmp_path: Pa
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    claimed = "is produced by more than one step: 'one', 'two'."
+    x = repr(str((tmp_path / "x.txt").resolve()))
+    claimed = f"Step 'two': output {x} is already produced by step 'one'"
     assert claimed in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "x.txt").exists()
@@ -1679,7 +1741,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
@@ -1709,7 +1771,10 @@ def pipeline():
         registry=registry,
         name="report",
     )
-    return PipelineSnapshot([summarize, report], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(summarize)
+    p.add_task(report)
+    return p
 """
 """A definition of the notebook step 'summarize', which runs summarize.ipynb next to the
 definition under ENV and writes 'summary.csv', and the python step 'report' that reads it."""
@@ -1871,7 +1936,10 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = step(frame, "population", reg)
     nb = notebook_step(NOTEBOOK, executed="run.ipynb", registry=reg, env=ENV, inputs=INPUTS)
-    return PipelineSnapshot([a, nb], HERE / "state", reg)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(a)
+    p.add_task(nb)
+    return p
 """
 )
 """A definition whose notebook step, named by default 'run.ipynb', reads a mistyped key,
@@ -1897,7 +1965,10 @@ def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
     a = step(make_a, "a", reg)
     nb = notebook_step(NOTEBOOK, executed=EXECUTED, registry=reg, env=ENV, parameters=PARAMS)
-    return PipelineSnapshot([a, nb], HERE / "state", reg)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(a)
+    p.add_task(nb)
+    return p
 """
 )
 """A definition whose notebook step, named by default 'run.ipynb', passes the misspelled
@@ -1917,7 +1988,10 @@ def pipeline():
         step(plus_one, "adults", reg, path="population"),
         python_step(plus_one, inputs=BAD, produces="s.csv", registry=reg, name="s"),
     ]
-    return PipelineSnapshot(tasks, HERE / "state", reg)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for task in tasks:
+        p.add_task(task)
+    return p
 """
 )
 """A definition whose step 's' reads the key 'zzz', which is unlike every registered key."""
@@ -1930,15 +2004,35 @@ NAME = "population"
 
 
 def pipeline():
-    reg = FileRegistry(HERE / "out", "run1")
-    tasks = [
-        python_step(frame, inputs={}, produces="a.parquet", registry=reg, name=NAME),
-        python_step(frame, inputs={}, produces="b.parquet", registry=reg, name=NAME),
-    ]
-    return PipelineSnapshot(tasks, HERE / "state", reg)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.python_step(frame, inputs={}, produces="a.parquet", name=NAME)
+    p.python_step(frame, inputs={}, produces="b.parquet", name=NAME)
+    return p
 """
 )
-"""A definition of two steps with different products that are both named 'population'."""
+"""A definition that adds two steps with different products that are both named
+'population', so the Pipeline refuses the second."""
+
+_NAME_ADDED = (
+    "Step 'population': a step named 'population' was already added to the pipeline; "
+    "give each step a different name= to tell them apart."
+)
+"""The Pipeline's message for the second step of :data:`_SHARED_NAME`."""
+
+_TWO_NAMED_POPULATION = (
+    "Two steps are named 'population'; give each a different name= to tell them apart."
+)
+"""The message of the verbs' own check for two steps named 'population'."""
+
+
+def _shared_name_snapshot(tmp_path: Path) -> _PipelineSnapshot:
+    """Return a snapshot, which a Pipeline would refuse, of two steps named 'population'."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    tasks = [
+        python_step(_frame, inputs={}, produces=key, registry=registry, name="population")
+        for key in ("a.parquet", "b.parquet")
+    ]
+    return _PipelineSnapshot(tasks, tmp_path / "state", registry)
 
 
 def test_a_step_that_calls_sys_exit_is_named_in_the_message(tmp_path: Path) -> None:
@@ -1961,7 +2055,7 @@ def test_a_system_exit_from_outside_any_step_names_the_build_not_a_step(
     def exits(*args: object, **kwargs: object) -> None:
         raise SystemExit(5)
 
-    monkeypatch.setattr("vivarium.dagger.frontend.cli.run_pipeline", exits)
+    monkeypatch.setattr("vivarium.dagger.frontend.cli._run", exits)
     result = _invoke("run", str(path))
 
     assert result.exit_code == 1, _describe(result)
@@ -2029,17 +2123,14 @@ def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
 def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apart(
     tmp_path: Path,
 ) -> None:
-    """Two steps with different products and the same name make 'dagger run' and 'dagger preview' exit 2 with "Two steps are named 'population'; give each a different name= to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
+    """A definition that adds two steps with different products and the same name makes 'dagger run' and 'dagger preview' exit 2 with the Pipeline's message "Step 'population': a step named 'population' was already added to the pipeline; give each step a different name= to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
     path = _write_definition(tmp_path, _SHARED_NAME)
-    expected = (
-        "Two steps are named 'population'; give each a different name= to tell them apart."
-    )
 
     for verb in ("run", "preview"):
         result = _invoke(verb, str(path))
 
         assert result.exit_code == 2, f"{verb}\n{_describe(result)}"
-        assert expected in result.stderr, result.stderr
+        assert _NAME_ADDED in result.stderr, result.stderr
         assert "Task names must be unique" not in result.output, result.output
         assert "['" not in result.output, result.output
     assert not (tmp_path / "state").exists()
@@ -2051,24 +2142,170 @@ def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apa
     ["run --until", "preview --until", "force"],
     ids=["run", "preview", "force"],
 )
-def test_two_steps_with_one_name_and_an_unknown_step_report_the_shared_name_as_a_definition_problem(
+def test_two_steps_with_one_name_and_an_unknown_step_exit_two_with_the_pipelines_message(
     tmp_path: Path, command: str
 ) -> None:
-    """With two steps named 'population' and an unknown step 'bb' given to --until or force, the command exits 2 with "Error: Two steps are named 'population'; ..." and no usage line or "Invalid value"."""
+    """With a definition that adds two steps named 'population' and an unknown step 'bb' given to --until or force, the command exits 2 with the Pipeline's message for the second step and no usage line or "Invalid value"."""
     path = _write_definition(tmp_path, _SHARED_NAME)
     verb, *option = command.split()
 
     result = _invoke(verb, str(path), *option, "bb")
 
     assert result.exit_code == 2, _describe(result)
-    expected = (
-        "Error: Two steps are named 'population'; give each a different name= to tell "
-        "them apart."
-    )
-    assert expected in result.stderr, result.stderr
+    assert _NAME_ADDED in result.stderr, result.stderr
     assert "Usage:" not in result.stderr, result.stderr
     assert "Invalid value" not in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
+
+
+# The command's checks after loading, which a Pipeline makes unreachable (MIC-7810)
+
+
+def _frame() -> pd.DataFrame:
+    """Return a fixed one-column table."""
+    return pd.DataFrame({"n": [1, 2, 3]})
+
+
+def _touch(name: str, node: pytask.PNode) -> Task:
+    """Return a hand-built command step ``name`` whose one output is ``node``."""
+    assert isinstance(node, pytask.PathNode)
+    return Task(
+        name=name,
+        run=f"touch {node.path}",
+        inputs={},
+        outputs={"product": node},
+        resources={},
+        env=None,
+    )
+
+
+def _definition_problem(call: Callable[[], object]) -> click.ClickException:
+    """Return the click error that ``call`` raises, which must have exit status 2."""
+    with pytest.raises(click.ClickException) as info:
+        call()
+    assert info.value.exit_code == 2, info.value
+    return info.value
+
+
+def test_the_single_producer_check_names_the_key_and_both_steps(tmp_path: Path) -> None:
+    """On a snapshot of two python steps 'first' and 'second' that produce 'shared.parquet' through one registry, the command's single-producer check raises a click error with exit status 2 and the message "Output 'shared.parquet' is produced by more than one step: 'first', 'second'."."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    claim: dict[str, Any] = {"inputs": {}, "produces": "shared.parquet", "registry": registry}
+    tasks = [python_step(_frame, name=name, **claim) for name in ("first", "second")]
+    snapshot = _PipelineSnapshot(tasks, tmp_path / "state", registry)
+
+    error = _definition_problem(lambda: frontend_cli._check_single_producers(snapshot))
+
+    assert error.message == (
+        "Output 'shared.parquet' is produced by more than one step: 'first', 'second'."
+    )
+
+
+@pytest.mark.parametrize(
+    "second",
+    ["same", "other_spelling", "named_node"],
+    ids=["same node", "two spellings of one path", "a node with another name"],
+)
+def test_the_single_producer_check_without_a_registry_names_the_node(
+    tmp_path: Path, second: str
+) -> None:
+    """On a snapshot with no registry whose steps 'one' and 'two' output file_node(<tmp>/same.txt) and, for 'two', the same node, an unnamed PathNode through 'sub/..', or a PathNode named 'custom' on that file, the single-producer check raises a click error with exit status 2 naming the first node's name and both steps."""
+    (tmp_path / "sub").mkdir()
+    same = tmp_path / "same.txt"
+    nodes: dict[str, pytask.PNode] = {
+        "same": file_node(same),
+        "other_spelling": pytask.PathNode(path=tmp_path / "sub" / ".." / "same.txt"),
+        "named_node": pytask.PathNode(name="custom", path=same),
+    }
+    tasks = [_touch("one", file_node(same)), _touch("two", nodes[second])]
+    snapshot = _PipelineSnapshot(tasks, tmp_path / "state")
+
+    error = _definition_problem(lambda: frontend_cli._check_single_producers(snapshot))
+
+    key = file_node(same).name
+    assert error.message == f"Output '{key}' is produced by more than one step: 'one', 'two'."
+
+
+def test_unnamed_path_nodes_on_different_files_pass_the_single_producer_check(
+    tmp_path: Path,
+) -> None:
+    """On a snapshot whose steps output unnamed PathNodes on different files, the single-producer check raises nothing."""
+    tasks = [
+        _touch(name, pytask.PathNode(path=tmp_path / f"{name}.txt")) for name in ("a", "b")
+    ]
+
+    frontend_cli._check_single_producers(_PipelineSnapshot(tasks, tmp_path / "state"))
+
+
+@pytest.mark.parametrize("verb", ["run", "preview"])
+@pytest.mark.parametrize("requested", [(), ("bb",)], ids=["no step", "an unknown step"])
+def test_the_verbs_shared_name_check_is_reported_as_a_definition_problem(
+    tmp_path: Path, verb: str, requested: tuple[str, ...]
+) -> None:
+    """On a snapshot of two steps named 'population', the private verb that the command calls, run with no step or with the unknown step 'bb' requested, is reported by the command as a click error with exit status 2 and the message "Two steps are named 'population'; ...", not as a bad parameter, and writes no state."""
+    snapshot = _shared_name_snapshot(tmp_path)
+    calls: dict[str, Callable[[], object]] = {
+        "run": lambda: _run(snapshot, only=requested or None),
+        "preview": lambda: frontend_cli._quiet_preview(snapshot, requested),
+    }
+
+    def verb_call() -> None:
+        with frontend_cli._verb_errors(snapshot, requested, "'--until'"):
+            calls[verb]()
+
+    error = _definition_problem(verb_call)
+
+    assert not isinstance(error, click.BadParameter)
+    assert error.message == _TWO_NAMED_POPULATION
+    assert not (tmp_path / "state").exists()
+
+
+def test_the_root_check_names_a_root_under_a_file(tmp_path: Path) -> None:
+    """On a snapshot whose root is under an existing file, the command's root check raises a click error with exit status 2 naming the root and saying the file is not a directory."""
+    blocker = tmp_path / "blocker"
+    blocker.write_text("")
+    snapshot = _PipelineSnapshot([], blocker / "state")
+
+    error = _definition_problem(lambda: frontend_cli._check_root(snapshot.root))
+
+    assert error.message == (
+        f"Cannot use the pipeline root {blocker / 'state'}: {blocker} is not a directory"
+    )
+
+
+def test_the_command_runs_the_snapshot_it_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """'dagger run' freezes the loaded pipeline once: the snapshot its single-producer check and its root check receive is the object it passes to the private run verb."""
+    path = _write_definition(tmp_path, _CHAIN)
+    seen: dict[str, object] = {}
+    check_single_producers = frontend_cli._check_single_producers
+    check_root = frontend_cli._check_root
+
+    def record_producers(snapshot: _PipelineSnapshot) -> None:
+        seen["producers"] = snapshot
+        check_single_producers(snapshot)
+
+    def record_root(root: Path) -> None:
+        seen["root"] = root
+        check_root(root)
+
+    def record_run(snapshot: _PipelineSnapshot, **kwargs: object) -> dict[str, object]:
+        seen["run"] = snapshot
+        return {}
+
+    monkeypatch.setattr(frontend_cli, "_check_single_producers", record_producers)
+    monkeypatch.setattr(frontend_cli, "_check_root", record_root)
+    monkeypatch.setattr(frontend_cli, "_run", record_run)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    ran = seen["run"]
+    assert isinstance(ran, _PipelineSnapshot)
+    assert seen["producers"] is ran
+    assert seen["root"] == ran.root
+    assert _calls(tmp_path) == []
 
 
 # A definition that does not parse (MIC-7785)
@@ -2243,15 +2480,12 @@ def test_the_command_example_previews_every_step_before_its_first_run(tmp_path: 
 
 
 def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path) -> None:
-    """With the copy's pipeline loaded by load_pipeline and each step given a stable code identity, after a successful run() an edit to the copied select_adults.py makes preview() report that adults would run with "artifact 'select_adults.py'" among its reasons."""
-    loaded = freeze(load_pipeline(str(_copy_command_example(tmp_path))))
-    pipeline = PipelineSnapshot(
-        [with_stable_code_id(task) for task in loaded.tasks], loaded.root, loaded.registry
-    )
-    assert run(pipeline) == dict.fromkeys(_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
+    """With the copy's pipeline loaded by load_pipeline and frozen with a stable code identity on each step, after a successful _run() an edit to the copied select_adults.py makes _preview() report that adults would run with "file 'select_adults.py'" among its reasons."""
+    pipeline = stable_snapshot(load_pipeline(str(_copy_command_example(tmp_path))))
+    assert _run(pipeline) == dict.fromkeys(_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
 
     with Perturbed(tmp_path / "select_adults.py", b"\n# An edit.\n"):
-        plan = {step.name: step for step in preview(pipeline)}
+        plan = {step.name: step for step in _preview(pipeline)}
 
     adults = plan["adults"]
     assert adults.would_run

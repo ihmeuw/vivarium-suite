@@ -492,7 +492,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 
@@ -506,7 +506,9 @@ def make_table():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     step = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
-    return PipelineSnapshot([step], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
 """
 """A definition of one step whose function is defined in the definition file."""
 

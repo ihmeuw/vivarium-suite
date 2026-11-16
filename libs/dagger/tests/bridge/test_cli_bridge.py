@@ -35,7 +35,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
@@ -85,7 +85,12 @@ def pipeline():
         for name, target, inputs in zip(NAMES, targets, sources)
     ]
     stable = [with_stable_code_id(task) for task in tasks]
-    return PipelineSnapshot(stable, HERE / "state", registry, resources=PIPELINE_RESOURCES)
+    p = Pipeline(
+        HERE / "out", "run1", state=HERE / "state", resources=PIPELINE_RESOURCES
+    )
+    for task in stable:
+        p.add_task(task)
+    return p
 """
 """The start of a definition of the chain NAMES[0] -> NAMES[1] -> NAMES[2] with stable code
 identities. Each step body logs its position ('a', 'b' or 'c') and its process id. The
@@ -102,7 +107,7 @@ _WITH_HELPER = """\
 import os
 from pathlib import Path
 
-from vivarium.dagger.frontend.snapshot import PipelineSnapshot
+from vivarium.dagger.frontend import Pipeline
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.python_step import python_step
 
@@ -122,7 +127,9 @@ def pipeline():
     step = python_step(
         make_table, inputs={}, produces="table.parquet", registry=registry, name="table"
     )
-    return PipelineSnapshot([step], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
 """
 """A definition of one step whose function, defined in the file, calls a helper module
 named HELPER that sits beside the file, and writes its process id and PYTHONPATH to
@@ -432,7 +439,7 @@ def test_project_and_queue_options_reach_the_adapter_over_the_defaults(
 def test_options_override_pipeline_resources_and_step_resources_override_both(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """For a definition whose PipelineSnapshot sets resources={'project': 'proj_a', 'queue': 'all.q', 'memory': 4} and whose step 'b' sets resources={'queue': 'i.q'}, 'dagger run -P proj_x -q long.q' binds project 'proj_x', queue 'long.q' and memory 4 as defaults, and b's plan entry has queue 'i.q'."""
+    """For a definition whose Pipeline sets resources={'project': 'proj_a', 'queue': 'all.q', 'memory': 4} and whose step 'b' sets resources={'queue': 'i.q'}, 'dagger run -P proj_x -q long.q' binds project 'proj_x', queue 'long.q' and memory 4 as defaults, and b's plan entry has queue 'i.q'."""
     path = _definition(
         tmp_path,
         step_resources={"b": {"queue": "i.q"}},
@@ -455,7 +462,7 @@ def test_options_override_pipeline_resources_and_step_resources_override_both(
 def test_a_project_from_pipeline_resources_needs_no_option(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """'dagger run -c def.py' with no -P, on a definition whose PipelineSnapshot sets resources={'project': 'proj_a'}, exits 0 and binds project 'proj_a'."""
+    """'dagger run -c def.py' with no -P, on a definition whose Pipeline sets resources={'project': 'proj_a'}, exits 0 and binds project 'proj_a'."""
     path = _definition(tmp_path, pipeline_resources={"project": "proj_a"})
 
     result = _dagger("run", "-c", str(path))
