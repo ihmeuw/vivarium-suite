@@ -32,15 +32,15 @@
 # separate process, the way a modeler would type it in a shell. The exceptions are C2's
 # check that the command imports no Jobmon (it runs the command through click's test runner
 # in a child Python), C12 (which runs the docs test with pytest) and C17 (which loads a
-# definition in this process to print a step's command). Everything else in this notebook
-# is machinery for showing many runs and many mistakes in one place. A modeler would not
-# write any of it:
+# definition in this process and reads its private snapshot to print a step's command).
+# Everything else in this notebook is machinery for showing many runs and many mistakes in
+# one place. A modeler would not write any of it:
 #
 # - **A copy per section.** A definition keeps its outputs next to itself (`HERE / "output"`),
-#   and its `Workflow` keeps the pytask state inside them (`output/.dagger/<run>`). If every
-#   section ran in one folder, each would
-#   start from what the sections before it left. So each section works in its own copy of
-#   `c_walkthrough_defs/` under a workspace folder, and the committed files never change.
+#   and its `Pipeline` keeps the pytask state inside them (`output/.dagger/<run>`). If every
+#   section ran in one folder, each would start from what the sections before it left. So
+#   each section works in its own copy of `c_walkthrough_defs/` under a workspace folder,
+#   and the committed files never change.
 # - **One-line edits.** Several sections need a definition that differs from the committed
 #   one by a line: a misspelled key, a changed parameter, a step that raises. A modeler
 #   would edit their file. Here `make_defs(name, edits=[(old, new)])` makes the copy,
@@ -53,13 +53,12 @@
 #   it. `products` and `plan` read the output folder and the preview lines for those checks.
 # - **Checks.** The `assert` lines turn the walkthrough into a test of what each section
 #   claims. A modeler reads the output instead.
-# - **`:stable`.** `-c pipeline.py:stable` loads a second function in the same definition
-#   that gives every step the test harness's fixed code fingerprint, the stand-in for
-#   MIC-7760. With the public API (`-c pipeline.py`) every step is stale on every run; C5
-#   shows both.
 # - **`--local`.** `dagger run` and `dagger force` send a definition's stale steps through
 #   Jobmon unless `--local` is given. The local sections pass `--local` so that they run
 #   anywhere in seconds; C16 and C1-real show the default on the cluster.
+#
+# Skipping unchanged steps is deferred to the caching sub-epic (MIC-7698), so every run in
+# this notebook re-runs every step.
 #
 # The cluster sections add a little more machinery, explained where it appears: the
 # bridge's run directories (`.pytask/jobmon/<run>/state.json`), read to print each Jobmon
@@ -243,16 +242,16 @@ def show_runs(runs):
 # ## C1 — One definition declares the steps; custom steps are first-class (local)
 #
 # The definition below has python steps, a fan-out over a two-location handoff, a
-# notebook step, and a command step, all added to one `Workflow` and wired by artifact
-# key. No file path appears in the wiring. Loading the definition runs nothing, so
-# `preview` plans the whole DAG before any product exists, and names every file by its key.
+# notebook step, and a command step, all added to one `Pipeline` and wired by file key. No
+# file path appears in the wiring. Loading the definition runs nothing, so `preview` plans
+# the whole DAG before any product exists, and names every file by its key.
 
 # %%
 GOOD = make_defs("good")
 print((GOOD / "pipeline.py").read_text())
 
 # %%
-first = dagger("preview", "-c", "pipeline.py:stable", cwd=GOOD)
+first = dagger("preview", "-c", "pipeline.py", cwd=GOOD)
 assert first.returncode == 0 and products(GOOD) == []
 assert set(plan(first)) == {
     "population",
@@ -264,6 +263,7 @@ assert set(plan(first)) == {
     "archive",
 }
 assert str(WORK) not in first.stdout, "a reason shows an absolute path"
+assert "file 'population.parquet'" in plan(first)["population"], plan(first)["population"]
 
 # %% [markdown]
 # ## C2 — One installed command (local)
@@ -281,7 +281,7 @@ for verb in (["preview"], ["run", "--local"]):
     folder = make_defs("c2_" + verb[0])
     probe = (
         "import sys; from click.testing import CliRunner; from vivarium.dagger.cli import dagger; "
-        f"r = CliRunner().invoke(dagger, [{verb[0]!r}, '-c', 'pipeline.py:stable', *{verb[1:]!r}]); "
+        f"r = CliRunner().invoke(dagger, [{verb[0]!r}, '-c', 'pipeline.py', *{verb[1:]!r}]); "
         "print('exit', r.exit_code, 'jobmon imported:', any(m.split('.')[0] == 'jobmon' for m in sys.modules))"
     )
     out = subprocess.run(
@@ -306,7 +306,7 @@ for verb in (["preview"], ["run", "--local"]):
 # command in a shell. The failing definition here is C9's.
 
 # %%
-wrong = dagger("run", "-c", "pipeline.py:stable", "--local", "-P", "proj_simscience", cwd=GOOD)
+wrong = dagger("run", "-c", "pipeline.py", "--local", "-P", "proj_simscience", cwd=GOOD)
 assert wrong.returncode == 2, wrong.returncode
 assert "--project" in wrong.stderr and "not with --local" in wrong.stderr
 assert products(GOOD) == []
@@ -314,7 +314,7 @@ assert products(GOOD) == []
 FAILS = make_defs(
     "c3_fails", edits=[('frame["age_group"] != "0-14"', 'frame["age"] != "0-14"')]
 )
-line = f"{shlex.quote(str(DAGGER))} run -c pipeline.py:stable --local > /dev/null 2>&1 && echo 'next command ran' || echo \"stopped: dagger exited $?\""
+line = f"{shlex.quote(str(DAGGER))} run -c pipeline.py --local > /dev/null 2>&1 && echo 'next command ran' || echo \"stopped: dagger exited $?\""
 for folder in (GOOD, FAILS):
     chain = subprocess.run(
         ["bash", "-c", line], cwd=folder, env=CHILD_ENV, capture_output=True, text=True
@@ -331,118 +331,76 @@ for folder in (GOOD, FAILS):
 # A preview limited the same way marks the other steps "not selected".
 
 # %%
-UNTIL = make_defs("c4_c5")
-dagger("run", "-c", "pipeline.py:stable", "--local", "--until", "adults", cwd=UNTIL)
+UNTIL = make_defs("c4_c6")
+dagger("run", "-c", "pipeline.py", "--local", "--until", "adults", cwd=UNTIL)
 print("products:", products(UNTIL))
 assert products(UNTIL) == ["walk/adults.parquet", "walk/population.parquet"]
-limited = dagger("preview", "-c", "pipeline.py:stable", "--until", "adults", cwd=UNTIL)
+limited = dagger("preview", "-c", "pipeline.py", "--until", "adults", cwd=UNTIL)
 assert "not selected" in plan(limited)["summary"]
 
 # %% [markdown]
-# ## C5 — A plain `run` then executes only what is left (local; uses the stand-in)
+# ## C5 — A plain `run` then executes only what is left (local)
 #
-# Every step built with the public API is always stale until MIC-7760 gives steps a code
-# fingerprint. This section uses `pipeline.py:stable`, whose steps carry the harness's
-# `stable_code_id` stand-in, as track B's B2 did. The second half shows the public API
-# today: after the same `--until`, every step would run again.
-
-# %%
-before = dagger("preview", "-c", "pipeline.py:stable", cwd=UNTIL)
-assert {s for s, l in plan(before).items() if l.startswith("skip")} == {
-    "population",
-    "adults",
-}
-rest = dagger("run", "-c", "pipeline.py:stable", "--local", cwd=UNTIL)
-assert rest.returncode == 0
-after = dagger("preview", "-c", "pipeline.py:stable", cwd=UNTIL)
-assert all(l.startswith("skip") for l in plan(after).values()), after.stdout
-
-# %%
-dagger("run", "-c", "pipeline.py", "--local", "--until", "adults", cwd=UNTIL, stdout=False)
-public = dagger("preview", "-c", "pipeline.py", cwd=UNTIL)
-assert all(l.startswith("run") for l in plan(public).values())
+# Moved to the caching sub-epic (MIC-7760) on 2026-11-16: after --until, a plain run
+# executes only the remaining steps.
 
 # %% [markdown]
 # ## C6 — `force S` re-runs S; its descendants run only if its output changed (local)
 #
-# Patrick confirmed this rule on 2026-11-09. Forcing adults, whose output comes out the
-# same, runs adults alone. A copy of the definition next to it, `stamped.py`, has a
-# population step that also writes the time it ran, so forcing it changes
-# population.parquet: adults runs again, but adults drops that column, so its output is
-# unchanged and summary and later steps stay skipped.
+# This section shows the checks on force's arguments. Forcing a real step runs it and exits
+# 0. A force that names no step, or names a step the definition does not have, exits 2 and
+# runs nothing; the message names the unknown steps and the valid ones.
 #
-# The rule holds for a run in this process (`--local`), which this section uses. Through
-# Jobmon, the bridge submits every step after a forced or stale step even when that step's
-# inputs did not change; early cutoff on the bridge is MIC-7763. C16 forces a step through
-# Jobmon.
+# The rule for descendants, which Patrick confirmed on 2026-11-09, needs unchanged steps to
+# be skipped, so it moved to the caching sub-epic on 2026-11-16: MIC-7760 for a run in this
+# process, and MIC-7763 for a run through Jobmon. C16 forces a step through Jobmon.
 
 # %%
 FORCE = UNTIL
-same = dagger("force", "-c", "pipeline.py:stable", "--local", "adults", cwd=FORCE)
+same = dagger("force", "-c", "pipeline.py", "--local", "adults", cwd=FORCE)
 assert same.returncode == 0
-assert all(
-    l.startswith("skip")
-    for l in plan(
-        dagger("preview", "-c", "pipeline.py:stable", cwd=FORCE, show=False)
-    ).values()
-)
-digest = {
-    p: hashlib.sha256((FORCE / "output" / p).read_bytes()).hexdigest()[:12]
-    for p in products(FORCE)
-}
-# A second definition file next to the first shares its outputs and state.
-stamped = (FORCE / "pipeline.py").read_text()
-for old, new in (
-    ("import sys\n", "import sys\nimport time\n"),
-    ('"count": [30, 55, 15]})', '"count": [30, 55, 15]}).assign(made_at=time.time())'),
-):
-    assert stamped.count(old) == 1, old
-    stamped = stamped.replace(old, new)
-(FORCE / "stamped.py").write_text(stamped)
-changed = dagger("force", "-c", "stamped.py:stable", "--local", "population", cwd=FORCE)
-assert changed.returncode == 0
-now = {
-    p: hashlib.sha256((FORCE / "output" / p).read_bytes()).hexdigest()[:12]
-    for p in products(FORCE)
-}
-print("bytes changed:", sorted(p for p in now if now[p] != digest[p]))
-assert sorted(p for p in now if now[p] != digest[p]) == ["walk/population.parquet"]
-
-# %%
-assert dagger("force", "-c", "pipeline.py:stable", "--local", cwd=FORCE).returncode == 2
-assert (
-    dagger(
-        "force", "-c", "pipeline.py:stable", "--local", "adult", "sumary", cwd=FORCE
-    ).returncode
-    == 2
-)
+no_step = dagger("force", "-c", "pipeline.py", "--local", cwd=FORCE)
+assert no_step.returncode == 2 and "Missing argument 'STEP...'" in no_step.stderr
+unknown = dagger("force", "-c", "pipeline.py", "--local", "adult", "sumary", cwd=FORCE)
+assert unknown.returncode == 2
+for name in ("'adult'", "'sumary'", "Valid steps"):
+    assert name in unknown.stderr, name
 
 # %% [markdown]
 # ## C10 — The primary-data handoff (local)
 #
 # Each location's file sits at `<root>/<location>/primary/coverage.csv` and is checked
-# before anything runs. When the analyst delivers a new Nigeria file, preview marks only
-# that location's step, and the run reads the new values.
+# before anything runs. When the analyst delivers a new Nigeria file, preview gives the
+# changed file as a reason to run that location's step, and the run reads the new values.
+# The claim that only that location's steps run again moved to the caching sub-epic
+# (MIC-7760) on 2026-11-16.
 
 # %%
 HANDOFF = GOOD
-dagger("run", "-c", "pipeline.py:stable", "--local", cwd=HANDOFF, stdout=False)
+dagger("run", "-c", "pipeline.py", "--local", cwd=HANDOFF, stdout=False)
 write_handoff(HANDOFF / "handoff", values=(0.6, 0.8), locations=["nigeria"])
-redelivered = dagger("preview", "-c", "pipeline.py:stable", cwd=HANDOFF)
-assert {s for s, l in plan(redelivered).items() if l.startswith("run")} == {
-    "coverage_nigeria"
-}
-dagger("run", "-c", "pipeline.py:stable", "--local", cwd=HANDOFF, stdout=False)
-print(pd.read_parquet(HANDOFF / "output/walk/nigeria/mean_coverage.parquet"))
+redelivered = dagger("preview", "-c", "pipeline.py", cwd=HANDOFF)
+nigeria_line = plan(redelivered)["coverage_nigeria"]
+assert nigeria_line.startswith("run"), nigeria_line
+assert "file 'nigeria/primary/coverage.csv' changed" in nigeria_line, nigeria_line
+dagger("run", "-c", "pipeline.py", "--local", cwd=HANDOFF, stdout=False)
+nigeria = pd.read_parquet(HANDOFF / "output/walk/nigeria/mean_coverage.parquet")
+print(nigeria)
+assert abs(nigeria["mean_coverage"][0] - 0.7) < 1e-9, "the run did not read the new file"
 
 # %% [markdown]
 # ## C11 — The notebook step (local)
 #
 # The report notebook ran in the declared env and wrote its product and an executed copy.
-# The source notebook is unchanged. A changed parameter marks the step in preview. Its
-# parameters cell assigns `summary`, `report` and `title`, the names the step passes, so
-# the parameters-cell check (C18) accepts it; the two cases it refuses are in the
-# plain-errors table below.
+# The source notebook is unchanged. A copy of the definition with a new title runs, and
+# the report then holds that title. Its parameters cell assigns `summary`, `report` and
+# `title`, the names the step passes, so the parameters-cell check (C18) accepts it; the
+# two cases it refuses are in the plain-errors table below.
+#
+# Two claims moved to the caching sub-epic (MIC-7760) on 2026-11-16: that preview marks
+# the report because its parameter changed, and that the run then re-runs only the report
+# and the archive. While every step re-runs, preview gives the steps before the report as
+# its reason, because they run first.
 
 # %%
 executed = json.loads((HANDOFF / "output/walk/report_executed.ipynb").read_text())
@@ -460,8 +418,11 @@ retitled.write_text(
     .read_text()
     .replace('"title": "Adults"', '"title": "Adults 15+"')
 )
-param = dagger("preview", "-c", "retitled.py:stable", cwd=HANDOFF)
-assert {s for s, l in plan(param).items() if l.startswith("run")} == {"report", "archive"}
+retitled_run = dagger("run", "-c", "retitled.py", "--local", cwd=HANDOFF, stdout=False)
+assert retitled_run.returncode == 0
+report_frame = pd.read_csv(HANDOFF / "output/walk/report.csv")
+print(report_frame)
+assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 
 # %% [markdown]
 # ## C17 — A command step runs a shell command with its paths filled in (local)
@@ -472,12 +433,19 @@ assert {s for s, l in plan(param).items() if l.startswith("run")} == {"report", 
 # ran, with this workspace's path shortened, and checks that the copy matches the report.
 # C1-real's artifact step is a command step that runs a script in the model's artifact
 # env. A misspelled placeholder and a failing command are in the plain-errors table below.
+#
+# A `Pipeline` has no public list of its steps, so to print the command the cell reads the
+# private snapshot that `dagger` freezes from the pipeline before a run
+# (`vivarium.dagger.frontend.builder.freeze`). A modeler would not do this.
 
 # %%
 from vivarium.dagger.frontend import load_pipeline
+from vivarium.dagger.frontend.builder import freeze
 
 archive = next(
-    t for t in load_pipeline(f"{HANDOFF / 'pipeline.py'}:stable").tasks if t.name == "archive"
+    t
+    for t in freeze(load_pipeline(str(HANDOFF / "pipeline.py"))).tasks
+    if t.name == "archive"
 )
 print(archive.run.replace(str(WORK), "<workspace>"))
 copy, report = HANDOFF / "output/walk/archive/report.csv", HANDOFF / "output/walk/report.csv"
@@ -502,7 +470,7 @@ def show_error(
     *,
     edits=(),
     report_edits=(),
-    args=("preview", "-c", "pipeline.py:stable"),
+    args=("preview", "-c", "pipeline.py"),
     setup=None,
     env=None,
     exit_code,
@@ -574,7 +542,7 @@ show_error(
     edits=[
         (
             '        name="summary",\n    )\n',
-            '        name="summary",\n    )\n    wf.python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
+            '        name="summary",\n    )\n    p.python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
         )
     ],
     exit_code=2,
@@ -585,7 +553,7 @@ show_error(
     "W8 two steps share a name",
     edits=[('name=f"coverage_{location}"', 'name="coverage"')],
     exit_code=2,
-    names=["coverage", "name="],
+    names=["coverage", "already added to the pipeline", "name="],
     absent=["['coverage']"],
     user_frames_only=True,
 )
@@ -637,7 +605,7 @@ assert len(wide.stderr) < 1500, f"the message is {len(wide.stderr)} characters"
 FAILED_FOLDER, _ = show_error(
     "T2 a python step raises",
     edits=[('frame["age_group"] != "0-14"', 'frame["age"] != "0-14"')],
-    args=("run", "-c", "pipeline.py:stable", "--local"),
+    args=("run", "-c", "pipeline.py", "--local"),
     exit_code=1,
     names=["adults", "KeyError", "summary", "report", "archive"],
 )
@@ -649,7 +617,7 @@ assert any("nigeria/mean_coverage" in p for p in products(FAILED_FOLDER))
 show_error(
     "T4 a notebook raises",
     report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
-    args=("run", "-c", "pipeline.py:stable", "--local"),
+    args=("run", "-c", "pipeline.py", "--local"),
     exit_code=1,
     names=["report", "KeyError", "adult", "report_executed.ipynb", "In ["],
     absent=["papermill", "ipykernel install"],
@@ -657,7 +625,7 @@ show_error(
 show_error(
     "Command step fails",
     edits=[('"cp {report} {copy}"', '"false && cp {report} {copy}"')],
-    args=("run", "-c", "pipeline.py:stable", "--local"),
+    args=("run", "-c", "pipeline.py", "--local"),
     exit_code=1,
     names=["archive", "status 1"],
     absent=["&& cp"],
@@ -665,7 +633,7 @@ show_error(
 show_error(
     "T6 declared env does not exist",
     edits=[("env=sys.prefix", 'env="vivarium_no_such_env"')],
-    args=("run", "-c", "pipeline.py:stable", "--local"),
+    args=("run", "-c", "pipeline.py", "--local"),
     exit_code=2,
     names=["report", "vivarium_no_such_env"],
 )
@@ -677,13 +645,13 @@ show_error(
             'sys.exit("no census this year")',
         )
     ],
-    args=("run", "-c", "pipeline.py:stable", "--local"),
+    args=("run", "-c", "pipeline.py", "--local"),
     exit_code=1,
     names=["population"],
 )
 show_error(
     "T1 --until names an unknown step",
-    args=("run", "-c", "pipeline.py:stable", "--local", "--until", "adult"),
+    args=("run", "-c", "pipeline.py", "--local", "--until", "adult"),
     exit_code=2,
     names=["adult", "adults", "Valid steps"],
 )
@@ -715,29 +683,24 @@ NO_SCONTROL_PATH = os.pathsep.join(
 )
 _, no_jobmon = show_error(
     "J1 a run through Jobmon where Jobmon cannot run",
-    args=("run", "-c", "pipeline.py:stable", "-P", "proj_simscience"),
+    args=("run", "-c", "pipeline.py", "-P", "proj_simscience"),
     env={"PATH": NO_SCONTROL_PATH},
     exit_code=2,
     names=["Jobmon", "--local"],
 )
 
 # %% [markdown]
-# After the cause in T2 is fixed, the same command completes. Only the failed step and
-# the steps it blocked run.
+# After the cause in T2 is fixed, the same command completes. The claim that it runs only
+# the failed step and the steps it blocked moved to the caching sub-epic (MIC-7760) on
+# 2026-11-16.
 
 # %%
 fixed = FAILED_FOLDER / "pipeline.py"
 fixed.write_text(
     fixed.read_text().replace('frame["age"] != "0-14"', 'frame["age_group"] != "0-14"')
 )
-again = dagger("run", "-c", "pipeline.py:stable", "--local", cwd=FAILED_FOLDER, stdout=False)
+again = dagger("run", "-c", "pipeline.py", "--local", cwd=FAILED_FOLDER, stdout=False)
 assert again.returncode == 0
-assert all(
-    l.startswith("skip")
-    for l in plan(
-        dagger("preview", "-c", "pipeline.py:stable", cwd=FAILED_FOLDER, show=False)
-    ).values()
-)
 
 # %%
 columns = ["case", "command", "exit", "chars", "checks"]
@@ -755,16 +718,16 @@ assert not failed, failed
 # %% [markdown]
 # ## C7 — Preview speaks in keys and step names (local)
 #
-# Every preview above named files by artifact key and steps by name. This cell checks
-# all of them at once: no line holds an absolute path from this workspace.
+# Every preview above named files by file key and steps by name. This cell checks all of
+# them at once: no line holds an absolute path from this workspace.
 
 # %%
-for proc in (first, limited, before, after, public, redelivered, param):
+for proc in (first, limited, redelivered):
     for line in plan(proc).values():
         assert str(WORK) not in line, line
 print(
     "checked",
-    sum(len(plan(p)) for p in (first, limited, before, after, public, redelivered, param)),
+    sum(len(plan(p)) for p in (first, limited, redelivered)),
     "preview lines",
 )
 
@@ -819,14 +782,13 @@ assert docs.returncode == 0
 # definition: a misspelled handoff file name, and a handoff whose IFA file renamed
 # `year_id` (1007 columns, as the real extract has).
 #
-# The run and the skip use `mncnh_slice.py:stable`, which carries the `stable_code_id`
-# stand-in, and run in this process (`--local`). Then the public API (`mncnh_slice.py`),
-# which has its own state folder, runs the slice again through Jobmon, the command's default: the
-# step functions are imported on the nodes from a definition file outside the folder
-# `dagger` runs from, the artifact and notebook steps run in the model's env there, and the
-# slice's `Workflow(resources=...)` gives every step more memory than dagger's default. The
-# project comes from `-P`. A preview after it shows that every step would run again until
-# MIC-7760.
+# The slice runs first in this process (`--local`). Then the same definition runs the slice
+# again through Jobmon, the command's default: the step functions are imported on the nodes
+# from a definition file outside the folder `dagger` runs from, the artifact and notebook
+# steps run in the model's env there, and the slice's `Pipeline(resources=...)` gives every
+# step more memory than dagger's default. The project comes from `-P`. The preview after
+# the local run that showed every step skipped moved to the caching sub-epic (MIC-7760) on
+# 2026-11-16.
 
 # %%
 MNCNH = os.environ.get("C_WALKTHROUGH_MNCNH")
@@ -855,14 +817,10 @@ else:
     )
     shutil.rmtree(SLICE / "output", ignore_errors=True)
     print(DEF.read_text())
-    dagger("preview", "-c", f"{DEF}:stable", cwd=MNCNH)
-    real = dagger("run", "-c", f"{DEF}:stable", "--local", cwd=MNCNH)
+    dagger("preview", "-c", DEF, cwd=MNCNH)
+    real = dagger("run", "-c", DEF, "--local", cwd=MNCNH)
     assert real.returncode == 0
     print("products:", products(SLICE))
-    assert all(
-        l.startswith("skip")
-        for l in plan(dagger("preview", "-c", f"{DEF}:stable", cwd=MNCNH)).values()
-    )
     nb = json.loads(
         (
             SLICE / "output/nigeria/notebooks/hemorrhage_split_proportions_executed.ipynb"
@@ -886,8 +844,6 @@ else:
     show_runs(bridged_runs(SLICE / "output/.dagger/nigeria"))
     assert real_jobmon.returncode == 0
     assert len(bridged_runs(SLICE / "output/.dagger/nigeria")) == 1
-    real_public = dagger("preview", "-c", DEF, cwd=MNCNH)
-    assert all(l.startswith("run") for l in plan(real_public).values())
 
     mistakes = WORK / "slice_mistakes"
     mistakes.mkdir(exist_ok=True)
@@ -896,7 +852,7 @@ else:
     assert source.count(typo) == 1
     key = mistakes / "mncnh_slice_misspelled_key.py"
     key.write_text(source.replace(typo, 'handoff_key(LOCATION, "ifa_coverge.csv")'))
-    misspelled = dagger("preview", "-c", f"{key}:stable", cwd=MNCNH)
+    misspelled = dagger("preview", "-c", key, cwd=MNCNH)
     assert misspelled.returncode == 2 and "ifa_coverage.csv" in misspelled.stderr
 
     renamed_csv = SLICE / "handoff_renamed/Nigeria/primary/ifa_coverage.csv"
@@ -910,7 +866,7 @@ else:
     assert source.count(root) == 1
     column = mistakes / "mncnh_slice_renamed_column.py"
     column.write_text(source.replace(root, 'SLICE_ROOT / "handoff_renamed"'))
-    renamed = dagger("preview", "-c", f"{column}:stable", cwd=MNCNH)
+    renamed = dagger("preview", "-c", column, cwd=MNCNH)
     assert renamed.returncode == 2 and "'year_id' may be 'year'" in renamed.stderr
     assert len(renamed.stderr) < 1500, len(renamed.stderr)
 
@@ -920,7 +876,7 @@ else:
 # Without `--local`, `dagger run` and `dagger force` send a definition's stale steps to
 # Slurm as one Jobmon workflow. Each step's compute resources start from dagger's defaults
 # (`vivarium.dagger.constants.DEFAULT_RESOURCES`: all.q, 1 GB, an hour, one core), then the
-# definition's `Workflow(resources=...)`, then the command's `-P`, `-q` and `-m`, then the
+# definition's `Pipeline(resources=...)`, then the command's `-P`, `-q` and `-m`, then the
 # step's own `resources=`. The walkthrough's definition sets no project, as an example
 # shared between people should not, so each command passes `-P`. A node imports each python
 # step's function through the import root that the bridge sends with the step, so nothing
@@ -931,10 +887,12 @@ else:
 # In order, each in its own copy where it says so:
 #
 # 1. The command with no project exits 2 and writes nothing.
-# 2. The good copy runs through Jobmon; a preview then skips every step, and the same
-#    command again binds no workflow.
+# 2. The good copy runs through Jobmon. The preview after it that skipped every step, and
+#    the same command again binding no workflow, moved to the caching sub-epic on
+#    2026-11-16 (MIC-7760, and MIC-7763 for a run through Jobmon).
 # 3. `dagger force ... adults` runs through Jobmon. The bridge also submits the steps after
-#    adults, because it has no early cutoff (C6, MIC-7763).
+#    adults, because it has no early cutoff (MIC-7763). The preview after it that skipped
+#    every step moved with the others.
 # 4. A copy of the definition next to it, `failing_archive.py`, whose archive command fails
 #    on its node: exit 1, and dagger's line for the step.
 # 5. A broken copy, in which a python step and the notebook fail, runs with `-m 1` behind
@@ -976,33 +934,29 @@ else:
 
     # 1. No project.
     GOOD_JOBMON = make_defs("jobmon_good")
-    GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py:stable", GOOD_JOBMON / "output/.dagger/walk-stable"
+    GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py", GOOD_JOBMON / "output/.dagger/walk"
     no_project = jobmon_dagger("run", "-c", GOOD_DEF)
     assert no_project.returncode == 2 and "-P/--project" in no_project.stderr
     assert products(GOOD_JOBMON) == [] and not bridged_runs(GOOD_STATE)
 
-    # 2. The good copy, a preview, and the same command again.
+    # 2. The good copy.
     first = jobmon_dagger("run", "-c", GOOD_DEF, "-P", PROJECT)
     first_runs = bridged_runs(GOOD_STATE)
     show_runs(first_runs)
     assert first.returncode == 0 and len(first_runs) == 1
     print("products:", products(GOOD_JOBMON))
     assert len(products(GOOD_JOBMON)) == 8
-    assert all(l.startswith("skip") for l in plan(jobmon_dagger("preview", "-c", GOOD_DEF)).values())
-    second = jobmon_dagger("run", "-c", GOOD_DEF, "-P", PROJECT)
-    assert second.returncode == 0 and bridged_runs(GOOD_STATE) == first_runs
 
     # 3. Force through Jobmon.
     forced = jobmon_dagger("force", "-c", GOOD_DEF, "-P", PROJECT, "adults")
     force_runs = [r for r in bridged_runs(GOOD_STATE) if r not in first_runs]
     show_runs(force_runs)
     assert forced.returncode == 0 and len(force_runs) == 1
-    assert all(l.startswith("skip") for l in plan(jobmon_dagger("preview", "-c", GOOD_DEF)).values())
 
     # 4. A command step that fails on its node.
     shutil.copy(GOOD_JOBMON / "pipeline.py", GOOD_JOBMON / "failing_archive.py")
     edit(GOOD_JOBMON / "failing_archive.py", [('"cp {report} {copy}"', '"false && cp {report} {copy}"')])
-    cmd_fail = jobmon_dagger("run", "-c", "jobmon_good/failing_archive.py:stable", "-P", PROJECT)
+    cmd_fail = jobmon_dagger("run", "-c", "jobmon_good/failing_archive.py", "-P", PROJECT)
     assert cmd_fail.returncode == 1 and "Step 'archive' failed" in cmd_fail.stderr
     assert "status 1" in cmd_fail.stderr and "&& cp" not in cmd_fail.stderr
 
@@ -1013,7 +967,7 @@ else:
         report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
     )
     gate = (
-        f"{shlex.quote(str(DAGGER))} run -c jobmon_broken/pipeline.py:stable -P {PROJECT} -m 1 "
+        f"{shlex.quote(str(DAGGER))} run -c jobmon_broken/pipeline.py -P {PROJECT} -m 1 "
         "> broken.out 2> broken.err && echo 'next command ran' || echo \"stopped: dagger exited $?\""
     )
     print(f"$ {gate}")
@@ -1025,7 +979,7 @@ else:
     broken_err, broken_out = (WORK / "broken.err").read_text(), (WORK / "broken.out").read_text()
     print("[stderr]\n" + broken_err.rstrip())
     print("[end of pytask's report on stdout]\n" + "\n".join(broken_out.rstrip().splitlines()[-25:]))
-    show_runs(bridged_runs(BROKEN_JOBMON / "output/.dagger/walk-stable"))
+    show_runs(bridged_runs(BROKEN_JOBMON / "output/.dagger/walk"))
     for expected in (
         "Step 'coverage_kenya' failed: KeyError: 'coverag'",
         "Step 'coverage_nigeria' failed: KeyError: 'coverag'",
@@ -1049,7 +1003,7 @@ else:
             ),
         ],
     )
-    LOCK_DEF, LOCK_STATE = "jobmon_lock/pipeline.py:stable", LOCKED / "output/.dagger/walk-stable"
+    LOCK_DEF, LOCK_STATE = "jobmon_lock/pipeline.py", LOCKED / "output/.dagger/walk"
     argv = [str(DAGGER), "run", "-c", LOCK_DEF, "-P", PROJECT]
     print(f"$ dagger {shlex.join(argv[1:])} &    # started in the background")
     # Its output goes to files, which nothing has to read while it runs.
@@ -1184,4 +1138,4 @@ else:
 
 # %%
 # mine = make_defs("mine", edits=[('"count": [30, 55, 15]', '"count": [30, 60, 15]')])
-# dagger("preview", "-c", "pipeline.py:stable", cwd=mine)
+# dagger("preview", "-c", "pipeline.py", cwd=mine)
