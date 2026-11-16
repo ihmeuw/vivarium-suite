@@ -1,12 +1,12 @@
-"""Validate a location's primary-data handoff and return it as root inputs.
+"""Find and check each location's input files and return them as root inputs.
 
-A data analyst delivers a location's primary data as files under a handoff root, at
+A data analyst delivers a location's primary data as files under an inputs root, at
 ``<root>/<location>/primary/<file>``. A pipeline declares which files every location
-must supply and the columns each file must have. :func:`handoff_inputs` checks every
+must supply and the columns each file must have. :func:`location_inputs` checks every
 declared file before anything runs, reading only column names, and returns the files
 keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.builder.Pipeline`
-or an :class:`~vivarium.dagger.backend.wiring.FileRegistry`. A step reads a handoff
-file by naming the key that :func:`handoff_key` returns as an input, and the step's
+or an :class:`~vivarium.dagger.backend.wiring.FileRegistry`. A step reads one of these
+files by naming the key that :func:`location_key` returns as an input, and the step's
 function receives the file's path.
 """
 
@@ -27,14 +27,14 @@ _LISTED_COLUMNS = 10
 """How many of a file's present columns a missing-columns problem lists."""
 
 
-class HandoffError(WiringError):
-    """A declared handoff file is missing, unreadable, or lacks a required column."""
+class LocationInputError(WiringError):
+    """A declared location input file is missing, unreadable, or lacks a required column."""
 
 
-def handoff_key(location: str, filename: str) -> FileKey:
+def location_key(location: str, filename: str) -> FileKey:
     """Return the file key a step names to read ``filename`` for ``location``.
 
-    The key is the file's path relative to the handoff root,
+    The key is the file's path relative to the inputs root,
     ``<location>/primary/<filename>``.
     """
     return f"{location}/{PRIMARY_DIR}/{filename}"
@@ -54,7 +54,7 @@ _COLUMN_READERS: dict[str, Callable[[Path], list[str]]] = {
     ".csv": _csv_columns,
     ".parquet": _parquet_columns,
 }
-"""Supported handoff suffixes mapped to a reader that loads only the column names."""
+"""Supported input file suffixes mapped to a reader that loads only the column names."""
 
 
 def _is_single_component(name: str) -> bool:
@@ -69,12 +69,12 @@ def _check_declaration(locations: list[str], files: Mapping[str, Sequence[str]])
             raise ValueError(f"location {location!r} must be a single directory name.")
     for filename, columns in files.items():
         if not _is_single_component(filename):
-            raise ValueError(f"handoff file {filename!r} must be a file name, not a path.")
+            raise ValueError(f"input file {filename!r} must be a file name, not a path.")
         suffix = Path(filename).suffix
         if suffix not in _COLUMN_READERS:
             supported = ", ".join(sorted(_COLUMN_READERS))
             raise ValueError(
-                f"handoff file {filename!r} has unsupported suffix {suffix!r}; "
+                f"input file {filename!r} has unsupported suffix {suffix!r}; "
                 f"supported suffixes are {supported}."
             )
         if isinstance(columns, str):
@@ -156,7 +156,7 @@ def _close_matches(
     return f" {'; '.join(hints)}." if hints else ""
 
 
-def handoff_inputs(
+def location_inputs(
     root: Path | str, locations: Iterable[str], files: Mapping[str, Sequence[str]]
 ) -> dict[FileKey, Path]:
     """Validate each location's primary-data files and return them as root inputs.
@@ -169,10 +169,10 @@ def handoff_inputs(
     Parameters
     ----------
     root
-        The handoff root. Location ``loc``'s file ``name.ext`` is expected at
+        The inputs root. Location ``loc``'s file ``name.ext`` is expected at
         ``<root>/<loc>/primary/<name.ext>``.
     locations
-        Locations whose handoff the pipeline reads, each a single directory name. A
+        Locations whose input files the pipeline reads, each a single directory name. A
         location listed more than once is checked once.
     files
         Maps each file name every location must supply (a ``.csv`` or ``.parquet``
@@ -181,14 +181,14 @@ def handoff_inputs(
 
     Returns
     -------
-        Each file's path under the resolved root, keyed by :func:`handoff_key`, to
+        Each file's path under the resolved root, keyed by :func:`location_key`, to
         pass as, or merge into, the ``root_inputs`` of a
         :class:`~vivarium.dagger.frontend.builder.Pipeline` or an
         ``FileRegistry``.
 
     Raises
     ------
-    HandoffError
+    LocationInputError
         If any declared file is missing, cannot be read (including when a directory
         on its path cannot be searched or the reader rejects the file), or lacks a
         required column. One error lists every problem found, grouped by location,
@@ -217,13 +217,13 @@ def handoff_inputs(
             path = root_dir / location / PRIMARY_DIR / filename
             problem = _problem(location, path, columns)
             if problem is None:
-                found[handoff_key(location, filename)] = path
+                found[location_key(location, filename)] = path
             else:
                 problems.append(problem)
     if problems:
         count = f"{len(problems)} problem{'s' if len(problems) > 1 else ''}"
         listing = "\n".join(f"  - {problem}" for problem in problems)
-        raise HandoffError(
-            f"the primary-data handoff under {root_dir} is not ready ({count}):\n{listing}"
+        raise LocationInputError(
+            f"the location inputs under {root_dir} are not ready ({count}):\n{listing}"
         )
     return found

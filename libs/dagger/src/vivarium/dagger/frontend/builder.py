@@ -80,9 +80,10 @@ class Pipeline:
     root_inputs
         Source files the pipeline reads but does not produce, keyed by the file key
         a step names as an input, as for
-        :class:`~vivarium.dagger.backend.wiring.FileRegistry`. The mapping that
-        :func:`~vivarium.dagger.frontend.handoff.handoff_inputs` returns can be passed
-        here.
+        :class:`~vivarium.dagger.backend.wiring.FileRegistry`. Any such mapping can be
+        passed here, such as the one that
+        :func:`~vivarium.dagger.frontend.location_inputs.location_inputs` returns or
+        several merged into one.
     state
         Absolute directory for the run's pytask configuration, state database, lockfile
         and run lock. Defaults to ``<output root>/.dagger/<run name>``, with the output
