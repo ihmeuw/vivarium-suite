@@ -19,20 +19,26 @@ from vivarium.dagger.frontend.execution import (
     preview,
     run,
 )
-from vivarium.dagger.frontend.handoff import HandoffError, handoff_inputs, handoff_key
+from vivarium.dagger.frontend.root_inputs import (
+    LocationInputError,
+    RootInputs,
+    location_inputs,
+    location_key,
+)
 
 __all__ = [
     "DefinitionError",
-    "HandoffError",
+    "LocationInputError",
     "Pipeline",
     "PipelineError",
+    "RootInputs",
     "RunInterrupted",
     "RunRefused",
     "StepExited",
     "StepFailed",
-    "handoff_inputs",
-    "handoff_key",
     "load_pipeline",
+    "location_inputs",
+    "location_key",
     "preview",
     "run",
 ]

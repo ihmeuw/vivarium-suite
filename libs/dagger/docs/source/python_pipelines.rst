@@ -57,10 +57,12 @@ directory on ``PYTHONPATH``. ``dagger`` does not add the current directory to
 A definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline` with an output
 root and a run name, adds each step to it with a method such as
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`, and returns the
-pipeline. Add a step after the steps that produce the artifacts it reads. A
-step's products go under ``<output root>/<run name>``. The pipeline's root, the directory
-that holds its pytask state, is ``<output root>/.dagger/<run name>``, so two runs with
-different run names under one output root keep separate state. Pass ``state=`` to the
+pipeline. Add a step after the steps that produce the artifacts it reads. A step
+reads a file that no step produces through the pipeline's root inputs (see
+:doc:`root_inputs`). A step's products go under ``<output root>/<run name>``. The
+pipeline's root, the directory that holds its pytask state, is
+``<output root>/.dagger/<run name>``, so two runs with different run names under one
+output root keep separate state. Pass ``state=`` to the
 ``Pipeline`` to put the root somewhere else; it must be an absolute path, so that the
 state does not depend on the directory ``dagger`` is run from. Building the output root
 from the definition file's own location, as the example below does, keeps the outputs
@@ -397,7 +399,8 @@ Each of these exits with status 2 before any step runs:
   produces it. When both apply, the message is the one for the product.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
-- A location's primary data fails the handoff check (see :doc:`data_handoff`).
+- A location's primary data fails the location inputs check (see
+  :ref:`location-inputs-helper`).
   ``dagger`` prints only the check's message, which lists each problem by location.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or pytask cannot order the steps. ``dagger`` prints

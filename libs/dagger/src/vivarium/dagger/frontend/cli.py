@@ -47,7 +47,7 @@ from vivarium.dagger.frontend.execution import (
     _preview,
     _run,
 )
-from vivarium.dagger.frontend.handoff import HandoffError
+from vivarium.dagger.frontend.root_inputs import LocationInputError
 
 _FRAMEWORK_MODULES = (
     "vivarium.dagger",
@@ -174,7 +174,7 @@ def _load(definition: str) -> _PipelineSnapshot:
     """Load, freeze and check ``definition``; report failures as click errors."""
     try:
         loaded = load_pipeline(definition)
-    except (DefinitionError, HandoffError) as error:
+    except (DefinitionError, LocationInputError) as error:
         raise _DefinitionProblem(str(error)) from None
     except (Exception, SystemExit) as error:
         click.echo(_user_traceback(error), err=True, nl=False)

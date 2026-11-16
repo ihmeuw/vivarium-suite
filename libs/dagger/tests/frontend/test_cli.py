@@ -43,7 +43,7 @@ import pandas as pd
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
-from vivarium.dagger.frontend import Pipeline, handoff_inputs
+from vivarium.dagger.frontend import Pipeline, location_inputs
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
 
@@ -343,16 +343,16 @@ def pipeline():
 _CLAIMED = "output 'shared.parquet' is already produced by step"
 """The middle of the Pipeline's message for the second step of _DOUBLE_CLAIM."""
 
-_HANDOFF_NOT_READY = (
+_LOCATION_INPUTS_NOT_READY = (
     _HEADER
     + """
 
 def pipeline():
-    inputs = handoff_inputs(HERE / "handoff", ["ethiopia"], {"coverage.csv": ["coverage"]})
+    inputs = location_inputs(HERE / "inputs", ["ethiopia"], {"coverage.csv": ["coverage"]})
     return Pipeline(HERE / "out", "run1", root_inputs=inputs, state=HERE / "state")
 """
 )
-"""A definition whose handoff check fails because ethiopia's coverage.csv is missing."""
+"""A definition whose location inputs check fails because ethiopia's coverage.csv is missing."""
 
 _RAISES = {
     "import": 'raise RuntimeError("the definition broke")\n',
@@ -1140,9 +1140,9 @@ def test_the_same_produces_key_with_default_names_is_reported_as_a_double_claim(
     assert "Task names must be unique" not in result.output
 
 
-def test_a_handoff_error_exits_two_and_prints_only_its_message(tmp_path: Path) -> None:
-    """A definition whose handoff_inputs check fails exits 2 and prints the HandoffError message with no traceback."""
-    path = _write_definition(tmp_path, _HANDOFF_NOT_READY)
+def test_a_location_input_error_exits_two_and_prints_only_its_message(tmp_path: Path) -> None:
+    """A definition whose location_inputs check fails exits 2 and prints the LocationInputError message with no traceback."""
+    path = _write_definition(tmp_path, _LOCATION_INPUTS_NOT_READY)
 
     result = _invoke("run", str(path))
 
@@ -2414,9 +2414,9 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_use_pipeline_and_import_no_registry() -> None:
-    """Each of the pipeline, handoff, command and simulation example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
+    """Each of the pipeline, location inputs, command and simulation example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
     backend_parts = ["vivarium", "dagger", "backend"]
-    for example in ("pipeline", "handoff", "command", "simulation"):
+    for example in ("pipeline", "location_inputs", "command", "simulation"):
         definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
         imported = _imported_modules(definition)
 
