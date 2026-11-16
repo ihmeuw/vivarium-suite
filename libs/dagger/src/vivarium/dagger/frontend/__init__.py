@@ -19,13 +19,19 @@ from vivarium.dagger.frontend.execution import (
     preview,
     run,
 )
-from vivarium.dagger.frontend.inputs import LocationInputError, location_inputs, location_key
+from vivarium.dagger.frontend.root_inputs import (
+    LocationInputError,
+    RootInputs,
+    location_inputs,
+    location_key,
+)
 
 __all__ = [
     "DefinitionError",
     "LocationInputError",
     "Pipeline",
     "PipelineError",
+    "RootInputs",
     "RunInterrupted",
     "RunRefused",
     "StepExited",

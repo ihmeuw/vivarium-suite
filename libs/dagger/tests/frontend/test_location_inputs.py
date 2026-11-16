@@ -1,4 +1,4 @@
-"""Tests for the location inputs contract (``frontend.inputs``)."""
+"""Tests for the location inputs contract (``frontend.root_inputs``)."""
 
 import os
 from collections.abc import Mapping, Sequence
@@ -17,8 +17,12 @@ from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend.execution import run
-from vivarium.dagger.frontend.inputs import LocationInputError, location_inputs, location_key
 from vivarium.dagger.frontend.python_step import python_step
+from vivarium.dagger.frontend.root_inputs import (
+    LocationInputError,
+    location_inputs,
+    location_key,
+)
 
 _COLUMNS = ["location_id", "year_id", "coverage"]
 _FILES = {"coverage.csv": _COLUMNS}

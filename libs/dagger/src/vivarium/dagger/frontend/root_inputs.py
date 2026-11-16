@@ -1,13 +1,28 @@
-"""Find and check each location's input files and return them as root inputs.
+"""Name the root inputs a pipeline reads, and find and check them with input helpers.
 
-A data analyst delivers a location's primary data as files under an inputs root, at
-``<root>/<location>/primary/<file>``. A pipeline declares which files every location
-must supply and the columns each file must have. :func:`location_inputs` checks every
-declared file before anything runs, reading only column names, and returns the files
-keyed for the ``root_inputs`` of a :class:`~vivarium.dagger.frontend.builder.Pipeline`
-or an :class:`~vivarium.dagger.backend.wiring.FileRegistry`. A step reads one of these
-files by naming the key that :func:`location_key` returns as an input, and the step's
-function receives the file's path.
+A :class:`~vivarium.dagger.frontend.builder.Pipeline` reads files that no step produces
+through its root inputs, a :data:`RootInputs` mapping from file key to path. A model may
+have conventions for where certain kinds of input files live, based on parameters such
+as location. An input helper is any function that returns a :data:`RootInputs` for one
+such convention. By convention, an input helper:
+
+- does its own checks of the files' format or columns when it is called, and raises one
+  error that lists every problem it finds;
+- pairs with a key function, such as :func:`location_key`, so that steps never spell
+  the relative paths by hand.
+
+A definition calls its input helpers inside its ``pipeline()`` function. It may merge
+several helpers' results with ``{**a, **b}``; a later key wins with no error, so give
+each helper's keys a distinct prefix. Input helpers take different arguments for
+different conventions, so their shared contract is the :data:`RootInputs` return type
+and this convention, not a base class.
+
+:func:`location_inputs` is the input helper this module provides, for files delivered
+per location. A data analyst delivers a location's primary data as files under an
+inputs root, at ``<root>/<location>/primary/<file>``. A pipeline declares which files
+every location must supply and the columns each file must have.
+:func:`location_inputs` checks every declared file before anything runs, reading only
+column names, and returns the files keyed by :func:`location_key`.
 """
 
 import difflib
@@ -19,6 +34,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from vivarium.dagger.backend.wiring import FileKey, WiringError
+
+RootInputs = Mapping[FileKey, Path | str]
+"""Map each file key a step names as an input to the path of a file no step produces.
+
+This is the mapping that the ``root_inputs`` of a
+:class:`~vivarium.dagger.frontend.builder.Pipeline` takes and that every input helper
+returns.
+"""
 
 PRIMARY_DIR = "primary"
 """Subdirectory of each location's directory that holds its primary data."""
@@ -181,10 +204,9 @@ def location_inputs(
 
     Returns
     -------
-        Each file's path under the resolved root, keyed by :func:`location_key`, to
-        pass as, or merge into, the ``root_inputs`` of a
-        :class:`~vivarium.dagger.frontend.builder.Pipeline` or an
-        ``FileRegistry``.
+        A :data:`RootInputs` of each file's path under the resolved root, keyed by
+        :func:`location_key`, to pass as, or merge into, the ``root_inputs`` of a
+        :class:`~vivarium.dagger.frontend.builder.Pipeline` or a ``FileRegistry``.
 
     Raises
     ------

@@ -23,6 +23,6 @@ by the Institute for Health Metrics and Evaluation's Simulation Science team.
 
    self
    dagger
-   location_inputs
+   root_inputs
    python_pipelines
    api_reference/index

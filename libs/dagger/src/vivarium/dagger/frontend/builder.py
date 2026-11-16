@@ -51,6 +51,7 @@ from vivarium.dagger.frontend.command_step import command_step as compile_comman
 from vivarium.dagger.frontend.notebook_step import NotebookParameter
 from vivarium.dagger.frontend.notebook_step import notebook_step as compile_notebook_step
 from vivarium.dagger.frontend.python_step import python_step as compile_python_step
+from vivarium.dagger.frontend.root_inputs import RootInputs
 from vivarium.dagger.frontend.simulation_step import (
     simulation_step as compile_simulation_step,
 )
@@ -80,9 +81,10 @@ class Pipeline:
     root_inputs
         Source files the pipeline reads but does not produce, keyed by the file key
         a step names as an input, as for
-        :class:`~vivarium.dagger.backend.wiring.FileRegistry`. Any such mapping can be
-        passed here, such as the one that
-        :func:`~vivarium.dagger.frontend.inputs.location_inputs` returns or
+        :class:`~vivarium.dagger.backend.wiring.FileRegistry`. Any
+        :data:`~vivarium.dagger.frontend.root_inputs.RootInputs` mapping can be passed
+        here, such as the one that an input helper like
+        :func:`~vivarium.dagger.frontend.root_inputs.location_inputs` returns, or
         several merged into one.
     state
         Absolute directory for the run's pytask configuration, state database, lockfile
@@ -115,7 +117,7 @@ class Pipeline:
         self,
         output_root: Path | str,
         run_name: str,
-        root_inputs: Mapping[FileKey, Path | str] | None = None,
+        root_inputs: RootInputs | None = None,
         state: Path | str | None = None,
         resources: Mapping[str, Any] | None = None,
     ) -> None:
