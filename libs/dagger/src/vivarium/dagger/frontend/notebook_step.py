@@ -233,8 +233,8 @@ def describe_notebook_failure(task: Task, error: BaseException) -> str | None:
 
     The executed notebook is read as JSON with the standard library, so the pipeline's
     own environment needs neither papermill nor nbformat.
-    :func:`~vivarium.dagger.frontend.pipeline.run` uses this description in the message
-    of :class:`~vivarium.dagger.frontend.pipeline.StepFailed`.
+    :func:`~vivarium.dagger.frontend.execution.run` uses this description in the message
+    of :class:`~vivarium.dagger.frontend.execution.StepFailed`.
 
     Parameters
     ----------

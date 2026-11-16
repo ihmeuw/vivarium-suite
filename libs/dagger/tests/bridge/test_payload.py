@@ -32,6 +32,7 @@ from vivarium.dagger.bridge.payload import (
     payload_for,
 )
 from vivarium.dagger.frontend import load_pipeline
+from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.frontend.python_step import PythonStepRun
 from vivarium.dagger.harness import _double, build_fixture
 
@@ -505,7 +506,9 @@ def make_table():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     step = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
-    return Pipeline([step], HERE / "state", registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
 """
 """A definition of one step whose function is defined in the definition file."""
 
@@ -569,7 +572,7 @@ def test_payload_for_a_target_in_a_definition_file_gives_the_files_directory(
 ) -> None:
     """For a python step whose target is defined in a definition file loaded with load_pipeline by path, payload_for gives sys_path equal to [the file's directory]."""
     path = _write(tmp_path / "definitions" / f"{_unique('def')}.py", _DEFINITION)
-    [task] = load_pipeline(str(path)).tasks
+    [task] = freeze(load_pipeline(str(path))).tasks
 
     payload = _as_python(payload_for(task, pytask_kwargs(task)))
 

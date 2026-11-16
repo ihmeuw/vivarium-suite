@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from vivarium.dagger.frontend import Pipeline, Workflow
+from vivarium.dagger.frontend import Pipeline
 
 HERE = Path(__file__).resolve().parent
 
@@ -23,8 +23,8 @@ def summarize_deaths(simulation: Path) -> pd.DataFrame:
 
 def pipeline() -> Pipeline:
     """Add the simulation and its summary, with their outputs and state next to this file."""
-    wf = Workflow(HERE / "output", run_name="example")
-    wf.simulation_step(
+    p = Pipeline(HERE / "output", run_name="example")
+    p.simulation_step(
         spec=HERE / "toy_model.yaml",
         branches=HERE / "branches.yaml",
         produces="sims/toy",
@@ -36,10 +36,10 @@ def pipeline() -> Pipeline:
             "no_slack": True,
         },
     )
-    wf.python_step(
+    p.python_step(
         summarize_deaths,
         inputs={"simulation": "sims/toy"},
         produces="summary.csv",
         name="summary",
     )
-    return wf.pipeline()
+    return p
