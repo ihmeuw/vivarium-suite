@@ -24,9 +24,9 @@ and resolves a relative path against the directory ``dagger`` runs from. When a 
 that reads a root input is added, ``dagger`` checks only that something exists at the
 path. If nothing does, the definition fails to load with an error that names the step
 and says ``input '<key>' is unresolved: declared as a root input but no file at
-<path>.`` A root input that no step reads is not checked. ``dagger`` does not open the
-file, so any check of its format or columns is the job of the function that returns
-the mapping. After a build, a change to a root input's contents makes the steps that
+<path>.`` A root input that no step reads is not checked. ``dagger`` does not read the
+file when the definition loads, so any check of its format or columns is the job of
+the function that returns the mapping. After a build, a change to a root input's contents makes the steps that
 read it stale. A step cannot produce a key that is a root input; the ``Pipeline``
 refuses such an output.
 
