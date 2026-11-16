@@ -1,9 +1,10 @@
 """Load a pipeline definition by file path or module name.
 
 A pipeline definition is a Python file or module with a function that takes no
-arguments and returns a :class:`~vivarium.dagger.frontend.pipeline.Pipeline`. The
-function is named ``pipeline`` unless the spec names another one. Loading a definition
-imports it and calls that function; it builds nothing and writes no pytask state.
+arguments, makes a :class:`~vivarium.dagger.frontend.builder.Pipeline`, adds its steps,
+and returns it. The function is named ``pipeline`` unless the spec names another one.
+Loading a definition imports it and calls that function; it builds nothing and writes
+no pytask state.
 
 A file is imported as a top-level module named by its stem, with its directory on
 ``sys.path``, so a step function defined in the file can be imported again by reference
@@ -17,7 +18,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-from vivarium.dagger.frontend.pipeline import Pipeline
+from vivarium.dagger.frontend.builder import Pipeline
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 DEFAULT_FUNCTION = "pipeline"
 """Name of the function :func:`load_pipeline` calls when the spec names none."""
@@ -27,7 +29,7 @@ class DefinitionError(Exception):
     """A definition spec names no loadable file, module, or pipeline function."""
 
 
-def load_pipeline(spec: str) -> Pipeline:
+def load_pipeline(spec: str) -> Pipeline | PipelineSnapshot:
     """Import the definition ``spec`` names and return the pipeline its function builds.
 
     Parameters
@@ -51,7 +53,10 @@ def load_pipeline(spec: str) -> Pipeline:
 
     Returns
     -------
-        The :class:`~vivarium.dagger.frontend.pipeline.Pipeline` the function returns.
+        The :class:`~vivarium.dagger.frontend.builder.Pipeline` the function returns,
+        as it returned it, not frozen. A function may instead return a
+        :class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` of tasks compiled
+        with the step functions directly, which is returned as it is.
 
     Raises
     ------
@@ -60,8 +65,9 @@ def load_pipeline(spec: str) -> Pipeline:
         is already imported (the message says to rename the file), the dotted module or
         one of its parent packages does not exist, the module has no attribute of the
         function's name, that attribute is not callable, or the function returns
-        something other than a ``Pipeline``. The message is one line and names the
-        spec.
+        something other than a ``Pipeline`` or a ``PipelineSnapshot``. The message is
+        one line and names the spec; for a wrong return value it names the function,
+        the type it returned, and says that a ``Pipeline`` is expected.
     Exception
         Any other exception raised while importing the definition or calling its
         function, including an import error raised inside the module, propagates
@@ -86,7 +92,7 @@ def load_pipeline(spec: str) -> Pipeline:
             "function."
         )
     pipeline = function()
-    if not isinstance(pipeline, Pipeline):
+    if not isinstance(pipeline, (Pipeline, PipelineSnapshot)):
         raise DefinitionError(
             f"Definition {spec!r}: {function_name}() returned {type(pipeline).__name__}, "
             "not a Pipeline."

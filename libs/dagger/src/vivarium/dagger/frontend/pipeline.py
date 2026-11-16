@@ -1,14 +1,16 @@
 """Run or preview a whole pipeline by step name.
 
-A :class:`Pipeline` holds a pipeline's compiled tasks, the directory for its pytask
-state, and the file registry its steps were wired through. A pipeline definition
-returns one, and the verbs here take one. :func:`run` builds the pipeline, or only the
-named steps and their ancestors, and can force named steps to run even when they are
-current. :func:`preview` returns the plan without running anything, with each reason
-naming, where it can, a file key or a step instead of a file path or a pytask node
-name. :func:`run` describes a failed command or notebook step without its generated
-command and names a step that calls ``sys.exit``; both verbs report two steps that
-share a name with what to change.
+The verbs here take the :class:`~vivarium.dagger.frontend.builder.Pipeline` that a
+pipeline definition builds. Each first freezes it, with
+:func:`~vivarium.dagger.frontend.builder.freeze`, into a
+:class:`~vivarium.dagger.frontend.snapshot.PipelineSnapshot` of the steps added so far,
+so that one call reads a fixed set of steps; they also accept a snapshot. :func:`run`
+builds the pipeline, or only the named steps and their ancestors, and can force named
+steps to run even when they are current. :func:`preview` returns the plan without
+running anything, with each reason naming, where it can, a file key or a step instead
+of a file path or a pytask node name. :func:`run` describes a failed command or notebook
+step without its generated command and names a step that calls ``sys.exit``; both verbs
+report two steps that share a name with what to change.
 
 With ``jobmon=True``, :func:`run` runs the stale steps through the Jobmon bridge (see
 :mod:`~vivarium.dagger.bridge.plugin`). It then gives every step its compute resources
@@ -22,8 +24,8 @@ import difflib
 import re
 import subprocess
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -45,68 +47,19 @@ from vivarium.dagger.backend.nodes import RunDirectoryNode
 from vivarium.dagger.backend.preview import PlanFailed, StepPreview
 from vivarium.dagger.backend.preview import preview as backend_preview
 from vivarium.dagger.backend.task import Task, check_unique_task_names
-from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
 from vivarium.dagger.bridge.state import RUN_STATE_KEY, RunState
 from vivarium.dagger.constants import DEFAULT_RESOURCES
+from vivarium.dagger.frontend.builder import Pipeline, freeze
 from vivarium.dagger.frontend.notebook_step import describe_notebook_failure
 from vivarium.dagger.frontend.simulation_step import describe_simulation_failure
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 # TODO(MIC-7541): once iterate() fans a step out over coordinates, map each task name
 # back to its step and coordinates; until then every task name is a step name.
 
 _INTERNAL_PACKAGES = ("_pytask", "pluggy")
 """Top-level packages whose leading frames a failed step's traceback drops."""
-
-
-@dataclass(frozen=True)
-class Pipeline:
-    """A compiled pipeline, the directory that holds its pytask state, and its registry.
-
-    Raises
-    ------
-    TypeError
-        If ``root`` is not a :class:`pathlib.Path`, for example a string, or
-        ``resources`` is not a mapping.
-    ValueError
-        If ``root`` is a relative path, which would move the pipeline's state with the
-        current directory.
-    """
-
-    tasks: Sequence[Task]
-    """The compiled tasks, in order. Each task's name is a step name. A sequence passed
-    to the constructor is stored as a tuple, so the pipeline does not change when the
-    caller changes the list it passed."""
-    root: Path
-    """Absolute directory for pytask's configuration, state database, and lockfile, as
-    :func:`~vivarium.dagger.backend.build.build` uses it."""
-    registry: FileRegistry | None = None
-    """The registry the steps were wired through. With it, :func:`preview` names files by
-    file key; without it, by path."""
-    resources: Mapping[str, Any] = field(default_factory=dict)
-    """The definition's default compute resources for a run through Jobmon, such as
-    ``{"project": "proj_simscience", "memory": 4}``. They override
-    :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES` key by key, and the ``dagger``
-    command's options and each step's own ``resources=`` override them in turn. A run in
-    this process ignores them. The default is an empty mapping."""
-
-    def __post_init__(self) -> None:
-        """Store ``tasks`` as a tuple; reject a relative root or non-mapping resources."""
-        object.__setattr__(self, "tasks", tuple(self.tasks))
-        if not isinstance(self.root, Path):
-            raise TypeError(
-                f"Pipeline root must be a pathlib.Path, got {type(self.root).__name__} "
-                f"{self.root!r}."
-            )
-        if not self.root.is_absolute():
-            raise ValueError(
-                f"Pipeline root must be absolute, got the relative path {str(self.root)!r}."
-            )
-        if not isinstance(self.resources, Mapping):
-            raise TypeError(
-                "Pipeline resources must be a mapping, got "
-                f"{type(self.resources).__name__} {self.resources!r}."
-            )
 
 
 class PipelineError(Exception):
@@ -260,7 +213,7 @@ class StepExited(SystemExit):
 
 
 def run(
-    pipeline: Pipeline,
+    pipeline: Pipeline | PipelineSnapshot,
     *,
     only: str | Iterable[str] | None = None,
     force: str | Iterable[str] | None = None,
@@ -268,10 +221,17 @@ def run(
 ) -> dict[str, TaskOutcome]:
     """Build ``pipeline`` and return each step's outcome, keyed by step name.
 
+    The run reads the steps that ``pipeline`` has when it is called: it first freezes
+    ``pipeline`` with :func:`~vivarium.dagger.frontend.builder.freeze`, and every check
+    and the build use that snapshot. A step added to ``pipeline`` afterwards is in the
+    next run, not this one. ``pipeline.root`` below is the snapshot's root, which for a
+    :class:`~vivarium.dagger.frontend.builder.Pipeline` is its
+    :attr:`~vivarium.dagger.frontend.builder.Pipeline.state`.
+
     Parameters
     ----------
     pipeline
-        The pipeline to build.
+        The pipeline to build, or a snapshot of one.
     only
         Names of the steps to run. pytask runs each named step and its ancestors and
         reports every other step as ``SKIP``. A string is one step name. ``None`` runs
@@ -329,15 +289,14 @@ def run(
         not only the steps that would run, and the message names each step without a
         project and the three ways to set one: the ``dagger`` command's ``-P/--project``
         (``jobmon_resources={"project": ...}`` when calling this function), the
-        definition's ``Workflow(resources={"project": ...})`` or
-        ``Pipeline(resources={"project": ...})``, and the step's own ``resources=``. A
-        shared name gives one line per name, in sorted order, such as ``Two steps are
-        named 'population'; give each a different name= to tell them apart.`` (with the
-        count as a digit, as in ``3 steps are named``, for more than two), and is
-        chained from the backend's ``ValueError``. An unknown step is reported with the
-        valid step names and the closest match. A rejection by the backend is chained from its
-        ``ValueError``, and an invalid lockfile from pytask's lockfile error.
-        When pytask stops, the message is
+        definition's ``Pipeline(resources={"project": ...})``, and the step's own
+        ``resources=``. A shared name gives one line per name, in sorted order, such as
+        ``Two steps are named 'population'; give each a different name= to tell them
+        apart.`` (with the count as a digit, as in ``3 steps are named``, for more than
+        two), and is chained from the backend's ``ValueError``. An unknown step is
+        reported with the valid step names and the closest match. A rejection by the
+        backend is chained from its ``ValueError``, and an invalid lockfile from
+        pytask's lockfile error. When pytask stops, the message is
         :func:`~vivarium.dagger.backend.build.failure_message`'s; for a cause pytask
         does not record, such as an error in a pytask plugin, that is only the exit
         code's name, and pytask's printed output shows the cause. The error's
@@ -370,7 +329,12 @@ def run(
         :class:`~vivarium.dagger.backend.build.TaskExited`, which is chained from the
         step's own ``SystemExit``. A ``KeyboardInterrupt`` raised in a step is
         re-raised as itself. Either is raised instead of :class:`StepFailed`.
+    TypeError
+        If ``pipeline`` is neither a pipeline nor a snapshot, as
+        :func:`~vivarium.dagger.frontend.builder.freeze` raises it, before anything is
+        checked or written.
     """
+    pipeline = freeze(pipeline)
     _check_unique_steps(pipeline)
     try:
         check_bridge_registered(build_kwargs)
@@ -419,22 +383,24 @@ def run(
 
 
 def preview(
-    pipeline: Pipeline, *, only: str | Iterable[str] | None = None
+    pipeline: Pipeline | PipelineSnapshot, *, only: str | Iterable[str] | None = None
 ) -> list[StepPreview]:
     """Return the plan for ``pipeline``, with each reason's node named in pipeline terms.
 
-    Like the backend :func:`~vivarium.dagger.backend.preview.preview`, this runs
-    nothing and writes no product. Each reason's ``node`` is relabeled. A file the
-    pipeline's registry knows reads ``file '<key>'`` (``run directory '<key>'`` for a
-    simulation's run directory), a step's code identity reads
-    ``code of '<step>'``, a step's command reads ``command of '<step>'``, and a step name
-    reads ``step '<step>'``. Any other node, including every file when the pipeline has
-    no registry, keeps pytask's name.
+    Like the backend :func:`~vivarium.dagger.backend.preview.preview`, this runs nothing
+    and writes no product. Like :func:`run`, it first freezes ``pipeline`` with
+    :func:`~vivarium.dagger.frontend.builder.freeze` and plans that snapshot, so a step
+    added to ``pipeline`` afterwards is not in this plan. Each reason's ``node`` is
+    relabeled. A file the pipeline's registry knows reads ``file '<key>'``
+    (``run directory '<key>'`` for a simulation's run directory), a step's code identity
+    reads ``code of '<step>'``, a step's command reads ``command of '<step>'``, and a
+    step name reads ``step '<step>'``. Any other node, including every file when the
+    pipeline has no registry, keeps pytask's name.
 
     Parameters
     ----------
     pipeline
-        The pipeline to plan.
+        The pipeline to plan, or a snapshot of one.
     only
         Names of the steps to plan, as for :func:`run`. Every other step reports
         ``SKIP`` with no reasons.
@@ -452,7 +418,10 @@ def preview(
         :func:`run`. When the
         backend raises :class:`~vivarium.dagger.backend.preview.PlanFailed`, the
         error's ``exit_code`` is that error's; otherwise it is ``None``.
+    TypeError
+        If ``pipeline`` is neither a pipeline nor a snapshot, as for :func:`run`.
     """
+    pipeline = freeze(pipeline)
     _check_unique_steps(pipeline)
     selected = None if only is None else _resolve(pipeline, only)
     try:
@@ -469,7 +438,7 @@ def preview(
     return plan
 
 
-def _check_unique_steps(pipeline: Pipeline) -> None:
+def _check_unique_steps(pipeline: PipelineSnapshot) -> None:
     """Raise PipelineError, chained from the backend's ValueError, if steps share a name."""
     try:
         check_unique_task_names(pipeline.tasks)
@@ -484,7 +453,7 @@ def _check_unique_steps(pipeline: Pipeline) -> None:
         raise PipelineError("\n".join(lines)) from error
 
 
-def _resolve(pipeline: Pipeline, steps: str | Iterable[str]) -> set[str]:
+def _resolve(pipeline: PipelineSnapshot, steps: str | Iterable[str]) -> set[str]:
     """Return ``steps`` as a set of step names; raise PipelineError for an unknown one."""
     names = {steps} if isinstance(steps, str) else set(steps)
     valid = sorted(task.name for task in pipeline.tasks)
@@ -509,7 +478,9 @@ def _through_bridge(build_kwargs: Mapping[str, Any]) -> bool:
     return not any(build_kwargs.get(mode) for mode in LOCAL_ONLY_MODES)
 
 
-def _bridge_resources(pipeline: Pipeline, given: Mapping[str, Any] | None) -> dict[str, Any]:
+def _bridge_resources(
+    pipeline: PipelineSnapshot, given: Mapping[str, Any] | None
+) -> dict[str, Any]:
     """Return the default resources, then ``pipeline.resources``, then ``given``, merged."""
     merged = {**DEFAULT_RESOURCES, **pipeline.resources}
     if given is not None:
@@ -517,7 +488,7 @@ def _bridge_resources(pipeline: Pipeline, given: Mapping[str, Any] | None) -> di
     return merged
 
 
-def _check_projects(pipeline: Pipeline, resources: Mapping[str, Any]) -> None:
+def _check_projects(pipeline: PipelineSnapshot, resources: Mapping[str, Any]) -> None:
     """Raise PipelineError naming each step with no project in ``resources`` or its own."""
     # The bridge merges each step's own resources over jobmon_resources key by key.
     missing = [
@@ -532,8 +503,8 @@ def _check_projects(pipeline: Pipeline, resources: Mapping[str, Any]) -> None:
         "A run through Jobmon needs a project for every step, but none is set for the "
         f"{noun} {', '.join(repr(name) for name in missing)}. Set one with the dagger "
         "command's -P/--project (jobmon_resources={'project': ...} when calling run()), "
-        "with Workflow(resources={'project': ...}) or Pipeline(resources={'project': ...}) "
-        "in the definition, or with the step's own resources={'project': ...}."
+        "with Pipeline(resources={'project': ...}) in the definition, or with the step's "
+        "own resources={'project': ...}."
     )
 
 
@@ -658,7 +629,7 @@ def _describe(error: BaseException) -> str:
     return f"{kind}: {message}" if message else kind
 
 
-def _labels(pipeline: Pipeline) -> dict[str, str]:
+def _labels(pipeline: PipelineSnapshot) -> dict[str, str]:
     """Map the node names in pytask's reasons to the labels :func:`preview` shows."""
     registry = pipeline.registry
     labels: dict[str, str] = {}

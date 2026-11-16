@@ -7,17 +7,17 @@ Run, preview, or force the steps of a Python pipeline definition for the ``dagge
 command, which calls these functions when ``-c`` names a definition.
 
 Each function loads a definition with
-:func:`~vivarium.dagger.frontend.definition.load_pipeline`, checks that no output
-has more than one producing step and that the pipeline's root can be used, and calls
-one verb of :mod:`~vivarium.dagger.frontend.pipeline`. A run or a force goes through the
-Jobmon bridge unless ``local`` is set; Jobmon is then checked before anything is written
-and imported only when the bridge runs the workflow, so a preview and a local run never
-import it. :doc:`/python_pipelines` shows
-an example of each command and describes the exit status and how each error is
-reported. The preview plan goes to standard output, as do pytask's progress table and
-failure reports. The command's own messages and tracebacks go to standard error, and so
-does pytask's output when pytask stops a preview's plan for a reason other than a
-definition error.
+:func:`~vivarium.dagger.frontend.definition.load_pipeline`, freezes the pipeline it
+returns with :func:`~vivarium.dagger.frontend.builder.freeze`, checks on that snapshot
+that no output has more than one producing step and that the pipeline's root can be
+used, and calls one verb of :mod:`~vivarium.dagger.frontend.pipeline` with the snapshot.
+A run or a force goes through the Jobmon bridge unless ``local`` is set; Jobmon is then
+checked before anything is written and imported only when the bridge runs the workflow,
+so a preview and a local run never import it. :doc:`/python_pipelines` shows an example
+of each command and describes the exit status and how each error is reported. The
+preview plan goes to standard output, as do pytask's progress table and failure reports.
+The command's own messages and tracebacks go to standard error, and so does pytask's
+output when pytask stops a preview's plan for a reason other than a definition error.
 
 """
 
@@ -35,10 +35,10 @@ import pytask
 from vivarium.dagger.backend.preview import StepPreview
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
+from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
 from vivarium.dagger.frontend.handoff import HandoffError
 from vivarium.dagger.frontend.pipeline import (
-    Pipeline,
     PipelineError,
     RunInterrupted,
     RunRefused,
@@ -47,6 +47,7 @@ from vivarium.dagger.frontend.pipeline import (
 )
 from vivarium.dagger.frontend.pipeline import preview as preview_pipeline
 from vivarium.dagger.frontend.pipeline import run as run_pipeline
+from vivarium.dagger.frontend.snapshot import PipelineSnapshot
 
 _FRAMEWORK_MODULES = (
     "vivarium.dagger",
@@ -169,10 +170,10 @@ def force_definition(
         _interrupted(resumable=True)
 
 
-def _load(definition: str) -> Pipeline:
-    """Load ``definition``, check its producers and root; report failures as click errors."""
+def _load(definition: str) -> PipelineSnapshot:
+    """Load, freeze and check ``definition``; report failures as click errors."""
     try:
-        pipeline = load_pipeline(definition)
+        loaded = load_pipeline(definition)
     except (DefinitionError, HandoffError) as error:
         raise _DefinitionProblem(str(error)) from None
     except (Exception, SystemExit) as error:
@@ -180,6 +181,7 @@ def _load(definition: str) -> Pipeline:
         raise _DefinitionProblem(
             f"Could not load the definition {definition!r}; the traceback above shows why."
         ) from None
+    pipeline = freeze(loaded)
     _check_single_producers(pipeline)
     _check_root(pipeline.root)
     return pipeline
@@ -208,7 +210,7 @@ def _bridge_options(
     return options
 
 
-def _check_single_producers(pipeline: Pipeline) -> None:
+def _check_single_producers(pipeline: PipelineSnapshot) -> None:
     """Raise a click error naming each output that more than one step produces."""
     producers: dict[Path | str, list[str]] = {}
     nodes: dict[Path | str, pytask.PNode] = {}
@@ -246,7 +248,7 @@ def _local_path(node: pytask.PNode) -> Path | None:
     return None
 
 
-def _output_key(pipeline: Pipeline, node: pytask.PNode) -> str:
+def _output_key(pipeline: PipelineSnapshot, node: pytask.PNode) -> str:
     """Return the registry key of ``node``'s file, else the node's name, else its path."""
     path = _local_path(node)
     if path is None:
@@ -273,7 +275,7 @@ def _check_root(root: Path) -> None:
 
 @contextmanager
 def _verb_errors(
-    pipeline: Pipeline, requested: tuple[str, ...], param_hint: str
+    pipeline: PipelineSnapshot, requested: tuple[str, ...], param_hint: str
 ) -> Iterator[None]:
     """Report an error raised by a verb as a click error with the command's exit status.
 
@@ -324,7 +326,10 @@ def _failure_summary(error: StepFailed) -> str:
 
 
 def _pipeline_error(
-    pipeline: Pipeline, requested: tuple[str, ...], param_hint: str, error: PipelineError
+    pipeline: PipelineSnapshot,
+    requested: tuple[str, ...],
+    param_hint: str,
+    error: PipelineError,
 ) -> click.ClickException:
     """Return the click error for a PipelineError that is not a step failure."""
     message = str(error)
@@ -350,7 +355,7 @@ def _stop_code(error: PipelineError) -> pytask.ExitCode | None:
     return error.exit_code
 
 
-def _quiet_preview(pipeline: Pipeline, until: tuple[str, ...]) -> list[StepPreview]:
+def _quiet_preview(pipeline: PipelineSnapshot, until: tuple[str, ...]) -> list[StepPreview]:
     """Return ``pipeline``'s plan; if pytask stops it, write pytask's output to stderr."""
     try:
         with pytask.console.capture() as captured:
