@@ -32,7 +32,7 @@ import pandas as pd
 
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend import Pipeline, handoff_inputs
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import with_stable_code_id
@@ -87,7 +87,7 @@ def make_c(source):
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     tasks = [
         step(make_a, "a", registry),
         step(make_b, "b", registry, source="a"),
@@ -135,7 +135,7 @@ def make_z():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     tasks = [
         step(make_p, "p", registry),
         step(make_x, "x", registry, source="p"),
@@ -179,7 +179,7 @@ def make_side():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     tasks = [
         step(make_a, "a", registry),
         step(explode_in_user_code, "b", registry, source="a"),
@@ -220,7 +220,7 @@ def stop():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(stop, "stop", registry)], HERE / "state", registry)
 """
 )
@@ -236,7 +236,7 @@ def leave():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(leave, "leave", registry)], HERE / "state", registry)
 """
 )
@@ -274,7 +274,7 @@ def make_b(x):
 
 
 def pipeline():
-    reg = ArtifactRegistry(HERE / "out", "run1")
+    reg = FileRegistry(HERE / "out", "run1")
     a = python_step(make_a, inputs={}, produces="population.parquet", registry=reg)
     b = python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", registry=reg)
     return Pipeline([a, b], HERE / "state", reg)
@@ -290,7 +290,7 @@ def make_shared():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     claim = {"inputs": {}, "produces": "shared.parquet", "registry": registry}
     tasks = [
         python_step(make_shared, name=FIRST, **claim),
@@ -300,7 +300,7 @@ def pipeline():
 """
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
 
-_CLAIMED = "Artifact 'shared.parquet' is produced by more than one step"
+_CLAIMED = "Output 'shared.parquet' is produced by more than one step"
 """The start of dagger's message for the artifact that both _DOUBLE_CLAIM steps produce."""
 
 _HANDOFF_NOT_READY = (
@@ -309,7 +309,7 @@ _HANDOFF_NOT_READY = (
 
 def pipeline():
     inputs = handoff_inputs(HERE / "handoff", ["ethiopia"], {"coverage.csv": ["coverage"]})
-    registry = ArtifactRegistry(HERE / "out", "run1", root_inputs=inputs)
+    registry = FileRegistry(HERE / "out", "run1", root_inputs=inputs)
     return Pipeline([], HERE / "state", registry)
 """
 )
@@ -333,7 +333,7 @@ def make_a():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(make_a, "a", registry)], Path("state"), registry)
 """
 )
@@ -381,7 +381,7 @@ def make_c(source):
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     tasks = [
         step(make_a, "a", registry),
         step(make_b, "b", registry, source="a"),
@@ -401,7 +401,7 @@ def make_a():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(make_a, "a", registry)], HERE / "state", registry)
 """
 )
@@ -416,7 +416,7 @@ def make_a():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(make_a, "a", registry)], HERE / "state", registry)
 """
 )
@@ -533,7 +533,7 @@ def make_a():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     root = HERE / "blocker" / "state"
     return Pipeline([step(make_a, "a", registry)], root, registry)
 """
@@ -559,7 +559,7 @@ def make_a():
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     return Pipeline([step(make_a, "a", registry)], HERE.joinpath(*ROOT), registry)
 """
 """The end of a definition of one step 'a' whose root is HERE joined with ROOT's parts."""
@@ -863,7 +863,7 @@ def test_pytask_stopping_without_a_recorded_error_exits_one_with_a_readable_mess
 # dagger preview
 
 
-def test_preview_prints_one_line_per_step_in_artifact_key_terms(tmp_path: Path) -> None:
+def test_preview_prints_one_line_per_step_in_file_key_terms(tmp_path: Path) -> None:
     """'dagger preview -c def.py' exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
     path = _write_definition(tmp_path, _CHAIN)
 
@@ -875,7 +875,7 @@ def test_preview_prints_one_line_per_step_in_artifact_key_terms(tmp_path: Path) 
     assert _would_run(result) == ["a", "b", "c"]
     assert lines[0].startswith("run  a: ")
     assert "code of 'a'" in lines[0]
-    assert "artifact 'a.parquet'" in lines[0]
+    assert "file 'a.parquet'" in lines[0]
     assert lines[3] == "3 of 3 steps would run."
     assert str(tmp_path) not in result.output
     assert str(tmp_path.resolve()) not in result.output
@@ -1053,7 +1053,7 @@ def test_a_missing_producer_exits_two_naming_the_step_and_the_key(tmp_path: Path
 def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
     tmp_path: Path,
 ) -> None:
-    """Two python_steps with different names and the same produces key exit 2 with a message naming the artifact key and both step names, before any build."""
+    """Two python_steps with different names and the same produces key exit 2 with a message naming the file key and both step names, before any build."""
     path = _write_definition(tmp_path, _double_claim("first", "second"))
 
     result = _invoke("run", str(path))
@@ -1354,7 +1354,7 @@ def test_two_nodes_on_one_file_with_different_names_are_a_double_claim(
 
 
 def test_a_double_claim_without_a_registry_names_the_node(tmp_path: Path) -> None:
-    """Two hand-built command steps 'one' and 'two' that both output file_node(<tmp>/same.txt), with no registry, exit 2 with "Artifact '<that node's name>' is produced by more than one step: 'one', 'two'."."""
+    """Two hand-built command steps 'one' and 'two' that both output file_node(<tmp>/same.txt), with no registry, exit 2 with "Output '<that node's name>' is produced by more than one step: 'one', 'two'."."""
     definition = _touches(
         ("one", 'file_node(HERE / "same.txt")'),
         ("two", 'file_node(HERE / "same.txt")'),
@@ -1365,7 +1365,7 @@ def test_a_double_claim_without_a_registry_names_the_node(tmp_path: Path) -> Non
 
     assert result.exit_code == 2, _describe(result)
     key = file_node(tmp_path / "same.txt").name
-    claimed = f"Artifact '{key}' is produced by more than one step: 'one', 'two'."
+    claimed = f"Output '{key}' is produced by more than one step: 'one', 'two'."
     assert claimed in result.stderr, result.stderr
     assert not (tmp_path / "state").exists()
 
@@ -1677,7 +1677,7 @@ from pathlib import Path
 import pandas as pd
 
 from vivarium.dagger.frontend import Pipeline
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend.notebook_step import notebook_step
 from vivarium.dagger.frontend.python_step import python_step
 
@@ -1690,7 +1690,7 @@ def read_summary(summary):
 
 
 def pipeline():
-    registry = ArtifactRegistry(HERE / "out", "run1")
+    registry = FileRegistry(HERE / "out", "run1")
     summarize = notebook_step(
         HERE / "summarize.ipynb",
         executed="executed/summarize.ipynb",
@@ -1865,7 +1865,7 @@ INPUTS = {"population_path": "populaton.parquet"}
 
 
 def pipeline():
-    reg = ArtifactRegistry(HERE / "out", "run1")
+    reg = FileRegistry(HERE / "out", "run1")
     a = step(frame, "population", reg)
     nb = notebook_step(NOTEBOOK, executed="run.ipynb", registry=reg, env=ENV, inputs=INPUTS)
     return Pipeline([a, nb], HERE / "state", reg)
@@ -1891,7 +1891,7 @@ def make_a():
 
 
 def pipeline():
-    reg = ArtifactRegistry(HERE / "out", "run1")
+    reg = FileRegistry(HERE / "out", "run1")
     a = step(make_a, "a", reg)
     nb = notebook_step(NOTEBOOK, executed=EXECUTED, registry=reg, env=ENV, parameters=PARAMS)
     return Pipeline([a, nb], HERE / "state", reg)
@@ -1908,7 +1908,7 @@ BAD = {"path": "zzz"}
 
 
 def pipeline():
-    reg = ArtifactRegistry(HERE / "out", "run1")
+    reg = FileRegistry(HERE / "out", "run1")
     tasks = [
         step(frame, "population", reg),
         step(plus_one, "adults", reg, path="population"),
@@ -1927,7 +1927,7 @@ NAME = "population"
 
 
 def pipeline():
-    reg = ArtifactRegistry(HERE / "out", "run1")
+    reg = FileRegistry(HERE / "out", "run1")
     tasks = [
         python_step(frame, inputs={}, produces="a.parquet", registry=reg, name=NAME),
         python_step(frame, inputs={}, produces="b.parquet", registry=reg, name=NAME),
@@ -2174,7 +2174,7 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_use_workflow_and_import_no_registry() -> None:
-    """Each of the pipeline, handoff, command and simulation example definitions imports Workflow from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names ArtifactRegistry or passes registry=."""
+    """Each of the pipeline, handoff, command and simulation example definitions imports Workflow from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
     backend_parts = ["vivarium", "dagger", "backend"]
     for example in ("pipeline", "handoff", "command", "simulation"):
         definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
@@ -2184,7 +2184,7 @@ def test_the_example_definitions_use_workflow_and_import_no_registry() -> None:
         backend = [module for module in imported if module.split(".")[:3] == backend_parts]
         assert backend == [], (example, backend)
         source = definition.read_text()
-        assert "ArtifactRegistry" not in source, example
+        assert "FileRegistry" not in source, example
         keywords = {
             node.arg for node in ast.walk(ast.parse(source)) if isinstance(node, ast.keyword)
         }
@@ -2253,7 +2253,7 @@ def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path
     adults = plan["adults"]
     assert adults.would_run
     nodes = [reason.node for reason in adults.reasons]
-    assert "artifact 'select_adults.py'" in nodes, adults.reasons
+    assert "file 'select_adults.py'" in nodes, adults.reasons
 
 
 # The Workflow object (MIC-7805)

@@ -95,7 +95,7 @@ the steps that would run. Each reason names an artifact by its key, a step's cod
 ``code of '<step>'``, and a step as ``step '<step>'``, never by a file path. For this
 example, before its first run, the output starts like this::
 
-    run  population: code of 'population' has no recorded state; step 'population' has no recorded state; artifact 'population.parquet' is missing
+    run  population: code of 'population' has no recorded state; step 'population' has no recorded state; file 'population.parquet' is missing
     run  adults: step 'population' would run first
 
 ``dagger preview`` also takes ``--until``, and plans only the steps that ``dagger run``
@@ -379,7 +379,7 @@ Each of these exits with status 2 before any step runs:
 - The definition's code raises an error, or calls ``sys.exit``, while it is imported
   or while its function runs. ``dagger`` prints the traceback as described below. For a
   step that reads an artifact that no step produces and that is not a root input, the
-  error names the step and the artifact key, with the closest key that does exist. If
+  error names the step and the file key, with the closest key that does exist. If
   no key is close, it lists the keys registered so far instead, which are the root
   inputs and the products of the steps defined before the one that reads the key.
   A notebook step that passes a name its notebook's ``parameters`` cell does not
@@ -388,10 +388,10 @@ Each of these exits with status 2 before any step runs:
 - A step is added to a ``Workflow`` with the name of a step already added, or with a
   product that a step already added produces. The ``Workflow`` refuses the step when it
   is added, so the traceback ends on the line of the definition that adds it, and the
-  message names the step and, for a product, the artifact key and the step that already
+  message names the step and, for a product, the file key and the step that already
   produces it. When both apply, the message is the one for the product.
-- For a ``Pipeline`` built from tasks directly, two steps produce the same artifact.
-  ``dagger`` names the artifact key and the steps.
+- For a ``Pipeline`` built from tasks directly, two steps produce the same output.
+  ``dagger`` names the file key and the steps.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the handoff check (see :doc:`data_handoff`).
@@ -450,7 +450,7 @@ It runs like any other definition:
    dagger preview -c pipeline.py
    dagger run -c pipeline.py --local
 
-``inputs`` and ``produces`` map names to artifact keys. Each ``{name}`` in the command is
+``inputs`` and ``produces`` map names to file keys. Each ``{name}`` in the command is
 replaced by the absolute path of the input or product of that name, quoted for the
 shell, so do not put quotes around a placeholder. The placeholders follow Python's
 :meth:`str.format`, so a literal brace in the command must be doubled: write the shell

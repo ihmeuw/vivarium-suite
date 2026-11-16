@@ -7,7 +7,7 @@ Run, preview, or force the steps of a Python pipeline definition for the ``dagge
 command, which calls these functions when ``-c`` names a definition.
 
 Each function loads a definition with
-:func:`~vivarium.dagger.frontend.definition.load_pipeline`, checks that no artifact
+:func:`~vivarium.dagger.frontend.definition.load_pipeline`, checks that no output
 has more than one producing step and that the pipeline's root can be used, and calls
 one verb of :mod:`~vivarium.dagger.frontend.pipeline`. A run or a force goes through the
 Jobmon bridge unless ``local`` is set; Jobmon is then checked before anything is written
@@ -209,7 +209,7 @@ def _bridge_options(
 
 
 def _check_single_producers(pipeline: Pipeline) -> None:
-    """Raise a click error naming each artifact that more than one step produces."""
+    """Raise a click error naming each output that more than one step produces."""
     producers: dict[Path | str, list[str]] = {}
     nodes: dict[Path | str, pytask.PNode] = {}
     for task in pipeline.tasks:
@@ -222,7 +222,7 @@ def _check_single_producers(pipeline: Pipeline) -> None:
             producers.setdefault(identity, []).append(task.name)
             nodes.setdefault(identity, node)
     lines = [
-        f"Artifact {_artifact_key(pipeline, nodes[identity])!r} is produced by more than "
+        f"Output {_output_key(pipeline, nodes[identity])!r} is produced by more than "
         f"one step: {_quoted(steps)}."
         for identity, steps in producers.items()
         if len(steps) > 1
@@ -246,7 +246,7 @@ def _local_path(node: pytask.PNode) -> Path | None:
     return None
 
 
-def _artifact_key(pipeline: Pipeline, node: pytask.PNode) -> str:
+def _output_key(pipeline: Pipeline, node: pytask.PNode) -> str:
     """Return the registry key of ``node``'s file, else the node's name, else its path."""
     path = _local_path(node)
     if path is None:

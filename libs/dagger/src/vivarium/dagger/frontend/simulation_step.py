@@ -42,7 +42,7 @@ from vivarium.dagger.backend.build import (
 )
 from vivarium.dagger.backend.nodes import RunDirectoryNode, file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactKey, ArtifactRegistry, WiringError
+from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend._collect_simulation import (
     _MESSAGE_FILE,
     _SENTINEL,
@@ -98,11 +98,11 @@ def simulation_step(
     *,
     spec: Path | str,
     branches: Path | str,
-    produces: ArtifactKey,
-    registry: ArtifactRegistry,
+    produces: FileKey,
+    registry: FileRegistry,
     env: str,
     options: Mapping[str, str | int | float | bool],
-    artifact: ArtifactKey | None = None,
+    artifact: FileKey | None = None,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
 ) -> Task:
@@ -138,7 +138,7 @@ def simulation_step(
         Path to the branches file, a file that must exist. It is a declared input of the
         step.
     produces
-        The artifact key for the run directory, registered with ``registry`` as the
+        The file key for the run directory, registered with ``registry`` as the
         step's product. A step that names this key as an input gets an edge to this
         step and receives the run directory's path: a ``pathlib.Path`` in a
         :func:`~vivarium.dagger.frontend.python_step.python_step` target, and a ``str``
@@ -165,7 +165,7 @@ def simulation_step(
         ``True``. The flags are sorted by key, so equal options give an identical
         command in any order.
     artifact
-        The artifact key of the model's artifact, which the registry resolves to the
+        The file key of the model's artifact, which the registry resolves to the
         producing step's node or a declared root input. It becomes an input of the step
         and its path is passed to psimulate as ``-i``. Without it, psimulate reads the
         artifact the model specification names, which is not a declared input.
@@ -225,7 +225,7 @@ def simulation_step(
     step = produces if name is None else name
     if not produces or produces.endswith("/"):
         raise ValueError(
-            f"Step '{step}': produces must be a non-empty artifact key that does not end "
+            f"Step '{step}': produces must be a non-empty file key that does not end "
             f"in '/', got {produces!r}."
         )
     run_dir = registry.path_for(produces)

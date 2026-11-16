@@ -47,7 +47,7 @@ from vivarium.dagger.backend.build import build, outcomes, to_pytask_task
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import (
     JobmonBindError,
@@ -129,7 +129,7 @@ def _node_imports(node_pythonpath: None) -> None:
     """Let every node runner in this module import ``tests.bridge.step_targets``."""
 
 
-def _steps(artifacts: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
+def _steps(artifacts: FileRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
     """Return one python step per key of ``graph``, reading the steps that the key lists.
 
     A step that reads nothing writes a constant frame, and any other step stacks the frames
@@ -148,7 +148,7 @@ def _steps(artifacts: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> l
 
 def _steps_with_missing_raw(
     directory: Path, graph: Mapping[str, Sequence[str]]
-) -> tuple[ArtifactRegistry, list[Task]]:
+) -> tuple[FileRegistry, list[Task]]:
     """Return a registry under ``directory`` and the steps of ``graph`` wired through it.
 
     The steps can read the root input ``raw``, the file ``directory / "raw.parquet"``. It
@@ -156,7 +156,7 @@ def _steps_with_missing_raw(
     """
     raw = make_dir(directory) / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(directory / "out", "run1", root_inputs={"raw": raw})
     tasks = _steps(artifacts, graph)
     raw.unlink()
     return artifacts, tasks
@@ -261,7 +261,7 @@ def _foreign(product: Path) -> None:
 
 
 def _refused_step(
-    artifacts: ArtifactRegistry, run: str, name: str = _REFUSED
+    artifacts: FileRegistry, run: str, name: str = _REFUSED
 ) -> tuple[Task, Path]:
     """Return a step that cannot run on a node, for the reason ``run`` names, and its product.
 
@@ -524,7 +524,7 @@ def test_a_missing_input_fails_its_step_at_plan_time_and_unrelated_steps_still_r
     """A step whose root input file is missing reports FAIL and its downstream step SKIP_PREVIOUS_FAILED, neither is in the plan, and an unrelated stale step is still submitted and writes its product."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "x.parquet": ["raw"],
         "y.parquet": ["x.parquet"],
@@ -548,7 +548,7 @@ def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_n
     """With stop_after_first_failure, when the first two steps in plan order both read a missing root input, a jobmon build reports only the first of them, as FAIL, and exits FAILED: planning ends at that step, so the second, which would also fail at plan time, gets no report. An unrelated stale step later in plan order is not submitted and its product is not written, no plan is bound, and no run directory exists."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": ["raw"],
         "b.parquet": ["raw"],
@@ -574,7 +574,7 @@ def test_stop_after_first_failure_submits_none_of_the_stale_steps_planned_before
     """With stop_after_first_failure, when a stale step comes before a step with a missing root input in plan order, a jobmon build reports the failing step FAIL and exits FAILED, gives the step after it no report, binds no plan, creates no run directory, and does not write the earlier stale step's product."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": [],
         "m.parquet": ["raw"],

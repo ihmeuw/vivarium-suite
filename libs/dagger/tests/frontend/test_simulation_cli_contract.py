@@ -24,7 +24,7 @@ from tests.frontend.simulations import (
     write_branches,
     write_spec,
 )
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.frontend import Pipeline, run
 from vivarium.dagger.frontend.simulation_step import simulation_step
 
@@ -47,7 +47,7 @@ def _recorded_argv(
     for variable in KNOB_VARIABLES:
         monkeypatch.delenv(variable, raising=False)
     root_inputs: dict[str, Path] = {} if artifact is None else {"artifact": artifact}
-    registry = ArtifactRegistry(base / "out", "run1", root_inputs=root_inputs)
+    registry = FileRegistry(base / "out", "run1", root_inputs=root_inputs)
     task = simulation_step(
         spec=write_spec(base / "model" / "toy_model.yaml"),
         branches=write_branches(base / "model" / "branches.yaml"),
