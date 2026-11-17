@@ -269,20 +269,20 @@ def python_step(
         declared root input. The message starts with ``Step '<name>':``, followed by the
         registry's message, which names the file key.
     ValueError
-        If ``produces`` has an unsupported suffix (the message names the step and the
-        produces key), the product's parameter name collides with one of ``target``'s
-        input parameter names, or ``name`` is empty. Every one of these is raised before
-        anything is registered.
+        If ``produces`` has an unsupported suffix (the message names the produces key),
+        the product's parameter name collides with one of ``target``'s input parameter
+        names, or ``name`` is empty. Except for the empty name, the message starts with
+        ``Step '<name>':``. Every one of these is raised before anything is registered.
     """
     task_name = produces if name is None else name
     if not task_name:
         raise ValueError(f"Task name must be a non-empty string, got {task_name!r}.")
     suffix = Path(produces).suffix
-    _check_suffix(suffix, f"Task '{task_name}': produces key {produces!r}")
+    _check_suffix(suffix, f"Step {task_name!r}: produces key {produces!r}")
     run = PythonStepRun(target, suffix)
     if _PRODUCT_ARG in inputs:
         raise ValueError(
-            f"Task '{task_name}': input parameter name {_PRODUCT_ARG!r} collides with the "
+            f"Step {task_name!r}: input parameter name {_PRODUCT_ARG!r} collides with the "
             "parameter name reserved for the product."
         )
     try:

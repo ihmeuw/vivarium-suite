@@ -1284,7 +1284,7 @@ def test_the_base_call_of_the_definition_error_tests_builds(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("case", list(_REJECTED))
 def test_definition_errors_register_nothing(tmp_path: Path, case: str) -> None:
-    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered."""
+    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered; except for an empty name, the message starts with "Step '<name>': "."""
     override = _REJECTED[case]
     registry = _registry(tmp_path)
     # The cell assigns every produced name, so a collision case can raise only through the
@@ -1300,6 +1300,8 @@ def test_definition_errors_register_nothing(tmp_path: Path, case: str) -> None:
         notebook_step(**call)
 
     message = str(info.value)
+    if case != "empty_name":
+        assert message.startswith(f"Step {executed!r}: "), message
     if case == "unassigned_parameter":
         assert "does not assign" in message, message
     else:
