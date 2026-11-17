@@ -1,4 +1,4 @@
-**5.3.0b1 - 11/12/26**
+**5.3.0b1 - 11/17/26**
 
 - Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose keys match a pattern
