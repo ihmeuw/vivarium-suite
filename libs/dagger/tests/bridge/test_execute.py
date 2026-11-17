@@ -1164,6 +1164,7 @@ def test_a_command_step_whose_product_directory_is_missing_succeeds_on_the_node(
     assert copy.read_bytes() == source.read_bytes()
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to any directory")
 def test_a_product_directory_that_cannot_be_created_fails_the_build_naming_the_step(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], fake_jobmon: FakeJobmon
 ) -> None:
