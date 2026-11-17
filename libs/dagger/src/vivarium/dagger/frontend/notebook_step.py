@@ -166,6 +166,8 @@ def notebook_step(
         ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
         ``notebook``, ``executed`` and the ``produces`` keys resolve to one path, as when a
         ``produces`` key equals ``executed`` or is given twice (the message names both).
+        Except for an empty ``name``, each of these messages starts with
+        ``Step '<name>':``.
         When ``inputs``, ``produces`` and ``parameters`` hold at least one name between
         them, also if ``notebook`` cannot be read as an nbformat 4 notebook, has no cell
         tagged ``parameters``, or its first cell tagged ``parameters`` is not a code cell,
@@ -180,7 +182,7 @@ def notebook_step(
     if not task_name:
         raise ValueError(f"Task name must be a non-empty string, got {task_name!r}.")
     if not env:
-        raise ValueError(f"Task '{task_name}': env must be a non-empty string, got {env!r}.")
+        raise ValueError(f"Step {task_name!r}: env must be a non-empty string, got {env!r}.")
     input_keys: dict[str, FileKey] = dict(inputs or {})
     product_keys: dict[str, FileKey] = dict(produces or {})
     scalars: dict[str, NotebookParameter] = dict(parameters or {})
@@ -357,7 +359,7 @@ def _check_names(task_name: str, groups: Mapping[str, Iterable[str]]) -> None:
                 seen[name] = group
                 continue
             raise ValueError(
-                f"Task '{task_name}': parameter name {name!r} in {group} {problem}."
+                f"Step {task_name!r}: parameter name {name!r} in {group} {problem}."
             )
 
 
@@ -367,7 +369,7 @@ def _check_parameter_values(task_name: str, parameters: Mapping[str, object]) ->
         if value is None or isinstance(value, (str, bool, numbers.Real)):
             continue
         raise ValueError(
-            f"Task '{task_name}': parameter {name!r} has unsupported type "
+            f"Step {task_name!r}: parameter {name!r} has unsupported type "
             f"{_type_name(value)}; a parameter must be a str, a real number, a bool or "
             "None. To give the notebook a file, pass files through inputs=; convert a "
             "numpy scalar such as numpy.bool_ with bool(), int() or float()."
@@ -387,15 +389,15 @@ def _check_paths(task_name: str, source: Path, executed: FileKey) -> None:
     """Reject a source that is not an existing .ipynb file, or a bad executed key."""
     if source.suffix != ".ipynb":
         raise ValueError(
-            f"Task '{task_name}': notebook {str(source)!r} does not end in '.ipynb'."
+            f"Step {task_name!r}: notebook {str(source)!r} does not end in '.ipynb'."
         )
     if not source.is_file():
         raise ValueError(
-            f"Task '{task_name}': notebook {str(source)!r} does not exist or is not a file."
+            f"Step {task_name!r}: notebook {str(source)!r} does not exist or is not a file."
         )
     if Path(executed).suffix != ".ipynb":
         raise ValueError(
-            f"Task '{task_name}': executed key {executed!r} does not end in '.ipynb'."
+            f"Step {task_name!r}: executed key {executed!r} does not end in '.ipynb'."
         )
 
 
@@ -416,7 +418,7 @@ def _check_collisions(
         path = registry.path_for(key)
         if path in claimed:
             raise ValueError(
-                f"Task '{task_name}': {claimed[path]} and {label} resolve to one path "
+                f"Step {task_name!r}: {claimed[path]} and {label} resolve to one path "
                 f"{str(path)!r}; each output must be written to its own path."
             )
         claimed[path] = label

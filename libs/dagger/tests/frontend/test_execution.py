@@ -1175,12 +1175,33 @@ def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
 
 
 def test_step_exited_keeps_a_non_integer_exit_code(tmp_path: Path) -> None:
-    """A step that calls sys.exit('bye') makes run() raise StepExited whose code is 'bye'."""
+    """A step that calls sys.exit('bye') makes run() raise StepExited whose code and args hold 'bye' and whose message names the step and the code."""
     with pytest.raises(StepExited) as info:
         run(_exiting(tmp_path, _leave_with_a_message))
 
     assert info.value.step == "leave"
     assert info.value.code == "bye"
+    assert info.value.args == ("bye",)
+    assert str(info.value) == "Step 'leave' exited with code 'bye' before the build finished."
+
+
+@pytest.mark.parametrize(
+    "code, status, stderr", [(3, 3, ""), ("bye", 1, "bye\n")], ids=["int", "str"]
+)
+def test_an_uncaught_step_exited_ends_the_process_as_the_steps_own_exit_would(
+    code: int | str, status: int, stderr: str
+) -> None:
+    """A StepExited that no code catches ends the Python process with the status and standard error that a SystemExit with the same code gives, not its message that names the step."""
+    script = (
+        "from vivarium.dagger.frontend import StepExited\n"
+        f"raise StepExited('leave', {code!r})\n"
+    )
+
+    process = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
+
+    assert (process.returncode, process.stderr) == (status, stderr)
 
 
 def test_step_exited_is_caught_by_an_except_system_exit_clause(tmp_path: Path) -> None:

@@ -206,7 +206,7 @@ def payload_for(
         an argument cannot be encoded, or its env does not resolve. The message names the
         step, the argument when there is one, and the reason.
     """
-    refused = f"Task '{task.name}': cannot run on a compute node"
+    refused = f"Step {task.name!r}: cannot run on a compute node"
     run = task.run
     if isinstance(run, str):
         env_path: str | None = None

@@ -784,7 +784,7 @@ def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
 def test_runner_exits_with_status_one_when_a_succeeding_step_result_cannot_be_written(
     tmp_path: Path,
 ) -> None:
-    """A command step that succeeds but whose result path is a directory gives exit status 1 after the step has run, a message on the process's stderr saying the result could not be written, and no temporary file."""
+    """A command step that succeeds but whose result path is a directory gives exit status 1 after the step has run, a message on the process's stderr that names the step and says its result could not be written, and no temporary file."""
     recipe = _command_payload("echo_step", tmp_path, "echo ran")
     payload = _write_payload(tmp_path / "step.payload.json", recipe)
     result_path = _mkdir(tmp_path / _RESULT_NAME)
@@ -794,7 +794,7 @@ def test_runner_exits_with_status_one_when_a_succeeding_step_result_cannot_be_wr
     stdout, _ = capture_paths(result_path)
     assert process.returncode == 1
     assert stdout.read_text() == "ran\n"
-    assert "could not write the result" in process.stderr, process.stderr
+    assert "step 'echo_step' could not write its result" in process.stderr, process.stderr
     assert list(tmp_path.glob("*.tmp")) == []
 
 

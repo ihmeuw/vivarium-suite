@@ -732,13 +732,14 @@ def test_a_missing_input_that_a_stale_step_writes_does_not_fail_its_step(
 def test_a_missing_input_failure_has_no_chained_error_or_traceback(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The FAIL report of a step after a stale step whose root input file is missing holds an exception with no __cause__, no __context__ and no traceback, and the report's exc_info holds no traceback."""
+    """The FAIL report of a step after a stale step whose root input file is missing holds an exception whose message starts with the step's name, with no __cause__, no __context__ and no traceback, and the report's exc_info holds no traceback."""
     _, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
     report = report_for(session, "y.parquet")
     error = failure_of(report)
+    assert str(error).startswith("Step 'y.parquet': these inputs do not exist"), error
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
@@ -873,7 +874,7 @@ def test_a_pytask_task_not_built_by_the_backend_is_refused_with_a_plain_message(
 
     error = failure_of(report_for(session, "foreign_task"))
     message = str(error)
-    assert "foreign_task" in message
+    assert message.startswith("Step 'foreign_task': "), message
     assert "built" in message and "vivarium.dagger" in message, message
     assert error.__cause__ is None
     assert error.__traceback__ is None
@@ -900,7 +901,7 @@ def test_a_step_whose_arguments_cannot_be_loaded_is_refused_with_a_plain_message
 
     report = report_for(session, _UNLOADABLE)
     error = failure_of(report)
-    assert _UNLOADABLE in str(error), str(error)
+    assert str(error).startswith(f"Step {_UNLOADABLE!r}: "), str(error)
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
@@ -1161,6 +1162,41 @@ def test_a_command_step_whose_product_directory_is_missing_succeeds_on_the_node(
     result = read_result(run_directory / f"{entries['copy_step'].signature}{RESULT_SUFFIX}")
     assert result["success"] is True, result["exc"]
     assert copy.read_bytes() == source.read_bytes()
+
+
+def test_a_product_directory_that_cannot_be_created_fails_the_build_naming_the_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], fake_jobmon: FakeJobmon
+) -> None:
+    """A command step after a stale step, whose product's parent directory cannot be created because its own parent is read-only, makes a jobmon build exit FAILED with a message that starts with the step's name and names the directory, with no traceback, and no plan is bound. pytask's planning does not create the directory, since the step after a stale step is stale without being checked."""
+    artifacts = registry(tmp_path)
+    [first] = _steps(artifacts, {"first.parquet": []})
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    blocker = locked / "sub"
+    product = blocker / "copy.txt"
+    task = Task(
+        name="blocked_step",
+        run=f"touch {shlex.quote(str(product))}",
+        inputs={"source": artifacts.resolve_input("first.parquet")},
+        outputs={"copy": file_node(product)},
+        resources={},
+        env=None,
+    )
+
+    locked.chmod(0o555)
+    try:
+        capsys.readouterr()
+        session = build([first, task], tmp_path / "state", jobmon=True)
+        captured = capsys.readouterr()
+    finally:
+        locked.chmod(0o755)
+
+    output = squashed(captured.out + captured.err)
+    assert session.exit_code == ExitCode.FAILED
+    assert squashed("Step 'blocked_step': could not create a directory") in output, output
+    assert squashed(str(blocker)) in output, output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
 
 
 def test_each_named_env_is_resolved_once_per_plan(
