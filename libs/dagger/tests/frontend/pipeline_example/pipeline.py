@@ -29,16 +29,16 @@ def total_adults(adults: Path) -> pd.DataFrame:
 def pipeline() -> Pipeline:
     """Add the three steps, with their outputs and state under ``output`` next to this file."""
     p = Pipeline(HERE / "output", run_name="example")
-    p.python_step(
+    p.add_python_step(
         make_population, inputs={}, produces="population.parquet", name="population"
     )
-    p.python_step(
+    p.add_python_step(
         select_adults,
         inputs={"population": "population.parquet"},
         produces="adults.parquet",
         name="adults",
     )
-    p.python_step(
+    p.add_python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
         produces="summary.csv",

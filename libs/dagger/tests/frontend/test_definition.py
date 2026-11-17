@@ -391,7 +391,7 @@ def make_table():
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1")
-    p.python_step(make_table, inputs={}, produces="table.parquet", name="table")
+    p.add_python_step(make_table, inputs={}, produces="table.parquet", name="table")
     return p
 """
 """A definition that makes a Pipeline, adds one step named 'table', and returns it."""

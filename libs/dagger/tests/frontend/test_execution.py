@@ -100,12 +100,14 @@ def _side_step(fixture: Fixture) -> Task:
 def _failing_pipeline(tmp_path: Path) -> Pipeline:
     """Return a raising step with two descendants and one independent step as a pipeline."""
     p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
-    p.python_step(_explode, inputs={}, produces="broken.parquet")
-    p.python_step(_increment, inputs={"source": "broken.parquet"}, produces="child.parquet")
-    p.python_step(
+    p.add_python_step(_explode, inputs={}, produces="broken.parquet")
+    p.add_python_step(
+        _increment, inputs={"source": "broken.parquet"}, produces="child.parquet"
+    )
+    p.add_python_step(
         _increment, inputs={"source": "child.parquet"}, produces="grandchild.parquet"
     )
-    p.python_step(_constant, inputs={}, produces="independent.parquet")
+    p.add_python_step(_constant, inputs={}, produces="independent.parquet")
     return p
 
 
@@ -542,11 +544,11 @@ def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> Non
     pipeline = Pipeline(
         tmp_path / "out", "run1", root_inputs=fixture.inputs, state=fixture.state
     )
-    pipeline.python_step(_increment, inputs={"source": "raw"}, produces="mid.parquet")
-    pipeline.python_step(
+    pipeline.add_python_step(_increment, inputs={"source": "raw"}, produces="mid.parquet")
+    pipeline.add_python_step(
         _increment, inputs={"source": "mid.parquet"}, produces="final.parquet"
     )
-    pipeline.command_step(
+    pipeline.add_command_step(
         "cp {src} {dst}",
         inputs={"src": "raw"},
         produces={"dst": "raw_copy.parquet"},
@@ -781,7 +783,7 @@ def _notebook_pipeline(
         tmp_path / "notebooks" / "summarize.ipynb", "summary_path = 'unset'", body
     )
     p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
-    p.notebook_step(
+    p.add_notebook_step(
         source,
         executed=_EXECUTED_KEY,
         env=env,

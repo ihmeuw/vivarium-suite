@@ -28,7 +28,7 @@ def pipeline(
         root_inputs=location_inputs(inputs_root, LOCATIONS, PRIMARY_DATA),
     )
     for location in LOCATIONS:
-        p.python_step(
+        p.add_python_step(
             mean_coverage,
             inputs={"coverage": location_key(location, "coverage.csv")},
             produces=f"{location}/mean_coverage.parquet",

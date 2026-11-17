@@ -1403,14 +1403,14 @@ def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_casc
 ) -> None:
     """After other content is written to the sentinel, preview reports both steps would run, the simulation step's reasons include Reason("run directory 'sims/toy'", "changed"), the consumer's are [Reason("step 'sims/toy'", "cascade")], and no reason holds the run directory's path."""
     p = Pipeline(model.base / "out", "run1", state=model.state)
-    p.simulation_step(
+    p.add_simulation_step(
         spec=model.spec,
         branches=model.branches,
         produces=_KEY,
         env=str(model.env),
         options=_OPTIONS,
     )
-    p.python_step(
+    p.add_python_step(
         summarize_run, inputs={"simulation": _KEY}, produces=_SUMMARY_KEY, name=_CONSUMER
     )
     # The step methods wire the steps through the pipeline's registry, so the preview
