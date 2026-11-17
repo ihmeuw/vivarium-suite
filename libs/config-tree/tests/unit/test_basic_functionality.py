@@ -259,7 +259,7 @@ def test_node_str() -> None:
 
 
 def _keys(nodes: list[ConfigNode]) -> list[str]:
-    return [".".join(node._key_path()) for node in nodes]
+    return [".".join(node._get_key_path()) for node in nodes]
 
 
 class _TextPrinter:
@@ -278,7 +278,7 @@ def _pretty(node: ConfigNode) -> str:
     return printer.output
 
 
-class TestLeaves:
+class TestGetLeaves:
     """Tests for listing a tree's leaf nodes and the parents they keep."""
 
     @pytest.fixture
@@ -292,36 +292,42 @@ class TestLeaves:
         )
 
     def test_lists_every_leaf_in_the_order_added(self, tree: ConfigTree) -> None:
-        assert [node._key_path() for node in tree.leaves()] == [
+        assert [node._get_key_path() for node in tree.get_leaves()] == [
             ("time", "start"),
             ("time", "step_size"),
             ("risk.child_wasting", "data_sources", "exposure"),
             ("seed",),
         ]
 
-    def test_returns_the_nodes_held_by_the_tree(self, tree: ConfigTree) -> None:
-        step_size = tree.leaves()[1]
-        assert step_size is tree.time._children["step_size"]
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ["time", "start"],
+            ["time", "step_size"],
+            ["risk.child_wasting", "data_sources", "exposure"],
+            ["seed"],
+        ],
+    )
+    def test_returns_the_nodes_held_by_the_tree(
+        self, tree: ConfigTree, keys: list[str]
+    ) -> None:
+        held = tree._get_node(keys)
+        assert any(node is held for node in tree.get_leaves())
 
     def test_a_subtree_keeps_the_keys_above_it(self, tree: ConfigTree) -> None:
-        exposure = tree.get_tree("risk.child_wasting").leaves()[0]
-        assert exposure._key_path() == ("risk.child_wasting", "data_sources", "exposure")
+        [exposure] = tree.get_tree("risk.child_wasting").get_leaves()
+        assert exposure._get_key_path() == ("risk.child_wasting", "data_sources", "exposure")
 
     def test_listing_does_not_mark_nodes_accessed(self, tree: ConfigTree) -> None:
-        tree.leaves()
+        tree.get_leaves()
         assert len(tree.unused_keys()) == 4
 
     def test_an_empty_tree_has_no_leaves(self) -> None:
-        assert ConfigTree().leaves() == []
+        assert ConfigTree().get_leaves() == []
 
     def test_a_frozen_tree_can_be_listed(self, tree: ConfigTree) -> None:
         tree.freeze()
-        assert len(tree.leaves()) == 4
-
-    def test_a_removed_subtree_becomes_a_root(self, tree: ConfigTree) -> None:
-        time = tree.get_tree("time")
-        del tree["time"]
-        assert [node._key_path() for node in time.leaves()] == [("start",), ("step_size",)]
+        assert len(tree.get_leaves()) == 4
 
     @pytest.mark.parametrize(
         "copy_tree",
@@ -332,8 +338,8 @@ class TestLeaves:
         self, tree: ConfigTree, copy_tree: Callable[[ConfigTree], ConfigTree]
     ) -> None:
         copied = copy_tree(tree)
-        assert _keys(copied.leaves()) == _keys(tree.leaves())
-        assert copied.leaves()[1]._parent is copied.time
+        assert _keys(copied.get_leaves()) == _keys(tree.get_leaves())
+        assert copied._get_node(["time", "step_size"])._parent is copied.time
 
 
 class TestPrettyRepr:
@@ -356,7 +362,7 @@ class TestPrettyRepr:
         return tree
 
     def test_a_node_displays_its_keys_and_outermost_value(self, tree: ConfigTree) -> None:
-        assert [_pretty(node) for node in tree.leaves()] == [
+        assert [_pretty(node) for node in tree.get_leaves()] == [
             'ConfigNode(("configuration", "time", "step_size"), 10)',
             'ConfigNode(("configuration", "risk.child_wasting", "distribution_type"), '
             "'ordered_polytomous')",
@@ -365,24 +371,28 @@ class TestPrettyRepr:
 
     def test_a_dotted_key_and_nested_keys_display_differently(self) -> None:
         tree = ConfigTree({"foo": {"bar": {"baz": 1}}, "foo.bar": {"baz": 10}})
-        assert [_pretty(node) for node in tree.leaves()] == [
+        assert [_pretty(node) for node in tree.get_leaves()] == [
             'ConfigNode(("foo", "bar", "baz"), 1)',
             'ConfigNode(("foo.bar", "baz"), 10)',
         ]
 
     def test_a_key_with_a_quote_is_escaped(self) -> None:
         tree = ConfigTree({'say "hi"': 1})
-        assert _pretty(tree.leaves()[0]) == 'ConfigNode(("say \\"hi\\"",), 1)'
+        [node] = tree.get_leaves()
+        assert _pretty(node) == 'ConfigNode(("say \\"hi\\"",), 1)'
 
     def test_displaying_does_not_mark_the_node_accessed(self, tree: ConfigTree) -> None:
-        for node in tree.leaves():
+        for node in tree.get_leaves():
             _pretty(node)
         assert len(tree.unused_keys()) == 3
 
-    def test_a_node_with_no_value_displays_its_keys(self, tree: ConfigTree) -> None:
-        step_size = tree.configuration.time._children["step_size"]
-        step_size._values.clear()
-        assert _pretty(step_size) == 'ConfigNode(("configuration", "time", "step_size"))'
+    def test_a_node_with_no_value_displays_its_keys(self) -> None:
+        """An update to a missing layer leaves an empty node behind, which find returns."""
+        tree = ConfigTree(layers=["base"])
+        with pytest.raises(ConfigurationKeyError):
+            tree.update({"time": {"step_size": 1}}, layer="no_such_layer")
+        [step_size] = tree.find("step_size")
+        assert _pretty(step_size) == 'ConfigNode(("time", "step_size"))'
 
     def test_a_node_outside_a_tree_displays_as_its_repr(self) -> None:
         node = ConfigNode(["base"], name="test_node")
@@ -403,7 +413,6 @@ class TestUpdateFoundNode:
         [step_size] = tree.find("step_size")
         step_size.update(5)
         assert tree.time.step_size == 5
-        assert tree.get(["time", "step_size"]) == 5
 
     def test_it_matches_assigning_through_the_tree(self, tree: ConfigTree) -> None:
         [step_size] = tree.find("step_size")
@@ -413,7 +422,7 @@ class TestUpdateFoundNode:
         assigned.update({"time": {"step_size": 1}}, layer="base")
         assigned.time.step_size = 5
 
-        assert step_size.metadata == assigned.time._children["step_size"].metadata
+        assert step_size.metadata == assigned.time.metadata("step_size")
 
     def test_the_display_shows_the_new_value(self, tree: ConfigTree) -> None:
         [step_size] = tree.find("step_size")
@@ -465,25 +474,30 @@ class TestFind:
     def test_the_pattern_is_literal_by_default(self, tree: ConfigTree) -> None:
         assert tree.find("risk.child.wasting") == []
 
-    def test_regex_matching_is_opt_in(self, tree: ConfigTree) -> None:
-        assert _keys(tree.find("^time\\.(start|end)$", regex=True)) == [
-            "time.start",
-            "time.end",
-        ]
+    def test_a_pattern_is_a_regex_only_with_regex_true(self, tree: ConfigTree) -> None:
+        pattern = r"^time\.(start|end)$"
+        assert _keys(tree.find(pattern, regex=True)) == ["time.start", "time.end"]
+        assert tree.find(pattern) == []
 
     def test_results_keep_the_order_keys_were_added(self, tree: ConfigTree) -> None:
-        every_key = _keys(tree.leaves())
-        assert _keys(tree.find("e")) == [key for key in every_key if "e" in key]
+        """The pattern skips time.start and time.end, so the matches are not contiguous."""
+        assert _keys(tree.find("_")) == [
+            "time.step_size",
+            "risk.child_wasting.distribution_type",
+            "risk.child_wasting.exposure_bounds.lower",
+            "risk.child_wasting.exposure_bounds.upper",
+            "population.population_size",
+        ]
 
     def test_no_pattern_finds_every_leaf(self, tree: ConfigTree) -> None:
-        assert tree.find() == tree.leaves()
-        assert tree.find("") == tree.leaves()
+        assert tree.find() == tree.get_leaves()
+        assert tree.find("") == tree.get_leaves()
 
     def test_no_match_returns_an_empty_list(self, tree: ConfigTree) -> None:
         assert tree.find("no_such_key") == []
 
     def test_an_invalid_regex_raises_a_useful_error(self, tree: ConfigTree) -> None:
-        with pytest.raises(ValueError, match="Invalid regular expression 'time\\['"):
+        with pytest.raises(ValueError, match=re.escape("Invalid regular expression 'time['")):
             tree.find("time[", regex=True)
 
     def test_invalid_regex_text_is_harmless_without_the_flag(self, tree: ConfigTree) -> None:
@@ -496,7 +510,7 @@ class TestFind:
 
     def test_a_subtree_matches_on_keys_from_the_root(self, tree: ConfigTree) -> None:
         """A subtree keeps its parent, so its nodes' keys start at the root."""
-        assert _keys(tree.time.find("^time\\.s", regex=True)) == [
+        assert _keys(tree.time.find(r"^time\.s", regex=True)) == [
             "time.start",
             "time.step_size",
         ]

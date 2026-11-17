@@ -1,6 +1,6 @@
 **5.3.0b1 - 11/17/26**
 
-- Add ``ConfigTree.leaves()``, which lists a tree's leaf nodes
+- Add ``ConfigTree.get_leaves()``, which lists a tree's leaf nodes
 - Add ``ConfigTree.find()``, which finds the leaf nodes whose keys match a pattern
 - Display a ``ConfigNode`` in IPython as its keys from the root of its tree and its
   outermost value, such as ``ConfigNode(("configuration", "time", "step_size"), 10)``
