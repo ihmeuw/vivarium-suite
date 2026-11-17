@@ -434,7 +434,7 @@ assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 # table below.
 #
 # A `Pipeline` has no public way to show a step's filled-in command yet. A planned
-# `dagger show` command will print each step's inputs, outputs and command without
+# `dagger show` command (MIC-7818) will print each step's inputs, outputs and command without
 # running anything, and this section will use it; until then it checks the result only.
 
 # %%
