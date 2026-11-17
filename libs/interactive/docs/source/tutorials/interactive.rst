@@ -319,29 +319,36 @@ name to :meth:`~vivarium.config_tree.main.ConfigTree.find`. It returns the
 matching configuration nodes. It matches the text literally and ignores case,
 takes ``regex=True`` for a regular expression, and lists every key when called
 with no pattern. In IPython or Jupyter, each node displays as its keys and the
-value the simulation will use:
+value the simulation will use. Outside a notebook,
+``IPython.lib.pretty.pprint`` prints the same display:
 
-.. code-block:: python
+.. testcode::
 
-    >>> sim.configuration.find("population")
+    from IPython.lib.pretty import pprint
+
+    pprint(sim.configuration.find("population"))
+
+.. testoutput::
+
     [ConfigNode(("configuration", "population", "population_size"), 1000),
      ConfigNode(("configuration", "population", "age_start"), 0),
      ConfigNode(("configuration", "population", "age_end"), 5)]
 
-The keys start at the model specification, so they begin with
-``"configuration"``. Each quoted string is one key, so a component name that
-contains dots stays whole:
+The returned configuration nodes show the full paths as tuples of keys and their
+corresponding values. Note that key names can include dots, for example:
 
-.. code-block:: python
+.. testcode::
 
-    >>> sim.configuration.find("excess_mortality_rate")
+    pprint(sim.configuration.find("excess_mortality_rate"))
+
+.. testoutput::
+
     [ConfigNode(("configuration", "disease_state.infected_with_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.06),
      ConfigNode(("configuration", "disease_state.susceptible_to_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.0)]
 
-You can change a value through a node you found.
-:meth:`~vivarium.config_tree.main.ConfigNode.update` sets it in the same layer
-as setting it through ``sim.configuration``. Here we make each time step one day
-instead of the model specification's half day:
+In addition to changing a value directly (with ``=``), you can use a node's
+own :meth:`~vivarium.config_tree.main.ConfigNode.update` method. Here we
+make each time step one day instead of the model specification's half day:
 
 .. testcode::
 
