@@ -24,7 +24,7 @@ def summarize_deaths(simulation: Path) -> pd.DataFrame:
 def pipeline() -> Pipeline:
     """Add the simulation and its summary, with their outputs and state next to this file."""
     p = Pipeline(HERE / "output", run_name="example")
-    p.simulation_step(
+    p.add_simulation_step(
         spec=HERE / "toy_model.yaml",
         branches=HERE / "branches.yaml",
         produces="sims/toy",
@@ -36,7 +36,7 @@ def pipeline() -> Pipeline:
             "no_slack": True,
         },
     )
-    p.python_step(
+    p.add_python_step(
         summarize_deaths,
         inputs={"simulation": "sims/toy"},
         produces="summary.csv",

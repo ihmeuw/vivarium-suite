@@ -237,7 +237,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if exc is not None:
         _echo_failure(stderr_tail, exc)
     if write_error is not None:
-        _report(f"could not write the result to {result_path}", write_error)
+        writer = (
+            "could not write the result"
+            if task is None
+            else f"step {task!r} could not write its result"
+        )
+        _report(f"{writer} to {result_path}", write_error)
         return 1
     return 0 if exc is None else 1
 

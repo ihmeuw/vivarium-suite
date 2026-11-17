@@ -190,7 +190,10 @@ class StepExited(SystemExit):
     """A step raised :class:`SystemExit`, as ``sys.exit`` does, and stopped the build.
 
     It is a ``SystemExit`` with the step's exit code, so unless it is caught it ends the
-    process with that code, as the step's own ``SystemExit`` would have.
+    process with that code, as the step's own ``SystemExit`` would have. Its message
+    names the step and the code, as in
+    ``Step 'x' exited with code 3 before the build finished.``; its ``args`` hold only
+    the code.
 
     Parameters
     ----------
@@ -206,6 +209,10 @@ class StepExited(SystemExit):
     def __init__(self, step: str, code: str | int | None) -> None:
         super().__init__(code)
         self.step = step
+
+    def __str__(self) -> str:
+        """Return a sentence that names the step and its exit code."""
+        return f"Step {self.step!r} exited with code {self.code!r} before the build finished."
 
 
 def run(

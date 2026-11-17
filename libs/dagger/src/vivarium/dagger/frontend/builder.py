@@ -3,13 +3,13 @@
 A :class:`Pipeline` holds a run's output root, its run name, the
 :class:`~vivarium.dagger.backend.wiring.FileRegistry` that wires its steps, the
 directory for its pytask state, and the steps added so far. A pipeline definition makes
-one pipeline, adds each step with a method such as :meth:`Pipeline.python_step`, and
+one pipeline, adds each step with a method such as :meth:`Pipeline.add_python_step`, and
 ends with ``return p``::
 
     def pipeline() -> Pipeline:
         p = Pipeline(HERE / "output", run_name="example")
-        p.python_step(make_population, inputs={}, produces="population.parquet")
-        p.python_step(
+        p.add_python_step(make_population, inputs={}, produces="population.parquet")
+        p.add_python_step(
             total, inputs={"population": "population.parquet"}, produces="total.csv"
         )
         return p
@@ -168,7 +168,7 @@ class Pipeline:
         """A copy of the definition's default compute resources, empty if none were given."""
         return dict(self._resources)
 
-    def python_step(
+    def add_python_step(
         self,
         target: Callable[..., pd.DataFrame],
         *,
@@ -234,7 +234,7 @@ class Pipeline:
         )
         self._add(task, products)
 
-    def notebook_step(
+    def add_notebook_step(
         self,
         notebook: Path | str,
         *,
@@ -314,7 +314,7 @@ class Pipeline:
         )
         self._add(task, products)
 
-    def command_step(
+    def add_command_step(
         self,
         command: str,
         *,
@@ -387,7 +387,7 @@ class Pipeline:
         )
         self._add(task, products)
 
-    def simulation_step(
+    def add_simulation_step(
         self,
         *,
         spec: Path | str,

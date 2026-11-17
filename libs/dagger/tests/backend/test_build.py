@@ -135,9 +135,9 @@ def test_to_pytask_task_rejects_reserved_names(
     outputs: dict[str, PNode],
     name: str,
 ) -> None:
-    """Reject reserved or shared names, and a callable's non-parameter output names."""
+    """Reject reserved or shared names, and a callable's non-parameter output names, in a message that starts with the step's name."""
     task = _task("clean_data", run, inputs, outputs)
-    with pytest.raises(ValueError, match=rf"clean_data.*{re.escape(name)}"):
+    with pytest.raises(ValueError, match=rf"^Step 'clean_data': .*{re.escape(name)}"):
         to_pytask_task(task)
 
 

@@ -41,7 +41,7 @@ class Task:
             raise ValueError(f"Task name must be a non-empty string, got {self.name!r}.")
         if callable(self.run) and self.env is not None:
             raise ValueError(
-                f"Task '{self.name}': a Python callable runs in the pipeline's own "
+                f"Step {self.name!r}: a Python callable runs in the pipeline's own "
                 f"process, so it cannot declare env '{self.env}'; use a command step "
                 "to run in another environment."
             )

@@ -242,7 +242,7 @@ def test_build_runs_a_command_task_under_its_declared_env(tmp_path: Path) -> Non
 
 
 def test_build_rejects_unresolved_envs_before_any_task_runs(tmp_path: Path) -> None:
-    """build() raises one ValueError naming each unresolved env once with every task that declares it, and no task runs and no lockfile is written."""
+    """build() raises one ValueError naming each unresolved env once with every task that declares it, after "Step '<name>':" or "Steps '<name>', '<name>':", and no task runs and no lockfile is written."""
     shared, single = str(tmp_path / "missing_shared"), str(tmp_path / "missing_single")
     good = str(_make_env(tmp_path / "good_env"))
     envs = {"alpha": shared, "beta": shared, "gamma": single, "delta": good}
@@ -258,6 +258,11 @@ def test_build_rejects_unresolved_envs_before_any_task_runs(tmp_path: Path) -> N
 
     message = str(info.value)
     lines = message.splitlines()
+    assert lines[0] == "Declared envs do not resolve, so no step was run:", message
+    assert sorted(line.partition(": ")[0] for line in lines[1:]) == [
+        "Step 'gamma'",
+        "Steps 'alpha', 'beta'",
+    ], message
     for env, declared in ((shared, {"alpha", "beta"}), (single, {"gamma"})):
         naming = [line for line in lines if env in line]
         assert len(naming) == 1, message

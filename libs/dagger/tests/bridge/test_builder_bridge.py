@@ -49,8 +49,8 @@ HERE = Path(__file__).resolve().parent
 
 def pipeline() -> Pipeline:
     p = Pipeline(HERE / "out", run_name="run1")
-    p.python_step(step_targets.record_pid, inputs={}, produces="a.parquet")
-    p.python_step(
+    p.add_python_step(step_targets.record_pid, inputs={}, produces="a.parquet")
+    p.add_python_step(
         step_targets.record_pid, inputs={"upstream": "a.parquet"}, produces="b.parquet"
     )
     return p
@@ -80,7 +80,7 @@ def _chain(p: Pipeline, own: Mapping[str, dict[str, Any]] | None = None) -> Pipe
     given: Mapping[str, dict[str, Any]] = {} if own is None else own
     sources: dict[str, dict[str, str]] = {A: {}, B: {"upstream": A}, C: {"upstream": B}}
     for name, inputs in sources.items():
-        p.python_step(
+        p.add_python_step(
             step_targets.record_pid, inputs=inputs, produces=name, resources=given.get(name)
         )
     return p
@@ -215,12 +215,12 @@ def test_a_step_added_after_a_run_through_jobmon_is_in_the_next_run_and_not_the_
 ) -> None:
     """End to end: after run(p, jobmon=True) of a two-step chain returns its two outcomes and binds a plan of those two steps, a third step added to p does not change that result; a second run(p, jobmon=True) binds a plan that has the third step, returns SUCCESS for all three steps, and writes the third step's product."""
     p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
-    p.python_step(step_targets.record_pid, inputs={}, produces=A)
-    p.python_step(step_targets.record_pid, inputs={"upstream": A}, produces=B)
+    p.add_python_step(step_targets.record_pid, inputs={}, produces=A)
+    p.add_python_step(step_targets.record_pid, inputs={"upstream": A}, produces=B)
     third = p.output_root / "run1" / C
 
     finished = run(p, jobmon=True)
-    p.python_step(step_targets.record_pid, inputs={"upstream": B}, produces=C)
+    p.add_python_step(step_targets.record_pid, inputs={"upstream": B}, produces=C)
 
     assert finished == {A: TaskOutcome.SUCCESS, B: TaskOutcome.SUCCESS}
     assert bound_names(fake_jobmon) == [[A, B]]

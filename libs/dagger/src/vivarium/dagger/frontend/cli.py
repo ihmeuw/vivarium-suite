@@ -305,9 +305,7 @@ def _verb_errors(
             f"Could not read or write the pipeline's state under {pipeline.root}: {error}"
         ) from None
     except StepExited as error:
-        raise click.ClickException(
-            f"Step {error.step!r} exited with code {error.code!r} before the build finished."
-        ) from None
+        raise click.ClickException(str(error)) from None
     except SystemExit as error:
         # A step's own exit arrives as StepExited, so this one came from pytask itself.
         raise click.ClickException(

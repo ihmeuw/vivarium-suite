@@ -117,9 +117,9 @@ _KEYED_CHAIN = _CHAIN.replace(
     _CHAIN[_CHAIN.index("def pipeline():") :],
     """def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.python_step(make_a, inputs={}, produces="a.parquet", name="a")
-    p.python_step(make_b, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
-    p.python_step(make_c, inputs={"source": "b.parquet"}, produces="c.parquet", name="c")
+    p.add_python_step(make_a, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(make_b, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
+    p.add_python_step(make_c, inputs={"source": "b.parquet"}, produces="c.parquet", name="c")
     return p
 """,
 )
@@ -334,8 +334,8 @@ def make_shared():
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.python_step(make_shared, inputs={}, produces="shared.parquet", name=FIRST)
-    p.python_step(make_shared, inputs={}, produces="shared.parquet", name=SECOND)
+    p.add_python_step(make_shared, inputs={}, produces="shared.parquet", name=FIRST)
+    p.add_python_step(make_shared, inputs={}, produces="shared.parquet", name=SECOND)
     return p
 """
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
@@ -2005,8 +2005,8 @@ NAME = "population"
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.python_step(frame, inputs={}, produces="a.parquet", name=NAME)
-    p.python_step(frame, inputs={}, produces="b.parquet", name=NAME)
+    p.add_python_step(frame, inputs={}, produces="a.parquet", name=NAME)
+    p.add_python_step(frame, inputs={}, produces="b.parquet", name=NAME)
     return p
 """
 )
@@ -2513,19 +2513,23 @@ def make_b(x):
 )
 """The start of every Pipeline definition: ``make_a`` and ``make_b`` log that they ran."""
 
-_FIRST_STEP = 'p.python_step(make_a, inputs={}, produces="population.parquet", name="first")'
+_FIRST_STEP = (
+    'p.add_python_step(make_a, inputs={}, produces="population.parquet", name="first")'
+)
 """A step 'first' that produces 'population.parquet'."""
 
-_SAME_NAME_STEP = 'p.python_step(make_a, inputs={}, produces="other.parquet", name="first")'
+_SAME_NAME_STEP = (
+    'p.add_python_step(make_a, inputs={}, produces="other.parquet", name="first")'
+)
 """A step with :data:`_FIRST_STEP`'s name and another product."""
 
 _SAME_KEY_STEP = (
-    'p.python_step(make_a, inputs={}, produces="population.parquet", name="second")'
+    'p.add_python_step(make_a, inputs={}, produces="population.parquet", name="second")'
 )
 """A step 'second' with :data:`_FIRST_STEP`'s product."""
 
 _MISTYPED_STEP = (
-    'p.python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
+    'p.add_python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
 )
 """A step 'b' that reads the mistyped key 'populaton.parquet'."""
 
@@ -2552,7 +2556,7 @@ def _last_frame(lines: list[str]) -> int:
 def test_a_pipeline_step_with_a_name_already_added_exits_two_with_the_definitions_line(
     tmp_path: Path,
 ) -> None:
-    """'dagger preview' and 'dagger run --local' of a definition that adds a second step named like the first through a Pipeline exit 2; stderr names the step, its traceback's last frame is the definition's second p.python_step( line, no frame of vivarium.dagger is shown, and no step body runs."""
+    """'dagger preview' and 'dagger run --local' of a definition that adds a second step named like the first through a Pipeline exit 2; stderr names the step, its traceback's last frame is the definition's second p.add_python_step( line, no frame of vivarium.dagger is shown, and no step body runs."""
     path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, _SAME_NAME_STEP))
 
     for verb in ("preview", "run"):
@@ -2592,7 +2596,7 @@ def test_a_pipeline_step_producing_a_key_already_produced_exits_two_naming_both_
 def test_a_definition_time_error_in_a_pipeline_method_points_at_the_modelers_line(
     tmp_path: Path,
 ) -> None:
-    """'dagger preview' of a definition whose p.python_step names an input key no step produces exits 2; the trimmed traceback's last frame is the definition's p.python_step( line, followed by the hidden-frames line and the WiringError naming the step and the key."""
+    """'dagger preview' of a definition whose p.add_python_step names an input key no step produces exits 2; the trimmed traceback's last frame is the definition's p.add_python_step( line, followed by the hidden-frames line and the WiringError naming the step and the key."""
     path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, _MISTYPED_STEP))
 
     result = _invoke("preview", str(path))
@@ -2655,7 +2659,7 @@ def test_dagger_preview_run_and_force_of_a_definition_that_returns_its_pipeline_
 ) -> None:
     """For a definition that makes a Pipeline, adds two steps and returns it, 'dagger preview' lists both steps as would-run, 'dagger run --local' runs both and exits 0, and 'dagger force --local first' runs 'first' again and exits 0."""
     second = (
-        'p.python_step(make_b, inputs={"x": "population.parquet"}, produces="b.csv", '
+        'p.add_python_step(make_b, inputs={"x": "population.parquet"}, produces="b.csv", '
         'name="b")'
     )
     path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, second))

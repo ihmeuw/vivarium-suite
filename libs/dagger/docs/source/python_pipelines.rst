@@ -56,7 +56,7 @@ directory on ``PYTHONPATH``. ``dagger`` does not add the current directory to
 
 A definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline` with an output
 root and a run name, adds each step to it with a method such as
-:meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`, and returns the
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_python_step`, and returns the
 pipeline. Add a step after the steps that produce the artifacts it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
 :doc:`root_inputs`). A step's products go under ``<output root>/<run name>``. The
@@ -207,7 +207,7 @@ before it, key by key:
    with ``PIPELINE_RESOURCES = {"project": "proj_example", "memory": 4}``.
 3. The command's options: ``-P/--project`` and ``-q/--queue``.
 4. The step's own ``resources=``, such as
-   ``p.python_step(..., resources={"memory": 16, "runtime": 7200})``.
+   ``p.add_python_step(..., resources={"memory": 16, "runtime": 7200})``.
 
 Memory is in gigabytes and runtime in seconds. ``-m/--max-attempts`` sets how many times
 Jobmon tries each step; the default is 2. Jobmon raises a step's memory and runtime by
@@ -241,7 +241,7 @@ if you confirm, the run stops in the same way.
 Simulation steps
 ----------------
 
-:meth:`~vivarium.dagger.frontend.builder.Pipeline.simulation_step` adds a step that runs
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_simulation_step` adds a step that runs
 a vivarium simulation with ``psimulate run`` in the environment named by ``env``, which
 needs ``vivarium-psimulate`` installed with its ``cluster`` extra. psimulate runs only
 on a cluster compute node: it refuses to start on a submit host or outside the cluster.
@@ -425,11 +425,11 @@ The full reference for the command and its options is in :mod:`vivarium.dagger.c
 Steps that run a command
 ------------------------
 
-:meth:`~vivarium.dagger.frontend.builder.Pipeline.command_step` adds a step that runs a
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_command_step` adds a step that runs a
 shell command. Use it when the step needs another environment than the pipeline's, or
 when the work is already a command-line tool or a script. A Python step always runs in
 the pipeline's own process, so it cannot use another environment. For any other step,
-use :meth:`~vivarium.dagger.frontend.builder.Pipeline.python_step`.
+use :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_python_step`.
 
 This example puts a command step between two Python steps. The ``population`` step
 writes a table, ``adults`` runs a script on it, and ``summary`` reads the script's
