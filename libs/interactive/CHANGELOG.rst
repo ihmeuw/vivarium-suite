@@ -1,4 +1,4 @@
-**1.1.0b2 - 11/12/26**
+**1.1.0b2 - 11/17/26**
 
 - Document finding configuration keys with ``ConfigTree.find`` and updating them with
   ``ConfigNode.update``
