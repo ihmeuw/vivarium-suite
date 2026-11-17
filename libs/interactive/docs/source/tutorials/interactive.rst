@@ -314,6 +314,47 @@ result is the same either way.
     # warn you if you are adding new keys, e.g. due to a typo!
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
+If you know roughly what a key is called but not where it sits, pass part of its
+name to ``sim.configuration.find``. It returns the
+matching configuration nodes. It matches the text literally and ignores case,
+takes ``regex=True`` for a regular expression, and lists every key when called
+with no pattern. In IPython or Jupyter, each node displays as its keys and the
+value the simulation will use. Outside a notebook,
+``IPython.lib.pretty.pprint`` prints the same display:
+
+.. testcode::
+
+    from IPython.lib.pretty import pprint
+
+    pprint(sim.configuration.find("population"))
+
+.. testoutput::
+
+    [ConfigNode(("configuration", "population", "population_size"), 1000),
+     ConfigNode(("configuration", "population", "age_start"), 0),
+     ConfigNode(("configuration", "population", "age_end"), 5)]
+
+The returned configuration nodes show the full paths as tuples of keys and their
+corresponding values. Note that key names can include dots, for example:
+
+.. testcode::
+
+    pprint(sim.configuration.find("excess_mortality_rate"))
+
+.. testoutput::
+
+    [ConfigNode(("configuration", "disease_state.infected_with_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.06),
+     ConfigNode(("configuration", "disease_state.susceptible_to_lower_respiratory_infections", "data_sources", "excess_mortality_rate"), 0.0)]
+
+In addition to changing a value directly (with ``=``), you can use a node's
+own :meth:`~vivarium.config_tree.main.ConfigNode.update` method. Here we
+make each time step one day instead of the model specification's half day:
+
+.. testcode::
+
+    [step_size] = sim.configuration.find("time.step_size")
+    step_size.update(1)
+
 We then need to call the
 :meth:`~vivarium.interactive.simulation.Simulation.setup` method on the
 simulation context to prepare it to run.
@@ -321,6 +362,18 @@ simulation context to prepare it to run.
 .. testcode::
 
    sim.setup()
+
+The simulation now uses the new step size:
+
+.. testcode::
+
+   start = sim.current_time
+   sim.step()
+   print(sim.current_time - start)
+
+.. testoutput::
+
+   1 days 00:00:00
 
 After this step, we are ready to  :ref:`run the simulation <interactive_run>`.
 
