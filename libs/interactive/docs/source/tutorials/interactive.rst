@@ -315,7 +315,7 @@ result is the same either way.
     # sim.configuration.update({'population': {'population_size': 1_000}})
 
 If you know roughly what a key is called but not where it sits, pass part of its
-name to :meth:`~vivarium.config_tree.main.ConfigTree.find`. It returns the
+name to ``sim.configuration.find``. It returns the
 matching configuration nodes. It matches the text literally and ignores case,
 takes ``regex=True`` for a regular expression, and lists every key when called
 with no pattern. In IPython or Jupyter, each node displays as its keys and the
