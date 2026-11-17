@@ -339,7 +339,8 @@ class TestGetLeaves:
     ) -> None:
         copied = copy_tree(tree)
         assert _keys(copied.get_leaves()) == _keys(tree.get_leaves())
-        assert copied._get_node(["time", "step_size"])._parent is copied.time
+        [step_size] = copied.find("time.step_size")
+        assert step_size._parent is copied.time
 
 
 class TestPrettyRepr:
