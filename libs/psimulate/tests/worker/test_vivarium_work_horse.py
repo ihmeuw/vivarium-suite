@@ -143,6 +143,25 @@ def test_get_backup_raises_when_backup_cannot_be_loaded(tmp_path: Path) -> None:
     assert backup_path.exists()
 
 
+def test_get_backup_raises_when_metadata_does_not_match_job(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    metadata_path = backup_dir / "backup_metadata.csv"
+    job_parameters = make_job_parameters(
+        model_specification="dummy",
+        backup_configuration={
+            "backup_freq": 300,
+            "backup_dir": backup_dir,
+            "backup_metadata_path": metadata_path,
+        },
+    )
+    # psimulate writes this file, so a missing column is a bug, not a missing backup.
+    pd.DataFrame({"job_id": ["prev_job"]}).to_csv(metadata_path, index=False)
+
+    with pytest.raises(pd.errors.UndefinedVariableError, match="input_draw"):
+        get_backup(job_parameters)
+
+
 def test_remove_backups(tmp_path: Path) -> None:
     # Ensure deleting non-existent file does not raise an error
     remove_backups(tmp_path / "job_id.pkl")

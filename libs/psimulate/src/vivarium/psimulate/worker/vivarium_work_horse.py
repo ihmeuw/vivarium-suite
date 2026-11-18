@@ -81,66 +81,55 @@ def get_backup(
     metadata_path = Path(job_parameters.backup_configuration["backup_metadata_path"])
     try:
         pickle_metadata = pd.read_csv(metadata_path)
+    except FileNotFoundError:
+        # psimulate writes the metadata only when backups are on.
+        logger.info("No backup metadata found. Starting simulation from the beginning.")
+        return None
 
-        def format_val(v: Any) -> str | int | float:
-            return v if isinstance(v, (int, float)) else f'"{v}"'
+    def format_val(v: Any) -> str | int | float:
+        return v if isinstance(v, (int, float)) else f'"{v}"'
 
-        # NOTE: queries want forward-ticks (``) around column names being filtered,
-        # quotes around string values and nothing around int/float values.
-        query_conditions = " & ".join(
-            [
-                f"`{k}` == {format_val(v)}"
-                for k, v in collapse_nested_dict(job_parameters.job_specific)
-            ]
-        )
-
-        # Use the query method to find rows that match the lookup parameters
-        run_ids = pickle_metadata.query(query_conditions)["job_id"].to_list()
-        possible_pickles = [
-            (backup_dir / str(run_id)).with_suffix(".pkl") for run_id in run_ids
+    # NOTE: queries want forward-ticks (``) around column names being filtered,
+    # quotes around string values and nothing around int/float values.
+    query_conditions = " & ".join(
+        [
+            f"`{k}` == {format_val(v)}"
+            for k, v in collapse_nested_dict(job_parameters.job_specific)
         ]
-        existing_pickles = [pickle for pickle in possible_pickles if pickle.exists()]
-        if existing_pickles:
-            last_pickle = max(existing_pickles, key=os.path.getctime)
-            if len(existing_pickles) > 1:
-                logger.warning(
-                    f"Multiple backups found for {job_parameters}. Using the most recent and deleting the rest."
-                )
-                for stale_file in set(existing_pickles) - {last_pickle}:
-                    os.remove(stale_file)
-            try:
-                with open(last_pickle, "rb") as backup_file:
-                    sim = cast(ParallelSimulation, dill.load(backup_file))
-            except Exception as e:
-                raise BackupLoadError(
-                    f"Backup {last_pickle} exists but cannot be loaded: {e!r}. "
-                    "Fix the cause, or delete the backup to restart the simulation "
-                    "from the beginning."
-                ) from e
-            if job_parameters.backup_configuration["backup_freq"] is not None:
-                logger.info(
-                    f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl"
-                )
-                # Sleep to prevent FS latency when loading the pickle
-                sleep(5)
-                os.rename(
-                    last_pickle, (backup_dir / job_parameters.task_id).with_suffix(".pkl")
-                )
-            return sim
+    )
+
+    # Use the query method to find rows that match the lookup parameters
+    run_ids = pickle_metadata.query(query_conditions)["job_id"].to_list()
+    possible_pickles = [(backup_dir / str(run_id)).with_suffix(".pkl") for run_id in run_ids]
+    existing_pickles = [pickle for pickle in possible_pickles if pickle.exists()]
+    if not existing_pickles:
         return None
 
-    except BackupLoadError:
-        # A silent restart repeats all the work and hides the cause.
-        raise
-    except (OSError, FileNotFoundError):
-        logger.info(
-            "Missing backup or backup directory. Restarting simulation from beginning."
+    last_pickle = max(existing_pickles, key=os.path.getctime)
+    if len(existing_pickles) > 1:
+        logger.warning(
+            f"Multiple backups found for {job_parameters}. Using the most recent and deleting the rest."
         )
-        return None
+        for stale_file in set(existing_pickles) - {last_pickle}:
+            os.remove(stale_file)
+
+    try:
+        with open(last_pickle, "rb") as backup_file:
+            sim = cast(ParallelSimulation, dill.load(backup_file))
     except Exception as e:
-        logger.warning(f"Load from backup failed with Exception: {e}")
-        logger.warning("Restarting simulation from beginning.")
-        return None
+        # Unpickling runs the classes' own code, so it can raise any exception type.
+        raise BackupLoadError(
+            f"Backup {last_pickle} exists but cannot be loaded: {e!r}. "
+            "Fix the cause, or delete the backup to restart the simulation "
+            "from the beginning."
+        ) from e
+
+    if job_parameters.backup_configuration["backup_freq"] is not None:
+        logger.info(f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl")
+        # Sleep to prevent FS latency when loading the pickle
+        sleep(5)
+        os.rename(last_pickle, (backup_dir / job_parameters.task_id).with_suffix(".pkl"))
+    return sim
 
 
 def get_sim_from_backup(
