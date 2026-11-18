@@ -577,6 +577,45 @@ def test_a_python_step_with_several_products_and_no_name_raises_the_step_functio
     assert not _registered(p, "a.csv")
 
 
+def test_a_python_step_with_several_products_whose_later_key_is_already_produced_is_refused(
+    tmp_path: Path,
+) -> None:
+    """After a step 'first' producing 'deaths.csv', a python step 'split' producing 'population.parquet' and 'deaths.csv' raises WiringError naming 'first', and neither 'split' nor 'population.parquet' is added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(_constant, inputs={}, produces="deaths.csv", name="first")
+
+    with pytest.raises(WiringError) as info:
+        p.add_python_step(
+            _split,
+            inputs={},
+            produces={"population": "population.parquet", "deaths": "deaths.csv"},
+            name="split",
+        )
+
+    assert str(info.value) == (
+        "Step 'split': output 'deaths.csv' is already produced by step 'first'; each file "
+        "key can have only one producing step."
+    )
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+    assert not _registered(p, "population.parquet")
+
+
+def test_a_python_step_with_several_products_and_no_name_is_not_named_after_its_first_key(
+    tmp_path: Path,
+) -> None:
+    """With a step already named 'a.csv' that does not produce it, a python step producing 'a.csv' and 'b.csv' with no name raises python_step's no-default-name ValueError, not the error for a name already added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(_constant, inputs={}, produces="z.csv", name="a.csv")
+
+    with pytest.raises(ValueError) as info:
+        p.add_python_step(_split, inputs={}, produces={"a": "a.csv", "b": "b.csv"})
+
+    message = str(info.value)
+    assert message.startswith("python_step:"), message
+    assert "has no default name" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["a.csv"]
+
+
 def test_a_python_step_with_one_mapped_product_and_no_name_is_named_after_its_key(
     tmp_path: Path,
 ) -> None:

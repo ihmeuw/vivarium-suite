@@ -437,9 +437,11 @@ Parquet file, and ``summary`` reads only the Parquet file:
    :caption: pipeline.py
 
 Every key in the mapping is a product of the step. A later step reads one of them by
-naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``, and
-``dagger preview`` names each product file by its key, so a missing ``children.csv``
-shows as ``file 'children.csv'`` among the step's reasons.
+naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each product
+is a separate artifact, so a ``dagger preview`` reason about one product names it by its
+key, such as ``file 'children.csv' is missing``. In this example the line for ``split``
+shows only ``step 'population' would run first``, because ``population`` is a Python
+step and re-runs on every build for now.
 
 A step with one product is named after its key by default. A step with more than one
 product has no default name, so pass ``name=``. A product name must be a valid Python
