@@ -1,4 +1,4 @@
-**1.2.0 - 11/04/26**
+**1.2.0 - 11/17/26**
 
 - Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
   dependencies to ``pandas>=3.0.0``, ``tables>=3.10.1``

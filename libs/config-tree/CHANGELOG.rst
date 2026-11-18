@@ -1,4 +1,4 @@
-**5.2.2 - 11/04/26**
+**5.2.2 - 11/17/26**
 
 - Cap ``vivarium-dependencies`` below 3.0.0
 
