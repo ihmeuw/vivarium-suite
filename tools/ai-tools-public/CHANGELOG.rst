@@ -1,3 +1,8 @@
+**0.5.1 - 11/18/26**
+
+- Fetch from the remote in ``/simsci:framework-development`` Phase 0 and base
+  the work branch on the fetched default branch
+
 **0.5.0 - 10/28/26**
 
 - Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per

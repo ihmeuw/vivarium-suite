@@ -49,9 +49,15 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
 1. Locate the target package/project directory from $ARGUMENTS and ``cd`` there.
 2. Activate the project's development environment — if an installed skill covers
    environment setup, use it; otherwise follow the project's docs.
-3. Create a work branch per your team's naming conventions (if an installed
+3. Get the latest code from the remote: run ``git fetch origin`` and find the
+   default branch with ``git rev-parse --abbrev-ref origin/HEAD``. If the fetch
+   fails, tell the user and ask whether to continue from the local state.
+4. Create a work branch per your team's naming conventions (if an installed
    skill covers them, invoke it and follow it; otherwise ask or use a sensible
-   name) and **create the branch now**.
+   name) and **create the branch now**. Base it on the fetched default branch
+   (``git switch -c <branch> origin/<default>``), not on a local branch that
+   may be out of date. If $ARGUMENTS names an existing branch to continue,
+   switch to it and report whether it is behind its upstream instead.
 
 ## Phase 1 — Design
 
