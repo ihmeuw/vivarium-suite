@@ -30,8 +30,8 @@ the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
    the per-finding commits in Step 4 are the recovery story, and a fix is only
    isolated if it is the only thing in its commit. Stop if the repo is mid-rebase
    or mid-merge.
-2. **Fix the base.** First choose the **base branch**. If $ARGUMENTS names one
-   (for example a beta or epic branch), use it. Otherwise, if the branch already
+2. **Fix the base.** First choose the **base branch**. If $ARGUMENTS names one,
+   use it. Otherwise, if the branch already
    has an open PR, use that PR's base. Otherwise use the default branch. Run
    `git fetch origin <base-branch>`, then compute the merge-base with
    `origin/<base-branch>`. State the base branch and the number of commits ahead

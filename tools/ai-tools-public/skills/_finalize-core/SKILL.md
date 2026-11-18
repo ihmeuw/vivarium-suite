@@ -30,8 +30,8 @@ checks** — checks this session ran outside the test suite that are the only
 evidence for a behavior, each with its command and result. Do not ask for either
 when the caller has none.
 
-The **base branch** is also optional. It is the branch the work was created from,
-for example a beta or epic branch. When the caller does not give one, the base
+The **base branch** is also optional. It is the branch the work was created from.
+When the caller does not give one, the base
 branch is the repo's default branch. Steps 1 and 5 use it.
 
 ## Step 1 — Summarize and read the branch

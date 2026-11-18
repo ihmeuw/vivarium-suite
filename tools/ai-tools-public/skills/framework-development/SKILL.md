@@ -51,8 +51,7 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
    environment setup, use it; otherwise follow the project's docs.
 3. Get the latest code from the remote: run ``git fetch origin``. If the fetch
    fails, tell the user and ask whether to continue from the local state.
-4. Choose the **base branch**. If $ARGUMENTS names one (for example a beta or
-   epic branch), use it. Otherwise use the default branch
+4. Choose the **base branch**. If $ARGUMENTS names one, use it. Otherwise use the default branch
    (``git rev-parse --abbrev-ref origin/HEAD``). If $ARGUMENTS names no base and
    the current branch is not the default branch, ask the user which branch to
    use. Do not guess. Record the base, because Phase 5 passes it on.
