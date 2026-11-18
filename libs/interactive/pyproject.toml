@@ -29,14 +29,14 @@ classifiers = [
 dependencies = [
     "vivarium-engine>=6.0.0",
     "vivarium-config-tree",
-    "vivarium-dependencies[numpy,pandas]",
+    "vivarium-dependencies[numpy,pandas]>=2.0.0,<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
 ]
 
 [project.optional-dependencies]
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
-    "vivarium-dependencies[pytest,networkx,pyyaml,loguru,ipython]",
+    "vivarium-dependencies[ipython,loguru,networkx,pytest,pyyaml]",
     "pytest-vivarium",
     "vivarium-fuzzy-checker",
 ]

@@ -1,3 +1,8 @@
+**1.0.2 - 11/17/26**
+
+- Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
+  dependencies to ``numpy>=2.1.0``, ``pandas>=3.0.0``
+
 **1.0.1 - 10/28/26**
 
 - Subclass engine's renamed ``BaseSimulation`` and require ``vivarium-engine`` 6
