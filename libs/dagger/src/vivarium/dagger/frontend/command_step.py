@@ -169,6 +169,8 @@ def command_step(
     product_paths = {param: registry.path_for(key) for param, key in product_keys.items()}
     _check_paths(task_name, input_keys, dependencies, product_keys, product_paths)
     try:
+        for key in product_keys.values():
+            registry.check_output(key)
         products = {
             param: registry.register_output(key) for param, key in product_keys.items()
         }
