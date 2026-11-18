@@ -19,7 +19,7 @@ at the design and PR gates.
 The phases below are the canonical detail; this is the skeleton:
 
 ```
-setup                                # Phase 0: package, env, feature branch
+setup                                # Phase 0: package, env, fetch, base, feature branch
 design  = brainstorm with user       # Phase 1: incl. scope-tightening; user-gated
 stubs   = author contract            # Phase 2: source + body-less test stubs; commit baseline
 build impl_wt, test_wt               # Phase 3: simsci:_feature_implementer || simsci:_test_writer, isolated
@@ -49,15 +49,20 @@ finalize & PR = finalize_core        # Phase 5: user-gated; residuals -> tickets
 1. Locate the target package/project directory from $ARGUMENTS and ``cd`` there.
 2. Activate the project's development environment — if an installed skill covers
    environment setup, use it; otherwise follow the project's docs.
-3. Get the latest code from the remote: run ``git fetch origin`` and find the
-   default branch with ``git rev-parse --abbrev-ref origin/HEAD``. If the fetch
+3. Get the latest code from the remote: run ``git fetch origin``. If the fetch
    fails, tell the user and ask whether to continue from the local state.
-4. Create a work branch per your team's naming conventions (if an installed
+4. Choose the **base branch**. If $ARGUMENTS names one (for example a beta or
+   epic branch), use it. Otherwise use the default branch
+   (``git rev-parse --abbrev-ref origin/HEAD``). If $ARGUMENTS names no base and
+   the current branch is not the default branch, ask the user which branch to
+   use. Do not guess. Record the base, because Phase 5 passes it on.
+5. Create a work branch per your team's naming conventions (if an installed
    skill covers them, invoke it and follow it; otherwise ask or use a sensible
-   name) and **create the branch now**. Base it on the fetched default branch
-   (``git switch -c <branch> origin/<default>``), not on a local branch that
+   name) and **create the branch now**. Base it on the fetched base branch
+   (``git switch -c <branch> origin/<base>``), not on a local branch that
    may be out of date. If $ARGUMENTS names an existing branch to continue,
-   switch to it and report whether it is behind its upstream instead.
+   switch to it and report whether it is behind its upstream instead. The base
+   from step 4 still applies.
 
 ## Phase 1 — Design
 
@@ -232,5 +237,6 @@ dropped.
    review findings carried out of that loop are the **leftover** set; this
    build ships as a **single PR**; and the Phase 1 testing strategy gives the
    **strategy items**, with each requirement, use case, and edge case as one item.
-   Also pass any outside-suite checks this session ran. If it is unavailable, report the build summary
+   Also pass the **base branch** from Phase 0 and any outside-suite checks this
+   session ran. If it is unavailable, report the build summary
    and the leftovers and stop, leaving the branch in place.

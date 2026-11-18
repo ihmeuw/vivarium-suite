@@ -1,7 +1,11 @@
 **0.5.1 - 11/18/26**
 
 - Fetch from the remote in ``/simsci:framework-development`` Phase 0 and base
-  the work branch on the fetched default branch
+  the work branch on the fetched base branch: the branch the user names, such
+  as a beta or epic branch, or else the default branch
+- Let ``_finalize-core`` take a base branch from its caller and use it for the
+  merge-base, the test summary, and the PR's base.
+  ``/simsci:framework-development`` passes the base from Phase 0
 
 **0.5.0 - 10/28/26**
 

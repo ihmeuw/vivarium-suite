@@ -30,6 +30,10 @@ checks** — checks this session ran outside the test suite that are the only
 evidence for a behavior, each with its command and result. Do not ask for either
 when the caller has none.
 
+The **base branch** is also optional. It is the branch the work was created from,
+for example a beta or epic branch. When the caller does not give one, the base
+branch is the repo's default branch. Steps 1 and 5 use it.
+
 ## Step 1 — Summarize and read the branch
 
 State what was built or changed, the validation verdict, and anything carried out
@@ -38,7 +42,7 @@ surface the residuals here rather than letting them appear for the first time in
 Step 6.
 
 Then establish the git facts, changing nothing: `git status --short`, the upstream,
-the base (`git merge-base HEAD origin/<default-branch>`), and
+the base (`git merge-base HEAD origin/<base-branch>`), and
 `git --no-pager log --oneline <base>..HEAD`. **A clean tree with nothing ahead of
 the base means there is nothing to finalize** — say so and stop rather than opening
 an empty PR.
@@ -113,7 +117,8 @@ by taking a PR out of draft, retracts the signal.
 Opening a new one: if an installed skill covers your team's push/PR conventions,
 invoke it and follow it rather than re-deriving them here; otherwise fill the repo's
 PR template from the actual diff if one exists. A **draft** is the safe default for
-a PR you open.
+a PR you open. Open it against the base branch, not against the default branch
+when the two differ.
 
 Either way, put Step 1's summary and the validation verdict, residuals included, in
 the body.
