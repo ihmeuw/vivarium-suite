@@ -422,6 +422,40 @@ prints only the file, the line number, the line with a caret under the error, an
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.
 
+Steps with several products
+---------------------------
+
+A Python step can write more than one file. Pass ``produces`` a mapping of product names
+to file keys, and have the function return a dict with exactly those names, each mapped
+to a DataFrame. Each DataFrame is saved at its key in the format that the key's suffix
+names, ``.parquet`` or ``.csv``, so one step can write files in both formats. In this
+example, ``split`` writes the children's rows to a CSV file and the adults' rows to a
+Parquet file, and ``summary`` reads only the Parquet file:
+
+.. literalinclude:: ../../tests/frontend/several_products_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+Every key in the mapping is a product of the step. A later step reads one of them by
+naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``, and
+``dagger preview`` names each product file by its key, so a missing ``children.csv``
+shows as ``file 'children.csv'`` among the step's reasons.
+
+A step with one product is named after its key by default. A step with more than one
+product has no default name, so pass ``name=``. A product name must be a valid Python
+identifier, must not be a Python keyword or one of the reserved names ``__code_id__``,
+``__command__``, ``__executed__`` and ``__notebook__``, and must not be the name of one
+of the step's inputs. These rules, and the rules for each key, are checked when the step
+is added, before any of its keys is registered.
+
+If the function returns something other than a dict, a dict with a missing or extra
+name, or a value that is not a DataFrame, the step fails and nothing is saved. The
+message names the function and the product names:
+
+.. code-block:: text
+
+   Step 'split' failed: ValueError: Python step target split_by_age returned a dict whose keys do not match its product names: the product 'children' is missing. The product names are 'adults' and 'children'.
+
 Steps that run a command
 ------------------------
 
