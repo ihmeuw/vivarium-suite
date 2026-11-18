@@ -131,7 +131,7 @@ def _products(kind: str, arguments: Mapping[str, Any]) -> list[str]:
 
 def _add(p: Pipeline, kind: str, arguments: Mapping[str, Any]) -> object:
     """Add a step of ``kind`` to ``p``; return what its method returns."""
-    method: Callable[..., object] = getattr(p, f"{kind}_step")
+    method: Callable[..., object] = getattr(p, f"add_{kind}_step")
     return method(**arguments)
 
 
@@ -279,7 +279,7 @@ def test_root_inputs_are_readable_by_a_step(tmp_path: Path) -> None:
     raw = _root_inputs(tmp_path)[_RAW]
     p = Pipeline(tmp_path / "out", "run1", root_inputs={_RAW: raw})
 
-    p.python_step(_read_raw, inputs={"raw": _RAW}, produces="copy.parquet")
+    p.add_python_step(_read_raw, inputs={"raw": _RAW}, produces="copy.parquet")
 
     [task] = freeze(p).tasks
     node = task.inputs["raw"]
@@ -295,7 +295,7 @@ def test_two_pipelines_with_different_run_names_write_under_different_paths(
     pipelines = {name: Pipeline(tmp_path, name) for name in ("a", "b")}
 
     for name, p in pipelines.items():
-        p.python_step(_constant, inputs={}, produces="table.parquet")
+        p.add_python_step(_constant, inputs={}, produces="table.parquet")
         assert _registry_of(p).path_for("table.parquet") == root / name / "table.parquet"
     for p in pipelines.values():
         assert run(p) == {"table.parquet": TaskOutcome.SUCCESS}
@@ -311,8 +311,8 @@ def test_two_pipelines_with_different_run_names_have_separate_state_directories(
     root = tmp_path.resolve()
     first = Pipeline(tmp_path, "a")
     second = Pipeline(tmp_path, "b")
-    first.python_step(_constant, inputs={}, produces="table.parquet", name="first")
-    second.python_step(_constant, inputs={}, produces="table.parquet", name="second")
+    first.add_python_step(_constant, inputs={}, produces="table.parquet", name="first")
+    second.add_python_step(_constant, inputs={}, produces="table.parquet", name="second")
 
     assert first.state == root / ".dagger" / "a"
     assert second.state == root / ".dagger" / "b"
@@ -330,7 +330,7 @@ def test_two_pipelines_with_different_run_names_have_separate_state_directories(
 def test_each_step_method_adds_the_task_its_step_function_compiles(
     tmp_path: Path, kind: str
 ) -> None:
-    """Each of python_step, notebook_step, command_step and simulation_step, given every argument of its step function except registry, adds a task equal to the one the step function compiles with the same arguments against a registry made from the same output root, run name and root inputs."""
+    """Each of add_python_step, add_notebook_step, add_command_step and add_simulation_step, given every argument of its step function except registry, adds a task equal to the one the step function compiles with the same arguments against a registry made from the same output root, run name and root inputs."""
     root_inputs = _root_inputs(tmp_path)
     p = Pipeline(tmp_path / "out", "run1", root_inputs=root_inputs)
     registry = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
@@ -348,7 +348,7 @@ def test_each_step_methods_parameters_are_its_step_functions_without_registry(
 ) -> None:
     """Each step method's parameters after self are its step function's parameters without registry, in order, with the same names, kinds, defaults and annotations."""
     function = inspect.signature(_STEP_FUNCTIONS[kind], eval_str=True)
-    method = inspect.signature(getattr(Pipeline, f"{kind}_step"), eval_str=True)
+    method = inspect.signature(getattr(Pipeline, f"add_{kind}_step"), eval_str=True)
 
     expected = [param for param in function.parameters.values() if param.name != "registry"]
     actual = [param for param in method.parameters.values() if param.name != "self"]
@@ -449,7 +449,7 @@ def test_each_step_method_returns_none(tmp_path: Path, kind: str) -> None:
 
 
 def test_a_step_method_keeps_the_step_functions_messages(tmp_path: Path) -> None:
-    """p.python_step with an input key no step produces raises the same WiringError message that python_step raises for the same arguments against an equal registry."""
+    """p.add_python_step with an input key no step produces raises the same WiringError message that python_step raises for the same arguments against an equal registry."""
     producer: dict[str, Any] = {"inputs": {}, "produces": "population.parquet"}
     consumer: dict[str, Any] = {
         "inputs": {"source": "populaton.parquet"},
@@ -460,10 +460,10 @@ def test_a_step_method_keeps_the_step_functions_messages(tmp_path: Path) -> None
     with pytest.raises(WiringError) as expected:
         python_step(_increment, registry=registry, **consumer)
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, **producer)
+    p.add_python_step(_constant, **producer)
 
     with pytest.raises(WiringError) as raised:
-        p.python_step(_increment, **consumer)
+        p.add_python_step(_increment, **consumer)
 
     assert str(raised.value) == str(expected.value)
 
@@ -473,7 +473,7 @@ def test_a_consumer_added_before_its_producer_is_refused(tmp_path: Path) -> None
     p = Pipeline(tmp_path / "out", "run1")
 
     with pytest.raises(WiringError) as info:
-        p.python_step(
+        p.add_python_step(
             _increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b"
         )
 
@@ -485,11 +485,11 @@ def test_a_consumer_added_before_its_producer_is_refused(tmp_path: Path) -> None
 def test_a_command_step_with_several_products_and_no_name_raises_the_step_functions_error(
     tmp_path: Path,
 ) -> None:
-    """p.command_step with two produces keys and no name raises command_step's ValueError, which starts with 'command_step:' and says to pass name=."""
+    """p.add_command_step with two produces keys and no name raises command_step's ValueError, which starts with 'command_step:' and says to pass name=."""
     p = Pipeline(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
-        p.command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"})
+        p.add_command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"})
 
     message = str(info.value)
     assert message.startswith("command_step:"), message
@@ -506,7 +506,7 @@ def test_a_second_step_with_a_name_already_added_is_refused(
 ) -> None:
     """After a python step named 'dup', adding a step of each kind named 'dup' with different products raises ValueError starting with "Step 'dup':" that says to give each step a different name=."""
     p = _pipeline(tmp_path)
-    p.python_step(_constant, inputs={}, produces="first.parquet", name="dup")
+    p.add_python_step(_constant, inputs={}, produces="first.parquet", name="dup")
     arguments = _arguments(kind, tmp_path, "second", name="dup")
 
     with pytest.raises(ValueError) as info:
@@ -524,10 +524,10 @@ def test_a_second_step_with_a_name_already_added_is_refused(
 def test_a_step_whose_default_name_is_a_name_already_added_is_refused(tmp_path: Path) -> None:
     """After a step named 'x.csv' that produces 'other.csv', a python step producing 'x.csv' with no name, whose default name is 'x.csv', raises ValueError naming 'x.csv' as a name already added."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="other.csv", name="x.csv")
+    p.add_python_step(_constant, inputs={}, produces="other.csv", name="x.csv")
 
     with pytest.raises(ValueError) as info:
-        p.python_step(_constant, inputs={}, produces="x.csv")
+        p.add_python_step(_constant, inputs={}, produces="x.csv")
 
     message = str(info.value)
     assert message.startswith("Step 'x.csv':"), message
@@ -539,10 +539,10 @@ def test_a_step_with_a_name_and_a_product_already_added_is_refused_for_its_produ
 ) -> None:
     """A python step whose name and product are both those of a step already added raises the WiringError for its product, not the ValueError for its name, and the message names the step, the step that produces the key, and the key."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
 
     with pytest.raises(WiringError) as info:
-        p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+        p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
 
     message = str(info.value)
     assert message.startswith("Step 'a':"), message
@@ -557,10 +557,10 @@ def test_two_unnamed_steps_producing_one_key_are_refused_for_the_product(
 ) -> None:
     """After an unnamed python step producing 'a.parquet', a second unnamed python step producing 'a.parquet', whose default name is also 'a.parquet', raises WiringError naming 'a.parquet' as already produced, not the ValueError that asks for a different name=."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet")
 
     with pytest.raises(WiringError) as info:
-        p.python_step(_constant, inputs={}, produces="a.parquet")
+        p.add_python_step(_constant, inputs={}, produces="a.parquet")
 
     message = str(info.value)
     assert message.startswith("Step 'a.parquet':"), message
@@ -574,10 +574,10 @@ def test_a_second_producer_of_a_key_is_refused_naming_both_steps_and_the_key(
 ) -> None:
     """After step 'first' produces 'shared.parquet', a python step 'second' producing 'shared.parquet' raises WiringError whose message names 'second', 'first' and 'shared.parquet'."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="shared.parquet", name="first")
+    p.add_python_step(_constant, inputs={}, produces="shared.parquet", name="first")
 
     with pytest.raises(WiringError) as info:
-        p.python_step(_constant, inputs={}, produces="shared.parquet", name="second")
+        p.add_python_step(_constant, inputs={}, produces="shared.parquet", name="second")
 
     message = str(info.value)
     assert message.startswith("Step 'second':"), message
@@ -590,10 +590,10 @@ def test_a_notebook_steps_executed_notebook_counts_as_a_product(tmp_path: Path) 
     """After a notebook step whose executed key is 'run.ipynb', a command step producing 'run.ipynb' is refused naming the notebook step and the key."""
     notebook = write_source_notebook(tmp_path / "report.ipynb")
     p = Pipeline(tmp_path / "out", "run1")
-    p.notebook_step(notebook, executed="run.ipynb", env="notebook_env", name="report")
+    p.add_notebook_step(notebook, executed="run.ipynb", env="notebook_env", name="report")
 
     with pytest.raises(WiringError) as info:
-        p.command_step("touch {out}", produces={"out": "run.ipynb"}, name="copy")
+        p.add_command_step("touch {out}", produces={"out": "run.ipynb"}, name="copy")
 
     message = str(info.value)
     assert message.startswith("Step 'copy':"), message
@@ -605,10 +605,10 @@ def test_a_notebook_steps_produces_keys_count_as_products(tmp_path: Path) -> Non
     """A notebook step whose produces includes a key a python step already produces is refused naming the python step and the key."""
     notebook = write_source_notebook(tmp_path / "report.ipynb", "table = 'unset'")
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="table.csv", name="make_table")
+    p.add_python_step(_constant, inputs={}, produces="table.csv", name="make_table")
 
     with pytest.raises(WiringError) as info:
-        p.notebook_step(
+        p.add_notebook_step(
             notebook,
             executed="report.ipynb",
             env="notebook_env",
@@ -625,10 +625,10 @@ def test_a_notebook_steps_produces_keys_count_as_products(tmp_path: Path) -> Non
 def test_every_produces_key_of_a_command_step_counts_as_a_product(tmp_path: Path) -> None:
     """After a command step producing 'a.csv' and 'b.csv', a python step producing 'b.csv' is refused naming the command step and 'b.csv'."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"}, name="pair")
+    p.add_command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"}, name="pair")
 
     with pytest.raises(WiringError) as info:
-        p.python_step(_constant, inputs={}, produces="b.csv", name="late")
+        p.add_python_step(_constant, inputs={}, produces="b.csv", name="late")
 
     message = str(info.value)
     assert message.startswith("Step 'late':"), message
@@ -647,10 +647,10 @@ def test_a_simulation_steps_run_directory_key_counts_as_a_product(tmp_path: Path
         "options": {"project": "proj_test", "no_slack": True},
     }
     p = Pipeline(tmp_path / "out", "run1")
-    p.simulation_step(**arguments, name="toy")
+    p.add_simulation_step(**arguments, name="toy")
 
     with pytest.raises(WiringError) as info:
-        p.simulation_step(**arguments, name="again")
+        p.add_simulation_step(**arguments, name="again")
 
     message = str(info.value)
     assert message.startswith("Step 'again':"), message
@@ -661,10 +661,12 @@ def test_a_simulation_steps_run_directory_key_counts_as_a_product(tmp_path: Path
 def test_a_refused_step_registers_nothing_and_is_not_added(tmp_path: Path) -> None:
     """A command step refused because one of its two products is already produced leaves its other product unregistered (registry.key_for of its path is None) and is not in the next pipeline's tasks."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.csv", name="first")
+    p.add_python_step(_constant, inputs={}, produces="a.csv", name="first")
 
     with pytest.raises(WiringError):
-        p.command_step("touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"}, name="pair")
+        p.add_command_step(
+            "touch {a} {b}", produces={"a": "a.csv", "b": "b.csv"}, name="pair"
+        )
 
     assert _registry_of(p).key_for(_registry_of(p).path_for("b.csv")) is None
     assert [task.name for task in freeze(p).tasks] == ["first"]
@@ -676,11 +678,11 @@ def test_a_step_its_step_function_rejects_is_not_added_so_its_name_stays_free(
     """A python step named 'x' that raises for an unresolved input is not added, and a corrected python step named 'x' added afterwards is accepted and is the only task in the pipeline."""
     p = Pipeline(tmp_path / "out", "run1")
     with pytest.raises(WiringError):
-        p.python_step(
+        p.add_python_step(
             _increment, inputs={"source": "missing.parquet"}, produces="x.parquet", name="x"
         )
 
-    p.python_step(_constant, inputs={}, produces="x.parquet", name="x")
+    p.add_python_step(_constant, inputs={}, produces="x.parquet", name="x")
 
     [task] = freeze(p).tasks
     assert task.name == "x"
@@ -694,7 +696,7 @@ def test_freeze_returns_the_tasks_in_the_order_added_as_a_tuple(tmp_path: Path) 
     """freeze(p).tasks is a tuple of the added steps' tasks in the order they were added."""
     p = Pipeline(tmp_path / "out", "run1")
     for name in ("c", "a", "b"):
-        p.python_step(_constant, inputs={}, produces=f"{name}.parquet", name=name)
+        p.add_python_step(_constant, inputs={}, produces=f"{name}.parquet", name=name)
 
     tasks = freeze(p).tasks
 
@@ -740,11 +742,11 @@ def test_a_step_added_after_freeze_does_not_reach_the_returned_snapshot(
 ) -> None:
     """A snapshot returned before a third step is added still has two tasks, and a second call of freeze(p) has all three."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
-    p.python_step(_constant, inputs={}, produces="b.parquet", name="b")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="b.parquet", name="b")
     earlier = freeze(p)
 
-    p.python_step(_constant, inputs={}, produces="c.parquet", name="c")
+    p.add_python_step(_constant, inputs={}, produces="c.parquet", name="c")
 
     assert [task.name for task in earlier.tasks] == ["a", "b"]
     assert [task.name for task in freeze(p).tasks] == ["a", "b", "c"]
@@ -753,7 +755,7 @@ def test_a_step_added_after_freeze_does_not_reach_the_returned_snapshot(
 def test_each_call_of_freeze_returns_a_new_equal_snapshot(tmp_path: Path) -> None:
     """Two calls of freeze(p) with no step added between them return two distinct _PipelineSnapshot objects with equal tasks, root, registry and resources."""
     p = Pipeline(tmp_path / "out", "run1", resources={"project": "proj_test"})
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
 
     first = freeze(p)
     second = freeze(p)
@@ -810,8 +812,8 @@ def test_a_pipeline_runs_locally_and_writes_under_the_run_directory(
     """run(p) of a two-step pipeline succeeds for both steps, writes the products under output_root/run_name, and writes pytask's state under output_root/.dagger/run_name."""
     output_root = (tmp_path / "out").resolve()
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
-    p.python_step(_increment, inputs={"source": "a.parquet"}, produces="b.csv", name="b")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_increment, inputs={"source": "a.parquet"}, produces="b.csv", name="b")
 
     result = run(p)
 
@@ -869,7 +871,7 @@ _GROWING: list[Pipeline] = []
 def _add_a_step() -> pd.DataFrame:
     """Add step 'added' to the pipeline in :data:`_GROWING` once; return a fixed table."""
     if _GROWING:
-        _GROWING.pop().python_step(
+        _GROWING.pop().add_python_step(
             _constant, inputs={}, produces="added.parquet", name="added"
         )
     return _constant()
@@ -878,8 +880,10 @@ def _add_a_step() -> pd.DataFrame:
 def _two_steps(tmp_path: Path) -> Pipeline:
     """Return a pipeline of step 'a', producing 'a.parquet', and step 'b', which reads it."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
-    p.python_step(_increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(
+        _increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b"
+    )
     return p
 
 
@@ -912,7 +916,7 @@ def test_freeze_of_something_other_than_a_pipeline_raises_type_error_naming_its_
 def test_the_pipeline_has_no_pipeline_method_and_no_public_tasks(tmp_path: Path) -> None:
     """A Pipeline has no pipeline() method, so a definition returns the Pipeline itself, and exposes no public tasks attribute; its steps are read only through freeze()."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
 
     assert not hasattr(Pipeline, "pipeline")
     assert not hasattr(p, "pipeline")
@@ -949,7 +953,7 @@ def test_a_step_added_after_run_is_in_the_next_run_and_not_the_finished_one(
     third = p.output_root / "run1" / "c.csv"
 
     finished = run(p)
-    p.python_step(_increment, inputs={"source": "b.parquet"}, produces="c.csv", name="c")
+    p.add_python_step(_increment, inputs={"source": "b.parquet"}, produces="c.csv", name="c")
 
     assert finished == {"a": TaskOutcome.SUCCESS, "b": TaskOutcome.SUCCESS}
     assert not third.exists()
@@ -960,7 +964,7 @@ def test_a_step_added_after_run_is_in_the_next_run_and_not_the_finished_one(
 def test_a_step_added_while_run_is_building_is_not_in_that_run(tmp_path: Path) -> None:
     """A python step whose function adds another step to the same module-level Pipeline while run(p) builds it does not change that run: its outcomes have only the steps p had when run(p) was called, the added step's product is not written, and the next run(p) runs the added step."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_add_a_step, inputs={}, produces="grow.parquet", name="grow")
+    p.add_python_step(_add_a_step, inputs={}, produces="grow.parquet", name="grow")
     added = p.output_root / "run1" / "added.parquet"
     _GROWING.append(p)
     try:
@@ -988,7 +992,7 @@ def test_preview_of_a_pipeline_plans_the_steps_added_so_far(tmp_path: Path) -> N
     ]
     p = Pipeline(tmp_path / "out", "run1", root_inputs=root_inputs)
     for target, arguments in steps:
-        p.python_step(target, **arguments)
+        p.add_python_step(target, **arguments)
     registry = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
     tasks = [
         python_step(target, **arguments, registry=registry) for target, arguments in steps
@@ -1007,11 +1011,13 @@ def test_preview_of_a_pipeline_plans_the_steps_added_so_far(tmp_path: Path) -> N
 def test_a_step_added_after_preview_is_in_the_next_preview_only(tmp_path: Path) -> None:
     """A plan returned by preview(p) before a step is added does not change when the step is added, and the next preview(p) has a StepPreview for the added step."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
     plan = preview(p)
     before = copy.deepcopy(plan)
 
-    p.python_step(_increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
+    p.add_python_step(
+        _increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b"
+    )
 
     assert plan == before
     assert [step.name for step in plan] == ["a"]
@@ -1058,12 +1064,14 @@ def test_run_and_preview_of_something_other_than_a_pipeline_raise_type_error_and
 def test_only_and_force_on_a_pipeline_name_the_steps_added_so_far(tmp_path: Path) -> None:
     """run(p, only=...) and run(p, force=...) accept the name of a step added to p before the call, and a step name added only after an earlier call is accepted by the next call; an unknown name raises PipelineError listing p's step names."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="a.parquet", name="a")
+    p.add_python_step(_constant, inputs={}, produces="a.parquet", name="a")
     assert run(p, only="a") == {"a": TaskOutcome.SUCCESS}
     with pytest.raises(PipelineError):
         run(p, force="b")
 
-    p.python_step(_increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
+    p.add_python_step(
+        _increment, inputs={"source": "a.parquet"}, produces="b.parquet", name="b"
+    )
 
     assert run(p, only="b")["b"] == TaskOutcome.SUCCESS
     assert run(p, force="b")["b"] == TaskOutcome.SUCCESS
@@ -1177,7 +1185,7 @@ def _command_task(name: str, out: Path, command: str | None = None) -> Task:
 def test_add_task_appends_the_tasks_in_order_and_they_run(tmp_path: Path) -> None:
     """A python step added with the method, then two tasks compiled with python_step against another registry and added with add_task, the second reading the first's product, freeze in that order and all run with SUCCESS."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="method.parquet", name="method")
+    p.add_python_step(_constant, inputs={}, produces="method.parquet", name="method")
     registry = FileRegistry(tmp_path / "out", "run1")
     first = python_step(_constant, inputs={}, produces="a.parquet", registry=registry)
     second = python_step(
@@ -1197,7 +1205,7 @@ def test_add_task_appends_the_tasks_in_order_and_they_run(tmp_path: Path) -> Non
 def test_add_task_refuses_a_name_a_step_method_added(tmp_path: Path) -> None:
     """After a python step named 'dup', add_task of a task named 'dup' with another output raises ValueError with the step methods' message, and the task is not added."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="first.parquet", name="dup")
+    p.add_python_step(_constant, inputs={}, produces="first.parquet", name="dup")
 
     with pytest.raises(ValueError) as info:
         p.add_task(_command_task("dup", tmp_path / "other.txt"))
@@ -1215,7 +1223,7 @@ def test_a_step_method_refuses_a_name_add_task_added(tmp_path: Path) -> None:
     p.add_task(_command_task("dup", tmp_path / "first.txt"))
 
     with pytest.raises(ValueError) as info:
-        p.python_step(_constant, inputs={}, produces="second.parquet", name="dup")
+        p.add_python_step(_constant, inputs={}, produces="second.parquet", name="dup")
 
     message = str(info.value)
     assert message.startswith("Step 'dup':"), message
@@ -1229,7 +1237,7 @@ def test_add_task_refuses_an_output_a_step_method_produces_naming_its_key(
 ) -> None:
     """After a python step 'first' produces 'shared.parquet', add_task of a task 'second' whose output is that file, compiled against another registry, raises WiringError starting "Step 'second':" that names the key 'shared.parquet' and the step 'first', and the task is not added."""
     p = Pipeline(tmp_path / "out", "run1")
-    p.python_step(_constant, inputs={}, produces="shared.parquet", name="first")
+    p.add_python_step(_constant, inputs={}, produces="shared.parquet", name="first")
     registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
         _constant, inputs={}, produces="shared.parquet", registry=registry, name="second"
@@ -1252,7 +1260,7 @@ def test_a_step_method_refuses_an_output_add_task_produces(tmp_path: Path) -> No
     p.add_task(_command_task("first", shared))
 
     with pytest.raises(WiringError) as info:
-        p.python_step(_constant, inputs={}, produces="shared.parquet", name="second")
+        p.add_python_step(_constant, inputs={}, produces="shared.parquet", name="second")
 
     message = str(info.value)
     assert message.startswith("Step 'second':"), message

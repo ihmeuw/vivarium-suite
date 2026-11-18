@@ -376,7 +376,7 @@ def test_payload_for_refuses_an_env_that_does_not_resolve(
     with pytest.raises(ValueError) as info:
         payload_for(task, pytask_kwargs(task))
 
-    assert "render_report" in str(info.value)
+    assert str(info.value).startswith("Step 'render_report': "), info.value
     assert env in str(info.value)
 
 
@@ -393,7 +393,7 @@ def test_payload_for_refuses_a_hand_built_callable_run(
         env=None,
     )
 
-    with pytest.raises(ValueError, match="hand_built_step"):
+    with pytest.raises(ValueError, match="^Step 'hand_built_step': "):
         payload_for(task, pytask_kwargs(task))
 
 
@@ -419,7 +419,7 @@ def test_payload_for_refuses_targets_that_cannot_be_imported_by_reference(
         payload_for(task, pytask_kwargs(task))
 
     message = str(info.value)
-    assert "bridged_step" in message
+    assert message.startswith("Step 'bridged_step': "), message
     assert re.search(reason, _without_identity(message, target)), message
 
 
@@ -434,7 +434,7 @@ def test_payload_for_refuses_an_argument_that_cannot_be_encoded(
     with pytest.raises(ValueError) as info:
         payload_for(task, pytask_kwargs(task))
 
-    assert "bridged_step" in str(info.value)
+    assert str(info.value).startswith("Step 'bridged_step': "), info.value
     assert "lookup_table" in str(info.value)
 
 

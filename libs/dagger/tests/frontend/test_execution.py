@@ -100,12 +100,14 @@ def _side_step(fixture: Fixture) -> Task:
 def _failing_pipeline(tmp_path: Path) -> Pipeline:
     """Return a raising step with two descendants and one independent step as a pipeline."""
     p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
-    p.python_step(_explode, inputs={}, produces="broken.parquet")
-    p.python_step(_increment, inputs={"source": "broken.parquet"}, produces="child.parquet")
-    p.python_step(
+    p.add_python_step(_explode, inputs={}, produces="broken.parquet")
+    p.add_python_step(
+        _increment, inputs={"source": "broken.parquet"}, produces="child.parquet"
+    )
+    p.add_python_step(
         _increment, inputs={"source": "child.parquet"}, produces="grandchild.parquet"
     )
-    p.python_step(_constant, inputs={}, produces="independent.parquet")
+    p.add_python_step(_constant, inputs={}, produces="independent.parquet")
     return p
 
 
@@ -542,11 +544,11 @@ def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> Non
     pipeline = Pipeline(
         tmp_path / "out", "run1", root_inputs=fixture.inputs, state=fixture.state
     )
-    pipeline.python_step(_increment, inputs={"source": "raw"}, produces="mid.parquet")
-    pipeline.python_step(
+    pipeline.add_python_step(_increment, inputs={"source": "raw"}, produces="mid.parquet")
+    pipeline.add_python_step(
         _increment, inputs={"source": "mid.parquet"}, produces="final.parquet"
     )
-    pipeline.command_step(
+    pipeline.add_command_step(
         "cp {src} {dst}",
         inputs={"src": "raw"},
         produces={"dst": "raw_copy.parquet"},
@@ -781,7 +783,7 @@ def _notebook_pipeline(
         tmp_path / "notebooks" / "summarize.ipynb", "summary_path = 'unset'", body
     )
     p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
-    p.notebook_step(
+    p.add_notebook_step(
         source,
         executed=_EXECUTED_KEY,
         env=env,
@@ -1173,12 +1175,33 @@ def test_a_step_that_calls_sys_exit_makes_run_raise_step_exited_naming_it(
 
 
 def test_step_exited_keeps_a_non_integer_exit_code(tmp_path: Path) -> None:
-    """A step that calls sys.exit('bye') makes run() raise StepExited whose code is 'bye'."""
+    """A step that calls sys.exit('bye') makes run() raise StepExited whose code and args hold 'bye' and whose message names the step and the code."""
     with pytest.raises(StepExited) as info:
         run(_exiting(tmp_path, _leave_with_a_message))
 
     assert info.value.step == "leave"
     assert info.value.code == "bye"
+    assert info.value.args == ("bye",)
+    assert str(info.value) == "Step 'leave' exited with code 'bye' before the build finished."
+
+
+@pytest.mark.parametrize(
+    "code, status, stderr", [(3, 3, ""), ("bye", 1, "bye\n")], ids=["int", "str"]
+)
+def test_an_uncaught_step_exited_ends_the_process_as_the_steps_own_exit_would(
+    code: int | str, status: int, stderr: str
+) -> None:
+    """A StepExited that no code catches ends the Python process with the status and standard error that a SystemExit with the same code gives, not its message that names the step."""
+    script = (
+        "from vivarium.dagger.frontend import StepExited\n"
+        f"raise StepExited('leave', {code!r})\n"
+    )
+
+    process = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, check=False
+    )
+
+    assert (process.returncode, process.stderr) == (status, stderr)
 
 
 def test_step_exited_is_caught_by_an_except_system_exit_clause(tmp_path: Path) -> None:

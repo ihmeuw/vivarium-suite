@@ -605,7 +605,7 @@ def _check_inputs(session: Session, stale: list[PTask]) -> list[PTask]:
             continue
         paths = "".join(f"\n    {path}" for path in missing)
         message = (
-            f"Task '{task.name}': these inputs do not exist, and no step that runs before "
+            f"Step {task.name!r}: these inputs do not exist, and no step that runs before "
             f"it writes them:{paths}"
         )
         _report_exception(session, task, NodeNotFoundError(message))
@@ -623,7 +623,7 @@ def _payloads(
     payloads: dict[str, Payload] = {}
     refusals: list[tuple[PTask, str]] = []
     for pytask_task in stale:
-        refused = f"Task '{pytask_task.name}': cannot run on a compute node"
+        refused = f"Step {pytask_task.name!r}: cannot run on a compute node"
         task = pytask_task.attributes.get(TASK_KEY)
         if not isinstance(task, Task):
             reason = (
@@ -830,12 +830,17 @@ def _new_run_directory(root: Path) -> Path:
 def _prepare_products(session: Session, stale: list[PTask]) -> None:
     """Create the stale tasks' product directories, as pytask's task setup does."""
     for task in stale:
-        for signature in session.dag.successors(task.signature):
-            node = session.dag.nodes[signature]
-            if isinstance(node, PPathNode):
-                node.path.parent.mkdir(parents=True, exist_ok=True)
-            if isinstance(node, DirectoryNode) and node.root_dir:
-                node.root_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            for signature in session.dag.successors(task.signature):
+                node = session.dag.nodes[signature]
+                if isinstance(node, PPathNode):
+                    node.path.parent.mkdir(parents=True, exist_ok=True)
+                if isinstance(node, DirectoryNode) and node.root_dir:
+                    node.root_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise _failure(
+                f"Step {task.name!r}: could not create a directory for its products: {error}"
+            ) from error
 
 
 def _stale_upstreams(session: Session, signature: str, stale: Set[str]) -> set[str]:

@@ -307,7 +307,7 @@ def _keyed_copy(tmp_path: Path, command: str) -> _PipelineSnapshot:
     p = Pipeline(
         tmp_path / "out", "run1", root_inputs={_SOURCE: source}, state=tmp_path / "state"
     )
-    p.command_step(
+    p.add_command_step(
         command,
         inputs={"source": _SOURCE},
         produces={"target": "copies/source.txt"},

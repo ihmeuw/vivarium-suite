@@ -101,11 +101,11 @@ def test_check_unique_task_names() -> None:
     "env", ["analysis_env", "/opt/envs/analysis", ""], ids=["name", "path", "empty"]
 )
 def test_task_rejects_a_callable_run_with_an_env(env: str) -> None:
-    """A Task with a callable run and any non-None env raises ValueError naming the task and the env."""
+    """A Task with a callable run and any non-None env raises ValueError that starts with "Step '<name>': " and names the env."""
     with pytest.raises(ValueError) as info:
         Task(**_task_kwargs(run=lambda **kwargs: None, env=env))
 
-    assert "clean_data" in str(info.value)
+    assert str(info.value).startswith("Step 'clean_data': "), info.value
     assert f"env {env!r}" in str(info.value)
 
 

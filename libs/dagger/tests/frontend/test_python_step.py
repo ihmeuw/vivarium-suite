@@ -314,10 +314,10 @@ def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
 
 
 def test_product_parameter_name_collision_is_rejected(tmp_path: Path) -> None:
-    """An input whose parameter name is the reserved product name is rejected."""
+    """An input whose parameter name is the reserved product name is rejected with a message that starts with the step's name."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    with pytest.raises(ValueError, match=r"(?s)Task 'out\.parquet'.*collides"):
+    with pytest.raises(ValueError, match=r"(?s)^Step 'out\.parquet': .*collides"):
         python_step(
             _constant,
             inputs={"product": "src"},
@@ -486,7 +486,7 @@ def test_unsupported_suffix_error_names_the_step_and_produces_key(tmp_path: Path
             python_step(_constant, inputs={}, produces="out.txt", registry=reg, name=name)
 
         assert "out.txt" in str(info.value)
-        assert f"Task '{step}'" in str(info.value)
+        assert str(info.value).startswith(f"Step {step!r}: "), info.value
 
 
 def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Path) -> None:

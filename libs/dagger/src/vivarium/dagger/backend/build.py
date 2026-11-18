@@ -186,11 +186,12 @@ def _check_envs(tasks: Iterable[Task]) -> None:
         try:
             resolve_env_prefix(env)
         except RuntimeError as error:
-            tasks_named = ", ".join(f"Task '{name}'" for name in names)
-            failures.append(f"{tasks_named}: {error}")
+            quoted = ", ".join(repr(name) for name in names)
+            steps = f"Step {quoted}" if len(names) == 1 else f"Steps {quoted}"
+            failures.append(f"{steps}: {error}")
     if failures:
         raise ValueError(
-            "Declared envs do not resolve, so no task was run:\n" + "\n".join(failures)
+            "Declared envs do not resolve, so no step was run:\n" + "\n".join(failures)
         )
 
 
@@ -218,17 +219,18 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
     ValueError
         If an input or output is named ``CODE_ID_KEY`` or ``COMMAND_KEY``, an output is
         named ``"return"``, an input and an output share a name, or a callable ``run``
-        has an output name that is not a valid parameter name.
+        has an output name that is not a valid parameter name. The message starts with
+        ``Step '<name>':``.
     """
     for side, names in (("input", task.inputs), ("output", task.outputs)):
         for key in (CODE_ID_KEY, COMMAND_KEY):
             if key in names:
-                raise ValueError(f"Task '{task.name}': {side} name {key!r} is reserved.")
+                raise ValueError(f"Step {task.name!r}: {side} name {key!r} is reserved.")
     if "return" in task.outputs:
-        raise ValueError(f"Task '{task.name}': output name 'return' is reserved by pytask.")
+        raise ValueError(f"Step {task.name!r}: output name 'return' is reserved by pytask.")
     shared = sorted(set(task.inputs) & set(task.outputs))
     if shared:
-        raise ValueError(f"Task '{task.name}': names {shared} are both inputs and outputs.")
+        raise ValueError(f"Step {task.name!r}: names {shared} are both inputs and outputs.")
 
     def _run(**kwargs: Any) -> None:
         """Run ``task`` with its loaded inputs and outputs; raise TaskExited on SystemExit."""
@@ -246,7 +248,7 @@ def to_pytask_task(task: Task) -> pytask.TaskWithoutPath:
         for key in task.outputs:
             if not key.isidentifier() or keyword.iskeyword(key):
                 raise ValueError(
-                    f"Task '{task.name}': output name {key!r} is not a valid parameter name."
+                    f"Step {task.name!r}: output name {key!r} is not a valid parameter name."
                 )
         parameters = [
             inspect.Parameter(key, inspect.Parameter.KEYWORD_ONLY) for key in task.outputs
@@ -313,9 +315,10 @@ def build(
         resolve, ``selected`` names a task that is not in ``tasks``, or ``jobmon`` is
         set but the bridge's pytask plugin is not registered (see
         :func:`check_bridge_registered`). Envs are checked before any task runs. The
-        error has one line per env that does not resolve, naming that env once, the
-        tasks that declare it, and why. Nothing is written under ``root`` for any of
-        these.
+        error has one line per env that does not resolve, which starts with
+        ``Step '<name>':``, or ``Steps '<name>', '<name>':`` when several tasks declare
+        the env, and then names the env once and says why. Nothing is written under
+        ``root`` for any of these.
     TaskExited
         If a task raises ``SystemExit``, which stops the build.
     """
