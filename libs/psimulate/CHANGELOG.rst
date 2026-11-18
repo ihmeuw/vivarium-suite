@@ -1,3 +1,9 @@
+**1.1.2 - 11/19/26**
+
+- Raise ``BackupLoadError`` when a backup exists but cannot be loaded, instead of
+  restarting the simulation from the beginning
+- Require ``vivarium-engine`` 6.1.1 or later, which fixes loading backups
+
 **1.1.1 - 11/18/26**
 
 - Read the installed packages with ``importlib.metadata`` in ``pip_env.validate``, so

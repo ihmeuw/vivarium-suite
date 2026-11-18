@@ -26,6 +26,10 @@ from vivarium.psimulate.vipin.perf_counters import CounterSnapshot
 from vivarium.psimulate.worker import PERF_LOG_MARKER
 
 
+class BackupLoadError(RuntimeError):
+    """Raised when a simulation backup exists but cannot be loaded."""
+
+
 class ParallelSimulation(Simulation):
     """A parallel simulation context.
 
@@ -104,8 +108,15 @@ def get_backup(
                 )
                 for stale_file in set(existing_pickles) - {last_pickle}:
                     os.remove(stale_file)
-            with open(last_pickle, "rb") as backup_file:
-                sim = cast(ParallelSimulation, dill.load(backup_file))
+            try:
+                with open(last_pickle, "rb") as backup_file:
+                    sim = cast(ParallelSimulation, dill.load(backup_file))
+            except Exception as e:
+                raise BackupLoadError(
+                    f"Backup {last_pickle} exists but cannot be loaded: {e!r}. "
+                    "Fix the cause, or delete the backup to restart the simulation "
+                    "from the beginning."
+                ) from e
             if job_parameters.backup_configuration["backup_freq"] is not None:
                 logger.info(
                     f"Renaming backup file {last_pickle} to {job_parameters.task_id}.pkl"
@@ -118,6 +129,9 @@ def get_backup(
             return sim
         return None
 
+    except BackupLoadError:
+        # A silent restart repeats all the work and hides the cause.
+        raise
     except (OSError, FileNotFoundError):
         logger.info(
             "Missing backup or backup directory. Restarting simulation from beginning."
