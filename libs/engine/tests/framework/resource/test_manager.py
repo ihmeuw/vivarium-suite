@@ -232,6 +232,28 @@ def test_resource_manager_sorted_nodes_acyclic(
     assert nodes.index(stream_b) < nodes.index(init_nothing)
 
 
+def test_resource_manager_getstate_drops_cached_graph(
+    manager_with_resources: ResourceManager,
+) -> None:
+    sorted_nodes = manager_with_resources.sorted_nodes
+    assert manager_with_resources.get_graph().number_of_nodes() > 0
+
+    state = manager_with_resources.__getstate__()
+
+    assert state["_graph"].number_of_nodes() == 0
+    assert state["_sorted_nodes"] == []
+    assert state["_required_resources_dirty"]
+    assert state["_resources"] is manager_with_resources._resources
+    # The live manager keeps its cache.
+    assert manager_with_resources.sorted_nodes is sorted_nodes
+
+    restored = ResourceManager.__new__(ResourceManager)
+    restored.__dict__.update(state)
+    assert [node.resource_id for node in restored.sorted_nodes] == [
+        node.resource_id for node in sorted_nodes
+    ]
+
+
 def test_get_population_initializers(
     manager_with_resources: ResourceManager, resource_producers: dict[int, ResourceProducer]
 ) -> None:

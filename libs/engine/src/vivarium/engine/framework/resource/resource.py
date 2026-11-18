@@ -23,6 +23,10 @@ class ResourceId(str):
         instance.name = name
         return instance
 
+    def __getnewargs__(self) -> tuple[str, str]:  # type: ignore[override]
+        # The str default returns only the joined value, which __new__ cannot accept.
+        return self.resource_type, self.name
+
     def __repr__(self) -> str:
         return f"ResourceId({self.resource_type!r}, {self.name!r})"
 

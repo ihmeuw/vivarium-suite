@@ -1,3 +1,8 @@
+**6.1.1 - 11/18/26**
+
+- Fix loading simulation backups. ``ResourceId`` failed to unpickle, and the
+  ``ResourceManager`` resource graph failed to unpickle
+
 **6.1.0 - 11/17/26**
 
 - Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
