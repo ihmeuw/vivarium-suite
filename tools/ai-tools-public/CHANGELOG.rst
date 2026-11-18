@@ -6,6 +6,9 @@
 - Let ``_finalize-core`` take a base branch from its caller and use it for the
   merge-base, the test summary, and the PR's base.
   ``/simsci:framework-development`` passes the base from Phase 0
+- Let ``/simsci:pr-prep`` take a base branch: the branch the user names, or
+  else the base of the branch's open PR, or else the default branch. It reviews
+  the diff against that base and passes the base to ``_finalize-core``
 
 **0.5.0 - 10/28/26**
 
