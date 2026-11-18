@@ -1,4 +1,4 @@
-"""Copy MNCNH's hemorrhage split notebook with a ``parameters`` cell that notebook_step can fill.
+"""Copy MNCNH's hemorrhage split notebook with a ``parameters`` cell that a notebook step fills.
 
 Usage: python make_demo_notebook.py <mncnh checkout> <destination .ipynb>
 
@@ -6,7 +6,7 @@ The model's notebook finds its artifacts through the model spec's ``artifact_pat
 a ``parameters`` cell, papermill injects the parameter at the top and cell 4 then overwrites
 it, so the notebook silently reads the model's own artifacts (the MIC-7755 case). This copy
 adds the cell and makes cell 4 use the injected path when one is given. That is the change
-a modeler makes to adopt notebook_step.
+a modeler makes to adopt a notebook step.
 """
 
 import json

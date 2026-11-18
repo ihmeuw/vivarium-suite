@@ -426,7 +426,7 @@ assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 # %% [markdown]
 # ## C17 — A command step runs a shell command with its paths filled in (local)
 #
-# The archive step is `command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
+# The archive step is `p.add_command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
 # the absolute path of the input or product of that name, quoted for the shell, and the
 # product's folder is made before the command runs. The cell checks that the copy matches
 # the report. C1-real's artifact step is a command step that runs a script in the model's
@@ -533,7 +533,7 @@ show_error(
     edits=[
         (
             '        name="summary",\n    )\n',
-            '        name="summary",\n    )\n    p.python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
+            '        name="summary",\n    )\n    p.add_python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
         )
     ],
     exit_code=2,
@@ -767,8 +767,8 @@ assert docs.returncode == 0
 # `c_walkthrough_defs/build_mncnh_envs.sh` builds both on a compute node. Set
 # `C_WALKTHROUGH_MNCNH` to the checkout and `DAGGER_SLICE_ROOT` to a new directory, and
 # run on a compute node. The model's notebook has no `parameters` cell, and
-# `notebook_step` refuses such a notebook when the step passes it names (C18), so the demo
-# copy adds one; that change is what a modeler makes to adopt `notebook_step`.
+# `add_notebook_step` refuses such a notebook when the step passes it names (C18), so the demo
+# copy adds one; that change is what a modeler makes to adopt a notebook step.
 # The section ends with two mistakes on the real slice, each made in a copy of the
 # definition: a misspelled input file name, and location inputs whose IFA file renamed
 # `year_id` (1007 columns, as the real extract has).

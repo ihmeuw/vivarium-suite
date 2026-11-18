@@ -2,7 +2,7 @@
 
 Run ``dagger`` from an MNCNH checkout so ``env="vivarium_gates_mncnh_artifact"`` resolves to
 that checkout's ``.venv/vivarium_gates_mncnh_artifact``. The pipeline's own env must import
-``vivarium_gates_mncnh``, because a ``python_step`` runs with that env's Python: in the
+``vivarium_gates_mncnh``, because a Python step runs with that env's Python: in the
 ``dagger`` process with ``--local``, and on a compute node through Jobmon. The artifact step
 and the notebook step run in the artifact env, as ``make_artifacts`` does. Set
 ``DAGGER_SLICE_ROOT`` to the folder that holds the slice's location inputs and outputs; the
@@ -56,20 +56,20 @@ def pipeline() -> Pipeline:
         },
         resources=SLICE_RESOURCES,
     )
-    p.python_step(
+    p.add_python_step(
         postpartum_fraction,
         inputs={},
         produces="postpartum_fraction.parquet",
         name="postpartum_fraction",
     )
-    p.python_step(demography, inputs={}, produces="demography.parquet", name="demography")
-    p.python_step(
+    p.add_python_step(demography, inputs={}, produces="demography.parquet", name="demography")
+    p.add_python_step(
         ifa_coverage,
         inputs={"extract": location_key(LOCATION, "ifa_coverage.csv")},
         produces="ifa_coverage.parquet",
         name="ifa_coverage",
     )
-    p.command_step(
+    p.add_command_step(
         "python {script} {postpartum_fraction} {demography} {ifa_coverage} {artifact}",
         inputs={
             "script": "write_artifact.py",
@@ -81,7 +81,7 @@ def pipeline() -> Pipeline:
         env=ARTIFACT_ENV,
         name="artifact",
     )
-    p.notebook_step(
+    p.add_notebook_step(
         SLICE_ROOT / "notebooks" / "hemorrhage_split_proportions.ipynb",
         executed="notebooks/hemorrhage_split_proportions_executed.ipynb",
         env=ARTIFACT_ENV,

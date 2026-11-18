@@ -27,14 +27,14 @@ def pipeline() -> Pipeline:
         run_name="toy",
         root_inputs={"make_toy_artifact.py": HERE / "make_toy_artifact.py"},
     )
-    p.command_step(
+    p.add_command_step(
         "python {script} {artifact}",
         inputs={"script": "make_toy_artifact.py"},
         produces={"artifact": "artifacts/toy.hdf"},
         env=ENV,
         name="artifact",
     )
-    p.simulation_step(
+    p.add_simulation_step(
         spec=HERE / "toy_model.yaml",
         branches=HERE / "branches.yaml",
         artifact="artifacts/toy.hdf",
@@ -47,7 +47,7 @@ def pipeline() -> Pipeline:
             "no_slack": True,
         },
     )
-    p.python_step(
+    p.add_python_step(
         summarize_deaths,
         inputs={"simulation": "sims/toy"},
         produces="summary.csv",

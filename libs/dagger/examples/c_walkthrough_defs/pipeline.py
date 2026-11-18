@@ -41,29 +41,29 @@ def pipeline() -> Pipeline:
         run_name="walk",
         root_inputs=location_inputs(HERE / "inputs", LOCATIONS, PRIMARY_DATA),
     )
-    p.python_step(
+    p.add_python_step(
         make_population, inputs={}, produces="population.parquet", name="population"
     )
-    p.python_step(
+    p.add_python_step(
         select_adults,
         inputs={"population": "population.parquet"},
         produces="adults.parquet",
         name="adults",
     )
-    p.python_step(
+    p.add_python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
         produces="summary.csv",
         name="summary",
     )
     for location in LOCATIONS:
-        p.python_step(
+        p.add_python_step(
             mean_coverage,
             inputs={"coverage": location_key(location, "coverage.csv")},
             produces=f"{location}/mean_coverage.parquet",
             name=f"coverage_{location}",
         )
-    p.notebook_step(
+    p.add_notebook_step(
         HERE / "report.ipynb",
         executed="report_executed.ipynb",
         env=sys.prefix,
@@ -72,7 +72,7 @@ def pipeline() -> Pipeline:
         parameters={"title": "Adults"},
         name="report",
     )
-    p.command_step(
+    p.add_command_step(
         "cp {report} {copy}",
         inputs={"report": "report.csv"},
         produces={"copy": "archive/report.csv"},
