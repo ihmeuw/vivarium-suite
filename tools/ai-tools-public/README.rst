@@ -59,7 +59,9 @@ In more detail:
 - ``/simsci:pr-prep <description>`` — takes a change you have already written on
   the current branch through to a PR ready for review, opening a new PR or
   updating the branch's existing one; the argument is optional context, not a PR
-  reference. It opens with a parallel multi-agent review that fans out to
+  reference. The argument can also name the base branch, such as a beta or epic
+  branch. Otherwise the base is the base of the branch's open PR, or the default
+  branch. It opens with a parallel multi-agent review that fans out to
   specialist sub-agents focused on:
 
   - Maintainability
@@ -126,7 +128,11 @@ In more detail:
 
 - ``/simsci:framework-development <ticket or feature description>`` — an
   end-to-end design → implement → verify → PR loop on a single well-scoped
-  feature. The main session owns the design and the interface stubs, then runs
+  feature. The argument can also name the base branch, such as a beta or epic
+  branch, or an existing branch to continue. Otherwise the work branch starts
+  from the fetched default branch. If you are on another branch, the skill
+  asks which base to use. The main session owns the design and the
+  interface stubs, then runs
   a **black-box TDD** build. The design includes a short
   testing strategy: the feature requirements, and the use cases and edge
   cases that test them. It owns the contract: it writes **source stubs** (the API) plus

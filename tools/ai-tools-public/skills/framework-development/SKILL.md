@@ -1,7 +1,7 @@
 ---
 name: framework-development
 description: "Guided design→implement→verify→PR loop for a well-scoped feature."
-argument-hint: "A ticket key, design doc link, or feature description."
+argument-hint: "A ticket key, design doc link, or feature description. Optional: the base branch if it is not the default branch, or an existing branch to continue."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_test_writer, simsci:_feature_implementer, simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
 
