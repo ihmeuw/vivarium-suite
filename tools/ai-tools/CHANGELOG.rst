@@ -1,3 +1,10 @@
+**0.33.0 - 11/18/26**
+
+- ``environments``: add a first section for repos with a committed ``uv.lock``, which use
+  the checkout's ``.venv`` through ``make build-env`` or ``uv sync --locked``
+- ``make-commands``, ``framework-clis`` and ``model-development``: describe how uv repos
+  build and activate their environment
+
 **0.32.0 - 11/10/26**
 
 - ``team-conventions``: apply the hub page's rules for the epic or fix version, labels,
