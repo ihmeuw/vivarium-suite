@@ -15,10 +15,10 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: 3.12
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
       - name: Update README
-        run: |
-          pip install packaging
-          python update_readme.py
+        run: uv run --no-project --with packaging python update_readme.py
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"

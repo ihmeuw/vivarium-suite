@@ -29,9 +29,10 @@ def resolve_env_prefix(env: str) -> str:
     """Resolve an environment name or path to its absolute filesystem prefix.
 
     ``env`` may name a conda env or a venv, or be a path to either's prefix directory
-    (anything containing a path separator or starting with ``~`` is a path). A name is
-    matched first to a venv at ``.venv/<env>`` under the current working directory, then
-    to a conda env through ``conda env list --json``, using ``CONDA_EXE``; without
+    (anything containing a path separator or starting with ``~`` is a path). The name
+    ``.venv`` means the project venv in the current working directory, such as the one
+    ``uv sync`` builds. Any other name is matched first to a venv at ``.venv/<env>`` under
+    the current working directory, then to a conda env through ``conda env list --json``, using ``CONDA_EXE``; without
     ``CONDA_EXE`` the conda lookup is skipped. A conda env matches when the last component
     of its prefix equals the name, so the base env, whose prefix is the conda install
     directory, is selected by its path rather than by ``base``. When a name matches both a
@@ -123,6 +124,9 @@ def resolve_env_bin_path(env_prefix: str) -> str:
 def _find_env_candidates(env: str) -> list[tuple[str, str]]:
     """Gather resolved prefixes matching *env* by name, as (source, prefix) pairs in precedence order."""
     candidates: list[tuple[str, str]] = []
+    project_venv = Path.cwd() / VENV_DIR_NAME
+    if env == VENV_DIR_NAME and _is_env_prefix(project_venv):
+        candidates.append(("project venv", str(project_venv.resolve())))
     local_venv = Path.cwd() / VENV_DIR_NAME / env
     if _is_env_prefix(local_venv):
         candidates.append(("local venv", str(local_venv.resolve())))
