@@ -306,7 +306,7 @@ def test_a_step_that_writes_no_output_is_a_failure(tmp_path: Path) -> None:
 
     def boom() -> pd.DataFrame:
         """Raise before returning, so no output is written."""
-        raise RuntimeError("no product written")
+        raise RuntimeError("no output written")
 
     task = python_step(boom, inputs={}, outputs="out.parquet", registry=reg, resources={})
 
