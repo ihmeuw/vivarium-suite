@@ -14,7 +14,7 @@ a command that runs a pipeline described in a YAML file as one Jobmon workflow
 on a Slurm cluster.
 
 It also builds a data pipeline from tasks that each declare their inputs and
-outputs. It wires producers to consumers by artifact key and uses ``pytask`` to
+outputs. It wires producers to consumers by file key and uses ``pytask`` to
 decide which tasks are stale and to run them. This part has four pieces: the
 backend (the task model, the build, and the run preview), the frontend (a
 ``Pipeline`` that a pipeline definition makes and returns after it adds Python,
