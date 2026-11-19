@@ -241,8 +241,9 @@ triage.
    set; the hold-out paths from step 1 stay uncommitted; and the partition rule
    from step 2 governs. Pass the **base branch** from Setup for the first PR.
    For each later PR in a stack, pass the branch of the PR before it. Carry any
-   "unverified" status through as the verification verdict. For the test summary, pass the plan's per-layer change list and
-   quantitative expectations as the **strategy items**, and the verification
+   "unverified" status through as the verification verdict. For the test
+   summary, pass the plan's per-layer change list and quantitative
+   expectations as the **strategy items**, and the verification
    checks and local `simulate` run as the **outside-suite checks**, each with its
    result or "unverified" status.
 4. **Post the verification traces to each PR.** Once the PR exists, attach the key

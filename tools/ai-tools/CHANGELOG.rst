@@ -1,4 +1,4 @@
-**0.32.1 - 11/18/26**
+**0.32.1 - 11/19/26**
 
 - ``model-development``: fetch from the remote in Setup, base the feature branch
   on the fetched base branch, and pass the base to ``_finalize-core``
