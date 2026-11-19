@@ -31,6 +31,6 @@ def pipeline(
         p.add_python_step(
             mean_coverage,
             inputs={"coverage": location_key(location, "coverage.csv")},
-            produces=f"{location}/mean_coverage.parquet",
+            outputs=f"{location}/mean_coverage.parquet",
         )
     return p

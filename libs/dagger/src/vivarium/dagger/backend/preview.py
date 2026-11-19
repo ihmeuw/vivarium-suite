@@ -91,7 +91,7 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
 
     Runs pytask with execution off (``dry_run=True, explain=True``) and reads one
     entry per step off the session's execution reports. A preview reads
-    ``pytask.lock`` and the ``.pytask`` store but writes no declared product.
+    ``pytask.lock`` and the ``.pytask`` store but writes no declared output.
 
     Parameters
     ----------

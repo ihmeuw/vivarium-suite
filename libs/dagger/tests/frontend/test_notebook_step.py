@@ -129,7 +129,7 @@ _PARAMETERS: dict[str, NotebookParameter] = {
 }
 
 # The shared notebook records the type and repr of every parameter, its working directory
-# and its sys.prefix, then writes the raw table doubled into its table product.
+# and its sys.prefix, then writes the raw table doubled into its table output.
 _RECORDING_BODY = """
 import json
 import os
@@ -199,7 +199,7 @@ _INVALID_NAMES = [
 
 _DECLARED_VALUES: dict[str, Any] = {
     "inputs": "raw",
-    "produces": "tables/declared.csv",
+    "outputs": "tables/declared.csv",
     "parameters": 1,
 }
 """A value to declare a name with in each of notebook_step's three name mappings."""
@@ -228,9 +228,9 @@ _BASE_PARAMETERS = "raw_path = None\ntable_path = None\nlocation = None"
 
 @dataclass
 class _Collision:
-    """A produces mapping that gives two of the notebook, executed and products one path."""
+    """An outputs mapping that gives two of the notebook, executed and outputs one path."""
 
-    produces: dict[str, str]
+    outputs: dict[str, str]
     names: tuple[tuple[str, ...], tuple[str, ...]]
     """For each of the two colliding items, the strings any one of which names it."""
 
@@ -238,20 +238,20 @@ class _Collision:
 # A key spelled with '.' is not a substring of the path it resolves to, so a message that
 # names only that path does not count as naming the key.
 _COLLISIONS: dict[str, _Collision] = {
-    "product_is_executed": _Collision(
-        produces={"table_path": "tables/out.csv", "report_path": _EXECUTED_KEY},
+    "output_is_executed": _Collision(
+        outputs={"table_path": "tables/out.csv", "report_path": _EXECUTED_KEY},
         names=(("report_path", _EXECUTED_KEY), (_EXECUTED_KEY,)),
     ),
-    "products_share_a_key": _Collision(
-        produces={
+    "outputs_share_a_key": _Collision(
+        outputs={
             "table_path": "tables/out.csv",
             "first_path": "tables/same.csv",
             "second_path": "tables/same.csv",
         },
         names=(("first_path",), ("second_path",)),
     ),
-    "products_share_a_path": _Collision(
-        produces={
+    "outputs_share_a_path": _Collision(
+        outputs={
             "table_path": "tables/out.csv",
             "first_path": "./tables/a.csv",
             "second_path": "tables/./a.csv",
@@ -259,12 +259,12 @@ _COLLISIONS: dict[str, _Collision] = {
         names=(("first_path", "./tables/a.csv"), ("second_path", "tables/./a.csv")),
     ),
     # The source is written at path_for(_SOURCE_KEY), so its path contains _SOURCE_KEY.
-    "product_is_source": _Collision(
-        produces={"table_path": "tables/out.csv", "notebook_path": _SOURCE_ALIAS_KEY},
+    "output_is_source": _Collision(
+        outputs={"table_path": "tables/out.csv", "notebook_path": _SOURCE_ALIAS_KEY},
         names=(("notebook_path", _SOURCE_ALIAS_KEY), (_SOURCE_KEY, _SOURCE_ALIAS_KEY)),
     ),
 }
-"""Products that collide when the source is at path_for(_SOURCE_KEY), keyed by case."""
+"""Outputs that collide when the source is at path_for(_SOURCE_KEY), keyed by case."""
 
 _REJECTED: dict[str, dict[str, Any]] = {
     "empty_name": {"name": ""},
@@ -278,7 +278,7 @@ _REJECTED: dict[str, dict[str, Any]] = {
     "executed_not_ipynb": {"executed": "executed/report.html"},
     "executed_is_source": {"executed": _SOURCE_KEY},
     "unassigned_parameter": {"parameters": {"loaction": "179"}},
-    **{case: {"produces": collision.produces} for case, collision in _COLLISIONS.items()},
+    **{case: {"outputs": collision.outputs} for case, collision in _COLLISIONS.items()},
 }
 """Overrides of a valid notebook_step call that each make it raise ValueError."""
 
@@ -486,7 +486,7 @@ def _recording_step(tmp_path: Path, registry: FileRegistry, log: Path) -> Task:
         executed=_NESTED_EXECUTED_KEY,
         registry=registry,
         env=str(_recording_env(tmp_path / "stub_env", log)),
-        produces={"record_path": _RECORD_KEY, "table_path": _TABLE_KEY},
+        outputs={"record_path": _RECORD_KEY, "table_path": _TABLE_KEY},
     )
 
 
@@ -514,7 +514,7 @@ class _SharedRun:
     bare_source: Path
     """The bare step's source notebook, in a directory named with '{location}'."""
     record_dir_existed: bool
-    """Whether the record product's parent directory existed just before the build."""
+    """Whether the record output's parent directory existed just before the build."""
     tmpdir: Path
     """The directory TMPDIR named during the build."""
     decoy: Path
@@ -523,7 +523,7 @@ class _SharedRun:
 
 @pytest.fixture(scope="module")
 def shared_run(tmp_path_factory: pytest.TempPathFactory) -> _SharedRun:
-    """Build two notebook steps and a python_step reading a product once, against decoys."""
+    """Build two notebook steps and a python_step reading an output once, against decoys."""
     base = tmp_path_factory.mktemp("notebook_run")
     # Cache this process's temp dir now, so TMPDIR below reaches only the build's
     # subprocesses.
@@ -543,14 +543,14 @@ def shared_run(tmp_path_factory: pytest.TempPathFactory) -> _SharedRun:
         registry=registry,
         env=sys.prefix,
         inputs={"raw_path": "raw"},
-        produces={"record_path": _RECORD_KEY, "table_path": _TABLE_KEY},
+        outputs={"record_path": _RECORD_KEY, "table_path": _TABLE_KEY},
         parameters=_PARAMETERS,
         name=_NOTEBOOK_STEP,
     )
     downstream = python_step(
         _offset_table,
         inputs={"table": _TABLE_KEY},
-        produces=_FINAL_KEY,
+        outputs=_FINAL_KEY,
         registry=registry,
         name=_DOWNSTREAM_STEP,
     )
@@ -562,7 +562,7 @@ def shared_run(tmp_path_factory: pytest.TempPathFactory) -> _SharedRun:
         executed=_BARE_EXECUTED_KEY,
         registry=registry,
         env=sys.prefix,
-        produces={"received_path": _BARE_RECORD_KEY},
+        outputs={"received_path": _BARE_RECORD_KEY},
         parameters=_BARE_PARAMETERS,
         name=_BARE_STEP,
     )
@@ -630,7 +630,7 @@ class _Converged:
             executed="executed/stale.ipynb",
             registry=FileRegistry(self.output_root, "run1"),
             env=sys.prefix,
-            produces={"table_path": "tables/stale.csv"},
+            outputs={"table_path": "tables/stale.csv"},
             parameters={"location": location, "draws": 3},
             name=_STALE_STEP,
         )
@@ -714,29 +714,29 @@ def test_inputs_are_the_source_notebook_and_the_resolved_input_nodes(tmp_path: P
     assert _path_of(task.inputs["raw_path"]) == _path_of(registry.resolve_input("raw"))
 
 
-def test_outputs_are_the_executed_notebook_and_the_product_nodes(tmp_path: Path) -> None:
-    """Task.outputs holds the registry's node for the executed key under '__executed__' and the registry's node for each produces key under its parameter name."""
+def test_outputs_are_the_executed_notebook_and_the_output_nodes(tmp_path: Path) -> None:
+    """Task.outputs holds the registry's node for the executed key under '__executed__' and the registry's node for each outputs key under its parameter name."""
     registry, source = _registry(tmp_path), _source(tmp_path)
-    produces = {"table_path": "tables/values.csv", "figure_path": "figures/plot.png"}
+    outputs = {"table_path": "tables/values.csv", "figure_path": "figures/plot.png"}
 
     task = notebook_step(
         source,
         executed=_EXECUTED_KEY,
         registry=registry,
         env=_ENV,
-        produces=produces,
+        outputs=outputs,
     )
 
-    assert set(task.outputs) == {"__executed__", *produces}
+    assert set(task.outputs) == {"__executed__", *outputs}
     executed = task.outputs["__executed__"]
     assert executed is registry.resolve_input(_EXECUTED_KEY)
     assert _path_of(executed) == registry.path_for(_EXECUTED_KEY)
-    for name, key in produces.items():
+    for name, key in outputs.items():
         assert task.outputs[name] is registry.resolve_input(key)
 
 
-def test_inputs_produces_and_parameters_are_optional(tmp_path: Path) -> None:
-    """A notebook step with no inputs, products or parameters compiles, with only the source notebook as input and the executed notebook as output."""
+def test_inputs_outputs_and_parameters_are_optional(tmp_path: Path) -> None:
+    """A notebook step with no inputs, outputs or parameters compiles, with only the source notebook as input and the executed notebook as output."""
     registry, source = _registry(tmp_path), _source(tmp_path)
 
     task = notebook_step(source, executed=_EXECUTED_KEY, registry=registry, env=_ENV)
@@ -748,10 +748,10 @@ def test_inputs_produces_and_parameters_are_optional(tmp_path: Path) -> None:
 
 
 def test_command_is_identical_for_equal_arguments_in_any_order(tmp_path: Path) -> None:
-    """Two calls whose inputs, produces and parameters hold the same entries in different insertion orders give identical run commands."""
+    """Two calls whose inputs, outputs and parameters hold the same entries in different insertion orders give identical run commands."""
     source = _source(tmp_path)
     inputs = {"raw_path": "raw", "lookup_path": "lookup"}
-    produces = {"table_path": "tables/values.csv", "figure_path": "figures/plot.png"}
+    outputs = {"table_path": "tables/values.csv", "figure_path": "figures/plot.png"}
     parameters: dict[str, NotebookParameter] = {
         "location": "179",
         "draws": 10,
@@ -766,7 +766,7 @@ def test_command_is_identical_for_equal_arguments_in_any_order(tmp_path: Path) -
         registry=_registry(tmp_path),
         env=_ENV,
         inputs=inputs,
-        produces=produces,
+        outputs=outputs,
         parameters=parameters,
     )
     backward = notebook_step(
@@ -775,7 +775,7 @@ def test_command_is_identical_for_equal_arguments_in_any_order(tmp_path: Path) -
         registry=_registry(tmp_path),
         env=_ENV,
         inputs=_reversed(inputs),
-        produces=_reversed(produces),
+        outputs=_reversed(outputs),
         parameters=_reversed(parameters),
     )
 
@@ -801,7 +801,7 @@ def test_command_names_no_installation_path(tmp_path: Path) -> None:
         registry=_registry(tmp_path),
         env=sys.prefix,
         inputs={"raw_path": "raw"},
-        produces={"table_path": "tables/values.csv"},
+        outputs={"table_path": "tables/values.csv"},
         parameters={"location": "179"},
     )
     package = Path(vivarium.dagger.__file__).parent
@@ -813,7 +813,7 @@ def test_command_names_no_installation_path(tmp_path: Path) -> None:
 
 
 def test_command_creates_parent_directories_itself(tmp_path: Path) -> None:
-    """Run with run_command under a stub env whose bin/python only records its arguments, outside pytask, the command creates the parent directories of the executed notebook and of every product."""
+    """Run with run_command under a stub env whose bin/python only records its arguments, outside pytask, the command creates the parent directories of the executed notebook and of every output."""
     registry = _registry(tmp_path)
     task = _recording_step(tmp_path, registry, tmp_path / "python_calls.log")
     keys = [_NESTED_EXECUTED_KEY, _RECORD_KEY, _TABLE_KEY]
@@ -853,10 +853,10 @@ def test_executed_notebook_lands_at_its_registry_path_and_the_source_is_unchange
     assert shared_run.source.read_bytes() == shared_run.source_bytes
 
 
-def test_product_is_written_into_a_directory_the_step_created(
+def test_output_is_written_into_a_directory_the_step_created(
     shared_run: _SharedRun,
 ) -> None:
-    """A product whose parent directory did not exist before the build is written by the notebook at its registry path."""
+    """An output whose parent directory did not exist before the build is written by the notebook at its registry path."""
     assert not shared_run.record_dir_existed
 
     record = _recorded(shared_run)
@@ -865,8 +865,8 @@ def test_product_is_written_into_a_directory_the_step_created(
     assert "values" in record  # the file is the notebook's own record
 
 
-def test_input_and_product_paths_reach_the_notebook_as_str(shared_run: _SharedRun) -> None:
-    """Each input and product parameter arrives in the notebook as a str equal to its resolved path, including a path that contains a space."""
+def test_input_and_output_paths_reach_the_notebook_as_str(shared_run: _SharedRun) -> None:
+    """Each input and output parameter arrives in the notebook as a str equal to its resolved path, including a path that contains a space."""
     record = _recorded(shared_run)
     expected = {
         "raw_path": str(shared_run.raw.resolve()),
@@ -933,8 +933,8 @@ def test_run_leaves_no_temporary_kernelspec_behind(shared_run: _SharedRun) -> No
     assert not env_kernelspec.exists(), env_kernelspec
 
 
-def test_downstream_python_step_reads_a_notebook_product(shared_run: _SharedRun) -> None:
-    """A python_step that names a notebook product key gets the edge, runs after the notebook step, and reads the data the notebook wrote."""
+def test_downstream_python_step_reads_a_notebook_output(shared_run: _SharedRun) -> None:
+    """A python_step that names a notebook output key gets the edge, runs after the notebook step, and reads the data the notebook wrote."""
     notebook, downstream = shared_run.notebook, shared_run.downstream
     order = shared_run.order
 
@@ -1033,7 +1033,7 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A notebook that raises makes the step FAIL and its downstream step SKIP_PREVIOUS_FAILED, leaves the executed notebook with the error at its product path, and leaves nothing in TMPDIR."""
+    """A notebook that raises makes the step FAIL and its downstream step SKIP_PREVIOUS_FAILED, leaves the executed notebook with the error at its output path, and leaves nothing in TMPDIR."""
     registry = FileRegistry(tmp_path / "out", "run1")
     source = _write_notebook(
         tmp_path / "notebooks" / "fails.ipynb",
@@ -1045,13 +1045,13 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
         executed="executed/fails.ipynb",
         registry=registry,
         env=sys.prefix,
-        produces={"table_path": _TABLE_KEY},
+        outputs={"table_path": _TABLE_KEY},
         name="fails",
     )
     downstream = python_step(
         _offset_table,
         inputs={"table": _TABLE_KEY},
-        produces=_FINAL_KEY,
+        outputs=_FINAL_KEY,
         registry=registry,
         name=_DOWNSTREAM_STEP,
     )
@@ -1071,10 +1071,10 @@ def test_failing_notebook_fails_the_step_and_keeps_the_executed_notebook(
     assert sorted(tmpdir.iterdir()) == []
 
 
-def test_notebook_that_does_not_write_a_declared_product_fails_the_step(
+def test_notebook_that_does_not_write_a_declared_output_fails_the_step(
     tmp_path: Path,
 ) -> None:
-    """A notebook that finishes without writing one of its declared products makes the step FAIL."""
+    """A notebook that finishes without writing one of its declared outputs makes the step FAIL."""
     registry = FileRegistry(tmp_path / "out", "run1")
     source = _write_notebook(
         tmp_path / "notebooks" / "partial.ipynb",
@@ -1086,7 +1086,7 @@ def test_notebook_that_does_not_write_a_declared_product_fails_the_step(
         executed="executed/partial.ipynb",
         registry=registry,
         env=sys.prefix,
-        produces={"written_path": "out/written.txt", "skipped_path": "out/skipped.txt"},
+        outputs={"written_path": "out/written.txt", "skipped_path": "out/skipped.txt"},
         name="partial",
     )
 
@@ -1161,14 +1161,14 @@ def test_parameter_values_of_unsupported_types_are_rejected(
     assert "inputs" in message
 
 
-@pytest.mark.parametrize("where", ["inputs", "produces", "parameters"])
+@pytest.mark.parametrize("where", ["inputs", "outputs", "parameters"])
 @pytest.mark.parametrize("bad_name", _INVALID_NAMES)
 def test_invalid_parameter_names_are_rejected(
     tmp_path: Path,
     bad_name: str,
     where: str,
 ) -> None:
-    """A name that is not an identifier, a keyword such as 'class', or a reserved name ('__notebook__', '__executed__', '__code_id__', '__command__') in inputs, produces or parameters raises ValueError naming it."""
+    """A name that is not an identifier, a keyword such as 'class', or a reserved name ('__notebook__', '__executed__', '__code_id__', '__command__') in inputs, outputs or parameters raises ValueError naming it."""
     with pytest.raises(ValueError) as info:
         notebook_step(
             _source(tmp_path),
@@ -1184,14 +1184,14 @@ def test_invalid_parameter_names_are_rejected(
 
 @pytest.mark.parametrize(
     "first, second",
-    [("inputs", "produces"), ("inputs", "parameters"), ("produces", "parameters")],
+    [("inputs", "outputs"), ("inputs", "parameters"), ("outputs", "parameters")],
 )
-def test_a_name_used_in_two_of_inputs_produces_and_parameters_is_rejected(
+def test_a_name_used_in_two_of_inputs_outputs_and_parameters_is_rejected(
     tmp_path: Path,
     first: str,
     second: str,
 ) -> None:
-    """A parameter name that appears in more than one of inputs, produces and parameters raises ValueError naming it."""
+    """A parameter name that appears in more than one of inputs, outputs and parameters raises ValueError naming it."""
     with pytest.raises(ValueError) as info:
         notebook_step(
             _source(tmp_path),
@@ -1267,7 +1267,7 @@ def _base_call(registry: FileRegistry, notebook: Path) -> dict[str, Any]:
         "registry": registry,
         "env": _ENV,
         "inputs": {"raw_path": "raw"},
-        "produces": {"table_path": "tables/out.csv"},
+        "outputs": {"table_path": "tables/out.csv"},
         "parameters": {"location": "179"},
     }
 
@@ -1284,12 +1284,12 @@ def test_the_base_call_of_the_definition_error_tests_builds(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("case", list(_REJECTED))
 def test_definition_errors_register_nothing(tmp_path: Path, case: str) -> None:
-    """After a ValueError from notebook_step, resolving the executed key or a produces key as an input raises WiringError, because nothing was registered; except for an empty name, the message starts with "Step '<name>': "."""
+    """After a ValueError from notebook_step, resolving the executed key or an outputs key as an input raises WiringError, because nothing was registered; except for an empty name, the message starts with "Step '<name>': "."""
     override = _REJECTED[case]
     registry = _registry(tmp_path)
     # The cell assigns every produced name, so a collision case can raise only through the
     # collision check, never through the parameters-cell check.
-    produced: Mapping[str, str] = override.get("produces", {})
+    produced: Mapping[str, str] = override.get("outputs", {})
     cell = f"{_BASE_PARAMETERS}\n{_assigning(produced)}"
     notebook = _write_notebook(registry.path_for(_SOURCE_KEY), cell)
     call: dict[str, Any] = {**_base_call(registry, notebook), **override}
@@ -1337,9 +1337,9 @@ def test_numpy_bool_parameter_is_rejected_with_a_conversion_hint(tmp_path: Path)
 
 @pytest.mark.parametrize("collision", list(_COLLISIONS.values()), ids=list(_COLLISIONS))
 def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collision) -> None:
-    """A produces key equal to the executed key, two produces parameters naming the same key, two produces keys that resolve to one path, or a produces key that resolves to the source notebook raises ValueError naming the step and both colliding items."""
+    """An outputs key equal to the executed key, two outputs parameters naming the same key, two outputs keys that resolve to one path, or an outputs key that resolves to the source notebook raises ValueError naming the step and both colliding items."""
     registry = _registry(tmp_path)
-    source = _write_notebook(registry.path_for(_SOURCE_KEY), _assigning(collision.produces))
+    source = _write_notebook(registry.path_for(_SOURCE_KEY), _assigning(collision.outputs))
 
     with pytest.raises(ValueError) as info:
         notebook_step(
@@ -1347,7 +1347,7 @@ def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collisi
             executed=_EXECUTED_KEY,
             registry=registry,
             env=_ENV,
-            produces=collision.produces,
+            outputs=collision.outputs,
             name="colliding_report",
         )
 
@@ -1360,10 +1360,10 @@ def test_colliding_output_paths_are_rejected(tmp_path: Path, collision: _Collisi
     assert unnamed == [], message
 
 
-def test_executed_or_product_key_that_is_a_root_input_raises_wiring_error(
+def test_executed_or_output_key_that_is_a_root_input_raises_wiring_error(
     tmp_path: Path,
 ) -> None:
-    """An executed key or a produces key that is a declared root input raises WiringError naming the key."""
+    """An executed key or an outputs key that is a declared root input raises WiringError naming the key."""
     source = _source(tmp_path)
 
     with pytest.raises(WiringError) as executed_info:
@@ -1379,7 +1379,7 @@ def test_executed_or_product_key_that_is_a_root_input_raises_wiring_error(
             executed=_EXECUTED_KEY,
             registry=_root_input_registry(tmp_path),
             env=_ENV,
-            produces={"table_path": _ROOT_TABLE_KEY},
+            outputs={"table_path": _ROOT_TABLE_KEY},
         )
 
     assert _ROOT_NOTEBOOK_KEY in str(executed_info.value)
@@ -1430,14 +1430,14 @@ def test_unknown_input_key_error_names_the_default_step_name(tmp_path: Path) -> 
 
 
 def test_output_on_a_root_input_error_names_the_step(tmp_path: Path) -> None:
-    """A produces key that is a declared root input raises WiringError whose message starts with "Step '<name>': " and names the key."""
+    """An outputs key that is a declared root input raises WiringError whose message starts with "Step '<name>': " and names the key."""
     with pytest.raises(WiringError) as info:
         notebook_step(
             _source(tmp_path),
             executed=_EXECUTED_KEY,
             registry=_root_input_registry(tmp_path),
             env=_ENV,
-            produces={"table_path": _ROOT_TABLE_KEY},
+            outputs={"table_path": _ROOT_TABLE_KEY},
             name="summarize",
         )
 
@@ -1460,7 +1460,7 @@ def test_an_executed_notebook_left_by_an_earlier_run_is_removed_before_the_noteb
         executed="executed/stale.ipynb",
         registry=registry,
         env=str(broken_env(tmp_path / "broken_env")),
-        produces={"table_path": _TABLE_KEY},
+        outputs={"table_path": _TABLE_KEY},
         name="stale",
     )
     executed = registry.path_for("executed/stale.ipynb")
@@ -1486,7 +1486,7 @@ def test_the_command_still_runs_and_succeeds_when_no_executed_notebook_exists(
         executed="executed/fresh.ipynb",
         registry=registry,
         env=sys.prefix,
-        produces={"table_path": _TABLE_KEY},
+        outputs={"table_path": _TABLE_KEY},
         name="fresh",
     )
     executed = registry.path_for("executed/fresh.ipynb")
@@ -1562,7 +1562,7 @@ def _failed_step(tmp_path: Path) -> _FailedStep:
         executed="executed/summarize.ipynb",
         registry=registry,
         env=_ENV,
-        produces={"table_path": _TABLE_KEY},
+        outputs={"table_path": _TABLE_KEY},
         name="summarize",
     )
     return _FailedStep(task, source, registry.path_for("executed/summarize.ipynb"))
@@ -1805,7 +1805,7 @@ def test_describe_notebook_failure_is_none_for_a_task_that_is_not_a_notebook_ste
     """A python_step task and a hand-built command task, each with a CalledProcessError, are described as None."""
     registry = FileRegistry(tmp_path / "out", "run1")
     python_task = python_step(
-        _offset_table, inputs={}, produces="offset.parquet", registry=registry
+        _offset_table, inputs={}, outputs="offset.parquet", registry=registry
     )
     command_task = Task(
         name="shout",
@@ -1824,7 +1824,7 @@ def test_describe_notebook_failure_is_none_for_a_task_that_is_not_a_notebook_ste
 def test_describe_notebook_failure_is_none_without_a_recorded_error_or_a_called_process_error(
     tmp_path: Path,
 ) -> None:
-    """A notebook step whose executed notebook records no error, failing with NodeNotFoundError as when a product was not written, is described as None."""
+    """A notebook step whose executed notebook records no error, failing with NodeNotFoundError as when an output was not written, is described as None."""
     step = _failed_step(tmp_path)
     write_notebook(step.executed, _executed_cells(code_cell("pass", execution_count=3)))
     error = NodeNotFoundError(f"{step.task.name}: a declared product was not written.")
@@ -1845,7 +1845,7 @@ def test_describe_notebook_failure_reads_a_real_failing_notebook(tmp_path: Path)
         executed="executed/summarize.ipynb",
         registry=registry,
         env=sys.prefix,
-        produces={"table_path": _TABLE_KEY},
+        outputs={"table_path": _TABLE_KEY},
         name="summarize",
     )
     executed = registry.path_for("executed/summarize.ipynb")
@@ -1989,15 +1989,15 @@ def test_a_misspelled_input_name_is_rejected_with_a_did_you_mean(tmp_path: Path)
     assert "'raw_pth' (inputs; did you mean 'raw_path'?)" in message
 
 
-def test_a_misspelled_product_name_is_rejected_with_a_did_you_mean(tmp_path: Path) -> None:
-    """produces={'table_pth': 'tables/out.csv'} over a cell assigning 'table_path' raises ValueError starting "Step '<name>': " and containing repr(str(source)) and "'table_pth' (produces; did you mean 'table_path'?)"."""
+def test_a_misspelled_output_name_is_rejected_with_a_did_you_mean(tmp_path: Path) -> None:
+    """outputs={'table_pth': 'tables/out.csv'} over a cell assigning 'table_path' raises ValueError starting "Step '<name>': " and containing repr(str(source)) and "'table_pth' (outputs; did you mean 'table_path'?)"."""
     source = _checked_source(tmp_path, "table_path = None")
 
-    message = _rejection(tmp_path, source, produces={"table_pth": "tables/out.csv"})
+    message = _rejection(tmp_path, source, outputs={"table_pth": "tables/out.csv"})
 
     assert message.startswith(f"Step '{_NOTEBOOK_STEP}': "), message
     assert repr(str(source.resolve())) in message
-    assert "'table_pth' (produces; did you mean 'table_path'?)" in message
+    assert "'table_pth' (outputs; did you mean 'table_path'?)" in message
 
 
 def test_the_unassigned_names_message_gives_each_name_its_argument_and_the_fix(
@@ -2063,14 +2063,14 @@ def test_names_the_cell_assigns_but_the_step_does_not_pass_are_allowed(
 
 
 def test_a_notebook_whose_cell_assigns_every_passed_name_builds(tmp_path: Path) -> None:
-    """A step passing names in inputs, produces and parameters over a cell that assigns each one compiles to a Task with every input and product wired."""
+    """A step passing names in inputs, outputs and parameters over a cell that assigns each one compiles to a Task with every input and output wired."""
     source = _checked_source(tmp_path, _BASE_PARAMETERS)
 
     task = _step(
         tmp_path,
         source,
         inputs={"raw_path": "raw"},
-        produces={"table_path": "tables/out.csv"},
+        outputs={"table_path": "tables/out.csv"},
         parameters={"location": "179"},
     )
 
@@ -2117,7 +2117,7 @@ def test_more_than_ten_names_to_a_notebook_with_no_parameters_cell_list_ten_and_
 def test_a_notebook_with_no_parameters_cell_builds_when_the_step_passes_no_names(
     tmp_path: Path,
 ) -> None:
-    """A step with no inputs, produces or parameters over a notebook with no cell tagged 'parameters' compiles to a Task."""
+    """A step with no inputs, outputs or parameters over a notebook with no cell tagged 'parameters' compiles to a Task."""
     source = _cells_source(tmp_path, [code_cell("location = None"), code_cell("pass")])
 
     task = _step(tmp_path, source)
@@ -2161,7 +2161,7 @@ def test_the_mncnh_shaped_notebook_with_a_parameters_cell_assigning_artifact_bui
 
 
 def test_a_step_with_no_names_over_a_file_that_is_not_json_compiles(tmp_path: Path) -> None:
-    """A step with no inputs, produces or parameters over an .ipynb file that is not JSON compiles to a Task."""
+    """A step with no inputs, outputs or parameters over an .ipynb file that is not JSON compiles to a Task."""
     source = _written(tmp_path / "notebooks" / "report.ipynb", "this is not JSON {")
 
     task = _step(tmp_path, source)
@@ -2170,7 +2170,7 @@ def test_a_step_with_no_names_over_a_file_that_is_not_json_compiles(tmp_path: Pa
 
 
 def test_a_step_with_no_names_over_json_with_no_cells_list_compiles(tmp_path: Path) -> None:
-    """A step with no inputs, produces or parameters over an .ipynb file holding JSON with no top-level 'cells' list (an nbformat 3 shape) compiles to a Task."""
+    """A step with no inputs, outputs or parameters over an .ipynb file holding JSON with no top-level 'cells' list (an nbformat 3 shape) compiles to a Task."""
     content = _UNREADABLE_NOTEBOOKS["nbformat_3_worksheets"]
     source = _written(tmp_path / "notebooks" / "report.ipynb", content)
 

@@ -1,4 +1,4 @@
-"""An example pipeline definition with a Python step that writes two products."""
+"""An example pipeline definition with a Python step that writes two outputs."""
 
 from pathlib import Path
 
@@ -34,18 +34,18 @@ def pipeline() -> Pipeline:
     """Add the three steps, with their outputs and state under ``output`` next to this file."""
     p = Pipeline(HERE / "output", run_name="example")
     p.add_python_step(
-        make_population, inputs={}, produces="population.parquet", name="population"
+        make_population, inputs={}, outputs="population.parquet", name="population"
     )
     p.add_python_step(
         split_by_age,
         inputs={"population": "population.parquet"},
-        produces={"children": "children.csv", "adults": "adults.parquet"},
+        outputs={"children": "children.csv", "adults": "adults.parquet"},
         name="split",
     )
     p.add_python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
-        produces="summary.csv",
+        outputs="summary.csv",
         name="summary",
     )
     return p

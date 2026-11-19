@@ -50,14 +50,14 @@ HERE = Path(__file__).resolve().parent
 
 def pipeline() -> Pipeline:
     p = Pipeline(HERE / "out", run_name="run1")
-    p.add_python_step(step_targets.record_pid, inputs={}, produces="a.parquet")
+    p.add_python_step(step_targets.record_pid, inputs={}, outputs="a.parquet")
     p.add_python_step(
-        step_targets.record_pid, inputs={"upstream": "a.parquet"}, produces="b.parquet"
+        step_targets.record_pid, inputs={"upstream": "a.parquet"}, outputs="b.parquet"
     )
     return p
 """
 """A definition that adds the chain a.parquet -> b.parquet to a Pipeline and returns it,
-with the products under ``out/run1`` beside the file."""
+with the outputs under ``out/run1`` beside the file."""
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +82,7 @@ def _chain(p: Pipeline, own: Mapping[str, dict[str, Any]] | None = None) -> Pipe
     sources: dict[str, dict[str, str]] = {A: {}, B: {"upstream": A}, C: {"upstream": B}}
     for name, inputs in sources.items():
         p.add_python_step(
-            step_targets.record_pid, inputs=inputs, produces=name, resources=given.get(name)
+            step_targets.record_pid, inputs=inputs, outputs=name, resources=given.get(name)
         )
     return p
 
@@ -99,7 +99,7 @@ def _describe(result: Result) -> str:
 def test_a_pipeline_runs_through_fake_jobmon_and_the_real_runner(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: a three-step chain added to a Pipeline with a project in its resources runs with run(p, jobmon=True); every step succeeds in a process other than the test's, the products are under output_root/run_name, one plan is bound with the three steps, and the run's state and run lock are under output_root/.dagger/run_name."""
+    """End to end: a three-step chain added to a Pipeline with a project in its resources runs with run(p, jobmon=True); every step succeeds in a process other than the test's, the outputs are under output_root/run_name, one plan is bound with the three steps, and the run's state and run lock are under output_root/.dagger/run_name."""
     output_root = (tmp_path / "out").resolve()
     p = _chain(Pipeline(tmp_path / "out", "run1", resources=_PROJECT))
 
@@ -197,7 +197,7 @@ def test_the_missing_project_message_names_the_pipelines_resources_and_not_workf
 def test_dagger_run_of_a_pipeline_definition_through_fake_jobmon_exits_zero(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """'dagger run -c def.py -P proj' on a definition that returns its Pipeline p exits 0 under FakeJobmon, binds one plan with the definition's steps, and writes every product under output_root/run_name."""
+    """'dagger run -c def.py -P proj' on a definition that returns its Pipeline p exits 0 under FakeJobmon, binds one plan with the definition's steps, and writes every output under output_root/run_name."""
     path = tmp_path / f"def_{uuid.uuid4().hex[:12]}.py"
     path.write_text(_DEFINITION)
 
@@ -214,14 +214,14 @@ def test_dagger_run_of_a_pipeline_definition_through_fake_jobmon_exits_zero(
 def test_a_step_added_after_a_run_through_jobmon_is_in_the_next_run_and_not_the_finished_one(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: after run(p, jobmon=True) of a two-step chain returns its two outcomes and binds a plan of those two steps, a third step added to p does not change that result; a second run(p, jobmon=True) binds a plan that has the third step, returns SUCCESS for all three steps, and writes the third step's product."""
+    """End to end: after run(p, jobmon=True) of a two-step chain returns its two outcomes and binds a plan of those two steps, a third step added to p does not change that result; a second run(p, jobmon=True) binds a plan that has the third step, returns SUCCESS for all three steps, and writes the third step's output."""
     p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
-    p.add_python_step(step_targets.record_pid, inputs={}, produces=A)
-    p.add_python_step(step_targets.record_pid, inputs={"upstream": A}, produces=B)
+    p.add_python_step(step_targets.record_pid, inputs={}, outputs=A)
+    p.add_python_step(step_targets.record_pid, inputs={"upstream": A}, outputs=B)
     third = p.output_root / "run1" / C
 
     finished = run(p, jobmon=True)
-    p.add_python_step(step_targets.record_pid, inputs={"upstream": B}, produces=C)
+    p.add_python_step(step_targets.record_pid, inputs={"upstream": B}, outputs=C)
 
     assert finished == {A: TaskOutcome.SUCCESS, B: TaskOutcome.SUCCESS}
     assert bound_names(fake_jobmon) == [[A, B]]
@@ -236,20 +236,20 @@ def test_a_step_added_after_a_run_through_jobmon_is_in_the_next_run_and_not_the_
 
 
 def _split_and_consumers(p: Pipeline, target: Any) -> Pipeline:
-    """Add the step 'split' with ``target`` and a step that copies each of its products."""
+    """Add the step 'split' with ``target`` and a step that copies each of its outputs."""
     p.add_python_step(
         target,
         inputs={},
-        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        outputs={"population": "population.parquet", "deaths": "deaths.csv"},
         name="split",
     )
     p.add_python_step(
         step_targets.copy_table,
         inputs={"source": "population.parquet"},
-        produces="population_copy.parquet",
+        outputs="population_copy.parquet",
     )
     p.add_python_step(
-        step_targets.copy_table, inputs={"source": "deaths.csv"}, produces="deaths_copy.csv"
+        step_targets.copy_table, inputs={"source": "deaths.csv"}, outputs="deaths_copy.csv"
     )
     return p
 
@@ -259,10 +259,10 @@ _SPLIT_STEPS = ["split", "population_copy.parquet", "deaths_copy.csv"]
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_a_python_step_with_several_products_runs_through_jobmon(
+def test_a_python_step_with_several_outputs_runs_through_jobmon(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: a python step whose produces maps 'population' and 'deaths' to a Parquet and a CSV key, and a consumer of each, run with run(p, jobmon=True); every step succeeds, one plan binds the three steps, and the products are under output_root/run_name in their formats."""
+    """End to end: a python step whose outputs maps 'population' and 'deaths' to a Parquet and a CSV key, and a consumer of each, run with run(p, jobmon=True); every step succeeds, one plan binds the three steps, and the outputs are under output_root/run_name in their formats."""
     p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
     _split_and_consumers(p, step_targets.split_frames)
 
@@ -283,10 +283,10 @@ def test_a_python_step_with_several_products_runs_through_jobmon(
 
 
 @pytest.mark.usefixtures("node_pythonpath")
-def test_a_dict_missing_a_product_fails_the_step_through_jobmon(
+def test_a_dict_missing_an_output_fails_the_step_through_jobmon(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """Through Jobmon, a python step with several products whose dict leaves out 'deaths' makes run raise StepFailed whose line names the step and the missing product; its consumers are skipped and write nothing."""
+    """Through Jobmon, a python step with several outputs whose dict leaves out 'deaths' makes run raise StepFailed whose line names the step and the missing output; its consumers are skipped and write nothing."""
     p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
     _split_and_consumers(p, step_targets.split_frames_without_deaths)
 
@@ -296,7 +296,7 @@ def test_a_dict_missing_a_product_fails_the_step_through_jobmon(
     line = str(info.value)
     assert line.startswith("Step 'split' failed:"), line
     assert (
-        "returned a dict whose keys do not match its product names: the product 'deaths' "
+        "returned a dict whose keys do not match its output names: the output 'deaths' "
         "is missing." in line
     ), line
     assert info.value.outcomes == {

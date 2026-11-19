@@ -112,7 +112,7 @@ def _chain(
         python_step(
             step_targets.record_pid,
             inputs=inputs,
-            produces=name,
+            outputs=name,
             registry=artifacts,
             resources=given.get(name),
         )

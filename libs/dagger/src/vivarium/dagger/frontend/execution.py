@@ -394,14 +394,14 @@ def preview(
     """Return the plan for ``pipeline``, with each reason's node named in pipeline terms.
 
     Like the backend :func:`~vivarium.dagger.backend.preview.preview`, this runs nothing
-    and writes no product. Like :func:`run`, it first freezes ``pipeline`` and plans
+    and writes no output. Like :func:`run`, it first freezes ``pipeline`` and plans
     that snapshot, so a step added to ``pipeline`` afterwards is not in this plan. Each
     reason's ``node`` is relabeled. A file the pipeline's registry knows reads
     ``file '<key>'`` (``run directory '<key>'`` for a simulation's run directory), a
     step's code identity reads ``code of '<step>'``, a step's command reads
     ``command of '<step>'``, and a step name reads ``step '<step>'``. Any other node
     keeps pytask's name, which for a file is its path. The registry knows only the
-    pipeline's root inputs and the products of steps added with the step methods, so
+    pipeline's root inputs and the outputs of steps added with the step methods, so
     each output of a step added with
     :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, and each of its inputs
     whose key the pipeline does not know, is named by path.

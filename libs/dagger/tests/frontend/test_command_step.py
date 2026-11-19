@@ -55,9 +55,9 @@ _PROBE_KEY = "?"
 
 _NAMES = {
     "inputs": {"population": _POPULATION, "script": _SCRIPT},
-    "produces": {"adults": "adults.csv"},
+    "outputs": {"adults": "adults.csv"},
 }
-"""The inputs and produces of the placeholder tests, whose names are _SORTED_NAMES."""
+"""The inputs and outputs of the placeholder tests, whose names are _SORTED_NAMES."""
 
 _SORTED_NAMES = ("adults", "population", "script")
 
@@ -85,7 +85,7 @@ HERE = Path(__file__).resolve().parent
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     task = command_step(
-        COMMAND, produces={"out": "out.txt"}, registry=registry, env=ENV, name=NAME
+        COMMAND, outputs={"out": "out.txt"}, registry=registry, env=ENV, name=NAME
     )
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     p.add_task(task)
@@ -138,7 +138,7 @@ def _valid() -> dict[str, Any]:
     return {
         "command": "true",
         "inputs": {"population": _POPULATION},
-        "produces": {"adults": "adults.csv"},
+        "outputs": {"adults": "adults.csv"},
         "name": "subset",
     }
 
@@ -193,7 +193,7 @@ def _compiled(tmp_path: Path, command: str) -> str:
     task = command_step(
         command,
         inputs={"population": _POPULATION},
-        produces={"adults": "adults.csv"},
+        outputs={"adults": "adults.csv"},
         registry=_registry(tmp_path),
         name="subset",
     )
@@ -212,7 +212,7 @@ _ORDER_PRODUCTS = {
     "c": "c/c.txt",
     "d": "d/d.txt",
 }
-"""Products in six directories, so that set order is unlikely to agree across hash seeds."""
+"""Outputs in six directories, so that set order is unlikely to agree across hash seeds."""
 
 _HASH_SEED_SCRIPT = """
 import sys
@@ -230,7 +230,7 @@ registry = FileRegistry(
 task = command_step(
     command,
     inputs={"script": script, "population": population},
-    produces=dict(zip(pairs[::2], pairs[1::2])),
+    outputs=dict(zip(pairs[::2], pairs[1::2])),
     registry=registry,
     name="subset",
 )
@@ -265,10 +265,10 @@ def _compiled_with_hash_seed(tmp_path: Path, seed: str) -> str:
 
 
 def _one_step(tmp_path: Path, command: str, **arguments: Any) -> tuple[Pipeline, Path]:
-    """Return a pipeline of one step 'step' writing 'out.txt', and that product's path."""
+    """Return a pipeline of one step 'step' writing 'out.txt', and that output's path."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = command_step(
-        command, produces={"out": "out.txt"}, registry=registry, name="step", **arguments
+        command, outputs={"out": "out.txt"}, registry=registry, name="step", **arguments
     )
     pipeline = pipeline_of([task], tmp_path / "state")
     return pipeline, registry.path_for("out.txt")
@@ -291,7 +291,7 @@ def _copy_pipeline(tmp_path: Path, command: str) -> Pipeline:
     task = command_step(
         command,
         inputs={"source": _SOURCE},
-        produces={"target": "copies/source.txt"},
+        outputs={"target": "copies/source.txt"},
         registry=registry,
         name="copy",
     )
@@ -310,7 +310,7 @@ def _keyed_copy(tmp_path: Path, command: str) -> _PipelineSnapshot:
     p.add_command_step(
         command,
         inputs={"source": _SOURCE},
-        produces={"target": "copies/source.txt"},
+        outputs={"target": "copies/source.txt"},
         name="copy",
     )
     return stable_snapshot(p)
@@ -326,7 +326,7 @@ def _write_definition(directory: Path, command: str, env: str | None, name: str)
 
 
 def _defined_product(definition: Path) -> Path:
-    """Return the path of the product of the step in ``definition``."""
+    """Return the path of the output of the step in ``definition``."""
     return definition.parent / "out" / "run1" / "out.txt"
 
 
@@ -371,7 +371,7 @@ def test_command_step_returns_one_command_task_with_the_declared_env_and_resourc
     task = command_step(
         "cp {population} {adults}",
         inputs={"population": _POPULATION},
-        produces={"adults": "adults.csv"},
+        outputs={"adults": "adults.csv"},
         registry=_registry(tmp_path),
         env=_ENV,
         resources=resources,
@@ -391,7 +391,7 @@ def test_inputs_are_the_resolved_input_nodes_keyed_by_input_name(tmp_path: Path)
     task = command_step(
         "cat {table} {population} > {out}",
         inputs={"table": "upstream/table.csv", "population": _POPULATION},
-        produces={"out": "out.csv"},
+        outputs={"out": "out.csv"},
         registry=registry,
     )
 
@@ -402,21 +402,21 @@ def test_inputs_are_the_resolved_input_nodes_keyed_by_input_name(tmp_path: Path)
     assert _path_of(task.inputs["population"]) == expected
 
 
-def test_outputs_are_the_registry_nodes_keyed_by_product_name(tmp_path: Path) -> None:
-    """The task's outputs map each product name to the node the registry holds for its key, which is the node a downstream step resolves."""
+def test_outputs_are_the_registry_nodes_keyed_by_output_name(tmp_path: Path) -> None:
+    """The task's outputs map each output name to the node the registry holds for its key, which is the node a downstream step resolves."""
     registry = _registry(tmp_path)
-    produces = {"table": "tables/adults.csv", "log": "logs/adults.log"}
+    outputs = {"table": "tables/adults.csv", "log": "logs/adults.log"}
 
     task = command_step(
         "cp {population} {table} 2> {log}",
         inputs={"population": _POPULATION},
-        produces=produces,
+        outputs=outputs,
         registry=registry,
         name="subset",
     )
 
-    assert set(task.outputs) == set(produces)
-    for name, key in produces.items():
+    assert set(task.outputs) == set(outputs)
+    for name, key in outputs.items():
         assert task.outputs[name] is registry.resolve_input(key)
         assert _path_of(task.outputs[name]) == registry.path_for(key)
 
@@ -424,7 +424,7 @@ def test_outputs_are_the_registry_nodes_keyed_by_product_name(tmp_path: Path) ->
 def test_inputs_env_and_resources_are_optional(tmp_path: Path) -> None:
     """With no inputs, env or resources the task has no inputs, env None and resources {}."""
     task = command_step(
-        "printf x > {out}", produces={"out": "out.txt"}, registry=_registry(tmp_path)
+        "printf x > {out}", outputs={"out": "out.txt"}, registry=_registry(tmp_path)
     )
 
     assert dict(task.inputs) == {}
@@ -432,25 +432,25 @@ def test_inputs_env_and_resources_are_optional(tmp_path: Path) -> None:
     assert task.resources == {}
 
 
-def test_name_defaults_to_the_single_produces_key(tmp_path: Path) -> None:
-    """With name=None and one product the task is named by that product's file key."""
+def test_name_defaults_to_the_single_outputs_key(tmp_path: Path) -> None:
+    """With name=None and one output the task is named by that output's file key."""
     task = command_step(
-        "printf x > {out}", produces={"out": "tables/out.csv"}, registry=_registry(tmp_path)
+        "printf x > {out}", outputs={"out": "tables/out.csv"}, registry=_registry(tmp_path)
     )
 
     assert task.name == "tables/out.csv"
 
 
 def test_name_overrides_the_default(tmp_path: Path) -> None:
-    """A given name becomes the task name, also when produces has more than one entry."""
+    """A given name becomes the task name, also when outputs has more than one entry."""
     registry = _registry(tmp_path)
 
     single = command_step(
-        "printf x > {out}", produces={"out": "one.txt"}, registry=registry, name="single"
+        "printf x > {out}", outputs={"out": "one.txt"}, registry=registry, name="single"
     )
     pair = command_step(
         "printf x > {first} && printf y > {second}",
-        produces={"first": "first.txt", "second": "second.txt"},
+        outputs={"first": "first.txt", "second": "second.txt"},
         registry=registry,
         name="pair",
     )
@@ -484,30 +484,30 @@ def test_an_empty_env_is_refused_naming_the_step(tmp_path: Path) -> None:
     assert message.startswith("Step 'subset':"), message
 
 
-def test_an_empty_produces_without_a_name_is_refused_with_the_command_step_prefix(
+def test_an_empty_outputs_without_a_name_is_refused_with_the_command_step_prefix(
     tmp_path: Path,
 ) -> None:
-    """produces={} with name=None raises ValueError starting "command_step:", and nothing is registered."""
-    message = _refused(_registry(tmp_path), produces={}, name=None)
+    """outputs={} with name=None raises ValueError starting "command_step:", and nothing is registered."""
+    message = _refused(_registry(tmp_path), outputs={}, name=None)
 
     assert message.startswith("command_step:"), message
 
 
-def test_an_empty_produces_with_a_name_is_refused_naming_the_step(tmp_path: Path) -> None:
-    """produces={} with a name raises ValueError starting "Step '<name>':", and nothing is registered."""
-    message = _refused(_registry(tmp_path), produces={})
+def test_an_empty_outputs_with_a_name_is_refused_naming_the_step(tmp_path: Path) -> None:
+    """outputs={} with a name raises ValueError starting "Step '<name>':", and nothing is registered."""
+    message = _refused(_registry(tmp_path), outputs={})
 
     assert message.startswith("Step 'subset':"), message
 
 
-def test_several_products_without_a_name_are_refused_listing_the_keys_and_asking_for_a_name(
+def test_several_outputs_without_a_name_are_refused_listing_the_keys_and_asking_for_a_name(
     tmp_path: Path,
 ) -> None:
-    """Two products with name=None raise ValueError starting "command_step:" that lists the produces keys in sorted order and says to pass name=, and nothing is registered."""
+    """Two outputs with name=None raise ValueError starting "command_step:" that lists the outputs keys in sorted order and says to pass name=, and nothing is registered."""
     # The names and the keys sort in opposite orders, and the keys are given unsorted.
-    produces = {"alpha": "z/out.csv", "zeta": "a/out.csv"}
+    outputs = {"alpha": "z/out.csv", "zeta": "a/out.csv"}
 
-    message = _refused(_registry(tmp_path), produces=produces, name=None)
+    message = _refused(_registry(tmp_path), outputs=outputs, name=None)
 
     assert message.startswith("command_step:"), message
     first, second = message.find("a/out.csv"), message.find("z/out.csv")
@@ -518,55 +518,55 @@ def test_several_products_without_a_name_are_refused_listing_the_keys_and_asking
 def test_the_errors_without_a_step_name_are_checked_before_every_other_error(
     tmp_path: Path,
 ) -> None:
-    """An empty name wins over an empty produces, and the three errors that start "command_step:" are raised even when the command, env and names are also invalid."""
+    """An empty name wins over an empty outputs, and the three errors that start "command_step:" are raised even when the command, env and names are also invalid."""
     registry = _registry(tmp_path)
     empty_name = _refused(registry, name="")
-    empty_produces = _refused(registry, produces={}, name=None)
+    empty_outputs = _refused(registry, outputs={}, name=None)
     invalid: dict[str, Any] = {"command": " ", "env": "", "inputs": {"my-file": _POPULATION}}
 
-    assert _refused(registry, produces={}, name="") == empty_name
+    assert _refused(registry, outputs={}, name="") == empty_name
     assert _refused(registry, **invalid, name="") == empty_name
-    assert _refused(registry, **invalid, produces={}, name=None) == empty_produces
+    assert _refused(registry, **invalid, outputs={}, name=None) == empty_outputs
     several = {"class": "b.csv", "__command__": "a.csv"}
-    message = _refused(registry, **invalid, produces=several, name=None)
+    message = _refused(registry, **invalid, outputs=several, name=None)
     assert message.startswith("command_step:"), message
     assert -1 < message.find("a.csv") < message.find("b.csv"), message
 
 
-@pytest.mark.parametrize("where", ["inputs", "produces"])
+@pytest.mark.parametrize("where", ["inputs", "outputs"])
 def test_a_name_that_is_not_an_identifier_is_refused(tmp_path: Path, where: str) -> None:
-    """An input or product name such as "my-file" raises ValueError naming the step and the name, and nothing is registered."""
+    """An input or output name such as "my-file" raises ValueError naming the step and the name, and nothing is registered."""
     message = _refused(_registry(tmp_path), **_declaring("my-file", where))
 
     assert message.startswith("Step 'subset':"), message
     assert "my-file" in message
 
 
-@pytest.mark.parametrize("where", ["inputs", "produces"])
+@pytest.mark.parametrize("where", ["inputs", "outputs"])
 def test_a_python_keyword_name_is_refused(tmp_path: Path, where: str) -> None:
-    """An input or product name such as "class" raises ValueError naming the step and the name, and nothing is registered."""
+    """An input or output name such as "class" raises ValueError naming the step and the name, and nothing is registered."""
     message = _refused(_registry(tmp_path), **_declaring("class", where))
 
     assert message.startswith("Step 'subset':"), message
     assert "class" in message
 
 
-@pytest.mark.parametrize("where", ["inputs", "produces"])
+@pytest.mark.parametrize("where", ["inputs", "outputs"])
 @pytest.mark.parametrize("reserved", _RESERVED)
 def test_each_reserved_name_is_refused(tmp_path: Path, reserved: str, where: str) -> None:
-    """Each of __code_id__, __command__, __notebook__ and __executed__, as an input name and as a product name, raises ValueError naming the step and the name, and nothing is registered."""
+    """Each of __code_id__, __command__, __notebook__ and __executed__, as an input name and as an output name, raises ValueError naming the step and the name, and nothing is registered."""
     message = _refused(_registry(tmp_path), **_declaring(reserved, where))
 
     assert message.startswith("Step 'subset':"), message
     assert reserved in message
 
 
-def test_a_name_in_both_inputs_and_produces_is_refused(tmp_path: Path) -> None:
-    """A name used in both inputs and produces raises ValueError naming the step and the name, and nothing is registered."""
+def test_a_name_in_both_inputs_and_outputs_is_refused(tmp_path: Path) -> None:
+    """A name used in both inputs and outputs raises ValueError naming the step and the name, and nothing is registered."""
     message = _refused(
         _registry(tmp_path),
         inputs={"shared_name": _POPULATION},
-        produces={"shared_name": "out.csv"},
+        outputs={"shared_name": "out.csv"},
     )
 
     assert message.startswith("Step 'subset':"), message
@@ -574,13 +574,13 @@ def test_a_name_in_both_inputs_and_produces_is_refused(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("right_key", ["x.csv", "./x.csv"], ids=["same_key", "same_path"])
-def test_two_products_at_one_path_are_refused_naming_both(
+def test_two_outputs_at_one_path_are_refused_naming_both(
     tmp_path: Path, right_key: str
 ) -> None:
-    """Two produces entries whose keys resolve to one path (the same key under two names, or "x.csv" and "./x.csv") raise ValueError naming both products and the second key, and nothing is registered."""
-    produces = {"left_table": "x.csv", "right_table": right_key}
+    """Two outputs entries whose keys resolve to one path (the same key under two names, or "x.csv" and "./x.csv") raise ValueError naming both outputs and the second key, and nothing is registered."""
+    outputs = {"left_table": "x.csv", "right_table": right_key}
 
-    message = _refused(_registry(tmp_path), produces=produces, name="pair")
+    message = _refused(_registry(tmp_path), outputs=outputs, name="pair")
 
     assert message.startswith("Step 'pair':"), message
     assert "'left_table'" in message, message
@@ -588,16 +588,16 @@ def test_two_products_at_one_path_are_refused_naming_both(
     assert repr(right_key) in message, message
 
 
-def test_the_same_key_as_input_and_product_is_refused_before_any_registry_lookup(
+def test_the_same_key_as_input_and_output_is_refused_before_any_registry_lookup(
     tmp_path: Path,
 ) -> None:
-    """One key in both inputs and produces raises ValueError, not WiringError and not a pytask cycle at build time, even when the key has no producer, naming the input and the product with their keys and saying a step cannot read and write the same artifact, and nothing is registered."""
+    """One key in both inputs and outputs raises ValueError, not WiringError and not a pytask cycle at build time, even when the key has no producer, naming the input and the output with their keys and saying a step cannot read and write the same artifact, and nothing is registered."""
     # 'shared.csv' has no producer and is no root input, so resolving it would raise
     # WiringError; pytest.raises(ValueError) does not catch a WiringError.
     message = _refused(
         _registry(tmp_path),
         inputs={"source": "shared.csv"},
-        produces={"target": "shared.csv"},
+        outputs={"target": "shared.csv"},
         name="copy",
     )
 
@@ -606,28 +606,28 @@ def test_the_same_key_as_input_and_product_is_refused_before_any_registry_lookup
         assert part in message, part
 
 
-def test_an_input_produced_at_a_product_path_under_another_key_is_refused(
+def test_an_input_produced_at_an_output_path_under_another_key_is_refused(
     tmp_path: Path,
 ) -> None:
-    """An input "x.csv" produced by an earlier step and a product "./x.csv" raise ValueError, not the registry's "resolve to one path" WiringError, naming both inputs and both products with their keys, and nothing more is registered."""
+    """An input "x.csv" produced by an earlier step and an output "./x.csv" raise ValueError, not the registry's "resolve to one path" WiringError, naming both inputs and both outputs with their keys, and nothing more is registered."""
     registry = _registry(tmp_path)
     registry.register_output("x.csv")
 
     message = _refused(
-        registry, inputs={"source": "x.csv"}, produces={"target": "./x.csv"}, name="redo"
+        registry, inputs={"source": "x.csv"}, outputs={"target": "./x.csv"}, name="redo"
     )
 
     assert message.startswith("Step 'redo':"), message
     assert "source" in message
     assert "target" in message
     assert "./x.csv" in message
-    # The input's key is a part of the product's, so look for it elsewhere.
+    # The input's key is a part of the output's, so look for it elsewhere.
     assert "x.csv" in message.replace("./x.csv", ""), message
     assert "resolve to one path" not in message
 
 
-def test_a_root_input_at_a_product_path_is_refused(tmp_path: Path) -> None:
-    """A root input whose file lies under the run directory at a product's path raises ValueError naming the input and the product with their keys, and nothing is registered."""
+def test_a_root_input_at_an_output_path_is_refused(tmp_path: Path) -> None:
+    """A root input whose file lies under the run directory at an output's path raises ValueError naming the input and the output with their keys, and nothing is registered."""
     product_key = "tables/given.csv"
     handed_over = (tmp_path / "out").resolve() / "run1" / product_key
     handed_over.parent.mkdir(parents=True)
@@ -640,7 +640,7 @@ def test_a_root_input_at_a_product_path_is_refused(tmp_path: Path) -> None:
     message = _refused(
         registry,
         inputs={"handed": "supplied_table"},
-        produces={"result": product_key},
+        outputs={"result": product_key},
         name="redo",
     )
 
@@ -656,14 +656,14 @@ def test_an_unresolved_input_raises_the_wiring_error_before_the_path_check(
     """An input key with no producer and no root input raises WiringError starting "Step '<name>': input '<key>' is unresolved", even when another check of the paths would also fail, and nothing is registered."""
     registry = _registry(tmp_path)
     before = _registered(registry)
-    # The input key and the product key name one path.
+    # The input key and the output key name one path.
     assert registry.path_for("missing.csv") == registry.path_for("./missing.csv")
 
     with pytest.raises(WiringError) as info:
         command_step(
             "cp {source} {target}",
             inputs={"source": "missing.csv"},
-            produces={"target": "./missing.csv"},
+            outputs={"target": "./missing.csv"},
             registry=registry,
             name="redo",
         )
@@ -675,14 +675,14 @@ def test_an_unresolved_input_raises_the_wiring_error_before_the_path_check(
     assert _registered(registry) == before
 
 
-def test_a_product_that_is_a_root_input_raises_a_wiring_error_naming_the_step(
+def test_an_output_that_is_a_root_input_raises_a_wiring_error_naming_the_step(
     tmp_path: Path,
 ) -> None:
-    """A produces key that is a declared root input raises WiringError starting "Step '<name>':" followed by the registry's message, with no chained cause shown."""
+    """An outputs key that is a declared root input raises WiringError starting "Step '<name>':" followed by the registry's message, with no chained cause shown."""
     with pytest.raises(WiringError) as info:
         command_step(
             "printf x > {out}",
-            produces={"out": _POPULATION},
+            outputs={"out": _POPULATION},
             registry=_registry(tmp_path),
             name="clobber",
         )
@@ -694,15 +694,15 @@ def test_a_product_that_is_a_root_input_raises_a_wiring_error_naming_the_step(
     assert error.__suppress_context__
 
 
-def test_a_later_product_that_is_a_root_input_registers_no_product(tmp_path: Path) -> None:
-    """A produces mapping whose second key is a declared root input raises WiringError naming the step and the key, and the first product is not registered."""
+def test_a_later_output_that_is_a_root_input_registers_no_output(tmp_path: Path) -> None:
+    """An outputs mapping whose second key is a declared root input raises WiringError naming the step and the key, and the first output is not registered."""
     registry = _registry(tmp_path)
     before = _registered(registry)
 
     with pytest.raises(WiringError) as info:
         command_step(
             "printf x > {first}",
-            produces={"first": "first.csv", "second": _POPULATION},
+            outputs={"first": "first.csv", "second": _POPULATION},
             registry=registry,
             name="clobber",
         )
@@ -712,17 +712,17 @@ def test_a_later_product_that_is_a_root_input_registers_no_product(tmp_path: Pat
     assert _registered(registry) == before
 
 
-def test_a_product_at_another_steps_product_path_raises_a_wiring_error_naming_the_step(
+def test_an_output_at_another_steps_output_path_raises_a_wiring_error_naming_the_step(
     tmp_path: Path,
 ) -> None:
-    """A produces key that resolves to the path of a different key another step produces raises WiringError starting "Step '<name>':" with the registry's message."""
+    """An outputs key that resolves to the path of a different key another step produces raises WiringError starting "Step '<name>':" with the registry's message."""
     registry = _registry(tmp_path)
     registry.register_output("tables/x.csv")
 
     with pytest.raises(WiringError) as info:
         command_step(
             "printf x > {out}",
-            produces={"out": "tables/./x.csv"},
+            outputs={"out": "tables/./x.csv"},
             registry=registry,
             name="clash",
         )
@@ -892,14 +892,14 @@ def test_an_unparseable_placeholder_is_refused_without_calling_it_a_single_brace
     _assert_hint_last(message, *[repr(name) for name in _SORTED_NAMES])
 
 
-def test_an_unused_input_or_product_name_is_allowed(tmp_path: Path) -> None:
-    """A command that names neither of an input and a product is accepted, and the task still has both as an input and an output."""
+def test_an_unused_input_or_output_name_is_allowed(tmp_path: Path) -> None:
+    """A command that names neither of an input and an output is accepted, and the task still has both as an input and an output."""
     registry = _registry(tmp_path)
 
     task = command_step(
         "true",
         inputs={"population": _POPULATION},
-        produces={"adults": "adults.csv"},
+        outputs={"adults": "adults.csv"},
         registry=registry,
     )
 
@@ -911,7 +911,7 @@ def test_an_unused_input_or_product_name_is_allowed(tmp_path: Path) -> None:
 def test_placeholders_become_quoted_absolute_paths_that_the_shell_reads_back(
     tmp_path: Path,
 ) -> None:
-    """Under an output root whose path holds a space, a single quote and a brace, a step that copies {source} to {target} runs, and its product holds the input's content."""
+    """Under an output root whose path holds a space, a single quote and a brace, a step that copies {source} to {target} runs, and its output holds the input's content."""
     source = tmp_path / "in put's {y}" / "source.txt"
     source.parent.mkdir()
     source.write_text("copied text\n")
@@ -921,7 +921,7 @@ def test_placeholders_become_quoted_absolute_paths_that_the_shell_reads_back(
     task = command_step(
         "cp {source} {target}",
         inputs={"source": "source.txt"},
-        produces={"target": "copies/target.txt"},
+        outputs={"target": "copies/target.txt"},
         registry=registry,
         name="copy",
     )
@@ -935,7 +935,7 @@ def test_placeholders_become_quoted_absolute_paths_that_the_shell_reads_back(
 
 
 def test_doubled_braces_reach_the_shell_as_single_braces(tmp_path: Path) -> None:
-    """The command printf '%s' '{{}}' > {out} writes the two characters "{}" to the product."""
+    """The command printf '%s' '{{}}' > {out} writes the two characters "{}" to the output."""
     pipeline, product = _one_step(tmp_path, "printf '%s' '{{}}' > {out}")
 
     assert run(pipeline) == {"step": TaskOutcome.SUCCESS}
@@ -943,22 +943,22 @@ def test_doubled_braces_reach_the_shell_as_single_braces(tmp_path: Path) -> None
 
 
 def test_the_command_is_identical_for_equal_mappings_in_any_order(tmp_path: Path) -> None:
-    """Two calls whose inputs and produces hold the same entries in a different order give the same run string."""
+    """Two calls whose inputs and outputs hold the same entries in a different order give the same run string."""
     command = _ORDER_COMMAND
     inputs = {"population": _POPULATION, "script": _SCRIPT}
-    produces = _ORDER_PRODUCTS
+    outputs = _ORDER_PRODUCTS
 
     forward = command_step(
         command,
         inputs=inputs,
-        produces=produces,
+        outputs=outputs,
         registry=_registry(tmp_path),
         name="subset",
     )
     backward = command_step(
         command,
         inputs=_reversed(inputs),
-        produces=_reversed(produces),
+        outputs=_reversed(outputs),
         registry=_registry(tmp_path),
         name="subset",
     )
@@ -980,18 +980,18 @@ def test_the_command_changes_when_the_command_text_changes(tmp_path: Path) -> No
 
 # Running the command
 #
-# The two tests of product directories run the command with run_command, outside pytask,
-# since pytask may create a product's parent directory itself before a step runs.
+# The two tests of output directories run the command with run_command, outside pytask,
+# since pytask may create an output's parent directory itself before a step runs.
 
 
-def test_the_product_parent_directory_is_created_before_the_command_runs(
+def test_the_output_parent_directory_is_created_before_the_command_runs(
     tmp_path: Path,
 ) -> None:
-    """Two product keys in different nested directories that do not exist yet, "a/b/out.txt" and "c/out.log", are both written by a command that does not create the directories."""
+    """Two output keys in different nested directories that do not exist yet, "a/b/out.txt" and "c/out.log", are both written by a command that does not create the directories."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = command_step(
         "printf made > {table} && printf log > {log}",
-        produces={"table": "a/b/out.txt", "log": "c/out.log"},
+        outputs={"table": "a/b/out.txt", "log": "c/out.log"},
         registry=registry,
         name="two_dirs",
     )
@@ -1008,10 +1008,10 @@ def test_the_product_parent_directory_is_created_before_the_command_runs(
     assert log.read_text() == "log"
 
 
-def test_the_command_does_not_run_when_a_product_directory_cannot_be_created(
+def test_the_command_does_not_run_when_an_output_directory_cannot_be_created(
     tmp_path: Path,
 ) -> None:
-    """When a product's parent path is an existing file, the step fails and the author's command, which would write a marker file, did not run."""
+    """When an output's parent path is an existing file, the step fails and the author's command, which would write a marker file, did not run."""
     registry = FileRegistry(tmp_path / "out", "run1")
     blocker = registry.path_for("blocked")
     blocker.parent.mkdir(parents=True)
@@ -1019,7 +1019,7 @@ def test_the_command_does_not_run_when_a_product_directory_cannot_be_created(
     marker = tmp_path / "author_command_ran"
     task = command_step(
         f"touch {shlex.quote(str(marker))}",
-        produces={"out": "blocked/out.txt"},
+        outputs={"out": "blocked/out.txt"},
         registry=registry,
     )
 
@@ -1031,7 +1031,7 @@ def test_the_command_does_not_run_when_a_product_directory_cannot_be_created(
 
 
 def test_the_command_runs_under_bin_sh(tmp_path: Path) -> None:
-    """A command that writes "$0" to its product writes /bin/sh."""
+    """A command that writes "$0" to its output writes /bin/sh."""
     pipeline, product = _one_step(tmp_path, 'printf %s "$0" > {out}')
 
     assert run(pipeline) == {"step": TaskOutcome.SUCCESS}
@@ -1041,7 +1041,7 @@ def test_the_command_runs_under_bin_sh(tmp_path: Path) -> None:
 def test_the_command_runs_in_the_working_directory_of_the_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A command that writes the output of pwd to its product writes the current working directory of the process that ran the build."""
+    """A command that writes the output of pwd to its output writes the current working directory of the process that ran the build."""
     work = tmp_path / "work"
     work.mkdir()
     monkeypatch.chdir(work)
@@ -1065,17 +1065,17 @@ def test_exit_in_the_command_gives_its_status(tmp_path: Path) -> None:
 def test_a_trailing_comment_and_a_heredoc_in_the_command_behave_as_written(
     tmp_path: Path,
 ) -> None:
-    """A command that ends in a shell comment, and a command that writes its product from a heredoc, each run and write the expected product."""
+    """A command that ends in a shell comment, and a command that writes its output from a heredoc, each run and write the expected output."""
     registry = FileRegistry(tmp_path / "out", "run1")
     commented = command_step(
         "printf done > {out} # a trailing comment",
-        produces={"out": "commented.txt"},
+        outputs={"out": "commented.txt"},
         registry=registry,
         name="commented",
     )
     heredoc = command_step(
         "cat > {out} <<'EOF'\nfirst line\nsecond line\nEOF",
-        produces={"out": "heredoc.txt"},
+        outputs={"out": "heredoc.txt"},
         registry=registry,
         name="heredoc",
     )
@@ -1087,10 +1087,10 @@ def test_a_trailing_comment_and_a_heredoc_in_the_command_behave_as_written(
     assert registry.path_for("heredoc.txt").read_text() == "first line\nsecond line\n"
 
 
-def test_products_from_an_earlier_run_are_not_removed_before_the_command_runs(
+def test_outputs_from_an_earlier_run_are_not_removed_before_the_command_runs(
     tmp_path: Path,
 ) -> None:
-    """A command that appends a line to its product, run on two builds, leaves two lines in the product."""
+    """A command that appends a line to its output, run on two builds, leaves two lines in the output."""
     for _ in range(2):
         # The step's code identity is always stale, so it runs on each build.
         pipeline, product = _one_step(tmp_path, "echo again >> {out}")
@@ -1163,10 +1163,10 @@ def test_dagger_run_reports_a_failing_command_step_and_exits_one(tmp_path: Path)
     assert expected in result.stderr, result.stderr
 
 
-def test_a_command_that_writes_no_declared_product_fails_the_step_naming_it(
+def test_a_command_that_writes_no_declared_output_fails_the_step_naming_it(
     tmp_path: Path,
 ) -> None:
-    """A command that exits 0 without writing its product makes run() raise StepFailed naming the step and pytask's NodeNotFoundError."""
+    """A command that exits 0 without writing its output makes run() raise StepFailed naming the step and pytask's NodeNotFoundError."""
     pipeline, product = _one_step(tmp_path, "true")
 
     error = _step_failed(pipeline)
@@ -1222,10 +1222,10 @@ def test_a_changed_input_file_makes_preview_report_the_input_file(tmp_path: Path
 def test_two_command_steps_with_one_name_make_run_raise_the_generic_message(
     tmp_path: Path,
 ) -> None:
-    """Two command steps named 'dup' with different products, in a snapshot made directly since a Pipeline refuses the second, make _run() raise PipelineError "Two steps are named 'dup'; give each a different name= to tell them apart." before anything runs."""
+    """Two command steps named 'dup' with different outputs, in a snapshot made directly since a Pipeline refuses the second, make _run() raise PipelineError "Two steps are named 'dup'; give each a different name= to tell them apart." before anything runs."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
-        command_step("printf x > {out}", produces={"out": key}, registry=registry, name="dup")
+        command_step("printf x > {out}", outputs={"out": key}, registry=registry, name="dup")
         for key in ("first.txt", "second.txt")
     ]
 
@@ -1246,7 +1246,7 @@ def test_two_command_steps_with_one_name_make_run_raise_the_generic_message(
 
 
 def test_a_command_step_with_an_env_runs_the_tool_from_that_env(tmp_path: Path) -> None:
-    """A step with env set to a fake env's prefix path runs the tool that exists only in that env through run(), and its product records that the tool ran."""
+    """A step with env set to a fake env's prefix path runs the tool that exists only in that env through run(), and its output records that the tool ran."""
     env = _make_env(tmp_path / "env")
     pipeline, product = _one_step(tmp_path, _TOOL + " ran {out}", env=str(env))
 
@@ -1255,7 +1255,7 @@ def test_a_command_step_with_an_env_runs_the_tool_from_that_env(tmp_path: Path) 
 
 
 def test_a_compound_command_finds_the_env_tool_in_both_parts(tmp_path: Path) -> None:
-    """A command "<tool> a {out} && <tool> b {out}" under a fake env runs the tool in both parts, so the product has both lines."""
+    """A command "<tool> a {out} && <tool> b {out}" under a fake env runs the tool in both parts, so the output has both lines."""
     env = _make_env(tmp_path / "env")
     command = f"{_TOOL} a {{out}} && {_TOOL} b {{out}}"
     pipeline, product = _one_step(tmp_path, command, env=str(env))
@@ -1267,19 +1267,19 @@ def test_a_compound_command_finds_the_env_tool_in_both_parts(tmp_path: Path) -> 
 def test_an_env_that_does_not_resolve_makes_run_raise_a_pipeline_error_naming_the_step(
     tmp_path: Path,
 ) -> None:
-    """A step whose env is a path with no bin/python makes run() raise PipelineError naming the step and the env, before any step runs or writes a product."""
+    """A step whose env is a path with no bin/python makes run() raise PipelineError naming the step and the env, before any step runs or writes an output."""
     missing_env = str(tmp_path / "no_such_env")
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         command_step(
             "printf x > {out}",
-            produces={"out": "local.txt"},
+            outputs={"out": "local.txt"},
             registry=registry,
             name="local",
         ),
         command_step(
             "printf x > {out}",
-            produces={"out": "elsewhere.txt"},
+            outputs={"out": "elsewhere.txt"},
             registry=registry,
             env=missing_env,
             name="elsewhere",
@@ -1299,7 +1299,7 @@ def test_an_env_that_does_not_resolve_makes_run_raise_a_pipeline_error_naming_th
 
 @pytest.mark.usefixtures("forget_definitions")
 def test_dagger_run_runs_a_command_step_under_its_env(tmp_path: Path) -> None:
-    """'dagger run -c <definition> --local' on a definition with a command step under a fake env exits 0, and the step's product records that the env's tool ran."""
+    """'dagger run -c <definition> --local' on a definition with a command step under a fake env exits 0, and the step's output records that the env's tool ran."""
     env = _make_env(tmp_path / "env")
     definition = _write_definition(
         tmp_path / "definition", _TOOL + " ran {out}", str(env), "tooled"
@@ -1332,26 +1332,26 @@ def test_dagger_run_with_an_env_that_does_not_resolve_exits_two_with_the_message
 # End to end
 
 
-def test_python_command_python_chain_runs_through_run_with_the_right_final_product(
+def test_python_command_python_chain_runs_through_run_with_the_right_final_output(
     tmp_path: Path,
 ) -> None:
-    """A python_step, then a command_step reading its product, then a python_step reading the command step's product all have outcome SUCCESS through run(), and the final product holds the expected values."""
+    """A python_step, then a command_step reading its output, then a python_step reading the command step's output all have outcome SUCCESS through run(), and the final output holds the expected values."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(
-            _people, inputs={}, produces="people.csv", registry=registry, name="people"
+            _people, inputs={}, outputs="people.csv", registry=registry, name="people"
         ),
         command_step(
             "awk -F, 'NR == 1 || $2 > 20' {people} > {adults}",
             inputs={"people": "people.csv"},
-            produces={"adults": "adults.csv"},
+            outputs={"adults": "adults.csv"},
             registry=registry,
             name="adults",
         ),
         python_step(
             _total_age,
             inputs={"adults": "adults.csv"},
-            produces="total.csv",
+            outputs="total.csv",
             registry=registry,
             name="total",
         ),

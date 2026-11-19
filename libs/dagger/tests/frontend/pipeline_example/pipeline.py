@@ -30,18 +30,18 @@ def pipeline() -> Pipeline:
     """Add the three steps, with their outputs and state under ``output`` next to this file."""
     p = Pipeline(HERE / "output", run_name="example")
     p.add_python_step(
-        make_population, inputs={}, produces="population.parquet", name="population"
+        make_population, inputs={}, outputs="population.parquet", name="population"
     )
     p.add_python_step(
         select_adults,
         inputs={"population": "population.parquet"},
-        produces="adults.parquet",
+        outputs="adults.parquet",
         name="adults",
     )
     p.add_python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
-        produces="summary.csv",
+        outputs="summary.csv",
         name="summary",
     )
     return p

@@ -45,13 +45,13 @@ from vivarium.dagger.frontend.simulation_step import simulation_step
 from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 _KEY = "sims/toy"
-"""The simulation step's produces key, which is also its name."""
+"""The simulation step's outputs key, which is also its name."""
 
 _CONSUMER = "summary"
 """The name of the python step that reads the run directory."""
 
 _SUMMARY_KEY = "summary.parquet"
-"""The consumer's product key."""
+"""The consumer's output key."""
 
 _OPTIONS: dict[str, str | int | float | bool] = {
     "project": "proj_simscience",
@@ -87,7 +87,7 @@ class _Simulation:
         return scratch_for(self.run_dir)
 
     def registry(self) -> FileRegistry:
-        """Return a new registry whose products go under ``base / "out"``."""
+        """Return a new registry whose outputs go under ``base / "out"``."""
         return FileRegistry(self.base / "out", "run1")
 
     def calls(self) -> list[list[str]]:
@@ -121,7 +121,7 @@ def _pipeline(
         simulation_step(
             spec=simulation.spec,
             branches=simulation.branches,
-            produces=_KEY,
+            outputs=_KEY,
             registry=registry,
             env=str(simulation.env),
             options=_OPTIONS,
@@ -132,7 +132,7 @@ def _pipeline(
             python_step(
                 summarize_run,
                 inputs={"simulation": _KEY},
-                produces=_SUMMARY_KEY,
+                outputs=_SUMMARY_KEY,
                 registry=registry,
                 name=_CONSUMER,
             )

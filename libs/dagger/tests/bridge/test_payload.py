@@ -249,7 +249,7 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
     monkeypatch: pytest.MonkeyPatch,
     pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
-    """For the harness's first step, payload_for gives kind 'python', the task name, target 'vivarium.dagger.harness:_double', sys_path holding only the harness module's import root (the src directory above vivarium/dagger/harness.py), suffix '.parquet', kwargs equal to the encoded input and product paths, and cwd equal to os.getcwd(); json.dumps accepts it."""
+    """For the harness's first step, payload_for gives kind 'python', the task name, target 'vivarium.dagger.harness:_double', sys_path holding only the harness module's import root (the src directory above vivarium/dagger/harness.py), suffix '.parquet', kwargs equal to the encoded input and output paths, and cwd equal to os.getcwd(); json.dumps accepts it."""
     controller = tmp_path / "controller"
     controller.mkdir()
     monkeypatch.chdir(controller)
@@ -271,15 +271,15 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
     assert json.loads(json.dumps(payload)) == dict(payload)
 
 
-def test_payload_for_a_python_step_with_several_products_maps_each_name_to_its_suffix(
+def test_payload_for_a_python_step_with_several_outputs_maps_each_name_to_its_suffix(
     tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
 ) -> None:
-    """For a python step whose produces maps 'population' and 'deaths' to a Parquet and a CSV key, the payload's suffix maps each name to its suffix, its kwargs tag each product path by name, and it round-trips through JSON."""
+    """For a python step whose outputs maps 'population' and 'deaths' to a Parquet and a CSV key, the payload's suffix maps each name to its suffix, its kwargs tag each output path by name, and it round-trips through JSON."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
         step_targets.split_frames,
         inputs={},
-        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        outputs={"population": "population.parquet", "deaths": "deaths.csv"},
         registry=registry,
         name="split",
     )
@@ -530,7 +530,7 @@ def make_table():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    step = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
+    step = python_step(make_table, inputs={}, outputs="table.parquet", registry=registry)
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     p.add_task(step)
     return p

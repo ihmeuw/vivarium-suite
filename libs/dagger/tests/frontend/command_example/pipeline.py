@@ -28,17 +28,15 @@ def pipeline() -> Pipeline:
         run_name="example",
         root_inputs={"select_adults.py": HERE / "select_adults.py"},
     )
-    p.add_python_step(
-        make_population, inputs={}, produces="population.csv", name="population"
-    )
+    p.add_python_step(make_population, inputs={}, outputs="population.csv", name="population")
     p.add_command_step(
         "python {script} {population} {adults}",
         inputs={"script": "select_adults.py", "population": "population.csv"},
-        produces={"adults": "adults.csv"},
+        outputs={"adults": "adults.csv"},
         env=sys.prefix,
         name="adults",
     )
     p.add_python_step(
-        total_adults, inputs={"adults": "adults.csv"}, produces="summary.csv", name="summary"
+        total_adults, inputs={"adults": "adults.csv"}, outputs="summary.csv", name="summary"
     )
     return p

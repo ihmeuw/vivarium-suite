@@ -27,7 +27,7 @@ def pipeline() -> Pipeline:
     p.add_simulation_step(
         spec=HERE / "toy_model.yaml",
         branches=HERE / "branches.yaml",
-        produces="sims/toy",
+        outputs="sims/toy",
         env=ENV,
         options={
             "project": "proj_simscience",
@@ -39,7 +39,7 @@ def pipeline() -> Pipeline:
     p.add_python_step(
         summarize_deaths,
         inputs={"simulation": "sims/toy"},
-        produces="summary.csv",
+        outputs="summary.csv",
         name="summary",
     )
     return p

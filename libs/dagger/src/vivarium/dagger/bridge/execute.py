@@ -721,7 +721,7 @@ def _warn_if_last_run_unfinished(root: Path) -> None:
     _warn(
         f"The latest earlier run under {root}, Jobmon workflow {state.workflow_id} in "
         f"{state.workdir}, {what}. Its jobs on compute nodes may still be running and "
-        "writing the same products as this build."
+        "writing the same outputs as this build."
     )
 
 
@@ -839,7 +839,7 @@ def _prepare_products(session: Session, stale: list[PTask]) -> None:
                     node.root_dir.mkdir(parents=True, exist_ok=True)
         except OSError as error:
             raise _failure(
-                f"Step {task.name!r}: could not create a directory for its products: {error}"
+                f"Step {task.name!r}: could not create a directory for its outputs: {error}"
             ) from error
 
 

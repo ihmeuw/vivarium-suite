@@ -126,7 +126,7 @@ tmp_path = Path(sys.argv[1])
 artifacts = registry(tmp_path)
 tasks = stable(
     [
-        python_step(step_targets.constant, inputs={}, produces=name, registry=artifacts)
+        python_step(step_targets.constant, inputs={}, outputs=name, registry=artifacts)
         for name in ("first.parquet", "second.parquet")
     ]
 )
@@ -319,7 +319,7 @@ def _two_independent(tmp_path: Path) -> list[Task]:
     artifacts = registry(tmp_path)
     return stable(
         [
-            python_step(step_targets.constant, inputs={}, produces=name, registry=artifacts)
+            python_step(step_targets.constant, inputs={}, outputs=name, registry=artifacts)
             for name in _TWO
         ]
     )
@@ -479,7 +479,7 @@ def test_bridge_interrupted_is_a_system_exit_with_exit_code_143() -> None:
 def test_sigterm_during_the_run_records_settles_and_writes_the_lockfile(
     tmp_path: Path,
 ) -> None:
-    """End to end: with FakeJobmon(interrupt_after=2, workflow_id=4242), a bridged build of a -> b -> c plus d returns normally; a and d are SUCCESS with pytask.lock entries, b is FAIL, c is SKIP_PREVIOUS_FAILED, each step has one report, pytask.lock.journal is gone, and no product records the test process's pid."""
+    """End to end: with FakeJobmon(interrupt_after=2, workflow_id=4242), a bridged build of a -> b -> c plus d returns normally; a and d are SUCCESS with pytask.lock entries, b is FAIL, c is SKIP_PREVIOUS_FAILED, each step has one report, pytask.lock.journal is gone, and no output records the test process's pid."""
     root = build_root(tmp_path)
 
     session = _interrupted_build(tmp_path)

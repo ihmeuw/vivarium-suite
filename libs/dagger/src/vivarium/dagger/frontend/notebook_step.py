@@ -5,7 +5,7 @@
 command runs ``python -m papermill`` in the step's declared environment, which
 :func:`~vivarium.dagger.backend.build.run_command` puts first on ``PATH``. The source
 notebook is a declared input file. The executed notebook, written to its own path, and
-the data files named in ``produces`` are the step's products, registered through the
+the data files named in ``outputs`` are the step's outputs, registered through the
 shared :class:`~vivarium.dagger.backend.wiring.FileRegistry` so downstream steps
 get real edges to them. If the notebook raises, the step fails and the executed notebook,
 with the error in it, stays at its path. The command removes an executed notebook left by
@@ -14,10 +14,10 @@ always this run's. :func:`describe_notebook_failure` reads the error back from i
 step's failure message.
 
 Papermill injects parameters into the notebook's cell tagged ``parameters``. Each input
-and product reaches the notebook as its resolved path, as a ``str``, under its parameter
+and output reaches the notebook as its resolved path, as a ``str``, under its parameter
 name, and the notebook reads and writes those paths itself. Scalar parameters keep their
 Python type, so the string ``"123"`` stays a string and is not read as a number. Every
-name a step passes in ``inputs``, ``produces`` or ``parameters`` must be assigned at the
+name a step passes in ``inputs``, ``outputs`` or ``parameters`` must be assigned at the
 top level of the notebook's first cell tagged ``parameters``, by a plain assignment such
 as ``location = None`` or an annotated one such as ``location: str``, and a notebook with
 no cell tagged ``parameters`` takes no names. :func:`notebook_step` checks this each time
@@ -92,7 +92,7 @@ def notebook_step(
     registry: FileRegistry,
     env: str,
     inputs: Mapping[str, FileKey] | None = None,
-    produces: Mapping[str, FileKey] | None = None,
+    outputs: Mapping[str, FileKey] | None = None,
     parameters: Mapping[str, NotebookParameter] | None = None,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
@@ -107,7 +107,7 @@ def notebook_step(
         as the working directory.
     executed
         The file key for the executed notebook, which must end in ``.ipynb``.
-        Registered with ``registry`` as a product.
+        Registered with ``registry`` as an output.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
     env
@@ -119,11 +119,11 @@ def notebook_step(
         Maps notebook parameter names to the file keys the registry resolves to the
         producing step's node (or a declared root input). Each input's resolved path
         reaches the notebook as a ``str`` under its parameter name.
-    produces
+    outputs
         Maps notebook parameter names to file keys for the data files the notebook
-        writes. Each key is registered with ``registry`` as a product, and its path reaches
+        writes. Each key is registered with ``registry`` as an output, and its path reaches
         the notebook as a ``str`` under its parameter name. The parent directory of each
-        product, and of the executed notebook, is created before the notebook runs.
+        output, and of the executed notebook, is created before the notebook runs.
         Each key must resolve to its own path, distinct from ``executed``'s and
         ``notebook``'s.
     parameters
@@ -142,7 +142,7 @@ def notebook_step(
         command, whose ``env`` is ``env``, whose inputs are the source notebook's file node
         and each input's resolved node (the producing step's own node for a produced key,
         or a node at the file's path for a root input), and whose outputs are the
-        registry's nodes for ``executed`` and for each ``produces`` key. Its inputs and
+        registry's nodes for ``executed`` and for each ``outputs`` key. Its inputs and
         outputs are keyed by parameter name, with the source notebook under
         ``"__notebook__"`` and the executed notebook under ``"__executed__"``. The command
         lists parameters in name order, so equal arguments give an identical command.
@@ -150,25 +150,25 @@ def notebook_step(
     Raises
     ------
     vivarium.dagger.backend.wiring.WiringError
-        If an input key resolves to no producer and no root input, or ``executed`` or a
-        ``produces`` key is a declared root input or resolves to the path of a different
+        If an input key resolves to no producer and no root input, or ``executed`` or an
+        ``outputs`` key is a declared root input or resolves to the path of a different
         key that is already registered (another step's output) or of a root input. The
         message starts with ``Step '<name>':``, followed by the registry's message, which
         names the file key. The same key claimed by two steps is left for the build
         to reject.
     ValueError
-        If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``produces`` or
+        If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``outputs`` or
         ``parameters`` is not a valid Python identifier, is a keyword, appears in more
         than one of the three, or is reserved (``__notebook__``, ``__executed__``,
         ``__code_id__``, ``__command__``); a parameter value is not a ``str``, a real
         number, a ``bool`` or ``None`` (the message says to pass files through ``inputs``
         and to convert a numpy ``bool_`` with ``bool()``); ``notebook`` does not end in
         ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
-        ``notebook``, ``executed`` and the ``produces`` keys resolve to one path, as when a
-        ``produces`` key equals ``executed`` or is given twice (the message names both).
+        ``notebook``, ``executed`` and the ``outputs`` keys resolve to one path, as when an
+        ``outputs`` key equals ``executed`` or is given twice (the message names both).
         Except for an empty ``name``, each of these messages starts with
         ``Step '<name>':``.
-        When ``inputs``, ``produces`` and ``parameters`` hold at least one name between
+        When ``inputs``, ``outputs`` and ``parameters`` hold at least one name between
         them, also if ``notebook`` cannot be read as an nbformat 4 notebook, has no cell
         tagged ``parameters``, or its first cell tagged ``parameters`` is not a code cell,
         is not valid Python, or does not assign every passed name at its top level. Each
@@ -184,18 +184,18 @@ def notebook_step(
     if not env:
         raise ValueError(f"Step {task_name!r}: env must be a non-empty string, got {env!r}.")
     input_keys: dict[str, FileKey] = dict(inputs or {})
-    product_keys: dict[str, FileKey] = dict(produces or {})
+    output_keys: dict[str, FileKey] = dict(outputs or {})
     scalars: dict[str, NotebookParameter] = dict(parameters or {})
     groups: dict[str, Iterable[str]] = {
         "inputs": input_keys,
-        "produces": product_keys,
+        "outputs": output_keys,
         "parameters": scalars,
     }
     _check_names(task_name, groups)
     _check_parameter_values(task_name, scalars)
     source = Path(notebook).resolve()
     _check_paths(task_name, source, executed)
-    _check_collisions(task_name, source, executed, product_keys, registry)
+    _check_collisions(task_name, source, executed, output_keys, registry)
     _check_parameters_cell(task_name, source, groups)
 
     try:
@@ -203,19 +203,17 @@ def notebook_step(
             param: registry.resolve_input(key) for param, key in input_keys.items()
         }
         executed_node = registry.register_output(executed)
-        products = {
-            param: registry.register_output(key) for param, key in product_keys.items()
-        }
+        nodes = {param: registry.register_output(key) for param, key in output_keys.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
     values: dict[str, NotebookParameter] = {
-        param: str(node.path) for param, node in (*dependencies.items(), *products.items())
+        param: str(node.path) for param, node in (*dependencies.items(), *nodes.items())
     }
     values.update(scalars)
     command = _papermill_command(
         source,
         registry.path_for(executed),
-        [registry.path_for(key) for key in product_keys.values()],
+        [registry.path_for(key) for key in output_keys.values()],
         values,
     )
     # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
@@ -224,7 +222,7 @@ def notebook_step(
         name=task_name,
         run=command,
         inputs={_NOTEBOOK_INPUT: file_node(source), **dependencies},
-        outputs={_EXECUTED_OUTPUT: executed_node, **products},
+        outputs={_EXECUTED_OUTPUT: executed_node, **nodes},
         resources={} if resources is None else resources,
         env=env,
     )
@@ -274,7 +272,7 @@ def describe_notebook_failure(task: Task, error: BaseException) -> str | None:
         ``None`` for a task that is not a notebook step, and for a notebook step whose
         executed notebook records no error when ``error`` is not a
         ``CalledProcessError``, as when the notebook finished but did not write a
-        declared product.
+        declared output.
     """
     if not isinstance(task.run, str):
         return None
@@ -353,7 +351,7 @@ def _check_names(task_name: str, groups: Mapping[str, Iterable[str]]) -> None:
             elif name in seen:
                 problem = (
                     f"also appears in {seen[name]}; a name may appear in only one of "
-                    "inputs, produces and parameters"
+                    "inputs, outputs and parameters"
                 )
             else:
                 seen[name] = group
@@ -405,14 +403,14 @@ def _check_collisions(
     task_name: str,
     source: Path,
     executed: FileKey,
-    products: Mapping[str, FileKey],
+    output_keys: Mapping[str, FileKey],
     registry: FileRegistry,
 ) -> None:
-    """Reject two of the source, the executed notebook and the products at one path."""
+    """Reject two of the source, the executed notebook and the outputs at one path."""
     claimed = {source: f"source notebook {str(source)!r}"}
     outputs = {f"executed key {executed!r}": executed}
     outputs.update(
-        (f"product {param!r} (key {key!r})", key) for param, key in products.items()
+        (f"output {param!r} (key {key!r})", key) for param, key in output_keys.items()
     )
     for label, key in outputs.items():
         path = registry.path_for(key)
@@ -603,12 +601,12 @@ def _escape_braces(path: Path) -> str:
 def _papermill_command(
     notebook: Path,
     executed: Path,
-    products: Iterable[Path],
+    outputs: Iterable[Path],
     values: Mapping[str, NotebookParameter],
 ) -> str:
     """Return the command that makes output dirs, removes a previous executed notebook,
     and runs papermill on a temporary kernel."""
-    directories = sorted({str(path.parent) for path in (executed, *products)})
+    directories = sorted({str(path.parent) for path in (executed, *outputs)})
     flags = [arg for name in sorted(values) for arg in _parameter_flag(name, values[name])]
     papermill = shlex.join(
         ["python", "-m", "papermill", _escape_braces(notebook), _escape_braces(executed)]
