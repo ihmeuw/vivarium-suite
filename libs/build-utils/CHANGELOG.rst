@@ -1,4 +1,4 @@
-**4.15.0 - 11/05/26**
+**4.15.0 - 11/18/26**
 
 - Add a ``uv_lock`` option to ``reusable_pipeline`` that builds each Python version's
   environment from the repo's ``uv.lock`` with ``uv sync --locked --no-editable``, using
@@ -18,6 +18,24 @@
 - Build with ``uv build`` and upload to Artifactory with ``uv publish``, in place of
   ``build`` and ``twine``
 - Run conda-pack with ``uvx`` in the shared environment job
+
+**4.14.2 - 11/13/26**
+
+- Build one ``<model>_current`` shared environment for each model repo in
+  ``ACTIVE_MODELS``, and one environment per type for each repo in the new
+  ``TYPE_SPECIFIC_ACTIVE_MODELS``. LSFF moves to a single environment, and the other
+  three models stay type-specific
+
+**4.14.1 - 11/10/26**
+
+- Log the uv cache size on each Jenkins build node every day in the cleanup job, and
+  clean the cache fully every Sunday
+
+**4.14.0 - 11/10/26**
+
+- Reject a beta of a version below the newest final release, so a beta line that a later
+  final overtook is renumbered rather than continued
+- Document releasing betas from ``beta/**`` branches and finals from ``main``
 
 **4.13.0 - 11/04/26**
 

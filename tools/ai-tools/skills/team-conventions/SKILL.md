@@ -1,6 +1,6 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, writing a Jira ticket against the team's hub doc, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
@@ -39,7 +39,7 @@ Pull it via the hub MCP server when the user asks to write a ticket:
 mcp__plugin_mcp-hub_mcp-hub__get_page(page_id="178128092")
 ```
 
-That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, where to file the ticket, and when ticket creation is expected. Read it, then draft the ticket body using its structure verbatim — overview, acceptance criteria, and the optional fields when they apply. Show the user the draft for review before creating the ticket.
+That page (title: *Make a Jira Ticket*, space: SSE) lists the required and optional sections, the epic or fix version, labels, and story points to set, and when ticket creation is expected. Read it, then draft the ticket using its structure verbatim — overview, acceptance criteria (see the rules below), the optional fields when they apply, and the epic or fix version, labels, and story points. Show the user the draft for review before creating the ticket.
 
 Format the draft in **Jira wiki markup** — not Markdown, not RST.
 
@@ -63,6 +63,28 @@ still carries the `_TODO (human)...` line verbatim, or it carries content the us
 gave you word for word. Anything else is your writing - put the line back. Say which of
 the two it is when you show the draft and when you report the created key.
 
+The acceptance criteria are the other section you never fill on your own. An engineer
+builds toward them, so a wrong criterion does more harm than a missing one. Each draft
+takes one of three paths. If the request does not make the path clear, ask the user
+before you draft:
+
+- **The user gives the criteria.** Use them. You may fix the format but not the meaning.
+- **You propose the criteria.** Do this only when the design is settled, for example
+  after a brainstorm or from a design doc that the user names. Show the criteria as
+  their own list and get an explicit yes on that list. A yes on the whole draft is not
+  a yes on the criteria. Ask for the yes on the criteria as its own question, before
+  you ask to create the ticket.
+- **The design is not settled.** This is normal for a quick ticket that records an idea
+  or a problem. Do not invent criteria to fill the section. Leave this in its place:
+
+  ```
+  h3. Acceptance criteria
+  _TODO (human): not yet defined - design the work before it starts._
+  ```
+
+Say which path the criteria took when you show the draft and when you report the
+created key.
+
 Once the user approves the draft, create the ticket via the `simsci` plugin's Jira MCP:
 
 ```
@@ -71,7 +93,15 @@ mcp__plugin_simsci_jira__create_issue(project="MIC", summary="<title>", descript
 
 The same call also takes `priority`, `labels`, `fix_versions`, `story_points`, `epic`,
 `assignee`, `sprint`, and `links`. Set only the values that the user gave or approved in
-the draft.
+the draft. If the ticket needs an epic and the user does not name one, search for open
+epics (`project = MIC AND issuetype = Epic AND status not in (Done, "Won't Do",
+Duplicate)`) and propose one. If it needs a fix version and the user does not name one,
+propose one from the hub page's list. If you cannot tell whether it needs an epic or a
+fix version, or no fix version fits, ask the user. Do not make up a new fix version.
+
+After a ticket exists, never change its story points unless the user gives you the new
+value. If the points need to change, ask the user how many points to give the ticket. Do
+not round a `.01` estimate or pick a number yourself.
 
 Report the resulting `MIC-####` key back to the user so it can flow into the branch name (§1) and PR body (§3).
 

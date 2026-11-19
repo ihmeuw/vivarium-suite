@@ -112,8 +112,10 @@ def check_bump(current: str, released: Iterable[str]) -> str | None:
     - beta to beta: ``bN`` to ``b(N+1)`` of the same version.
     - beta to final: the final of a version one step from the last final.
 
-    Versions released before ``current`` decide the step, so a patch release of
-    an older line still passes.
+    A beta must also be of a version above the newest final, so a beta line that a
+    later final overtook is renumbered rather than continued. Versions released
+    before ``current`` decide the step, so a patch release of an older line still
+    passes.
 
     Parameters
     ----------
@@ -136,6 +138,14 @@ def check_bump(current: str, released: Iterable[str]) -> str | None:
     if cur.pre is not None:
         if target in all_released:
             return f"{target} is already released, so it cannot get a new beta {cur}."
+        newest_final = max((v for v in all_released if not v.is_prerelease), default=None)
+        if newest_final is not None and target < newest_final:
+            return (
+                f"{target} is below the newest final release {newest_final}, so it "
+                f"cannot get a new beta {cur}. Renumber the beta line to a version one "
+                f"step above {newest_final}, for example "
+                f"{newest_final.major}.{newest_final.minor + 1}.0b1."
+            )
         previous = earlier[-1] if earlier else None
         if (
             previous is not None

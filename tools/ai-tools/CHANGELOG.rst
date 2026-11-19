@@ -1,9 +1,21 @@
-**0.32.0 - 11/05/26**
+**0.33.0 - 11/18/26**
 
 - ``environments``: add a first section for repos with a committed ``uv.lock``, which use
   the checkout's ``.venv`` through ``make build-env`` or ``uv sync --locked``
 - ``make-commands``, ``framework-clis`` and ``model-development``: describe how uv repos
   build and activate their environment
+
+**0.32.0 - 11/10/26**
+
+- ``team-conventions``: apply the hub page's rules for the epic or fix version, labels,
+  and story points to every ticket draft, and ask the user before changing a ticket's
+  story points
+
+**0.31.2 - 11/10/26**
+
+- ``team-conventions`` and ``brainstorming``: write a ticket's acceptance criteria only
+  from the user, or from a settled design with an explicit yes on the criteria, and
+  otherwise leave a human TODO line in their place
 
 **0.31.1 - 10/29/26**
 

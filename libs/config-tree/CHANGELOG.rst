@@ -1,3 +1,7 @@
+**5.2.2 - 11/17/26**
+
+- Cap ``vivarium-dependencies`` below 3.0.0
+
 **5.2.1 - 09/22/26**
 
 - Fail fast when ``make build-env`` fails and tear down the partially-built
