@@ -37,12 +37,12 @@ the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
    the number of commits ahead of it, so the user can catch a wrong base before
    the review. Do not wait for an answer. **If you cannot compute the
    merge-base, stop** — the lookup fails when `origin/<base-branch>` was never
-   fetched, and the shell can be unavailable outright. Say which step failed and stop. Do **not** reconstruct
-   the change from git internals, commit messages, or the current contents of
-   the files and review that instead: a review of an inferred diff indicts code
-   the change may never have touched, and every downstream step — the
-   dispositions, the fixes, the PR — inherits that error while looking exactly
-   like a real run.
+   fetched, and the shell can be unavailable outright. Say which step failed
+   and stop. Do **not** reconstruct the change from git internals, commit
+   messages, or the current contents of the files and review that instead: a
+   review of an inferred diff indicts code the change may never have touched,
+   and every downstream step — the dispositions, the fixes, the PR — inherits
+   that error while looking exactly like a real run.
 3. **Find out whether the tree is already green.** Unless this session already saw
    the checks pass on this branch, dispatch `simsci:_validator` (inputs per Step 5)
    in the same turn as the Step 3 proposal, so it costs no extra round trip.
