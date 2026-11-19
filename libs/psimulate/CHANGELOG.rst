@@ -2,8 +2,9 @@
 
 - Raise ``BackupLoadError`` when a backup exists but cannot be loaded, instead of
   restarting the simulation from the beginning
-- Start from the beginning only when no backup metadata exists. Other errors while
-  looking for a backup now fail the job instead of restarting it
+- Start from the beginning only when there is no backup metadata or no backup file
+  for the job. Other errors while looking for a backup now fail the job instead of
+  restarting it
 - Require ``vivarium-engine`` 6.1.1 or later, which fixes loading backups
 
 **1.1.1 - 11/18/26**
