@@ -35,11 +35,10 @@ now stay valid.
    imports, then the modules they import, then the modules those import.
 3. For each file, read its changed lines in the diff and list the changed
    behaviors: the functions, methods, and branches that the diff adds or changes.
-   A change that only
-   moves, renames, reformats, or edits comments or docstrings changes no behavior.
-   The summary covers these changed behaviors and nothing else. Do not add a row
-   for a behavior that the diff does not touch, even when a test of the file
-   covers it.
+   A change that only moves, renames, reformats, or edits comments or docstrings
+   changes no behavior. Apart from strategy items (step 5), the summary covers
+   these changed behaviors and nothing else. Do not add a row for a behavior that
+   the diff does not touch, even when a test of the file covers it.
 4. Find the tests that exercise each changed behavior. Start with the tests in the
    diff. A test outside the diff counts if you read it and it calls the changed
    code. List the cases, one behavior per row, in the order of the file's
@@ -47,7 +46,8 @@ now stay valid.
    each.
 5. With strategy items: put each item in the file whose code it exercises. An item
    that spans files goes under the highest file in the order. Each item gets a row
-   whether or not a test covers it. A test outside the diff counts if it clearly
+   whether or not a test covers it, and even when the code it exercises is
+   unchanged. A test outside the diff counts if it clearly
    covers the item. An outside-suite check counts if it is the only evidence for the
    item, and its Test cell gives the check's command. An item with neither gets
    ``Not tested`` in the Test column.
@@ -87,8 +87,8 @@ Exercised through the tests of `file_a.py`.
 - Leave out the "not tested" count when it is zero.
 - For a file whose changed code no test calls directly, replace the table with
   one sentence naming the file whose tests exercise it.
-- For a file whose diff changes no behavior, replace the table with one sentence
-  that says so, for example "No behavior change: the diff only renames
+- For a file whose diff changes no behavior and that has no strategy items,
+  replace the table with one sentence that says so, for example "No behavior change: the diff only renames
   `old_name`." Do not list the file's existing tests.
 
 ## Constraints
