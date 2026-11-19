@@ -1,4 +1,4 @@
-"""Track C walkthrough definition: python steps, one with two products, location inputs, a notebook step and a command step."""
+"""Track C walkthrough definition: python steps, one with two outputs, location inputs, a notebook step and a command step."""
 
 import sys
 from pathlib import Path
@@ -46,25 +46,25 @@ def pipeline() -> Pipeline:
         root_inputs=location_inputs(HERE / "inputs", LOCATIONS, PRIMARY_DATA),
     )
     p.add_python_step(
-        make_population, inputs={}, produces="population.parquet", name="population"
+        make_population, inputs={}, outputs="population.parquet", name="population"
     )
     p.add_python_step(
         split_by_age,
         inputs={"population": "population.parquet"},
-        produces={"children": "children.csv", "adults": "adults.parquet"},
+        outputs={"children": "children.csv", "adults": "adults.parquet"},
         name="adults",
     )
     p.add_python_step(
         total_adults,
         inputs={"adults": "adults.parquet"},
-        produces="summary.csv",
+        outputs="summary.csv",
         name="summary",
     )
     for location in LOCATIONS:
         p.add_python_step(
             mean_coverage,
             inputs={"coverage": location_key(location, "coverage.csv")},
-            produces=f"{location}/mean_coverage.parquet",
+            outputs=f"{location}/mean_coverage.parquet",
             name=f"coverage_{location}",
         )
     p.add_notebook_step(
@@ -72,14 +72,14 @@ def pipeline() -> Pipeline:
         executed="report_executed.ipynb",
         env=sys.prefix,
         inputs={"summary": "summary.csv"},
-        produces={"report": "report.csv"},
+        outputs={"report": "report.csv"},
         parameters={"title": "Adults"},
         name="report",
     )
     p.add_command_step(
         "cp {report} {copy}",
         inputs={"report": "report.csv"},
-        produces={"copy": "archive/report.csv"},
+        outputs={"copy": "archive/report.csv"},
         name="archive",
     )
     return p

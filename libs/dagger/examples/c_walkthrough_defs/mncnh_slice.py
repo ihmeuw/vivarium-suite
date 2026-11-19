@@ -59,14 +59,14 @@ def pipeline() -> Pipeline:
     p.add_python_step(
         postpartum_fraction,
         inputs={},
-        produces="postpartum_fraction.parquet",
+        outputs="postpartum_fraction.parquet",
         name="postpartum_fraction",
     )
-    p.add_python_step(demography, inputs={}, produces="demography.parquet", name="demography")
+    p.add_python_step(demography, inputs={}, outputs="demography.parquet", name="demography")
     p.add_python_step(
         ifa_coverage,
         inputs={"extract": location_key(LOCATION, "ifa_coverage.csv")},
-        produces="ifa_coverage.parquet",
+        outputs="ifa_coverage.parquet",
         name="ifa_coverage",
     )
     p.add_command_step(
@@ -77,7 +77,7 @@ def pipeline() -> Pipeline:
             "demography": "demography.parquet",
             "ifa_coverage": "ifa_coverage.parquet",
         },
-        produces={"artifact": "artifacts/nigeria.hdf"},
+        outputs={"artifact": "artifacts/nigeria.hdf"},
         env=ARTIFACT_ENV,
         name="artifact",
     )

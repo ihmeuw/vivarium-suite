@@ -30,7 +30,7 @@ def pipeline() -> Pipeline:
     p.add_command_step(
         "python {script} {artifact}",
         inputs={"script": "make_toy_artifact.py"},
-        produces={"artifact": "artifacts/toy.hdf"},
+        outputs={"artifact": "artifacts/toy.hdf"},
         env=ENV,
         name="artifact",
     )
@@ -38,7 +38,7 @@ def pipeline() -> Pipeline:
         spec=HERE / "toy_model.yaml",
         branches=HERE / "branches.yaml",
         artifact="artifacts/toy.hdf",
-        produces="sims/toy",
+        outputs="sims/toy",
         env=ENV,
         options={
             "project": "proj_simscience",
@@ -50,7 +50,7 @@ def pipeline() -> Pipeline:
     p.add_python_step(
         summarize_deaths,
         inputs={"simulation": "sims/toy"},
-        produces="summary.csv",
+        outputs="summary.csv",
         name="summary",
     )
     return p

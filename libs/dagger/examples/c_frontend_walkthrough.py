@@ -21,7 +21,7 @@
 # ipykernel), as a notebook or with `python examples/c_frontend_walkthrough.py`. The
 # cluster sections also need Jobmon in that env (the `cluster` extra, or a shared env that
 # provides it), and `C_WALKTHROUGH_DIR` set to a folder on storage that every node can read
-# and write, because steps that run through Jobmon write their products there.
+# and write, because steps that run through Jobmon write their outputs there.
 
 # %% [markdown]
 # ## How this notebook works
@@ -243,7 +243,7 @@ def show_runs(runs):
 # The definition below has python steps, a fan-out over two locations' input files, a
 # notebook step, and a command step, all added to one `Pipeline` and wired by file key. No
 # file path appears in the wiring. Loading the definition runs nothing, so `preview` plans
-# the whole DAG before any product exists, and names every file by its key. The step
+# the whole DAG before any output exists, and names every file by its key. The step
 # `adults` writes two files from one function, `children.csv` and `adults.parquet`
 # (MIC-7827, #449); C3 reads both after the definition's first run.
 
@@ -271,7 +271,7 @@ assert "file 'population.parquet'" in plan(first)["population"], plan(first)["po
 #
 # `dagger --help` lists the verbs, and `dagger run --help` shows the options a run through
 # Jobmon takes. There is no `vwf` script. Neither a preview nor a run with `--local`
-# imports Jobmon; each is checked in its own copy, so the run's products stay out of the
+# imports Jobmon; each is checked in its own copy, so the run's outputs stay out of the
 # folder the next sections use.
 
 # %%
@@ -305,7 +305,7 @@ for verb in (["preview"], ["run", "--local"]):
 # The first command gives a Jobmon option together with `--local`, which is refused before
 # the definition is loaded. Then a failed step exits 1, so the status can gate the next
 # command in a shell. The failing definition here is C9's. After the good run, the cell
-# reads the two products of `adults`: `children.csv` as CSV, with only the age group 0-14,
+# reads the two outputs of `adults`: `children.csv` as CSV, with only the age group 0-14,
 # and `adults.parquet` as Parquet, without it.
 
 # %%
@@ -337,7 +337,7 @@ assert "0-14" not in adults["age_group"].tolist() and len(adults) == 2, adults
 # ## C4 — `--until S` runs S and its ancestors only (local)
 #
 # From an empty state, `run --until adults` runs population and adults and nothing else, so
-# it writes the population file and both products of adults. A preview limited the same
+# it writes the population file and both outputs of adults. A preview limited the same
 # way marks the other steps "not selected".
 
 # %%
@@ -405,7 +405,7 @@ assert abs(nigeria["mean_coverage"][0] - 0.7) < 1e-9, "the run did not read the 
 # %% [markdown]
 # ## C11 — The notebook step (local)
 #
-# The report notebook ran in the declared env and wrote its product and an executed copy.
+# The report notebook ran in the declared env and wrote its output and an executed copy.
 # The source notebook is unchanged. A copy of the definition with a new title runs, and
 # the report then holds that title. Its parameters cell assigns `summary`, `report` and
 # `title`, the names the step passes, so the parameters-cell check (C18) accepts it; the
@@ -442,8 +442,8 @@ assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 # ## C17 — A command step runs a shell command with its paths filled in (local)
 #
 # The archive step is `p.add_command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
-# the absolute path of the input or product of that name, quoted for the shell, and the
-# product's folder is made before the command runs. The cell checks that the copy matches
+# the absolute path of the input or output of that name, quoted for the shell, and the
+# output's folder is made before the command runs. The cell checks that the copy matches
 # the report. C1-real's artifact step is a command step that runs a script in the model's
 # artifact env. A misspelled placeholder and a failing command are in the plain-errors
 # table below.
@@ -548,7 +548,7 @@ show_error(
     edits=[
         (
             '        name="summary",\n    )\n',
-            '        name="summary",\n    )\n    p.add_python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        produces="summary.csv",\n        name="summary_v2",\n    )\n',
+            '        name="summary",\n    )\n    p.add_python_step(\n        total_adults,\n        inputs={"adults": "adults.parquet"},\n        outputs="summary.csv",\n        name="summary_v2",\n    )\n',
         )
     ],
     exit_code=2,
@@ -997,7 +997,7 @@ else:
         assert expected in broken_err, expected
     assert "Traceback" not in broken_err
     assert "mean_coverage" in broken_out, "the node's traceback is in pytask's report"
-    # The archive step did not run, so its product is missing (its folder may exist).
+    # The archive step did not run, so its output is missing (its folder may exist).
     assert not (BROKEN_JOBMON / "output/walk/archive/report.csv").exists()
 
     # 6. The run lock and an interrupt.
