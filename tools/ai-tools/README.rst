@@ -39,7 +39,10 @@ It includes:
 - ``/simsci-internal:model-development <ticket, research doc, or iteration description>`` — an
   end-to-end iteration of a vivarium model concept (a cause, risk, intervention,
   or observer) in an existing model repo, driven from its vivarium-research
-  documentation. The main session owns the **iteration plan** — the contract
+  documentation. The argument can also name the base branch or an existing
+  branch to continue. Otherwise the feature branch starts from the fetched
+  default branch. If you are on another branch, the skill asks which base to
+  use. The main session owns the **iteration plan** — the contract
   that pins the artifact keys, pipeline names, state-table columns, and observer
   outputs a change touches, plus the quantitative expectations from the research
   doc. From that contract it runs a **sequential build** in
