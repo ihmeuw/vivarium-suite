@@ -150,7 +150,6 @@ jobs:
         # Editable from the in-tree checkout so the release ordering is computed
         # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
         run: |
-          python -m pip install uv
           uv pip install --system -e libs/build-utils
 
       - name: Order releases dependencies-first
@@ -213,7 +212,6 @@ jobs:
         # Editable from the in-tree checkout so the release ordering is computed
         # by THIS push's dependency graph/resolver (vbu may itself be in the batch)
         run: |
-          python -m pip install uv
           uv pip install --system -e libs/build-utils
 
       - name: Validate tag

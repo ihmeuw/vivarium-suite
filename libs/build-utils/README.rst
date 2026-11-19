@@ -32,6 +32,12 @@ This repository provides:
 Note: for help with the Make targets available to any environment with this repository
 installed, run `make help` in the terminal.
 
+The Make targets install, build and publish with `uv <https://docs.astral.sh/uv/>`_, so
+``make build-env``, ``make install``, ``make build-package`` and
+``make deploy-package-artifactory`` need ``uv`` on your ``PATH``. See
+`installing uv <https://docs.astral.sh/uv/getting-started/installation/>`_. Jenkins
+installs a pinned uv with Astral's install script.
+
 Monorepo support
 ================
 
