@@ -104,6 +104,9 @@ before.
   ``uv_git_credentials_id: '<jenkins-credential-id>'`` with a credential that can
   read them. ``uv sync`` then runs with that credential.
 - ``uv_lock`` cannot be combined with ``deployable``, and monorepo libs cannot use it.
+- Jenkins loads the build-utils version that ``uv.lock`` pins, not the newest release.
+  So a build-utils release that changes CI reaches a repo with a ``uv.lock`` only when
+  that repo bumps build-utils and relocks.
 
 In a standalone repo with a ``uv.lock``, ``make install`` outside Jenkins refuses
 and points to ``source environment.sh`` (or ``uv sync``), because it would install

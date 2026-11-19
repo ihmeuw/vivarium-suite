@@ -11,6 +11,7 @@
   and point to ``environment.sh``
 - Make ``make help`` list the uv build steps in a standalone repo with a ``uv.lock``, and
   point to ``make list`` for a repo's own targets
+- Describe uv environments in the README
 
 **4.14.2 - 11/13/26**
 
