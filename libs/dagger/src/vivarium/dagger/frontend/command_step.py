@@ -123,12 +123,12 @@ def command_step(
         empty; ``outputs`` is empty; ``name`` is ``None`` and ``outputs`` has more than
         one entry; a name in ``inputs`` or ``outputs`` is not a valid Python identifier,
         is a Python keyword, is reserved (``__code_id__``, ``__command__``,
-        ``__executed__``, ``__notebook__``) or appears in both; two ``outputs`` keys
-        resolve to one path (the message names both); an input and an output are one
-        file, by key or by resolved path (the message names both, with their keys);
-        a placeholder in ``command`` is not exactly an input or output name, as for an
-        unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute or an
-        index; or ``command`` has a single ``{`` or ``}`` that is not part of a
+        ``__executed__``, ``__notebook__``, ``__output__``) or appears in both; two
+        ``outputs`` keys resolve to one path (the message names both); an input and an
+        output are one file, by key or by resolved path (the message names both, with
+        their keys); a placeholder in ``command`` is not exactly an input or output name,
+        as for an unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute
+        or an index; or ``command`` has a single ``{`` or ``}`` that is not part of a
         placeholder. A placeholder message quotes the placeholder as written, lists the
         input and output names in sorted order, suggests the closest name when one is
         close, and says how to write a literal brace. The message for a single brace
@@ -233,8 +233,7 @@ def _check_names(
             elif keyword.iskeyword(name):
                 problem = "is a Python keyword"
             elif name in _RESERVED_NAMES:
-                reserved = ", ".join(repr(each) for each in sorted(_RESERVED_NAMES))
-                problem = f"is reserved; the reserved names are {reserved}"
+                raise _reserved_name(task_name, name, group)
             elif group == "outputs" and name in inputs:
                 problem = (
                     "also appears in inputs; a name may appear in only one of inputs "
@@ -243,6 +242,15 @@ def _check_names(
             else:
                 continue
             raise ValueError(f"Step {task_name!r}: name {name!r} in {group} {problem}.")
+
+
+def _reserved_name(task_name: str, name: str, group: str) -> ValueError:
+    """Return the error for a reserved ``name`` in ``group``."""
+    reserved = ", ".join(repr(each) for each in sorted(_RESERVED_NAMES))
+    return ValueError(
+        f"Step {task_name!r}: name {name!r} in {group} is reserved; the reserved names "
+        f"are {reserved}."
+    )
 
 
 def _names_and_hint(names: Sequence[str], suggestion: str = "") -> str:

@@ -193,6 +193,7 @@ _INVALID_NAMES = [
     "class",
     "__notebook__",
     "__executed__",
+    "__output__",
     "__code_id__",
     "__command__",
 ]
@@ -1168,7 +1169,7 @@ def test_invalid_parameter_names_are_rejected(
     bad_name: str,
     where: str,
 ) -> None:
-    """A name that is not an identifier, a keyword such as 'class', or a reserved name ('__notebook__', '__executed__', '__code_id__', '__command__') in inputs, outputs or parameters raises ValueError naming it."""
+    """A name that is not an identifier, a keyword such as 'class', or a reserved name ('__notebook__', '__executed__', '__output__', '__code_id__', '__command__') in inputs, outputs or parameters raises ValueError naming it."""
     with pytest.raises(ValueError) as info:
         notebook_step(
             _source(tmp_path),

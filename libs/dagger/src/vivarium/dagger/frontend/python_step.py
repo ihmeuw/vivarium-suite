@@ -34,11 +34,10 @@ from vivarium.dagger.frontend.command_step import (
     _check_paths,
     _check_shared_keys,
     _no_output,
+    _reserved_name,
     _step_name,
 )
-
-_PRODUCT_ARG = "product"
-"""Parameter name under which the loaded output path reaches the run wrapper."""
+from vivarium.dagger.frontend.notebook_step import _PYTHON_OUTPUT, _RESERVED_NAMES
 
 
 def _save_parquet(frame: pd.DataFrame, path: Path) -> None:
@@ -86,7 +85,7 @@ class PythonStepRun:
     process needs :func:`target_reference` to succeed for it."""
     suffix: str | Mapping[str, str]
     """The output key's suffix, which names the save format (``.parquet`` or ``.csv``),
-    for a step with one output under ``"product"``; or, for a step whose ``outputs`` is
+    for a step with one output under ``"__output__"``; or, for a step whose ``outputs`` is
     a mapping, each output name mapped to its key's suffix."""
 
     def __post_init__(self) -> None:
@@ -112,7 +111,7 @@ class PythonStepRun:
     def __call__(self, **kwargs: Any) -> None:
         """Call ``target`` and save what it returns at each output's path.
 
-        With one output, ``kwargs["product"]`` is the output's path, and ``target``
+        With one output, ``kwargs["__output__"]`` is the output's path, and ``target``
         returns the DataFrame to save there. With a mapping of suffixes, each output name
         in it is a keyword argument that holds that output's path, and ``target`` returns
         a dict that maps each output name to its DataFrame. The type of the result, its
@@ -137,7 +136,7 @@ class PythonStepRun:
         """
         __tracebackhide__ = True
         if isinstance(self.suffix, str):
-            path = Path(kwargs.pop(_PRODUCT_ARG))
+            path = Path(kwargs.pop(_PYTHON_OUTPUT))
             path.parent.mkdir(parents=True, exist_ok=True)
             result: object = self.target(**kwargs)
             if not isinstance(result, pd.DataFrame):
@@ -364,15 +363,16 @@ def python_step(
         path itself.
     inputs
         Maps each of ``target``'s parameter names to the file key the registry
-        resolves to the producing step's node (or a declared root input).
+        resolves to the producing step's node (or a declared root input). No input name
+        may be reserved.
     outputs
         The file key of the output, or a mapping of output names to file keys. Each
         key's suffix names the format its DataFrame is saved in (``.parquet`` or
         ``.csv``), and each key is registered with ``registry`` so that a downstream
         step that names it gets an edge to this step. An output name must be a valid
         Python identifier, not a keyword, not a reserved name, and not one of
-        ``inputs``' names. With one key, no input may be named ``product``, which is
-        reserved for the output's path. The mapping must have at least one entry. Each
+        ``inputs``' names. With one key, the output's path reaches the run under the
+        reserved name ``__output__``. The mapping must have at least one entry. Each
         output's parent directory is created when the step runs.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
@@ -389,7 +389,7 @@ def python_step(
         One :class:`~vivarium.dagger.backend.task.Task` whose ``run`` is a
         :class:`PythonStepRun` of ``target`` and the output suffix (or each output
         name's suffix), whose outputs are the registry's node for ``outputs`` under
-        ``"product"``, or for each mapped key under its name, and whose inputs are the
+        ``"__output__"``, or for each mapped key under its name, and whose inputs are the
         resolved nodes, ready to collect into a list and hand to ``build`` or
         ``preview``.
 
@@ -404,11 +404,11 @@ def python_step(
     ValueError
         If an ``outputs`` key has an unsupported suffix (the message names the key, and
         with a mapping its output name); ``name`` is empty; the mapping is empty; the
-        mapping has more than one entry and ``name`` is ``None``; an output name is not
-        a valid Python identifier, is a Python keyword, is reserved, or is also an input
-        name; two outputs resolve to one path; an input and an output are one file; or,
-        with one key, an input is named ``product``. The messages for an empty name, an
-        empty mapping with no name, and several outputs with no name start with
+        mapping has more than one entry and ``name`` is ``None``; an input name is
+        reserved; an output name is not a valid Python identifier, is a Python keyword,
+        is reserved, or is also an input name; two outputs resolve to one path; or an
+        input and an output are one file. The messages for an empty name, an empty
+        mapping with no name, and several outputs with no name start with
         ``python_step:``; every other message starts with ``Step '<name>':``. Every one
         of these is raised before anything is registered.
     """
@@ -420,11 +420,9 @@ def python_step(
     suffix = Path(outputs).suffix
     _check_suffix(suffix, f"Step {task_name!r}: output key {outputs!r}")
     run = PythonStepRun(target, suffix)
-    if _PRODUCT_ARG in inputs:
-        raise ValueError(
-            f"Step {task_name!r}: input name {_PRODUCT_ARG!r} is reserved for the step's "
-            "output."
-        )
+    for param in inputs:
+        if param in _RESERVED_NAMES:
+            raise _reserved_name(task_name, param, "inputs")
     try:
         dependencies = {param: registry.resolve_input(key) for param, key in inputs.items()}
         node = registry.register_output(outputs)
@@ -436,7 +434,7 @@ def python_step(
         name=task_name,
         run=run,
         inputs=dependencies,
-        outputs={_PRODUCT_ARG: node},
+        outputs={_PYTHON_OUTPUT: node},
         resources={} if resources is None else resources,
         env=None,
     )

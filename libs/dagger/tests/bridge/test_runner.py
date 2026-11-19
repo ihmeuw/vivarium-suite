@@ -122,7 +122,7 @@ def _python_payload(task: str, cwd: Path, target: str) -> PythonPayload:
         "target": target,
         "sys_path": [],
         "suffix": ".parquet",
-        "kwargs": {"product": _tag(cwd / "out" / f"{task}.parquet")},
+        "kwargs": {"__output__": _tag(cwd / "out" / f"{task}.parquet")},
     }
 
 
@@ -770,7 +770,7 @@ def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
     payload = _python_payload("relative_step", step_cwd, "vivarium.dagger.harness:_double")
     payload["kwargs"] = {
         "raw": _tag(Path("raw.parquet")),
-        "product": _tag(Path("out", "mid.parquet")),
+        "__output__": _tag(Path("out", "mid.parquet")),
     }
 
     process, result = _run_step(tmp_path, payload)

@@ -61,7 +61,7 @@ _NAMES = {
 
 _SORTED_NAMES = ("adults", "population", "script")
 
-_RESERVED = ["__code_id__", "__command__", "__notebook__", "__executed__"]
+_RESERVED = ["__code_id__", "__command__", "__notebook__", "__executed__", "__output__"]
 
 _FORMATTER_MESSAGES = (
     "encountered in format string",
@@ -554,7 +554,7 @@ def test_a_python_keyword_name_is_refused(tmp_path: Path, where: str) -> None:
 @pytest.mark.parametrize("where", ["inputs", "outputs"])
 @pytest.mark.parametrize("reserved", _RESERVED)
 def test_each_reserved_name_is_refused(tmp_path: Path, reserved: str, where: str) -> None:
-    """Each of __code_id__, __command__, __notebook__ and __executed__, as an input name and as an output name, raises ValueError naming the step and the name, and nothing is registered."""
+    """Each of __code_id__, __command__, __notebook__, __executed__ and __output__, as an input name and as an output name, raises ValueError naming the step and the name, and nothing is registered."""
     message = _refused(_registry(tmp_path), **_declaring(reserved, where))
 
     assert message.startswith("Step 'subset':"), message

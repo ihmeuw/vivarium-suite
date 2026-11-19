@@ -75,8 +75,14 @@ _NOTEBOOK_INPUT = "__notebook__"
 _EXECUTED_OUTPUT = "__executed__"
 """Task output name under which the executed notebook's node is attached."""
 
-_RESERVED_NAMES = frozenset({_NOTEBOOK_INPUT, _EXECUTED_OUTPUT, CODE_ID_KEY, COMMAND_KEY})
-"""Names a notebook parameter cannot take, because the task or the backend uses them."""
+_PYTHON_OUTPUT = "__output__"
+"""Task output name under which a python step with one output gets its output's path."""
+
+_RESERVED_NAMES = frozenset(
+    {_NOTEBOOK_INPUT, _EXECUTED_OUTPUT, _PYTHON_OUTPUT, CODE_ID_KEY, COMMAND_KEY}
+)
+"""Names no step input, output or notebook parameter may take, because a task or the
+backend uses them."""
 
 _PARAMETERS_TAG = "parameters"
 """The cell tag papermill injects parameters after, in the first cell that carries it."""
@@ -160,12 +166,13 @@ def notebook_step(
         If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``outputs`` or
         ``parameters`` is not a valid Python identifier, is a keyword, appears in more
         than one of the three, or is reserved (``__notebook__``, ``__executed__``,
-        ``__code_id__``, ``__command__``); a parameter value is not a ``str``, a real
-        number, a ``bool`` or ``None`` (the message says to pass files through ``inputs``
-        and to convert a numpy ``bool_`` with ``bool()``); ``notebook`` does not end in
-        ``.ipynb`` or does not exist; ``executed`` does not end in ``.ipynb``; or two of
-        ``notebook``, ``executed`` and the ``outputs`` keys resolve to one path, as when an
-        ``outputs`` key equals ``executed`` or is given twice (the message names both).
+        ``__output__``, ``__code_id__``, ``__command__``); a parameter value is not a
+        ``str``, a real number, a ``bool`` or ``None`` (the message says to pass files
+        through ``inputs`` and to convert a numpy ``bool_`` with ``bool()``); ``notebook``
+        does not end in ``.ipynb`` or does not exist; ``executed`` does not end in
+        ``.ipynb``; or two of ``notebook``, ``executed`` and the ``outputs`` keys resolve
+        to one path, as when an ``outputs`` key equals ``executed`` or is given twice (the
+        message names both).
         Except for an empty ``name``, each of these messages starts with
         ``Step '<name>':``.
         When ``inputs``, ``outputs`` and ``parameters`` hold at least one name between

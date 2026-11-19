@@ -150,7 +150,7 @@ from vivarium.dagger.frontend.python_step import PythonStepRun, resolve_referenc
 
 for reference, suffix, inputs, product in json.loads(sys.argv[1]):
     step_run = PythonStepRun(resolve_reference(reference), suffix)
-    step_run(product=Path(product), **{name: Path(path) for name, path in inputs.items()})
+    step_run(__output__=Path(product), **{name: Path(path) for name, path in inputs.items()})
 """
 
 
@@ -313,21 +313,38 @@ def test_a_step_that_writes_no_output_is_a_failure(tmp_path: Path) -> None:
     assert outcomes(build([task], tmp_path / "state")) == {task.name: TaskOutcome.FAIL}
 
 
-def test_the_reserved_input_name_product_is_rejected(tmp_path: Path) -> None:
-    """An input named 'product' beside one output key is rejected with a message that starts with the step's name and says the name is reserved for the step's output."""
+def test_the_reserved_input_name_output_is_rejected(tmp_path: Path) -> None:
+    """An input named '__output__' beside one output key raises ValueError with the shared reserved-name message, which lists every reserved name, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    with pytest.raises(
-        ValueError,
-        match=r"^Step 'out\.parquet': input name 'product' is reserved for the step's output\.$",
-    ):
+    with pytest.raises(ValueError) as info:
         python_step(
             _constant,
-            inputs={"product": "src"},
+            inputs={"__output__": "src"},
             outputs="out.parquet",
             registry=reg,
             resources={},
         )
+
+    assert str(info.value) == (
+        "Step 'out.parquet': name '__output__' in inputs is reserved; the reserved names "
+        "are '__code_id__', '__command__', '__executed__', '__notebook__', '__output__'."
+    )
+    _assert_unregistered(reg, "out.parquet")
+
+
+def test_an_input_named_product_is_allowed_with_one_output(tmp_path: Path) -> None:
+    """With one output key, an input may be named 'product': the step builds and its output holds the input's data."""
+    source = tmp_path / "src.parquet"
+    _population().to_parquet(source)
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": source})
+
+    task = python_step(
+        _read_product, inputs={"product": "src"}, outputs="out.csv", registry=reg
+    )
+
+    assert outcomes(build([task], tmp_path / "state")) == {"out.csv": TaskOutcome.SUCCESS}
+    pd.testing.assert_frame_equal(pd.read_csv(reg.path_for("out.csv")), _population())
 
 
 def test_python_step_run_holds_the_target_and_output_suffix(tmp_path: Path) -> None:
@@ -506,7 +523,7 @@ def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Pat
 
     session = build([task], tmp_path / "state")
     with pytest.raises(TypeError) as info:
-        step_run(product=direct)
+        step_run(__output__=direct)
 
     assert outcomes(session) == {task.name: TaskOutcome.FAIL}
     [report] = session.execution_reports
@@ -586,7 +603,7 @@ def test_a_target_that_returns_another_type_gets_no_missing_return_hint(
     assert isinstance(step_run, PythonStepRun)
 
     with pytest.raises(TypeError) as info:
-        step_run(product=tmp_path / "direct.parquet")
+        step_run(__output__=tmp_path / "direct.parquet")
 
     assert "returned dict" in str(info.value)
     assert "missing return" not in str(info.value)
@@ -693,6 +710,11 @@ def _read_population(population: Path) -> pd.DataFrame:
 def _read_deaths(deaths: Path) -> pd.DataFrame:
     """Read the deaths output and return it unchanged."""
     return pd.read_csv(deaths)
+
+
+def _read_product(product: Path) -> pd.DataFrame:
+    """Read and return the input named 'product'."""
+    return pd.read_parquet(product)
 
 
 def _copy_product(product: Path) -> dict[str, pd.DataFrame]:
@@ -929,7 +951,7 @@ def test_a_single_output_target_that_returns_a_dict_is_told_to_map_outputs(
     task = python_step(_split, inputs={}, outputs="out.parquet", registry=reg)
 
     with pytest.raises(TypeError) as info:
-        _call_directly(task.run, {"product": tmp_path / "out.parquet"})
+        _call_directly(task.run, {"__output__": tmp_path / "out.parquet"})
 
     assert str(info.value) == (
         "Python step target _split returned dict; a python step must return a pandas "
@@ -1012,6 +1034,7 @@ def test_an_output_name_that_is_also_an_input_name_is_refused(tmp_path: Path) ->
         ("class", "is a Python keyword"),
         ("return", "is a Python keyword"),
         ("__code_id__", "is reserved"),
+        ("__output__", "is reserved"),
     ],
 )
 def test_an_output_name_that_is_not_a_parameter_name_is_refused(

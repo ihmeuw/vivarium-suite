@@ -446,9 +446,9 @@ step and re-runs on every build for now.
 A step with one output is named after its key by default. A step with more than one
 output has no default name, so pass ``name=``. An output name must be a valid Python
 identifier, must not be a Python keyword or one of the reserved names ``__code_id__``,
-``__command__``, ``__executed__`` and ``__notebook__``, and must not be the name of one
-of the step's inputs. These rules, and the rules for each key, are checked when the step
-is added, before any of its keys is registered.
+``__command__``, ``__executed__``, ``__notebook__`` and ``__output__``, and must not be
+the name of one of the step's inputs. These rules, and the rules for each key, are
+checked when the step is added, before any of its keys is registered.
 
 If the function returns something other than a dict, a dict with a missing or extra
 name, or a value that is not a DataFrame, the step fails and nothing is saved. The
