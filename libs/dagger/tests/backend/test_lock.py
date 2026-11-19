@@ -33,7 +33,8 @@ from vivarium.dagger.backend import lock as lock_module
 from vivarium.dagger.backend.lock import LOCK_FILE_MODE, RUN_LOCK_NAME, RunLocked, run_lock
 
 _HOLDER = re.compile(
-    r"user (?P<user>.+), pid (?P<pid>\d+) on host (?P<host>.+), since (?P<since>\S+)"
+    r"user (?P<user>.+), pid (?P<pid>\d+) on host (?P<host>\S+)"
+    r"(?: in Slurm job (?P<job>\S+))?, since (?P<since>\S+)"
 )
 """A holder line, as ``run_lock`` writes it."""
 
@@ -78,8 +79,11 @@ def _failing_flock(code: int) -> Callable[[object, int], None]:
     return flock
 
 
-def test_run_lock_creates_the_file_and_writes_the_holder_line(tmp_path: Path) -> None:
-    """run_lock on a missing path creates it, and inside the block the file holds one line "user <name>, pid <this pid> on host <socket.gethostname()>, since <ISO time with UTC offset>"."""
+def test_run_lock_creates_the_file_and_writes_the_holder_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Outside a Slurm job, run_lock on a missing path creates it, and inside the block the file holds one line "user <name>, pid <this pid> on host <socket.gethostname()>, since <ISO time with UTC offset>"."""
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
     path = tmp_path / RUN_LOCK_NAME
     earliest = datetime.now().astimezone().replace(microsecond=0)
 
@@ -93,6 +97,7 @@ def test_run_lock_creates_the_file_and_writes_the_holder_line(tmp_path: Path) ->
     assert holder["user"] == account_name()
     assert int(holder["pid"]) == os.getpid()
     assert holder["host"] == socket.gethostname()
+    assert holder["job"] is None, content
     since = holder["since"]
     assert _ISO_SECONDS.fullmatch(since), since
     started = datetime.fromisoformat(since)
@@ -141,8 +146,8 @@ def test_run_lock_is_refused_while_a_child_holds_it(tmp_path: Path) -> None:
 
     assert refusal.value.path == path
     assert refusal.value.holder == first_line
-    expected = f"pid {child.pid} on host {socket.gethostname()},"
-    assert expected in refusal.value.holder, refusal.value.holder
+    expected = rf"pid {child.pid} on host {re.escape(socket.gethostname())}(,| in Slurm job )"
+    assert re.search(expected, refusal.value.holder), refusal.value.holder
 
 
 def test_a_refused_run_lock_does_not_change_the_file(tmp_path: Path) -> None:
@@ -201,11 +206,50 @@ def test_run_locked_message_names_the_lock_file_and_the_holder() -> None:
 
 
 def test_run_locked_message_says_holder_unknown_for_an_empty_holder() -> None:
-    """str(RunLocked(path, '')) contains the path and 'holder unknown'."""
+    """str(RunLocked(path, '')) contains the path and 'holder unknown', and says nothing about stopping the holder."""
     message = str(RunLocked(_EXAMPLE_PATH, ""))
 
     assert str(_EXAMPLE_PATH) in message, message
     assert "holder unknown" in message, message
+    assert "To stop it" not in message, message
+
+
+def test_the_holder_line_names_the_slurm_job_inside_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_ID set to 4517667, the holder line that run_lock writes reads "... on host <host> in Slurm job 4517667, since ..."."""
+    monkeypatch.setenv("SLURM_JOB_ID", "4517667")
+    path = tmp_path / RUN_LOCK_NAME
+
+    with run_lock(path):
+        content = path.read_text(encoding="utf-8")
+
+    holder = _HOLDER.fullmatch(content.strip())
+    assert holder is not None, content
+    assert holder["host"] == socket.gethostname()
+    assert holder["job"] == "4517667"
+
+
+@pytest.mark.parametrize("job", ["", " in Slurm job 7"], ids=["no_job", "slurm_job"])
+@pytest.mark.parametrize("where", ["this_host", "other_host"])
+def test_run_locked_tells_the_same_user_how_to_stop_the_holder(where: str, job: str) -> None:
+    """For a holder line naming this account and pid 4242, with or without a Slurm job, the message says to run "kill 4242" when the host is this one, or "ssh node-17 kill 4242" when it is node-17, and says that a bridged run then records the steps that finished."""
+    host = socket.gethostname() if where == "this_host" else "node-17"
+    holder = f"user {account_name()}, pid 4242 on host {host}{job}, since t"
+
+    message = str(RunLocked(_EXAMPLE_PATH, holder))
+
+    command = "kill 4242" if where == "this_host" else "ssh node-17 kill 4242"
+    assert f'run "{command}"' in message, message
+    assert "records the steps that finished" in message, message
+
+
+def test_run_locked_tells_another_user_to_ask_the_holder() -> None:
+    """For a holder line naming another account, jdoe, the message says to ask jdoe and gives no kill command."""
+    message = str(RunLocked(_EXAMPLE_PATH, _EXAMPLE_HOLDER))
+
+    assert "ask jdoe" in message, message
+    assert "kill" not in message, message
 
 
 def test_run_locked_is_a_runtime_error_with_path_and_holder() -> None:
