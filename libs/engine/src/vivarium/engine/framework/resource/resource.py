@@ -149,13 +149,3 @@ class Column(Resource):
 
     RESOURCE_TYPE = "column"
     """The type of the resource."""
-
-    def __eq__(self, value: object) -> bool:
-        return (
-            isinstance(value, Column)
-            and self.resource_id == value.resource_id
-            and self.component.name == value.component.name
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.resource_id, self.component.name))

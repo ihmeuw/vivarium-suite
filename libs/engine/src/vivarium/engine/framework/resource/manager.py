@@ -47,16 +47,6 @@ class ResourceManager(Manager):
     def name(self) -> str:
         return "resource_manager"
 
-    def __getstate__(self) -> dict[str, Any]:
-        # Leave out the cached graph, which is rebuilt on first use. Its nodes are
-        # resources that hash by their attributes, and the unpickler can hash a node
-        # before it restores those attributes.
-        state = self.__dict__.copy()
-        state["_graph"] = nx.DiGraph()
-        state["_sorted_nodes"] = []
-        state["_required_resources_dirty"] = True
-        return state
-
     def get_graph(self) -> nx.DiGraph[Resource]:
         """The networkx graph representation of the resource pool."""
         if self._required_resources_dirty:

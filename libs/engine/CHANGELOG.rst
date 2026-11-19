@@ -2,6 +2,9 @@
 
 - Fix loading simulation backups. ``ResourceId`` failed to unpickle, and the
   ``ResourceManager`` resource graph failed to unpickle
+- Remove ``Pipeline.__hash__`` and ``Column.__eq__`` and ``__hash__``, which were left
+  from when ``Resource`` was a dataclass. Pipelines and columns now compare and hash
+  by identity
 
 **6.1.0 - 11/17/26**
 

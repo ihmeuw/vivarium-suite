@@ -582,9 +582,6 @@ class Pipeline(Resource, RequiresPrettyHook):
 
         return "\n".join(lines)
 
-    def __hash__(self) -> int:
-        return hash(self.name)
-
     def get_value_modifier(
         self,
         modifier: Callable[..., Any],
