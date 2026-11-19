@@ -85,8 +85,8 @@ In more detail:
   becomes a ticket rather than a red PR. The finish — leftover triage, the test
   summary, the PR gate, the commit history, the PR, and a comment
   recording what went unaddressed — belongs to the internal ``_finalize-core``
-  skill. Without a testing strategy, the test summary lists the cases the diff's
-  tests cover.
+  skill. Without a testing strategy, the test summary lists the tested cases of
+  the behavior that the diff changes.
 
   It requires a clean working tree, so each fix is its own revertible commit
   (a bare ``WIP`` commit is enough to satisfy that, since ``_finalize-core`` offers
@@ -385,12 +385,13 @@ test summary, the PR approval gate, a reviewable commit history, the draft
 PR, and the comment recording what was *not* addressed. The test summary comes
 from the ``_test_summarizer`` sub-agent. Each changed source file gets one table,
 posted as a file-level review comment on that file, so a reviewer reads it next to
-the code. Each row is one case, with the columns Case, Error / success, Expected,
-and Test, and each comment's first line gives the file's case count and how many
+the code. The table covers only the behavior that the diff adds or changes in that
+file, and not every test of the file. Each row is one case, with the columns Case,
+Error / success, Expected, and Test, and each comment's first line gives the file's case count and how many
 cases have no test. The PR body is unchanged. When the caller
 passes the testing strategy agreed in the design, every strategy item gets a row,
 and an item with no test or check says ``Not tested``. Without a strategy, the
-rows come from the diff's tests alone. With the GitHub MCP, the file comments go
+rows come from the tests that exercise the changed code. With the GitHub MCP, the file comments go
 in one review, so reviewers get one notification. Each test link is a GitHub
 permalink at the pushed head commit, so a later rebase leaves the links pointing
 at the older commit. Three paths share it — ``/simsci:pr-prep``,

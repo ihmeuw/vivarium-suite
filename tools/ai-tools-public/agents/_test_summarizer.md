@@ -1,6 +1,6 @@
 ---
 name: _test_summarizer
-description: "Use when: summarizing a PR's tests — one table per changed source file, ordered top down, mapping each case the file must handle to the test that covers it and marking the cases nothing covers. The caller posts each table as a comment on its file."
+description: "Use when: summarizing a PR's tests — one table per changed source file, ordered top down, mapping each case that the file's changed code must handle to the test that covers it and marking the cases nothing covers. The caller posts each table as a comment on its file."
 tools:
   - Read
   - Grep
@@ -33,16 +33,25 @@ now stay valid.
    config.
 2. Order the files top down: first the entry points that a user or caller runs or
    imports, then the modules they import, then the modules those import.
-3. Read the tests in the diff and the source they exercise. For each file, list the
-   cases its tests cover, one behavior per row, in the order of the file's
-   functions. A test that covers several files appears under each.
-4. With strategy items: put each item in the file whose code it exercises. An item
+3. For each file, read its changed lines in the diff and list the changed
+   behaviors: the functions, methods, and branches that the diff adds or changes.
+   A change that only
+   moves, renames, reformats, or edits comments or docstrings changes no behavior.
+   The summary covers these changed behaviors and nothing else. Do not add a row
+   for a behavior that the diff does not touch, even when a test of the file
+   covers it.
+4. Find the tests that exercise each changed behavior. Start with the tests in the
+   diff. A test outside the diff counts if you read it and it calls the changed
+   code. List the cases, one behavior per row, in the order of the file's
+   functions. A test that covers changed behavior in several files appears under
+   each.
+5. With strategy items: put each item in the file whose code it exercises. An item
    that spans files goes under the highest file in the order. Each item gets a row
    whether or not a test covers it. A test outside the diff counts if it clearly
    covers the item. An outside-suite check counts if it is the only evidence for the
    item, and its Test cell gives the check's command. An item with neither gets
    ``Not tested`` in the Test column.
-5. Find the line of each cited ``def test_...`` with Grep, and link it as
+6. Find the line of each cited ``def test_...`` with Grep, and link it as
    ``<link-base>/blob/{sha}/<path>#L<line>``. Write ``{sha}`` literally; the caller
    fills it in.
 
@@ -76,8 +85,11 @@ Exercised through the tests of `file_a.py`.
 - **Test** links the test that covers the case, gives the command of the
   outside-suite check that covers it, or says ``Not tested``.
 - Leave out the "not tested" count when it is zero.
-- For a file that no test calls directly, replace the table with one sentence
-  naming the file whose tests exercise it.
+- For a file whose changed code no test calls directly, replace the table with
+  one sentence naming the file whose tests exercise it.
+- For a file whose diff changes no behavior, replace the table with one sentence
+  that says so, for example "No behavior change: the diff only renames
+  `old_name`." Do not list the file's existing tests.
 
 ## Constraints
 
@@ -85,6 +97,8 @@ Exercised through the tests of `file_a.py`.
   direct ones. For a parameterized test, link it once and add the variant count, for
   example ``(16 variants)``.
 - Do not outline the test files or describe how the tests are organized.
+- Do not summarize all tests of a changed file. A small change to a large file
+  gets a small table.
 - Do not include checks that CI already reports: Python or OS versions, lint, type
   checks, or a passing suite run.
 - Do not state a reason that a case is not tested. You do not know it.

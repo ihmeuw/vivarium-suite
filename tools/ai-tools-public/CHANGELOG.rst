@@ -1,3 +1,7 @@
+**0.5.1 - 11/19/26**
+
+- Limit ``_test_summarizer`` tables to the behavior that the PR changes
+
 **0.5.0 - 10/28/26**
 
 - Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per
