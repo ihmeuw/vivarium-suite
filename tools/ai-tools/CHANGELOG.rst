@@ -1,3 +1,9 @@
+**0.32.0 - 11/10/26**
+
+- ``team-conventions``: apply the hub page's rules for the epic or fix version, labels,
+  and story points to every ticket draft, and ask the user before changing a ticket's
+  story points
+
 **0.31.2 - 11/10/26**
 
 - ``team-conventions`` and ``brainstorming``: write a ticket's acceptance criteria only
