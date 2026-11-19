@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from pathlib import Path
@@ -119,8 +120,9 @@ def _python_payload(task: str, cwd: Path, target: str) -> PythonPayload:
         "task": task,
         "cwd": str(cwd),
         "target": target,
+        "sys_path": [],
         "suffix": ".parquet",
-        "kwargs": {"product": _tag(cwd / "out" / f"{task}.parquet")},
+        "kwargs": {"__output__": _tag(cwd / "out" / f"{task}.parquet")},
     }
 
 
@@ -202,12 +204,12 @@ def _identity(fd: int) -> tuple[int, int]:
     return status.st_dev, status.st_ino
 
 
-def test_runner_runs_the_harness_chain_with_products_equal_to_a_local_build(
+def test_runner_runs_the_harness_chain_with_outputs_equal_to_a_local_build(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
-    """End to end: payload_for each harness task, run runner_command for each in topological order in a subprocess started from another directory; each exits 0 with success=True, and both products equal a local build()'s."""
+    """End to end: payload_for each harness task, run runner_command for each in topological order in a subprocess started from another directory; each exits 0 with success=True, and both outputs equal a local build()'s."""
     local = build_fixture(_mkdir(tmp_path / "local"))
     ran = dict.fromkeys(local.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(local.tasks, local.state)) == ran
@@ -762,13 +764,13 @@ def test_a_successful_result_has_no_exception_fields_and_a_duration(tmp_path: Pa
 
 
 def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
-    """A python payload whose input and product path tags are relative, run by a runner started in another directory, reads its input from and writes its product under the payload's cwd, with success=True."""
+    """A python payload whose input and output path tags are relative, run by a runner started in another directory, reads its input from and writes its output under the payload's cwd, with success=True."""
     step_cwd = _mkdir(tmp_path / "step_cwd")
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(step_cwd / "raw.parquet")
     payload = _python_payload("relative_step", step_cwd, "vivarium.dagger.harness:_double")
     payload["kwargs"] = {
         "raw": _tag(Path("raw.parquet")),
-        "product": _tag(Path("out", "mid.parquet")),
+        "__output__": _tag(Path("out", "mid.parquet")),
     }
 
     process, result = _run_step(tmp_path, payload)
@@ -779,10 +781,66 @@ def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
     assert not (tmp_path / "elsewhere" / "out").exists()
 
 
+def _split_payload(cwd: Path, target: str) -> PythonPayload:
+    """Return a recipe that runs ``target`` and saves 'population' and 'deaths' under ``cwd``."""
+    return {
+        "kind": "python",
+        "task": "split",
+        "cwd": str(cwd),
+        "target": target,
+        "sys_path": [],
+        "suffix": {"population": ".parquet", "deaths": ".csv"},
+        "kwargs": {
+            "population": _tag(cwd / "out" / "population.parquet"),
+            "deaths": _tag(cwd / "out" / "deaths.csv"),
+        },
+    }
+
+
+def test_runner_saves_each_output_of_a_python_step_with_several_outputs(
+    tmp_path: Path,
+) -> None:
+    """main() on a python payload whose suffix maps 'population' to '.parquet' and 'deaths' to '.csv' returns 0, writes population.parquet as Parquet and deaths.csv as CSV, and records success=True."""
+    step_cwd = _mkdir(tmp_path / "step_cwd")
+    target = target_reference(step_targets.split_frames)
+    payload = _write_payload(tmp_path / "step.payload.json", _split_payload(step_cwd, target))
+    result_path = tmp_path / _RESULT_NAME
+
+    status = main([str(payload), str(result_path)])
+
+    result = _read(result_path)
+    assert (status, result["task"], result["success"]) == (0, "split", True), result["exc"]
+    assert pd.read_parquet(step_cwd / "out" / "population.parquet")["n"].tolist() == [1, 2, 3]
+    assert pd.read_csv(step_cwd / "out" / "deaths.csv")["n"].tolist() == [1, 2, 3]
+
+
+def test_runner_records_a_dict_missing_an_output_as_a_failure_naming_it(
+    tmp_path: Path,
+) -> None:
+    """main() on a python payload with several outputs whose target leaves out 'deaths' returns 1, records success=False with a ValueError that names the target and 'deaths', and writes no output."""
+    step_cwd = _mkdir(tmp_path / "step_cwd")
+    target = target_reference(step_targets.split_frames_without_deaths)
+    payload = _write_payload(tmp_path / "step.payload.json", _split_payload(step_cwd, target))
+    result_path = tmp_path / _RESULT_NAME
+
+    status = main([str(payload), str(result_path)])
+
+    result = _read(result_path)
+    assert (status, result["success"]) == (1, False)
+    assert result["exc_type"] is not None and result["exc_type"].endswith("ValueError")
+    assert result["exc_message"] == (
+        "Python step target split_frames_without_deaths returned a dict whose keys do not "
+        "match its output names: the output 'deaths' is missing. The output names are "
+        "'deaths' and 'population'."
+    )
+    assert not (step_cwd / "out" / "population.parquet").exists()
+    assert not (step_cwd / "out" / "deaths.csv").exists()
+
+
 def test_runner_exits_with_status_one_when_a_succeeding_step_result_cannot_be_written(
     tmp_path: Path,
 ) -> None:
-    """A command step that succeeds but whose result path is a directory gives exit status 1 after the step has run, a message on the process's stderr saying the result could not be written, and no temporary file."""
+    """A command step that succeeds but whose result path is a directory gives exit status 1 after the step has run, a message on the process's stderr that names the step and says its result could not be written, and no temporary file."""
     recipe = _command_payload("echo_step", tmp_path, "echo ran")
     payload = _write_payload(tmp_path / "step.payload.json", recipe)
     result_path = _mkdir(tmp_path / _RESULT_NAME)
@@ -792,7 +850,7 @@ def test_runner_exits_with_status_one_when_a_succeeding_step_result_cannot_be_wr
     stdout, _ = capture_paths(result_path)
     assert process.returncode == 1
     assert stdout.read_text() == "ran\n"
-    assert "could not write the result" in process.stderr, process.stderr
+    assert "step 'echo_step' could not write its result" in process.stderr, process.stderr
     assert list(tmp_path.glob("*.tmp")) == []
 
 
@@ -838,3 +896,238 @@ def test_a_target_that_cannot_be_imported_on_the_node_is_named_in_the_traceback(
     assert exc is not None
     assert task in exc, exc
     assert reference in exc, exc
+
+
+# The payload's sys_path (MIC-7752)
+
+_SYS_PATH_MODULE = """\
+import json
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+
+def make():
+    Path({observed!r}).write_text(json.dumps(sys.path))
+    return pd.DataFrame({{"n": [{value}]}})
+
+
+def fail():
+    Path({observed!r}).write_text(json.dumps(sys.path))
+    raise ValueError("the step failed after its import")
+"""
+"""A module whose ``make`` writes ``sys.path`` as JSON to ``observed`` and returns the frame
+``n == [value]``, and whose ``fail`` writes ``sys.path`` and raises ValueError."""
+
+
+def _sys_path_module(directory: Path, value: int, observed: Path) -> str:
+    """Write a :data:`_SYS_PATH_MODULE` into ``directory`` and return its new, unique name."""
+    name = f"sys_path_probe_{uuid.uuid4().hex[:12]}"
+    source = _SYS_PATH_MODULE.format(value=value, observed=str(observed))
+    (_mkdir(directory) / f"{name}.py").write_text(source)
+    return name
+
+
+def _sys_path_payload(task: str, cwd: Path, target: str, entries: list[str]) -> PythonPayload:
+    """Return :func:`_python_payload` for ``target`` with ``entries`` as its sys_path."""
+    payload = _python_payload(task, cwd, target)
+    payload["sys_path"] = entries
+    return payload
+
+
+def _observed(path: Path) -> list[str]:
+    """Return the ``sys.path`` that a step of :data:`_SYS_PATH_MODULE` wrote to ``path``."""
+    observed: list[str] = json.loads(path.read_text())
+    return observed
+
+
+def test_runner_imports_a_target_from_the_payloads_sys_path_without_pythonpath(
+    tmp_path: Path,
+) -> None:
+    """A runner subprocess whose PYTHONPATH lacks a module's directory runs a python payload naming a target in that module, with sys_path holding the directory, writes a successful result and the output."""
+    modules = tmp_path / "modules"
+    name = _sys_path_module(modules, 1, tmp_path / "observed.json")
+    assert str(modules) not in _subprocess_env()["PYTHONPATH"].split(os.pathsep)
+    payload = _sys_path_payload("sys_path_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    assert process.returncode == 0, process.stderr
+    assert (result["task"], result["success"]) == ("sys_path_step", True), result["exc"]
+    product = tmp_path / "out" / "sys_path_step.parquet"
+    assert pd.read_parquet(product)["n"].tolist() == [1]
+
+
+def test_without_sys_path_the_same_target_fails_to_import_on_the_node(tmp_path: Path) -> None:
+    """The same payload with sys_path [] fails in the runner subprocess with ModuleNotFoundError, and the result names the step and the target reference and says the module must be importable from the node's own sys.path."""
+    name = _sys_path_module(tmp_path / "modules", 1, tmp_path / "observed.json")
+    reference = f"{name}:make"
+    payload = _sys_path_payload("sys_path_step", tmp_path, reference, [])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert (result["task"], result["success"]) == ("sys_path_step", False)
+    assert result["exc_type"] == "ModuleNotFoundError", exc
+    assert exc is not None
+    assert "sys_path_step" in exc, exc
+    assert reference in exc, exc
+    assert "node's own sys.path" in exc, exc
+    assert not (tmp_path / "out" / "sys_path_step.parquet").exists()
+
+
+def test_import_note_names_a_sys_path_root_missing_on_the_node(tmp_path: Path) -> None:
+    """A payload whose sys_path holds a directory that does not exist on the node and whose target's module is not importable fails, and the note names that directory, says it was not found on this node and names the module's top-level name."""
+    missing = tmp_path / "missing"
+    top = f"absent_package_{uuid.uuid4().hex[:12]}"
+    reference = f"{top}.steps:make"
+    payload = _sys_path_payload("sys_path_step", tmp_path, reference, [str(missing)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert (result["task"], result["success"]) == ("sys_path_step", False)
+    assert result["exc_type"] == "ModuleNotFoundError", exc
+    assert exc is not None
+    assert not missing.exists()
+    assert "sys_path_step" in exc, exc
+    assert reference in exc, exc
+    assert str(missing) in exc, exc
+    assert "not found on this node" in exc, exc
+    assert top in exc, exc
+
+
+def _failing_module(directory: Path, body: str) -> str:
+    """Write a module under ``directory`` whose import runs ``body`` and return its name."""
+    name = f"import_note_probe_{uuid.uuid4().hex[:12]}"
+    (_mkdir(directory) / f"{name}.py").write_text(f"{body}\n\ndef make():\n    return None\n")
+    return name
+
+
+def test_import_note_names_a_missing_dependency_of_a_module_under_sys_path(
+    tmp_path: Path,
+) -> None:
+    """A target whose module is found under the payload's sys_path but imports a module the node does not have fails with a note that names that module and says to install it, not the readable-directory note."""
+    absent = f"absent_dependency_{uuid.uuid4().hex[:12]}"
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, f"import {absent}")
+    payload = _sys_path_payload("dep_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert f"{absent!r}, which this node cannot find" in exc, exc
+    assert "Install" in exc and "node's environment" in exc, exc
+    assert "must be readable from every compute node" not in exc, exc
+
+
+def test_import_note_names_a_dependency_that_lacks_a_name_the_module_imports(
+    tmp_path: Path,
+) -> None:
+    """A target whose module is found under the payload's sys_path but imports a name its dependency does not have fails with a note that names the dependency and its version, not the readable-directory note."""
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, f"from json import does_not_exist_{uuid.uuid4().hex[:8]}")
+    payload = _sys_path_payload("dep_step", tmp_path, f"{name}:make", [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert "failed inside 'json'" in exc, exc
+    assert "the version the pipeline was built with" in exc, exc
+    assert "must be readable from every compute node" not in exc, exc
+
+
+def test_import_note_for_a_missing_parent_package_under_a_found_root_is_the_root_note(
+    tmp_path: Path,
+) -> None:
+    """A target in a package that does not exist, with a sys_path root that does exist on the node, gets the note that names the root as found, not a missing-dependency note for its own package."""
+    root = _mkdir(tmp_path / "root")
+    top = f"absent_package_{uuid.uuid4().hex[:12]}"
+    payload = _sys_path_payload("sys_path_step", tmp_path, f"{top}.steps:make", [str(root)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert exc is not None
+    assert f"{str(root)!r} (found on this node)" in exc, exc
+    assert "Install" not in exc, exc
+
+
+def test_runner_prefers_the_nodes_own_module_to_one_under_the_payloads_sys_path(
+    tmp_path: Path,
+) -> None:
+    """When a module of the target's name is importable from the runner's own sys.path and another copy sits under the payload's sys_path, the runner runs the target from its own sys.path."""
+    node_modules = tmp_path / "node_modules"
+    payload_modules = tmp_path / "payload_modules"
+    name = _sys_path_module(node_modules, 1, tmp_path / "observed.json")
+    source = (node_modules / f"{name}.py").read_text().replace("[1]", "[2]")
+    (_mkdir(payload_modules) / f"{name}.py").write_text(source)
+    entries = [str(payload_modules)]
+    recipe = _sys_path_payload("sys_path_step", tmp_path, f"{name}:make", entries)
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+    result_path = tmp_path / _RESULT_NAME
+    env = _subprocess_env()
+    env["PYTHONPATH"] = os.pathsep.join([str(node_modules), env["PYTHONPATH"]])
+
+    process = _run_runner(payload, result_path, tmp_path / "elsewhere", env)
+
+    assert process.returncode == 0, process.stderr
+    assert _read(result_path)["success"] is True
+    product = tmp_path / "out" / "sys_path_step.parquet"
+    assert pd.read_parquet(product)["n"].tolist() == [1]
+
+
+def test_main_called_in_process_removes_the_sys_path_entries_it_added(tmp_path: Path) -> None:
+    """After main() runs a python payload in-process whose sys_path holds a directory not on sys.path, sys.path equals what it was before, also when the step raises."""
+    modules = tmp_path / "modules"
+    observed = tmp_path / "observed.json"
+    name = _sys_path_module(modules, 1, observed)
+    assert str(modules) not in sys.path
+    before = list(sys.path)
+    statuses: list[int] = []
+
+    for target in ("make", "fail"):
+        recipe = _sys_path_payload(target, tmp_path, f"{name}:{target}", [str(modules)])
+        payload = _write_payload(tmp_path / f"{target}.payload.json", recipe)
+        try:
+            statuses.append(main([str(payload), str(tmp_path / f"{target}{RESULT_SUFFIX}")]))
+        finally:
+            # Dropped, so that the next payload must import the module from sys_path again.
+            sys.modules.pop(name, None)
+        assert sys.path == before
+        seen = _observed(observed)
+        assert seen[: len(before)] == before
+        assert str(modules) in seen[len(before) :]
+
+    assert statuses == [0, 1]
+    assert _read(tmp_path / f"fail{RESULT_SUFFIX}")["exc_type"] == "ValueError"
+
+
+def test_main_called_in_process_keeps_a_sys_path_entry_that_was_already_there(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the payload's sys_path entry is already on sys.path, main() leaves it in place, does not add a second copy, and does not remove it afterwards."""
+    modules = tmp_path / "modules"
+    observed = tmp_path / "observed.json"
+    name = _sys_path_module(modules, 1, observed)
+    monkeypatch.syspath_prepend(str(modules))
+    before = list(sys.path)
+    recipe = _sys_path_payload("kept_step", tmp_path, f"{name}:make", [str(modules)])
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+
+    try:
+        status = main([str(payload), str(tmp_path / _RESULT_NAME)])
+    finally:
+        sys.modules.pop(name, None)
+
+    assert status == 0, _read(tmp_path / _RESULT_NAME)["exc"]
+    assert _observed(observed).count(str(modules)) == 1
+    assert sys.path == before

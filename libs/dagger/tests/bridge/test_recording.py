@@ -40,7 +40,7 @@ from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import execute
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun
 from vivarium.dagger.bridge.execute import RemoteTaskFailed, _record_available
@@ -55,16 +55,16 @@ _EXCEPTION_LINE = f"tests.bridge.step_targets.StepFailure: {step_targets.FAILURE
 """The last line of the node's traceback for the step whose target raises."""
 
 _NO_PRODUCT = "no_product_step"
-"""Name of the command step that exits 0 without writing its product."""
+"""Name of the command step that exits 0 without writing its output."""
 
 _NOT_PRODUCED = "The task did not produce the following files"
-"""The start of pytask's message for a step that did not write a declared product."""
+"""The start of pytask's message for a step that did not write a declared output."""
 
 _WRITES_ONE = "writes_one_of_two"
-"""Name of the command step that writes only one of its two declared products."""
+"""Name of the command step that writes only one of its two declared outputs."""
 
 _COPIES = "copies_the_written_product"
-"""Name of the command step that copies the product that :data:`_WRITES_ONE` wrote."""
+"""Name of the command step that copies the output that :data:`_WRITES_ONE` wrote."""
 
 
 _WIDE = 1000
@@ -103,36 +103,36 @@ def _stable_fixture(directory: Path) -> Fixture:
 
 
 def _steps_without_inputs(
-    artifacts: ArtifactRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
+    artifacts: FileRegistry, targets: Mapping[str, Callable[..., pd.DataFrame]]
 ) -> list[Task]:
-    """Return one python step per product key in ``targets``, running its target."""
+    """Return one python step per output key in ``targets``, running its target."""
     return [
-        python_step(target, inputs={}, produces=produces, registry=artifacts)
-        for produces, target in targets.items()
+        python_step(target, inputs={}, outputs=outputs, registry=artifacts)
+        for outputs, target in targets.items()
     ]
 
 
-def _constant_steps(artifacts: ArtifactRegistry, names: Sequence[str]) -> list[Task]:
+def _constant_steps(artifacts: FileRegistry, names: Sequence[str]) -> list[Task]:
     """Return one independent python step per name, each writing a constant frame."""
     return _steps_without_inputs(artifacts, dict.fromkeys(names, step_targets.constant))
 
 
-def _two_step_chain(artifacts: ArtifactRegistry) -> list[Task]:
+def _two_step_chain(artifacts: FileRegistry) -> list[Task]:
     """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
     first = python_step(
-        step_targets.constant, inputs={}, produces="first.parquet", registry=artifacts
+        step_targets.constant, inputs={}, outputs="first.parquet", registry=artifacts
     )
     second = python_step(
         step_targets.stack,
         inputs={"upstream": "first.parquet"},
-        produces="second.parquet",
+        outputs="second.parquet",
         registry=artifacts,
     )
     return [first, second]
 
 
-def _chain_missing_a_product(directory: Path) -> tuple[list[Task], Path]:
-    """Return two command steps with stable code identities, and the second's product.
+def _chain_missing_an_output(directory: Path) -> tuple[list[Task], Path]:
+    """Return two command steps with stable code identities, and the second's output.
 
     The first step declares ``written.txt`` and ``missing.txt`` under ``directory`` but
     writes only ``written.txt``. The second step copies ``written.txt`` to ``copy.txt``.
@@ -209,7 +209,7 @@ def _build_a_failing_step(tmp_path: Path) -> ExecutionReport:
     task = python_step(
         step_targets.raise_step_failure,
         inputs={},
-        produces="failing.parquet",
+        outputs="failing.parquet",
         registry=registry(tmp_path),
         name=_FAILING,
     )
@@ -217,10 +217,10 @@ def _build_a_failing_step(tmp_path: Path) -> ExecutionReport:
     return report_for(session, _FAILING)
 
 
-def _build_a_step_without_its_product(tmp_path: Path) -> tuple[Session, Path]:
-    """Build a command step that exits 0 without writing its product, with jobmon=True.
+def _build_a_step_without_its_output(tmp_path: Path) -> tuple[Session, Path]:
+    """Build a command step that exits 0 without writing its output, with jobmon=True.
 
-    Return the session and the product's path. The build's root is ``tmp_path / "state"``.
+    Return the session and the output's path. The build's root is ``tmp_path / "state"``.
     """
     product = tmp_path / "never_written.txt"
     task = Task(
@@ -327,12 +327,12 @@ def test_no_step_body_runs_in_the_build_process(tmp_path: Path) -> None:
     """In a bridged two-step chain whose targets record their process id, both steps report SUCCESS and no recorded process id is the test process's own."""
     artifacts = registry(tmp_path)
     first = python_step(
-        step_targets.record_pid, inputs={}, produces="first.parquet", registry=artifacts
+        step_targets.record_pid, inputs={}, outputs="first.parquet", registry=artifacts
     )
     second = python_step(
         step_targets.record_pid,
         inputs={"upstream": "first.parquet"},
-        produces="second.parquet",
+        outputs="second.parquet",
         registry=artifacts,
     )
 
@@ -484,13 +484,13 @@ def test_a_step_that_failed_on_its_node_has_no_lockfile_entry_and_its_descendant
     fails = python_step(
         step_targets.raise_step_failure,
         inputs={},
-        produces="fails.parquet",
+        outputs="fails.parquet",
         registry=artifacts,
     )
     after = python_step(
         step_targets.stack,
         inputs={"upstream": "fails.parquet"},
-        produces="after.parquet",
+        outputs="after.parquet",
         registry=artifacts,
     )
     root = tmp_path / "state"
@@ -568,15 +568,15 @@ def test_remote_task_failed_keeps_its_message_and_each_keyword() -> None:
     assert (bare.stdout, bare.stderr) == ("", "")
 
 
-# Products checked and hashed
+# Outputs checked and hashed
 
 
 @pytest.mark.usefixtures("fake_jobmon")
-def test_a_command_step_that_exits_zero_without_its_product_is_a_fail_naming_the_file(
+def test_a_command_step_that_exits_zero_without_its_output_is_a_fail_naming_the_file(
     tmp_path: Path,
 ) -> None:
-    """A bridged command step whose command exits 0 but writes no declared product reports FAIL with a NodeNotFoundError whose message says 'The task did not produce the following files' and names the file, and it has no pytask.lock entry."""
-    session, product = _build_a_step_without_its_product(tmp_path)
+    """A bridged command step whose command exits 0 but writes no declared output reports FAIL with a NodeNotFoundError whose message says 'The task did not produce the following files' and names the file, and it has no pytask.lock entry."""
+    session, product = _build_a_step_without_its_output(tmp_path)
 
     error = failure_of(report_for(session, _NO_PRODUCT))
     assert isinstance(error, NodeNotFoundError), repr(error)
@@ -587,9 +587,9 @@ def test_a_command_step_that_exits_zero_without_its_product_is_a_fail_naming_the
 
 
 @pytest.mark.usefixtures("fake_jobmon")
-def test_a_missing_product_report_shows_only_pytasks_message(tmp_path: Path) -> None:
-    """The rendered report of that step shows pytask's missing-product message and no frame from bridge/execute.py or pluggy."""
-    session, _ = _build_a_step_without_its_product(tmp_path)
+def test_a_missing_output_report_shows_only_pytasks_message(tmp_path: Path) -> None:
+    """The rendered report of that step shows pytask's missing-output message and no frame from bridge/execute.py or pluggy."""
+    session, _ = _build_a_step_without_its_output(tmp_path)
 
     rendered = _rendered(report_for(session, _NO_PRODUCT))
 
@@ -599,10 +599,10 @@ def test_a_missing_product_report_shows_only_pytasks_message(tmp_path: Path) -> 
 
 
 @pytest.mark.usefixtures("fake_jobmon")
-def test_editing_a_bridged_product_makes_preview_report_its_step_would_be_executed(
+def test_editing_a_bridged_output_makes_preview_report_its_step_would_be_executed(
     tmp_path: Path,
 ) -> None:
-    """After a bridged build of the harness fixture with stable code identities, appending a byte to the final product makes preview() report the final step WOULD_BE_EXECUTED and its upstream step SKIP_UNCHANGED."""
+    """After a bridged build of the harness fixture with stable code identities, appending a byte to the final output makes preview() report the final step WOULD_BE_EXECUTED and its upstream step SKIP_UNCHANGED."""
     fx = _stable_fixture(tmp_path)
     ran = dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(fx.tasks, fx.state, jobmon=True)) == ran
@@ -626,7 +626,7 @@ def test_a_successful_steps_output_is_kept_in_its_report_sections(tmp_path: Path
     task = python_step(
         step_targets.write_to_streams_and_descriptors,
         inputs={},
-        produces="talks.parquet",
+        outputs="talks.parquet",
         registry=registry(tmp_path),
     )
 
@@ -814,11 +814,11 @@ def test_when_the_workflow_run_raises_the_finished_steps_are_recorded_and_the_re
 # A step after a step that failed at recording
 
 
-def test_a_step_after_a_step_missing_its_product_is_skip_previous_failed_with_no_entry(
+def test_a_step_after_a_step_missing_its_output_is_skip_previous_failed_with_no_entry(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A bridged chain of two command steps with stable code identities, where the first exits 0 without writing one of its two declared products and the second reads the product that was written, reports the first FAIL and the second SKIP_PREVIOUS_FAILED, and pytask.lock has an entry for neither, although the second ran on its node."""
-    tasks, copy = _chain_missing_a_product(tmp_path)
+    """A bridged chain of two command steps with stable code identities, where the first exits 0 without writing one of its two declared outputs and the second reads the output that was written, reports the first FAIL and the second SKIP_PREVIOUS_FAILED, and pytask.lock has an entry for neither, although the second ran on its node."""
+    tasks, copy = _chain_missing_an_output(tmp_path)
     root = tmp_path / "state"
 
     session = build(tasks, root, jobmon=True)
@@ -867,9 +867,9 @@ def test_a_step_after_a_step_with_an_unreadable_result_is_skip_previous_failed(
 def test_bridged_outcomes_match_a_local_build_when_a_step_fails_only_at_recording(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """For the chain whose first step does not write a declared product, the outcomes and pytask.lock entries of a bridged build equal those of a local build of the same steps in another directory."""
-    local_tasks, _ = _chain_missing_a_product(make_dir(tmp_path / "local"))
-    bridged_tasks, _ = _chain_missing_a_product(make_dir(tmp_path / "bridged"))
+    """For the chain whose first step does not write a declared output, the outcomes and pytask.lock entries of a bridged build equal those of a local build of the same steps in another directory."""
+    local_tasks, _ = _chain_missing_an_output(make_dir(tmp_path / "local"))
+    bridged_tasks, _ = _chain_missing_an_output(make_dir(tmp_path / "bridged"))
     local_root, bridged_root = tmp_path / "local" / "state", tmp_path / "bridged" / "state"
     local = build(local_tasks, local_root)
 
@@ -888,7 +888,7 @@ def test_the_next_build_after_a_failure_at_recording_plans_both_steps_again(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
     """After the bridged build of that chain, a second bridged build binds a plan holding both steps, because neither was recorded."""
-    tasks, _ = _chain_missing_a_product(tmp_path)
+    tasks, _ = _chain_missing_an_output(tmp_path)
     root = tmp_path / "state"
     build(tasks, root, jobmon=True)
 

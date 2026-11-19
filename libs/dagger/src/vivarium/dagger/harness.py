@@ -24,7 +24,7 @@ import os
 import signal
 import subprocess
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Literal, NoReturn
@@ -35,7 +35,7 @@ from pytask import PNode, TaskOutcome
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.preview import preview
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.frontend.python_step import python_step
@@ -95,13 +95,32 @@ def stable_code_id(name: str, version: str = "1") -> PNode:
     return _StableCodeNode(name=name, version=version)
 
 
+def with_stable_code_id(task: Task, version: str = "1") -> Task:
+    """Return a copy of ``task`` whose code identity is a :func:`stable_code_id`.
+
+    The node is named ``"<task name>::code"``, so each task keeps its own code identity.
+
+    Parameters
+    ----------
+    task
+        The task to copy. It is not changed.
+    version
+        The code version the copy's code identity reports.
+
+    Returns
+    -------
+        ``task`` with ``code_id`` replaced.
+    """
+    return replace(task, code_id=stable_code_id(f"{task.name}::code", version))
+
+
 @dataclass
 class Fixture:
     """A built stub pipeline plus the handles scenarios perturb and inspect."""
 
     tasks: list[Task]
     """The compiled pipeline, ready for ``build`` or ``preview``."""
-    registry: ArtifactRegistry
+    registry: FileRegistry
     """The registry the steps were wired through."""
     state: Path
     """Directory holding pytask's state for this fixture."""
@@ -127,7 +146,7 @@ def build_fixture(tmp_path: Path) -> Fixture:
     """Build a small two-step ``python_step`` pipeline under ``tmp_path``.
 
     The pipeline reads a root-input table, doubles it into an intermediate
-    product, then offsets that into a final product: a producer/consumer chain
+    output, then offsets that into a final output: a producer/consumer chain
     wired through one registry, enough for a scenario to perturb one input and
     inspect the plan. The returned :class:`Fixture` carries the tasks, the
     registry, the pytask state directory, the perturbable input paths, and the
@@ -136,16 +155,16 @@ def build_fixture(tmp_path: Path) -> Fixture:
     raw_path = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(raw_path)
 
-    registry = ArtifactRegistry(
+    registry = FileRegistry(
         output_root=tmp_path / "out",
         run_name="run1",
         root_inputs={"raw": raw_path},
     )
     double = python_step(
-        _double, inputs={"raw": "raw"}, produces="mid.parquet", registry=registry
+        _double, inputs={"raw": "raw"}, outputs="mid.parquet", registry=registry
     )
     offset = python_step(
-        _offset, inputs={"mid": "mid.parquet"}, produces="final.parquet", registry=registry
+        _offset, inputs={"mid": "mid.parquet"}, outputs="final.parquet", registry=registry
     )
 
     state = tmp_path / "state"

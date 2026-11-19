@@ -8,7 +8,7 @@ import math
 import os
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +41,7 @@ from tests.bridge.helpers import (
 )
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import plugin as bridge_plugin
 from vivarium.dagger.bridge._jobmon_adapter import JobmonBindError, JobmonRun, PlanEntry
 from vivarium.dagger.bridge.state import (
@@ -52,7 +52,7 @@ from vivarium.dagger.bridge.state import (
     read_run_state,
 )
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, stable_code_id
+from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +79,7 @@ def _signature(session: Session, name: str) -> str:
 
 def _at_version(task: Task, version: str) -> Task:
     """Return ``task`` with a stable code identity at ``version``."""
-    return replace(task, code_id=stable_code_id(f"{task.name}::code", version))
+    return with_stable_code_id(task, version)
 
 
 def _jobmon_for(stop: str) -> FakeJobmon:
@@ -166,7 +166,7 @@ class _ReadsTheStateWhileRunning(FakeJobmon):
         super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
 
 
-def _missing_input_steps(directory: Path) -> tuple[ArtifactRegistry, list[Task]]:
+def _missing_input_steps(directory: Path) -> tuple[FileRegistry, list[Task]]:
     """Return x -> y and an unrelated step u under ``directory``, with x's input deleted.
 
     Step x reads the root input ``raw``, which exists while the steps are wired and is
@@ -175,22 +175,22 @@ def _missing_input_steps(directory: Path) -> tuple[ArtifactRegistry, list[Task]]
     raw = directory / "raw.parquet"
     raw.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(directory / "out", "run1", root_inputs={"raw": raw})
     tasks = [
         python_step(
             step_targets.stack,
             inputs={"upstream": "raw"},
-            produces="x.parquet",
+            outputs="x.parquet",
             registry=artifacts,
         ),
         python_step(
             step_targets.stack,
             inputs={"upstream": "x.parquet"},
-            produces="y.parquet",
+            outputs="y.parquet",
             registry=artifacts,
         ),
         python_step(
-            step_targets.constant, inputs={}, produces="u.parquet", registry=artifacts
+            step_targets.constant, inputs={}, outputs="u.parquet", registry=artifacts
         ),
     ]
     raw.unlink()
@@ -203,7 +203,7 @@ def _missing_input_steps(directory: Path) -> tuple[ArtifactRegistry, list[Task]]
 def test_a_failed_step_fails_its_descendant_is_skipped_and_an_independent_step_succeeds(
     tmp_path: Path,
 ) -> None:
-    """End to end: with FakeJobmon(workflow_id=4242), a bridged build of a -> b -> c plus d where b raises on its node reports a and d SUCCESS, b FAIL, c SKIP_PREVIOUS_FAILED, one report per step, and exit code FAILED; no product records the test process's pid; pytask.lock holds a and d only; the state file is 'finished' with workflow id 4242, workflow status 'E' and pending (b, c)."""
+    """End to end: with FakeJobmon(workflow_id=4242), a bridged build of a -> b -> c plus d where b raises on its node reports a and d SUCCESS, b FAIL, c SKIP_PREVIOUS_FAILED, one report per step, and exit code FAILED; no output records the test process's pid; pytask.lock holds a and d only; the state file is 'finished' with workflow id 4242, workflow status 'E' and pending (b, c)."""
     session = chain_build(tmp_path, FakeJobmon(workflow_id=WORKFLOW_ID), failing={B})
 
     assert outcomes(session) == {
@@ -276,11 +276,11 @@ def test_a_runner_that_dies_without_a_result_fails_the_build(tmp_path: Path) -> 
         python_step(
             step_targets.exit_without_a_result,
             inputs={},
-            produces="dies.parquet",
+            outputs="dies.parquet",
             registry=artifacts,
         ),
         python_step(
-            step_targets.record_pid, inputs={}, produces="lives.parquet", registry=artifacts
+            step_targets.record_pid, inputs={}, outputs="lives.parquet", registry=artifacts
         ),
     ]
     root = build_root(tmp_path)
@@ -403,13 +403,13 @@ def test_a_run_error_after_a_node_failure_still_shows_the_failure_and_the_summar
         python_step(
             step_targets.raise_step_failure,
             inputs={},
-            produces="a_fails.parquet",
+            outputs="a_fails.parquet",
             registry=artifacts,
         ),
         python_step(
             step_targets.constant,
             inputs={},
-            produces="b_succeeds.parquet",
+            outputs="b_succeeds.parquet",
             registry=artifacts,
         ),
     ]
@@ -473,7 +473,7 @@ def test_a_run_error_after_every_result_is_written_leaves_the_build_ok(
     "stop", ["node_failure", "no_result", "run_error", "sigterm", "keyboard_interrupt"]
 )
 def test_settlement_never_calls_pytasks_execute_protocol(tmp_path: Path, stop: str) -> None:
-    """With a plugin that records each call of pytask_execute_task_protocol made while dry_run is False, a bridged build of a -> b -> c plus d that stops in the way named records no such call, every step of the plan has exactly one report, and no product records the test process's pid."""
+    """With a plugin that records each call of pytask_execute_task_protocol made while dry_run is False, a bridged build of a -> b -> c plus d that stops in the way named records no such call, every step of the plan has exactly one report, and no output records the test process's pid."""
     calls = _ProtocolCalls()
     with pytest.MonkeyPatch.context() as monkeypatch:
         _register_with_each_build(monkeypatch, calls)

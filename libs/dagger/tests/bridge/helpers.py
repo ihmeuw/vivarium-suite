@@ -8,7 +8,6 @@ import json
 import re
 import tomllib
 from collections.abc import Collection, Sequence
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +18,11 @@ from tests.bridge import step_targets
 from vivarium.dagger.backend.build import build
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE, RunState, read_run_state
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, stable_code_id
+from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
 
 LOCKFILE = "pytask.lock"
 """The name of pytask's lockfile in a build's root."""
@@ -54,9 +53,9 @@ _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 """An ANSI escape sequence, which pytask's console writes when it styles its output."""
 
 
-def registry(tmp_path: Path) -> ArtifactRegistry:
-    """Return a registry whose products go under ``tmp_path / "out"``."""
-    return ArtifactRegistry(output_root=tmp_path / "out", run_name="run1")
+def registry(tmp_path: Path) -> FileRegistry:
+    """Return a registry whose outputs go under ``tmp_path / "out"``."""
+    return FileRegistry(output_root=tmp_path / "out", run_name="run1")
 
 
 def make_dir(path: Path) -> Path:
@@ -67,26 +66,18 @@ def make_dir(path: Path) -> Path:
 
 def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
     """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
-    return [
-        replace(
-            task,
-            code_id=stable_code_id(
-                f"{task.name}::code", "2" if task.name in changed else "1"
-            ),
-        )
-        for task in tasks
-    ]
+    return [with_stable_code_id(task, "2" if task.name in changed else "1") for task in tasks]
 
 
 def chain_and_independent(
-    artifacts: ArtifactRegistry,
+    artifacts: FileRegistry,
     *,
     failing: Collection[str] = (),
     killed: Collection[str] = (),
 ) -> list[Task]:
     """Return the chain ``a -> b -> c`` and the independent step ``d``, in that order.
 
-    Each step records its node's process id in its product, after the ids its upstream
+    Each step records its node's process id in its output, after the ids its upstream
     recorded. A step named in ``failing`` raises ``StepFailure`` on its node instead, and
     one named in ``killed`` ends its runner without a result.
     """
@@ -100,12 +91,12 @@ def chain_and_independent(
         else:
             target = step_targets.record_pid
         inputs = {"upstream": upstream_of[name]} if name in upstream_of else {}
-        tasks.append(python_step(target, inputs=inputs, produces=name, registry=artifacts))
+        tasks.append(python_step(target, inputs=inputs, outputs=name, registry=artifacts))
     return tasks
 
 
-def recorded_pids(artifacts: ArtifactRegistry, names: Collection[str]) -> set[int]:
-    """Return every process id recorded in the products of ``names`` that exist."""
+def recorded_pids(artifacts: FileRegistry, names: Collection[str]) -> set[int]:
+    """Return every process id recorded in the outputs of ``names`` that exist."""
     pids: set[int] = set()
     for name in names:
         path = artifacts.path_for(name)
@@ -193,7 +184,7 @@ def chain_build(
 ) -> Session:
     """Build a -> b -> c plus d under ``tmp_path`` with jobmon=True through ``jobmon``.
 
-    The products go under ``tmp_path / "out"`` and the root is :func:`build_root`. A step
+    The outputs go under ``tmp_path / "out"`` and the root is :func:`build_root`. A step
     named in ``failing`` raises on its node, and one named in ``killed`` ends its runner
     without a result. ``stable_ids`` gives every step a stable code identity.
     """

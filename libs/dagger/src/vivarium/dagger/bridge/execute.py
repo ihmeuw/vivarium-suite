@@ -8,8 +8,8 @@ pytask's own dry-run protocol, turns every stale step into a recipe with
 workflow in which each step waits for its nearest stale ancestors.
 
 Before pytask runs a step locally, it decides whether the step is stale, checks that the
-step's inputs exist, and creates the parent directory of each product. For a stale step
-with no stale ancestor, planning does all three, so it can create product directories even
+step's inputs exist, and creates the parent directory of each output. For a stale step
+with no stale ancestor, planning does all three, so it can create output directories even
 for a step that the bridge then refuses or, with ``force``, fails for a missing input.
 pytask marks every step after a stale step to run without checking its inputs. Unless
 such a step is deselected or persisted, it is stale, and the bridge submits it even when a
@@ -19,8 +19,8 @@ Before it writes anything, the bridge therefore checks the inputs of every stale
 itself: each input with a file path must exist unless a stale step produces it. A stale
 step with a missing input is reported as FAIL and every stale step after it as
 SKIP_PREVIOUS_FAILED, as a local build reports them, and the bridge submits none of these
-steps. It creates the product directories of every step that it submits before it submits
-anything, so a step whose product directory does not exist yet runs on a node as it does
+steps. It creates the output directories of every step that it submits before it submits
+anything, so a step whose output directory does not exist yet runs on a node as it does
 locally. pytask's ``max_failures`` and ``stop_after_first_failure`` apply to planning
 and to this input check, so a failure that makes pytask stop the build ends it there and
 nothing is submitted. They do not apply to the steps that run through Jobmon.
@@ -31,7 +31,7 @@ each step once.
 
 After the workflow ends, the hook records each step's result from the file that the node
 runner wrote. Recording runs pytask's own per-task hooks in the build's process, so pytask
-checks and hashes each step's products and writes its lockfile entry exactly as a local
+checks and hashes each step's outputs and writes its lockfile entry exactly as a local
 build does, and a later build skips a step whose inputs and code are unchanged. A step
 that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
 recorded while the workflow runs, so pytask's table shows no step finishing until the
@@ -261,7 +261,7 @@ def pytask_execute_build(session: Session) -> bool:
     each missing input and has no traceback or chained error, and every stale step after
     it is reported as SKIP_PREVIOUS_FAILED. A step that planning already reported keeps
     that report. The hook writes nothing for the steps it reports here and does not submit
-    them, although with ``force`` planning can already have created the product directory
+    them, although with ``force`` planning can already have created the output directory
     of such a step that has no stale ancestor. If a failure here makes pytask ask the
     build to stop (``stop_after_first_failure``, or ``max_failures`` reached), the check
     ends with that step, the steps it has not reached get no report, and the hook submits
@@ -275,9 +275,9 @@ def pytask_execute_build(session: Session) -> bool:
     target cannot be named by import reference), the step was not built by
     :func:`~vivarium.dagger.backend.build.build`, or its arguments cannot be loaded on
     the controller, each such step is reported as FAIL with the reason as a plain
-    message. No recipe, run directory or product is then written and nothing is
+    message. No recipe, run directory or output is then written and nothing is
     submitted, although planning, like
-    :func:`~vivarium.dagger.backend.preview.preview`, can already have created product
+    :func:`~vivarium.dagger.backend.preview.preview`, can already have created output
     directories.
 
     Otherwise it checks the Jobmon environment and works out how long Jobmon may run the
@@ -292,14 +292,14 @@ def pytask_execute_build(session: Session) -> bool:
     with an error (its state's ``error`` is set), the hook prints a warning through
     pytask's console that names that run's workflow id and run directory, gives that
     error if there is one, and says that its jobs on compute nodes may still be running
-    and writing the same products. A run interrupted before its workflow was bound (its
+    and writing the same outputs. A run interrupted before its workflow was bound (its
     state has no workflow id) launched no jobs, so it is passed over and the run before
     it is checked. If a state file cannot be read, the warning names the file instead.
     Either way the build goes on.
 
     It then creates a new run directory
     ``<root>/.pytask/jobmon/<YYYYmmdd-HHMMSS>-<6 hex digits>/``, writes each recipe there
-    as ``<signature>.payload.json``, creates the parent directory of the products of each
+    as ``<signature>.payload.json``, creates the parent directory of the outputs of each
     step to submit, and binds and runs one workflow. Its entries are the steps to submit
     in plan order, named by step and carrying each step's
     :attr:`~vivarium.dagger.backend.task.Task.resources`. Each entry waits for the
@@ -331,11 +331,11 @@ def pytask_execute_build(session: Session) -> bool:
     result file is in the run directory, in plan order, and appends its report to
     ``session.execution_reports``. Recording runs, in this process, the per-task hooks
     that a local build runs around a step's body, except setup and the call itself: it
-    logs the step's start, checks that each of its products exists, hashes its
-    dependencies and products into the lockfile, and logs its outcome. The output that
+    logs the step's start, checks that each of its outputs exists, hashes its
+    inputs and outputs into the lockfile, and logs its outcome. The output that
     the step wrote on its node is added to the report's sections as captured output of
-    the call. A step whose node reports success but which did not write every product is
-    a FAIL with pytask's own message naming the missing products, as in a local build. A
+    the call. A step whose node reports success but which did not write every output is
+    a FAIL with pytask's own message naming the missing outputs, as in a local build. A
     step that failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`,
     with no lockfile entry, and pytask marks every step after it as skipped because an
     ancestor failed. A step whose result file cannot be read is a FAIL in the same way,
@@ -401,7 +401,7 @@ def pytask_execute_build(session: Session) -> bool:
         because neither ``jobmon_resources`` nor a step's resources name a queue. The
         message then names ``jobmon_cluster`` and the compute resources to check and
         quotes the adapter's message, which gives the type and message of Jobmon's error.
-        The run directory, its recipes and the product directories have then already been
+        The run directory, its recipes and the output directories have then already been
         created, but no state file, and no step has run. Each of these messages, the
         refusal included, is printed through pytask's console first, so the build fails
         with that message and no traceback.
@@ -605,7 +605,7 @@ def _check_inputs(session: Session, stale: list[PTask]) -> list[PTask]:
             continue
         paths = "".join(f"\n    {path}" for path in missing)
         message = (
-            f"Task '{task.name}': these inputs do not exist, and no step that runs before "
+            f"Step {task.name!r}: these inputs do not exist, and no step that runs before "
             f"it writes them:{paths}"
         )
         _report_exception(session, task, NodeNotFoundError(message))
@@ -623,7 +623,7 @@ def _payloads(
     payloads: dict[str, Payload] = {}
     refusals: list[tuple[PTask, str]] = []
     for pytask_task in stale:
-        refused = f"Task '{pytask_task.name}': cannot run on a compute node"
+        refused = f"Step {pytask_task.name!r}: cannot run on a compute node"
         task = pytask_task.attributes.get(TASK_KEY)
         if not isinstance(task, Task):
             reason = (
@@ -721,7 +721,7 @@ def _warn_if_last_run_unfinished(root: Path) -> None:
     _warn(
         f"The latest earlier run under {root}, Jobmon workflow {state.workflow_id} in "
         f"{state.workdir}, {what}. Its jobs on compute nodes may still be running and "
-        "writing the same products as this build."
+        "writing the same outputs as this build."
     )
 
 
@@ -830,12 +830,17 @@ def _new_run_directory(root: Path) -> Path:
 def _prepare_products(session: Session, stale: list[PTask]) -> None:
     """Create the stale tasks' product directories, as pytask's task setup does."""
     for task in stale:
-        for signature in session.dag.successors(task.signature):
-            node = session.dag.nodes[signature]
-            if isinstance(node, PPathNode):
-                node.path.parent.mkdir(parents=True, exist_ok=True)
-            if isinstance(node, DirectoryNode) and node.root_dir:
-                node.root_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            for signature in session.dag.successors(task.signature):
+                node = session.dag.nodes[signature]
+                if isinstance(node, PPathNode):
+                    node.path.parent.mkdir(parents=True, exist_ok=True)
+                if isinstance(node, DirectoryNode) and node.root_dir:
+                    node.root_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise _failure(
+                f"Step {task.name!r}: could not create a directory for its outputs: {error}"
+            ) from error
 
 
 def _stale_upstreams(session: Session, signature: str, stale: Set[str]) -> set[str]:

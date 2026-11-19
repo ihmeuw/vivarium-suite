@@ -21,8 +21,8 @@ from click.testing import CliRunner
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.config.utilities import WORKFLOW_ARGS_FILENAME
 
-_WORKFLOW_MAIN = "vivarium.dagger.cli.runner.run_workflow"
-_RESTART_MAIN = "vivarium.dagger.cli.runner.restart_workflow"
+_WORKFLOW_MAIN = "vivarium.dagger.runner.run_workflow"
+_RESTART_MAIN = "vivarium.dagger.runner.restart_workflow"
 
 
 def _write_yaml(tmp_path: Path, data: dict[str, Any], name: str = "pipeline.yaml") -> Path:

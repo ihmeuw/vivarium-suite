@@ -47,7 +47,7 @@ from vivarium.dagger.backend.build import build, outcomes, to_pytask_task
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import ArtifactRegistry
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import (
     JobmonBindError,
@@ -129,7 +129,7 @@ def _node_imports(node_pythonpath: None) -> None:
     """Let every node runner in this module import ``tests.bridge.step_targets``."""
 
 
-def _steps(artifacts: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
+def _steps(artifacts: FileRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
     """Return one python step per key of ``graph``, reading the steps that the key lists.
 
     A step that reads nothing writes a constant frame, and any other step stacks the frames
@@ -142,13 +142,13 @@ def _steps(artifacts: ArtifactRegistry, graph: Mapping[str, Sequence[str]]) -> l
             target: Callable[..., pd.DataFrame] = step_targets.stack
         else:
             target = step_targets.constant
-        tasks.append(python_step(target, inputs=inputs, produces=name, registry=artifacts))
+        tasks.append(python_step(target, inputs=inputs, outputs=name, registry=artifacts))
     return tasks
 
 
 def _steps_with_missing_raw(
     directory: Path, graph: Mapping[str, Sequence[str]]
-) -> tuple[ArtifactRegistry, list[Task]]:
+) -> tuple[FileRegistry, list[Task]]:
     """Return a registry under ``directory`` and the steps of ``graph`` wired through it.
 
     The steps can read the root input ``raw``, the file ``directory / "raw.parquet"``. It
@@ -156,7 +156,7 @@ def _steps_with_missing_raw(
     """
     raw = make_dir(directory) / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(directory / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(directory / "out", "run1", root_inputs={"raw": raw})
     tasks = _steps(artifacts, graph)
     raw.unlink()
     return artifacts, tasks
@@ -261,13 +261,13 @@ def _foreign(product: Path) -> None:
 
 
 def _refused_step(
-    artifacts: ArtifactRegistry, run: str, name: str = _REFUSED
+    artifacts: FileRegistry, run: str, name: str = _REFUSED
 ) -> tuple[Task, Path]:
-    """Return a step that cannot run on a node, for the reason ``run`` names, and its product.
+    """Return a step that cannot run on a node, for the reason ``run`` names, and its output.
 
     ``run`` is ``"main"`` for a target defined in ``__main__``, ``"lambda"`` for a lambda
     target, and ``"hand_built"`` for a task whose run is a plain function. ``name`` is the
-    step's name, which also names its product.
+    step's name, which also names its output.
     """
     if run == "hand_built":
         product_key = f"{name}.txt"
@@ -285,7 +285,7 @@ def _refused_step(
     else:
         target = lambda: pd.DataFrame({"n": [1]})
     task = python_step(
-        target, inputs={}, produces=f"{name}.parquet", registry=artifacts, name=name
+        target, inputs={}, outputs=f"{name}.parquet", registry=artifacts, name=name
     )
     return task, artifacts.path_for(f"{name}.parquet")
 
@@ -330,7 +330,7 @@ class _UnloadableNode:
         raise _LoadFailed(self.name)
 
     def save(self, value: Any) -> None:
-        """Reject saves: this is a dependency, not a product."""
+        """Reject saves: this is a dependency, not an output."""
         raise NotImplementedError(f"{self.name} is a dependency and cannot be saved.")
 
 
@@ -385,15 +385,15 @@ class _RefusingBind(FakeJobmon):
 def test_a_jobmon_build_runs_every_stale_step_in_one_plan_and_in_other_processes(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: a two-step python_step chain whose targets save their process id in their products, built with jobmon=True, binds exactly one plan with both steps in topological order; the build exits OK, both products exist, and each recorded pid differs from the test process's."""
+    """End to end: a two-step python_step chain whose targets save their process id in their outputs, built with jobmon=True, binds exactly one plan with both steps in topological order; the build exits OK, both outputs exist, and each recorded pid differs from the test process's."""
     artifacts = registry(tmp_path)
     first = python_step(
-        step_targets.record_pid, inputs={}, produces="first.parquet", registry=artifacts
+        step_targets.record_pid, inputs={}, outputs="first.parquet", registry=artifacts
     )
     second = python_step(
         step_targets.record_pid,
         inputs={"upstream": "first.parquet"},
-        produces="second.parquet",
+        outputs="second.parquet",
         registry=artifacts,
     )
 
@@ -409,10 +409,10 @@ def test_a_jobmon_build_runs_every_stale_step_in_one_plan_and_in_other_processes
     assert os.getpid() not in first_pids + second_pids
 
 
-def test_the_harness_fixture_through_the_bridge_writes_the_products_a_local_build_writes(
+def test_the_harness_fixture_through_the_bridge_writes_the_outputs_a_local_build_writes(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: the harness fixture built with jobmon=True writes products equal to those of a local build of an identical fixture."""
+    """End to end: the harness fixture built with jobmon=True writes outputs equal to those of a local build of an identical fixture."""
     local = build_fixture(make_dir(tmp_path / "local"))
     ran = dict.fromkeys(local.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(local.tasks, local.state)) == ran
@@ -501,7 +501,7 @@ def test_deselected_steps_report_skip_and_are_not_submitted(
 def test_a_persisted_step_between_two_stale_steps_is_crossed_by_the_dependency(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a chain a -> b -> c with b marked persist and its product present, b reports PERSISTENCE, the plan holds a and c, and c's entry waits for a."""
+    """In a chain a -> b -> c with b marked persist and its output present, b reports PERSISTENCE, the plan holds a and c, and c's entry waits for a."""
     tasks = _steps(registry(tmp_path), _CHAIN)
     root = tmp_path / "state"
     assert outcomes(build(tasks, root)) == dict.fromkeys(_CHAIN, TaskOutcome.SUCCESS)
@@ -521,10 +521,10 @@ def test_a_persisted_step_between_two_stale_steps_is_crossed_by_the_dependency(
 def test_a_missing_input_fails_its_step_at_plan_time_and_unrelated_steps_still_run(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A step whose root input file is missing reports FAIL and its downstream step SKIP_PREVIOUS_FAILED, neither is in the plan, and an unrelated stale step is still submitted and writes its product."""
+    """A step whose root input file is missing reports FAIL and its downstream step SKIP_PREVIOUS_FAILED, neither is in the plan, and an unrelated stale step is still submitted and writes its output."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "x.parquet": ["raw"],
         "y.parquet": ["x.parquet"],
@@ -545,10 +545,10 @@ def test_a_missing_input_fails_its_step_at_plan_time_and_unrelated_steps_still_r
 def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_nothing(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With stop_after_first_failure, when the first two steps in plan order both read a missing root input, a jobmon build reports only the first of them, as FAIL, and exits FAILED: planning ends at that step, so the second, which would also fail at plan time, gets no report. An unrelated stale step later in plan order is not submitted and its product is not written, no plan is bound, and no run directory exists."""
+    """With stop_after_first_failure, when the first two steps in plan order both read a missing root input, a jobmon build reports only the first of them, as FAIL, and exits FAILED: planning ends at that step, so the second, which would also fail at plan time, gets no report. An unrelated stale step later in plan order is not submitted and its output is not written, no plan is bound, and no run directory exists."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": ["raw"],
         "b.parquet": ["raw"],
@@ -571,10 +571,10 @@ def test_stop_after_first_failure_ends_planning_at_a_missing_input_and_submits_n
 def test_stop_after_first_failure_submits_none_of_the_stale_steps_planned_before_it(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With stop_after_first_failure, when a stale step comes before a step with a missing root input in plan order, a jobmon build reports the failing step FAIL and exits FAILED, gives the step after it no report, binds no plan, creates no run directory, and does not write the earlier stale step's product."""
+    """With stop_after_first_failure, when a stale step comes before a step with a missing root input in plan order, a jobmon build reports the failing step FAIL and exits FAILED, gives the step after it no report, binds no plan, creates no run directory, and does not write the earlier stale step's output."""
     raw = tmp_path / "raw.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(raw)
-    artifacts = ArtifactRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
+    artifacts = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": raw})
     graph: dict[str, list[str]] = {
         "a.parquet": [],
         "m.parquet": ["raw"],
@@ -693,7 +693,7 @@ def test_an_entry_does_not_wait_for_a_step_that_is_not_stale(
 def test_a_missing_input_after_a_stale_step_fails_its_step_and_the_others_still_run(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL with a message naming y and the missing file's full path and both z and w SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and writes the products of a and u but not those of y, z and w."""
+    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL with a message naming y and the missing file's full path and both z and w SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and writes the outputs of a and u but not those of y, z and w."""
     artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     missing = (tmp_path / "raw.parquet").resolve()
 
@@ -715,7 +715,7 @@ def test_a_missing_input_after_a_stale_step_fails_its_step_and_the_others_still_
 def test_a_missing_input_that_a_stale_step_writes_does_not_fail_its_step(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a first build of a chain a -> b -> c, where the files that b and c read do not exist before the build because a and b write them, a jobmon build reports no step FAIL, binds one plan holding all three steps, exits OK and writes every product."""
+    """In a first build of a chain a -> b -> c, where the files that b and c read do not exist before the build because a and b write them, a jobmon build reports no step FAIL, binds one plan holding all three steps, exits OK and writes every output."""
     artifacts = registry(tmp_path)
     tasks = _steps(artifacts, _CHAIN)
     assert not any(artifacts.path_for(step).exists() for step in _CHAIN)
@@ -732,13 +732,14 @@ def test_a_missing_input_that_a_stale_step_writes_does_not_fail_its_step(
 def test_a_missing_input_failure_has_no_chained_error_or_traceback(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """The FAIL report of a step after a stale step whose root input file is missing holds an exception with no __cause__, no __context__ and no traceback, and the report's exc_info holds no traceback."""
+    """The FAIL report of a step after a stale step whose root input file is missing holds an exception whose message starts with the step's name, with no __cause__, no __context__ and no traceback, and the report's exc_info holds no traceback."""
     _, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
 
     session = build(tasks, tmp_path / "state", jobmon=True)
 
     report = report_for(session, "y.parquet")
     error = failure_of(report)
+    assert str(error).startswith("Step 'y.parquet': these inputs do not exist"), error
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
@@ -794,12 +795,12 @@ def test_a_missing_input_after_a_stale_step_gets_the_outcomes_of_a_local_build(
 def test_a_refused_step_after_a_failed_input_check_is_skipped_and_the_others_still_run(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing and a step that cannot run on a node reads y's product and writes its own into a directory that does not exist, a jobmon build reports y FAIL and the refused step once, as SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and does not create the refused step's product directory."""
+    """In a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing and a step that cannot run on a node reads y's output and writes its own into a directory that does not exist, a jobmon build reports y FAIL and the refused step once, as SKIP_PREVIOUS_FAILED, binds one plan holding only a and u, in that order, and does not create the refused step's output directory."""
     artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     refused = python_step(
         _in_main_reading,
         inputs={"upstream": "y.parquet"},
-        produces="later/refused.parquet",
+        outputs="later/refused.parquet",
         registry=artifacts,
         name=_REFUSED,
     )
@@ -821,7 +822,7 @@ def test_a_refused_step_after_a_failed_input_check_is_skipped_and_the_others_sti
 def test_stop_after_first_failure_ends_the_input_check_and_submits_nothing(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With stop_after_first_failure, in a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL and exits FAILED, gives z and w no report, binds no plan, creates no run directory, and writes the products of neither a nor u."""
+    """With stop_after_first_failure, in a first build of a -> y -> z -> w and an unrelated step u, where y also reads a root input file that is missing, a jobmon build reports y FAIL and exits FAILED, gives z and w no report, binds no plan, creates no run directory, and writes the outputs of neither a nor u."""
     artifacts, tasks = _steps_with_missing_raw(tmp_path, _AFTER_STALE)
     root = tmp_path / "state"
 
@@ -873,7 +874,7 @@ def test_a_pytask_task_not_built_by_the_backend_is_refused_with_a_plain_message(
 
     error = failure_of(report_for(session, "foreign_task"))
     message = str(error)
-    assert "foreign_task" in message
+    assert message.startswith("Step 'foreign_task': "), message
     assert "built" in message and "vivarium.dagger" in message, message
     assert error.__cause__ is None
     assert error.__traceback__ is None
@@ -889,7 +890,7 @@ def test_a_step_whose_arguments_cannot_be_loaded_is_refused_with_a_plain_message
     task = python_step(
         step_targets.constant,
         inputs={},
-        produces="unloadable.parquet",
+        outputs="unloadable.parquet",
         registry=artifacts,
         name=_UNLOADABLE,
     )
@@ -900,7 +901,7 @@ def test_a_step_whose_arguments_cannot_be_loaded_is_refused_with_a_plain_message
 
     report = report_for(session, _UNLOADABLE)
     error = failure_of(report)
-    assert _UNLOADABLE in str(error), str(error)
+    assert str(error).startswith(f"Step {_UNLOADABLE!r}: "), str(error)
     assert report.exc_info is not None and report.exc_info[2] is None
     assert error.__traceback__ is None
     assert error.__cause__ is None
@@ -934,7 +935,7 @@ def test_a_refusal_shows_its_reason_once_with_no_chained_error_or_traceback(
 def test_a_refused_step_stops_every_other_stale_step_from_being_submitted(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """When two of three independent stale steps are refused, each for a different reason, the build exits FAILED, each refused step reports FAIL with a message naming it, no plan is bound, and the third step's product is not written."""
+    """When two of three independent stale steps are refused, each for a different reason, the build exits FAILED, each refused step reports FAIL with a message naming it, no plan is bound, and the third step's output is not written."""
     artifacts = registry(tmp_path)
     refused, _ = _refused_step(artifacts, "lambda")
     also_refused, _ = _refused_step(artifacts, "hand_built", name="second_refused")
@@ -1135,10 +1136,10 @@ def test_entries_carry_each_steps_name_and_resources(
     assert carried == [(step, resources[step]) for step in fx.steps]
 
 
-def test_a_command_step_whose_product_directory_is_missing_succeeds_on_the_node(
+def test_a_command_step_whose_output_directory_is_missing_succeeds_on_the_node(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """A command step after a python step, writing its product into a directory that does not exist yet, succeeds through the bridge, because the bridge creates the product's parent directory before it submits."""
+    """A command step after a python step, writing its output into a directory that does not exist yet, succeeds through the bridge, because the bridge creates the output's parent directory before it submits."""
     artifacts = registry(tmp_path)
     [first] = _steps(artifacts, {"first.parquet": []})
     source = artifacts.path_for("first.parquet")
@@ -1161,6 +1162,42 @@ def test_a_command_step_whose_product_directory_is_missing_succeeds_on_the_node(
     result = read_result(run_directory / f"{entries['copy_step'].signature}{RESULT_SUFFIX}")
     assert result["success"] is True, result["exc"]
     assert copy.read_bytes() == source.read_bytes()
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can write to any directory")
+def test_an_output_directory_that_cannot_be_created_fails_the_build_naming_the_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], fake_jobmon: FakeJobmon
+) -> None:
+    """A command step after a stale step, whose output's parent directory cannot be created because its own parent is read-only, makes a jobmon build exit FAILED with a message that starts with the step's name and names the directory, with no traceback, and no plan is bound. pytask's planning does not create the directory, since the step after a stale step is stale without being checked."""
+    artifacts = registry(tmp_path)
+    [first] = _steps(artifacts, {"first.parquet": []})
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    blocker = locked / "sub"
+    product = blocker / "copy.txt"
+    task = Task(
+        name="blocked_step",
+        run=f"touch {shlex.quote(str(product))}",
+        inputs={"source": artifacts.resolve_input("first.parquet")},
+        outputs={"copy": file_node(product)},
+        resources={},
+        env=None,
+    )
+
+    locked.chmod(0o555)
+    try:
+        capsys.readouterr()
+        session = build([first, task], tmp_path / "state", jobmon=True)
+        captured = capsys.readouterr()
+    finally:
+        locked.chmod(0o755)
+
+    output = squashed(captured.out + captured.err)
+    assert session.exit_code == ExitCode.FAILED
+    assert squashed("Step 'blocked_step': could not create a directory") in output, output
+    assert squashed(str(blocker)) in output, output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
 
 
 def test_each_named_env_is_resolved_once_per_plan(

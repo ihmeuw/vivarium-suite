@@ -16,6 +16,9 @@ post-process the results, then render a report) that you want to launch and
 resume as a single unit. For a single parallel simulation with no surrounding
 steps, use ``psimulate`` from the ``vivarium-psimulate`` package directly.
 
+This page covers workflow YAML files. ``dagger`` also runs a Python pipeline
+definition, chosen by the same ``-c`` option; :doc:`python_pipelines` describes that.
+
 ``dagger`` submits its steps through Jobmon, which the ``cluster`` extra
 installs. The ``simulation`` step also needs ``vivarium-psimulate``, which the
 ``simulation`` extra installs:

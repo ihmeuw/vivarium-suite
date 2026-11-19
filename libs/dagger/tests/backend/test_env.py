@@ -200,8 +200,92 @@ def test_a_path_that_cannot_be_checked_raises_a_runtime_error_naming_the_env(
         locked.chmod(0o000)
 
     try:
-        with pytest.raises(RuntimeError, match=re.escape(repr(env))):
+        with pytest.raises(RuntimeError, match=re.escape(repr(env))) as info:
             resolve_env_prefix(env)
     finally:
         if case == "unsearchable_parent":
             locked.chmod(0o755)
+
+    assert "could not be checked" in str(info.value), str(info.value)
+    assert "is not a conda env or venv" not in str(info.value)
+
+
+def test_a_failing_conda_lookup_gives_condas_own_json_reason_before_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When conda exits non-zero with a JSON error on stdout and an unrelated warning on stderr, the message quotes the JSON message; without JSON on stdout it quotes stderr."""
+    monkeypatch.chdir(tmp_path)
+    conda = tmp_path / "fake_conda"
+    monkeypatch.setenv("CONDA_EXE", str(conda))
+    report = json.dumps({"exception_name": "CondaError", "message": "Bad condarc  at line 3"})
+
+    for stdout, stderr, wanted, unwanted in [
+        (report, "warning: unrelated", "Bad condarc at line 3", "unrelated"),
+        ("not json", "the real reason", "the real reason", "not json"),
+        (json.dumps({"error": "only an error field"}), "", "only an error field", None),
+    ]:
+        conda.write_text(f"#!/bin/sh\necho '{stdout}'\necho '{stderr}' >&2\nexit 1\n")
+        conda.chmod(0o755)
+        with pytest.raises(RuntimeError) as info:
+            resolve_env_prefix("analysis")
+        message = str(info.value)
+        assert "'analysis'" in message and "exited with status 1" in message, message
+        assert wanted in message, message
+        if unwanted is not None:
+            assert unwanted not in message, message
+
+
+def test_a_conda_env_matches_only_on_the_last_component_of_its_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Listed prefixes that hold the name only as an earlier component or as part of a longer name do not match it, so the name is reported as not listed."""
+    monkeypatch.chdir(tmp_path)
+    _fake_conda(
+        tmp_path,
+        monkeypatch,
+        _make_prefix(tmp_path / "conda_envs" / "analysis" / "sub"),
+        _make_prefix(tmp_path / "conda_envs" / "analysis_old"),
+        _make_prefix(tmp_path / "conda_envs" / "my_analysis"),
+    )
+
+    with pytest.raises(RuntimeError, match="'analysis'") as info:
+        resolve_env_prefix("analysis")
+
+    assert "no conda env of that name is listed" in str(info.value)
+
+
+def test_a_tilde_env_without_a_separator_is_a_path_not_a_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An env that starts with ~ and has no path separator is treated as a path: an unknown ~user raises RuntimeError saying it could not be checked, and conda is never called."""
+    monkeypatch.chdir(tmp_path)
+    called = tmp_path / "conda_was_called"
+    conda = tmp_path / "fake_conda"
+    conda.write_text(f"#!/bin/sh\ntouch '{called}'\necho '{{\"envs\": []}}'\n")
+    conda.chmod(0o755)
+    monkeypatch.setenv("CONDA_EXE", str(conda))
+
+    with pytest.raises(RuntimeError, match=re.escape(repr("~no_such_user_xyz_vw"))) as info:
+        resolve_env_prefix("~no_such_user_xyz_vw")
+
+    assert "could not be checked" in str(info.value)
+    assert not called.exists()
+
+
+def test_an_unsearchable_local_venv_directory_raises_a_runtime_error_naming_the_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A name whose ./.venv directory cannot be searched raises RuntimeError naming the env, never a raw PermissionError."""
+    if os.geteuid() == 0:
+        pytest.skip("root can search a directory without permission")
+    monkeypatch.delenv("CONDA_EXE", raising=False)
+    monkeypatch.chdir(tmp_path)
+    venvs = tmp_path / ".venv"
+    _make_prefix(venvs / "analysis")
+    venvs.chmod(0o000)
+
+    try:
+        with pytest.raises(RuntimeError, match="'analysis'"):
+            resolve_env_prefix("analysis")
+    finally:
+        venvs.chmod(0o755)

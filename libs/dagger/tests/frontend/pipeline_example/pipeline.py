@@ -1,0 +1,47 @@
+"""An example pipeline definition for the ``dagger`` command: three steps in a chain."""
+
+from pathlib import Path
+
+import pandas as pd
+
+from vivarium.dagger.frontend import Pipeline
+
+HERE = Path(__file__).resolve().parent
+
+
+def make_population() -> pd.DataFrame:
+    """Return a small population table by age group."""
+    return pd.DataFrame({"age_group": ["0-14", "15-64", "65+"], "count": [30, 55, 15]})
+
+
+def select_adults(population: Path) -> pd.DataFrame:
+    """Keep the age groups of 15 and older."""
+    frame = pd.read_parquet(population)
+    return frame[frame["age_group"] != "0-14"].reset_index(drop=True)
+
+
+def total_adults(adults: Path) -> pd.DataFrame:
+    """Sum the adult population."""
+    frame = pd.read_parquet(adults)
+    return pd.DataFrame({"adults": [frame["count"].sum()]})
+
+
+def pipeline() -> Pipeline:
+    """Add the three steps, with their outputs and state under ``output`` next to this file."""
+    p = Pipeline(HERE / "output", run_name="example")
+    p.add_python_step(
+        make_population, inputs={}, outputs="population.parquet", name="population"
+    )
+    p.add_python_step(
+        select_adults,
+        inputs={"population": "population.parquet"},
+        outputs="adults.parquet",
+        name="adults",
+    )
+    p.add_python_step(
+        total_adults,
+        inputs={"adults": "adults.parquet"},
+        outputs="summary.csv",
+        name="summary",
+    )
+    return p

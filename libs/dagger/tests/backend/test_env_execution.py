@@ -10,7 +10,9 @@ from pathlib import Path
 import pytest
 from pytask import TaskOutcome
 
+import vivarium.dagger
 from vivarium.dagger.backend.build import (
+    COLLECT_SIMULATION_VARIABLE,
     build,
     outcomes,
     run_command,
@@ -127,6 +129,25 @@ def test_run_command_adds_no_empty_path_entry_when_path_is_unset(
     assert seen.read_text() == str(env / "bin")
 
 
+def test_run_command_with_bin_path_names_the_simulation_check_with_or_without_an_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With bin_path None and with an env's bin directory, the command sees DAGGER_COLLECT_SIMULATION as the path of frontend/_collect_simulation.py in this vivarium-dagger, even when the caller's environment set it to another path."""
+    env = _make_env(tmp_path / "env")
+    monkeypatch.setenv(COLLECT_SIMULATION_VARIABLE, str(tmp_path / "elsewhere.py"))
+    package = Path(vivarium.dagger.__file__).resolve().parent
+    expected = package / "frontend" / "_collect_simulation.py"
+
+    for name, bin_path in (("no_env", None), ("env", str(env / "bin"))):
+        seen = tmp_path / f"seen_{name}"
+        run_command_with_bin_path(
+            f'printf %s "${COLLECT_SIMULATION_VARIABLE}" > {seen}', bin_path
+        )
+        assert Path(seen.read_text()) == expected, name
+
+    assert expected.is_file()
+
+
 def test_run_command_with_bin_path_puts_every_directory_first_on_path(
     tmp_path: Path,
 ) -> None:
@@ -221,7 +242,7 @@ def test_build_runs_a_command_task_under_its_declared_env(tmp_path: Path) -> Non
 
 
 def test_build_rejects_unresolved_envs_before_any_task_runs(tmp_path: Path) -> None:
-    """build() raises one ValueError naming each unresolved env once with every task that declares it, and no task runs and no lockfile is written."""
+    """build() raises one ValueError naming each unresolved env once with every task that declares it, after "Step '<name>':" or "Steps '<name>', '<name>':", and no task runs and no lockfile is written."""
     shared, single = str(tmp_path / "missing_shared"), str(tmp_path / "missing_single")
     good = str(_make_env(tmp_path / "good_env"))
     envs = {"alpha": shared, "beta": shared, "gamma": single, "delta": good}
@@ -237,6 +258,11 @@ def test_build_rejects_unresolved_envs_before_any_task_runs(tmp_path: Path) -> N
 
     message = str(info.value)
     lines = message.splitlines()
+    assert lines[0] == "Declared envs do not resolve, so no step was run:", message
+    assert sorted(line.partition(": ")[0] for line in lines[1:]) == [
+        "Step 'gamma'",
+        "Steps 'alpha', 'beta'",
+    ], message
     for env, declared in ((shared, {"alpha", "beta"}), (single, {"gamma"})):
         naming = [line for line in lines if env in line]
         assert len(naming) == 1, message

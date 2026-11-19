@@ -2,11 +2,15 @@
 
 import dataclasses
 import functools
+import importlib
 import json
 import os
 import re
-from collections.abc import Callable, Mapping
+import sys
+import uuid
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
@@ -14,10 +18,13 @@ import pandas as pd
 import pytest
 from pytask import PNode, PythonNode
 
+from tests.bridge import step_targets
+from vivarium.dagger import harness
 from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.payload import (
     PATH_TAG,
     Payload,
@@ -26,7 +33,9 @@ from vivarium.dagger.bridge.payload import (
     encode,
     payload_for,
 )
-from vivarium.dagger.frontend.python_step import PythonStepRun
+from vivarium.dagger.frontend import load_pipeline
+from vivarium.dagger.frontend.builder import freeze
+from vivarium.dagger.frontend.python_step import PythonStepRun, python_step
 from vivarium.dagger.harness import _double, build_fixture
 
 
@@ -130,7 +139,7 @@ def _python_task(
         name=name,
         run=PythonStepRun(target, ".parquet"),
         inputs={} if inputs is None else inputs,
-        outputs={"product": file_node(product)},
+        outputs={"__output__": file_node(product)},
         resources={},
         env=None,
     )
@@ -240,7 +249,7 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
     monkeypatch: pytest.MonkeyPatch,
     pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
-    """For the harness's first step, payload_for gives kind 'python', the task name, target 'vivarium.dagger.harness:_double', suffix '.parquet', kwargs equal to the encoded input and product paths, and cwd equal to os.getcwd(); json.dumps accepts it."""
+    """For the harness's first step, payload_for gives kind 'python', the task name, target 'vivarium.dagger.harness:_double', sys_path holding only the harness module's import root (the src directory above vivarium/dagger/harness.py), suffix '.parquet', kwargs equal to the encoded input and output paths, and cwd equal to os.getcwd(); json.dumps accepts it."""
     controller = tmp_path / "controller"
     controller.mkdir()
     monkeypatch.chdir(controller)
@@ -255,8 +264,32 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
         "task": "mid.parquet",
         "cwd": os.getcwd(),
         "target": "vivarium.dagger.harness:_double",
+        "sys_path": [str(Path(os.path.abspath(harness.__file__)).parents[2])],
         "suffix": ".parquet",
-        "kwargs": {"raw": {PATH_TAG: str(raw)}, "product": {PATH_TAG: str(product)}},
+        "kwargs": {"raw": {PATH_TAG: str(raw)}, "__output__": {PATH_TAG: str(product)}},
+    }
+    assert json.loads(json.dumps(payload)) == dict(payload)
+
+
+def test_payload_for_a_python_step_with_several_outputs_maps_each_name_to_its_suffix(
+    tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
+) -> None:
+    """For a python step whose outputs maps 'population' and 'deaths' to a Parquet and a CSV key, the payload's suffix maps each name to its suffix, its kwargs tag each output path by name, and it round-trips through JSON."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    task = python_step(
+        step_targets.split_frames,
+        inputs={},
+        outputs={"population": "population.parquet", "deaths": "deaths.csv"},
+        registry=registry,
+        name="split",
+    )
+
+    payload = _as_python(payload_for(task, pytask_kwargs(task)))
+
+    assert payload["suffix"] == {"population": ".parquet", "deaths": ".csv"}
+    assert payload["kwargs"] == {
+        "population": {PATH_TAG: str(registry.path_for("population.parquet"))},
+        "deaths": {PATH_TAG: str(registry.path_for("deaths.csv"))},
     }
     assert json.loads(json.dumps(payload)) == dict(payload)
 
@@ -271,7 +304,7 @@ def test_payload_for_leaves_out_the_reserved_arguments(
     payload = _as_python(payload_for(task, kwargs))
 
     assert CODE_ID_KEY in kwargs
-    assert set(payload["kwargs"]) == {"raw", "product"}
+    assert set(payload["kwargs"]) == {"raw", "__output__"}
 
 
 def test_payload_for_a_command_step_without_env_has_no_bin_path(
@@ -368,7 +401,7 @@ def test_payload_for_refuses_an_env_that_does_not_resolve(
     with pytest.raises(ValueError) as info:
         payload_for(task, pytask_kwargs(task))
 
-    assert "render_report" in str(info.value)
+    assert str(info.value).startswith("Step 'render_report': "), info.value
     assert env in str(info.value)
 
 
@@ -385,7 +418,7 @@ def test_payload_for_refuses_a_hand_built_callable_run(
         env=None,
     )
 
-    with pytest.raises(ValueError, match="hand_built_step"):
+    with pytest.raises(ValueError, match="^Step 'hand_built_step': "):
         payload_for(task, pytask_kwargs(task))
 
 
@@ -411,7 +444,7 @@ def test_payload_for_refuses_targets_that_cannot_be_imported_by_reference(
         payload_for(task, pytask_kwargs(task))
 
     message = str(info.value)
-    assert "bridged_step" in message
+    assert message.startswith("Step 'bridged_step': "), message
     assert re.search(reason, _without_identity(message, target)), message
 
 
@@ -426,7 +459,7 @@ def test_payload_for_refuses_an_argument_that_cannot_be_encoded(
     with pytest.raises(ValueError) as info:
         payload_for(task, pytask_kwargs(task))
 
-    assert "bridged_step" in str(info.value)
+    assert str(info.value).startswith("Step 'bridged_step': "), info.value
     assert "lookup_table" in str(info.value)
 
 
@@ -475,3 +508,157 @@ def test_payload_for_uses_a_bin_path_already_in_env_paths(
     assert dict(payload)["env_path"] == cached
     assert calls.read_text() == ""
     assert env_paths == {"unlisted_env": cached}
+
+
+# The target's import root (MIC-7752)
+
+_DEFINITION = """\
+from pathlib import Path
+
+import pandas as pd
+
+from vivarium.dagger.frontend import Pipeline
+from vivarium.dagger.backend.wiring import FileRegistry
+from vivarium.dagger.frontend.python_step import python_step
+
+HERE = Path(__file__).resolve().parent
+
+
+def make_table():
+    return pd.DataFrame({"n": [1, 2, 3]})
+
+
+def pipeline():
+    registry = FileRegistry(HERE / "out", "run1")
+    step = python_step(make_table, inputs={}, outputs="table.parquet", registry=registry)
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(step)
+    return p
+"""
+"""A definition of one step whose function is defined in the definition file."""
+
+_TARGET_MODULE = """\
+import pandas as pd
+
+
+def make_table():
+    return pd.DataFrame({"n": [1, 2, 3]})
+"""
+"""A module that defines the step function ``make_table``."""
+
+
+def _unique(prefix: str) -> str:
+    """Return a module name that starts with ``prefix`` and no other test uses."""
+    return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+def _write(path: Path, text: str) -> Path:
+    """Write ``text`` to ``path``, creating its directory, and return the path."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def _imported(name: str, root: Path, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    """Import the module ``name`` with ``root`` first on ``sys.path`` for the test."""
+    monkeypatch.syspath_prepend(str(root))
+    importlib.invalidate_caches()
+    return importlib.import_module(name)
+
+
+def _sys_path_of(target: Callable[..., Any], tmp_path: Path) -> list[str]:
+    """Return the sys_path of the python payload for a step whose target is ``target``."""
+    task = _python_task("import_root_step", target, tmp_path / "out.parquet")
+    kwargs = {"__output__": tmp_path / "out.parquet"}
+    return _as_python(payload_for(task, kwargs))["sys_path"]
+
+
+def _loaded_from(module: object, directory: Path) -> bool:
+    """Return whether ``module``'s file is under ``directory``."""
+    file = getattr(module, "__file__", None)
+    return isinstance(file, str) and Path(file).resolve().is_relative_to(directory.resolve())
+
+
+@pytest.fixture
+def _imports_restored(tmp_path: Path) -> Iterator[None]:
+    """Restore ``sys.path`` and drop the modules that the test imported from ``tmp_path``."""
+    path = list(sys.path)
+    modules = set(sys.modules)
+    yield
+    sys.path[:] = path
+    for name in set(sys.modules) - modules:
+        if _loaded_from(sys.modules.get(name), tmp_path):
+            del sys.modules[name]
+
+
+@pytest.mark.usefixtures("_imports_restored")
+def test_payload_for_a_target_in_a_definition_file_gives_the_files_directory(
+    tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
+) -> None:
+    """For a python step whose target is defined in a definition file loaded with load_pipeline by path, payload_for gives sys_path equal to [the file's directory]."""
+    path = _write(tmp_path / "definitions" / f"{_unique('def')}.py", _DEFINITION)
+    [task] = freeze(load_pipeline(str(path))).tasks
+
+    payload = _as_python(payload_for(task, pytask_kwargs(task)))
+
+    assert payload["sys_path"] == [str(path.resolve().parent)]
+
+
+@pytest.mark.usefixtures("_imports_restored")
+def test_payload_for_a_target_in_a_package_module_gives_the_dir_above_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For a target in <root>/pkg/sub/mod.py imported as pkg.sub.mod, payload_for gives sys_path equal to [<root>]."""
+    root = tmp_path / "root"
+    package = _unique("pkg")
+    _write(root / package / "__init__.py", "")
+    _write(root / package / "sub" / "__init__.py", "")
+    _write(root / package / "sub" / "mod.py", _TARGET_MODULE)
+
+    module = _imported(f"{package}.sub.mod", root, monkeypatch)
+
+    assert _sys_path_of(module.make_table, tmp_path) == [str(root)]
+
+
+@pytest.mark.usefixtures("_imports_restored")
+def test_payload_for_a_target_in_a_package_init_gives_the_dir_above_the_package(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For a target defined in <root>/pkg/__init__.py and imported as pkg, payload_for gives sys_path equal to [<root>]."""
+    root = tmp_path / "root"
+    package = _unique("pkg")
+    _write(root / package / "__init__.py", _TARGET_MODULE)
+
+    module = _imported(package, root, monkeypatch)
+
+    assert _sys_path_of(module.make_table, tmp_path) == [str(root)]
+
+
+@pytest.mark.usefixtures("_imports_restored")
+def test_payload_for_keeps_the_import_root_as_imported_without_resolving_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For a target in a module imported through a symlinked directory, sys_path holds the symlinked path, not its resolved target."""
+    real = tmp_path / "real"
+    link = tmp_path / "link"
+    name = _unique("linked")
+    _write(real / f"{name}.py", _TARGET_MODULE)
+    link.symlink_to(real, target_is_directory=True)
+
+    module = _imported(name, link, monkeypatch)
+
+    assert _sys_path_of(module.make_table, tmp_path) == [str(link)]
+    assert str(link) != str(link.resolve())
+
+
+def test_payload_for_a_target_in_a_module_without_a_file_gives_an_empty_sys_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """For a target in a module that has no __file__ (a module object put in sys.modules by hand), payload_for gives sys_path equal to []."""
+    name = _unique("fileless")
+    module = ModuleType(name)
+    exec(_TARGET_MODULE, module.__dict__)
+    monkeypatch.setitem(sys.modules, name, module)
+    assert not hasattr(module, "__file__")
+
+    assert _sys_path_of(module.make_table, tmp_path) == []

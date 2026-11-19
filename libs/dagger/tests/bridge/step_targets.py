@@ -93,6 +93,21 @@ def constant() -> pd.DataFrame:
     return _frame()
 
 
+def split_frames() -> dict[str, pd.DataFrame]:
+    """Return a small frame under each of the output names 'population' and 'deaths'."""
+    return {"population": _frame(), "deaths": _frame()}
+
+
+def split_frames_without_deaths() -> dict[str, pd.DataFrame]:
+    """Return a small frame under 'population' only, leaving out the output 'deaths'."""
+    return {"population": _frame()}
+
+
+def copy_table(source: Path) -> pd.DataFrame:
+    """Read ``source`` as CSV or Parquet, by its suffix, and return it."""
+    return pd.read_csv(source) if source.suffix == ".csv" else pd.read_parquet(source)
+
+
 def stack(**upstreams: Path) -> pd.DataFrame:
     """Read each upstream step's frame and stack them, ordered by argument name."""
     frames = [pd.read_parquet(upstreams[name]) for name in sorted(upstreams)]
@@ -107,7 +122,7 @@ def record_pid(**upstreams: Path) -> pd.DataFrame:
 
 
 def raise_step_failure_reading(**upstreams: Path) -> pd.DataFrame:
-    """Accept any upstream products, then fail with StepFailure."""
+    """Accept any upstream outputs, then fail with StepFailure."""
     raise StepFailure(FAILURE_MESSAGE)
 
 
