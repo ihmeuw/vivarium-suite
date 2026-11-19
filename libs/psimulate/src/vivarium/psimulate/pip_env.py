@@ -7,9 +7,8 @@ Tools to manage and validate reproducible Python environments for simulation run
 
 """
 
-import importlib.metadata
 import os
-import re
+import subprocess
 from pathlib import Path
 
 import click
@@ -17,19 +16,11 @@ from loguru import logger
 
 
 def validate(environment_file: Path) -> None:
-    """Write the installed packages to ``environment_file``, or compare them with it.
-
-    Packages are read from the running interpreter, not with ``pip``, so this
-    works in venvs that have no ``pip``, such as those uv builds.
-
-    Parameters
-    ----------
-    environment_file
-        The file that records the run's packages. The first run writes it. A
-        restart compares the installed packages with it and asks whether to
-        continue if they differ.
-    """
-    current_environment_list = _list_installed_packages()
+    pip_list_proc = subprocess.Popen(
+        ["pip", "list", "--format=freeze"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    out, err = pip_list_proc.communicate()
+    current_environment_list = out.decode().strip().split("\n")
 
     # Update permissions mask (assign to variable to avoid printing previous value)
     _ = os.umask(0o002)
@@ -47,22 +38,6 @@ def validate(environment_file: Path) -> None:
             "Validation of environment successful. All pip installed packages match "
             "original versions. Run can proceed."
         )
-
-
-def _list_installed_packages() -> list[str]:
-    """Return ``<name>==<version>`` for each installed package, in ``pip list`` order."""
-    packages: dict[str, str] = {}
-    for dist in importlib.metadata.distributions():
-        name = dist.metadata["Name"]
-        # Keep the first copy of a package, which is the one Python imports.
-        if name and _normalize_name(name) not in packages:
-            packages[_normalize_name(name)] = f"{name}=={dist.version}"
-    return [packages[key] for key in sorted(packages)]
-
-
-def _normalize_name(name: str) -> str:
-    """Return the PEP 503 normalized form of a package name."""
-    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def _parse_package_version(s: str) -> tuple[str, str]:
@@ -83,8 +58,7 @@ def _parse_package_version(s: str) -> tuple[str, str]:
 
 
 def _convert_pip_list_to_dict(pf_list: list[str]) -> dict[str, str]:
-    # Normalize names so a file that pip wrote compares cleanly with this one.
-    return {_normalize_name(p): v for p, v in [_parse_package_version(s) for s in pf_list]}
+    return {p: v for p, v in [_parse_package_version(s) for s in pf_list]}
 
 
 def _compare_environments(current: dict[str, str], original: dict[str, str]) -> None:

@@ -56,10 +56,6 @@ help:
 endif
 
 build-env: # Create a new environment with installed packages
-	@command -v uv > /dev/null || { \
-		echo "Error: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2; \
-		exit 1; \
-	}
 #	Validate arguments - exit if unsupported arguments are passed
 	@allowed="name py artifactory_access keep_env"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
@@ -125,11 +121,10 @@ build-env: # Create a new environment with installed packages
 _build-env:
 	conda create -n $(name) python=$(py) --yes
 # 	Install vbu from the local checkout, not PyPI, so the env matches the source under test.
-# 	Without VIRTUAL_ENV, uv targets the conda env that conda run activates, not a stale venv.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip install -e .
+	conda run --no-capture-output -n $(name) pip install -e .
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
-	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+	conda run --no-capture-output -n $(name) make install $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 # 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
-	@env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip list --editable --format=freeze | grep -q . \
+	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }
