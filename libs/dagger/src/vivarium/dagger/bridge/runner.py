@@ -157,8 +157,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     result (each run truncates them), and Python's own streams are line-buffered so their
     output keeps its order with a child process's. The runner changes to the payload's
     ``cwd`` and runs a python recipe as
-    ``PythonStepRun(resolve_reference(target), suffix)(**decode(kwargs))`` or a command
-    recipe through :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. Any
+    ``PythonStepRun(resolve_reference(target), suffix)(**decode(kwargs))``, where
+    ``suffix`` is a suffix or a mapping of product names to suffixes, or a command recipe
+    through :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. Any
     exception is a failure, including :class:`SystemExit` or :class:`KeyboardInterrupt`
     from the step, an unreadable payload, and an unknown ``kind``. On a failure the runner
     also writes the captured standard error tail and then the traceback to its own standard

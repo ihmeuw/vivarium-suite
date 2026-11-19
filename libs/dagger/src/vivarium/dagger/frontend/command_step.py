@@ -142,7 +142,7 @@ def command_step(
         ``name``, and more than one product with no ``name`` start with
         ``command_step:``. Every one of these is raised before anything is registered.
     """
-    task_name = _step_name(produces, name)
+    task_name = _step_name(produces, name, "command_step")
     if not command.strip():
         raise ValueError(
             f"Step {task_name!r}: command must not be empty or only whitespace, "
@@ -169,6 +169,8 @@ def command_step(
     product_paths = {param: registry.path_for(key) for param, key in product_keys.items()}
     _check_paths(task_name, input_keys, dependencies, product_keys, product_paths)
     try:
+        for key in product_keys.values():
+            registry.check_output(key)
         products = {
             param: registry.register_output(key) for param, key in product_keys.items()
         }
@@ -197,17 +199,17 @@ def _no_product(prefix: str) -> str:
     )
 
 
-def _step_name(produces: Mapping[str, FileKey], name: str | None) -> str:
-    """Return the step's name; raise the errors that have no name to report."""
+def _step_name(produces: Mapping[str, FileKey], name: str | None, caller: str) -> str:
+    """Return the step's name; raise the errors that have no name to report, as ``caller``."""
     if name is not None:
         if not name:
-            raise ValueError(f"command_step: name must be a non-empty string, got {name!r}.")
+            raise ValueError(f"{caller}: name must be a non-empty string, got {name!r}.")
         return name
     if not produces:
-        raise ValueError(_no_product("command_step"))
+        raise ValueError(_no_product(caller))
     if len(produces) > 1:
         raise ValueError(
-            "command_step: produces has more than one entry, with keys "
+            f"{caller}: produces has more than one entry, with keys "
             f"{_quoted(sorted(produces.values()))}, so the step has no default name; "
             "pass name= to name it."
         )

@@ -2414,9 +2414,10 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_use_pipeline_and_import_no_registry() -> None:
-    """Each of the pipeline, location inputs, command and simulation example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
+    """Each of the pipeline, location inputs, command, simulation and several products example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
     backend_parts = ["vivarium", "dagger", "backend"]
-    for example in ("pipeline", "location_inputs", "command", "simulation"):
+    examples = ("pipeline", "location_inputs", "command", "simulation", "several_products")
+    for example in examples:
         definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
         imported = _imported_modules(definition)
 
@@ -2491,6 +2492,64 @@ def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path
     assert adults.would_run
     nodes = [reason.node for reason in adults.reasons]
     assert "file 'select_adults.py'" in nodes, adults.reasons
+
+
+# The several products example (MIC-7827)
+
+_SEVERAL_PRODUCTS_EXAMPLE = Path(__file__).parent / "several_products_example"
+"""The example of a python step with several products, whose definition the docs include."""
+
+_SPLIT_EXAMPLE_STEPS = ["population", "split", "summary"]
+"""The several products example's steps, in dependency order."""
+
+
+def _copy_several_products_example(directory: Path) -> Path:
+    """Copy the several products example's definition to ``directory``; return the copy."""
+    return Path(shutil.copy(_SEVERAL_PRODUCTS_EXAMPLE / "pipeline.py", directory))
+
+
+def test_the_several_products_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/several_products_example in tmp_path exits 0; children.csv holds the 0-14 row, adults.parquet the two adult rows, and summary.csv the adult total of 70."""
+    definition = _copy_several_products_example(tmp_path)
+
+    result = _invoke("run", str(definition))
+
+    assert result.exit_code == 0, _describe(result)
+    children = _example_product(tmp_path, "children.csv").read_text().splitlines()
+    assert children == ["age_group,count", "0-14,30"]
+    adults = pd.read_parquet(_example_product(tmp_path, "adults.parquet"))
+    assert adults["age_group"].tolist() == ["15-64", "65+"]
+    summary = _example_product(tmp_path, "summary.csv").read_text().splitlines()
+    assert summary == ["adults", "70"]
+
+
+def test_the_several_products_example_previews_every_step_before_its_first_run(
+    tmp_path: Path,
+) -> None:
+    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/several_products_example exits 0 and lists population, split and summary as would-run in that order."""
+    definition = _copy_several_products_example(tmp_path)
+
+    result = _invoke("preview", str(definition))
+
+    assert result.exit_code == 0, _describe(result)
+    assert _would_run(result) == _SPLIT_EXAMPLE_STEPS
+
+
+def test_preview_of_the_several_products_example_names_each_missing_product(
+    tmp_path: Path,
+) -> None:
+    """With the copy's pipeline loaded by load_pipeline and frozen with a stable code identity on each step, after a successful _run() the removal of children.csv and adults.parquet makes _preview() report that split would run with "file 'children.csv'" and "file 'adults.parquet'" among its reasons."""
+    pipeline = stable_snapshot(load_pipeline(str(_copy_several_products_example(tmp_path))))
+    assert _run(pipeline) == dict.fromkeys(_SPLIT_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
+
+    for key in ("children.csv", "adults.parquet"):
+        _example_product(tmp_path, key).unlink()
+    plan = {step.name: step for step in _preview(pipeline)}
+
+    split = plan["split"]
+    assert split.would_run
+    nodes = [reason.node for reason in split.reasons]
+    assert {"file 'children.csv'", "file 'adults.parquet'"} <= set(nodes), split.reasons
 
 
 # The Pipeline builder (MIC-7805, MIC-7810)
