@@ -11,10 +11,6 @@ LOCATIONS=src tests
 # the directory is what's meant and DIST_NAME_FROM_PROJECT where the package is.
 PACKAGE_DIR := $(notdir $(CURDIR))
 
-# "yes" in a standalone repo that builds its environment from a committed uv.lock.
-# Monorepo libs never do, even if a stray uv.lock is in libs/<pkg>.
-USES_UV_LOCK := $(if $(wildcard uv.lock),$(if $(findstring /libs/$(PACKAGE_DIR),$(CURDIR)),,yes),)
-
 # The PyPI distribution name, read from pyproject.toml's `[project].name`
 # (e.g. "vivarium-cluster-tools" for libs/cluster-tools/). Parsed with sed/grep
 # rather than tomllib so this works on Python <3.11 too.
@@ -89,7 +85,7 @@ help: # Curated help message
 	echo "Diagnostic targets"; \
 	echo "=================="; \
 	echo; \
-	echo "list       Print available Make targets, including this repo's own"; \
+	echo "list       Print available Make targets"; \
 	echo "debug      Print debug information"; \
 	echo; \
 	echo "=============="; \
@@ -110,31 +106,20 @@ help: # Curated help message
 	echo "====================="; \
 	echo; \
 	echo "Run the following targets (in order) to mimic a Jenkins build:"; \
-	if [ "$(USES_UV_LOCK)" = "yes" ]; then \
-	echo "  1. build-env                        Build .venv from uv.lock"; \
-	echo "  2. lint                             Check for formatting errors"; \
-	echo "  3. mypy                             (optional) Check for type hinting errors"; \
-	echo "  4. test-<test-type>                 Run specific tests (unit, integration,"; \
-	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
-	echo "  5. build-docs                       Build documentation"; \
-	echo "  6. test-docs                        Test documentation examples"; \
-	echo "  7. clean                            Clean build artifacts and temporary files"; \
-	else \
 	echo "  1. create-env                       Create a new conda environment"; \
 	echo "  2. install                          Install package and dependencies"; \
 	echo "  3. lint                             Check for formatting errors"; \
 	echo "  4. mypy                             (optional) Check for type hinting errors"; \
-	echo "  5. test-<test-type>                 Run specific tests (unit, integration,"; \
+	echo "  5. test-<test-type>                 Run specific tests unit, integration,"; \
 	echo "                                      e2e, all); include RUNSLOW=true if desired"; \
 	echo "  6. build-docs                       Build documentation"; \
 	echo "  7. test-docs                        Test documentation examples"; \
 	echo "  8. Deploy the package (Artifactory only)"; \
 	echo "     a. tag-version                   Tag current version and push to git"; \
-	echo "     b. build-package                 Build the sdist and wheel with uv"; \
+	echo "     b. build-package                 Build pip wheel package"; \
 	echo "     c. deploy-package-artifactory    Deploy the package to Artifactory"; \
 	echo "  9. deploy-docs                      Deploy documentation to shared server"; \
 	echo " 10. clean                            Clean build artifacts and temporary files"; \
-	fi; \
 	echo) | less
 
 ######################
@@ -188,19 +173,7 @@ install: ENV_REQS?=dev
 install: UV_FLAGS?=
 install: CHANGED_LIBS?=
 install: # Install package and dependencies
-# A repo with uv.lock builds its environment from the lock. `install` would resolve
-# outside the lock and use whatever pip is on PATH, since uv venvs have none. Jenkins
-# and monorepo libs are exempt, so a repo that has not opted in to the uv pipeline,
-# or a stray lock in libs/<pkg>, still builds.
-	@if [ "$(USES_UV_LOCK)" = "yes" ] && [ -z "$${JENKINS_URL}" ]; then \
-		echo "ERROR: this repo builds its environment from uv.lock, so 'make install' is disabled."; \
-		echo "Run 'make build-env' instead."; \
-		exit 1; \
-	fi
-	@command -v uv > /dev/null || { \
-		echo "ERROR: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/"; \
-		exit 1; \
-	}
+	pip install uv
 	uv pip install --upgrade pip setuptools ${UV_FLAGS}
 	@if [ -z "$(strip $(CHANGED_LIBS))" ]; then \
 		set -x; uv pip install -e .[${ENV_REQS}] ${EDITABLE_COMPAT_FLAG} ${EXTRA_INDEX_FLAGS} ${UV_FLAGS}; \
@@ -309,16 +282,17 @@ check-release-tag: # Fail if this version was already released from another comm
 	fi
 
 .PHONY: build-package
-build-package: # Build the sdist and wheel with uv
-	uv build
+build-package: # Build pip wheel package
+	pip install build
+	python -m build
 
 .PHONY: deploy-package-artifactory
 deploy-package-artifactory: # Deploy the package to Artifactory
 	@[ "${IHME_PYPI}" ] && echo "" > /dev/null || ( echo "IHME_PYPI is empty; cannot upload. This target is Jenkins/internal-only."; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_USR}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_USR is not set, export using simsci artifactory credentials"; exit 1 )
 	@[ "${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" ] && echo "" > /dev/null || ( echo "PYPI_ARTIFACTORY_CREDENTIALS_PSW is not set, export using simsci artifactory credentials"; exit 1 )
-	UV_PUBLISH_USERNAME="$${PYPI_ARTIFACTORY_CREDENTIALS_USR}" UV_PUBLISH_PASSWORD="$${PYPI_ARTIFACTORY_CREDENTIALS_PSW}" \
-		uv publish --publish-url ${IHME_PYPI} dist/*
+	pip install twine
+	twine upload --repository-url ${IHME_PYPI} -u ${PYPI_ARTIFACTORY_CREDENTIALS_USR} -p ${PYPI_ARTIFACTORY_CREDENTIALS_PSW} dist/*
 
 .PHONY: deploy-docs
 deploy-docs: # Deploy documentation to shared server
