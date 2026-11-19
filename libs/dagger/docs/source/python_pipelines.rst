@@ -57,7 +57,7 @@ directory on ``PYTHONPATH``. ``dagger`` does not add the current directory to
 A definition makes a :class:`~vivarium.dagger.frontend.builder.Pipeline` with an output
 root and a run name, adds each step to it with a method such as
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_python_step`, and returns the
-pipeline. Add a step after the steps that produce the artifacts it reads. A step
+pipeline. Add a step after the steps that produce the files it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
 :doc:`root_inputs`). A step's products go under ``<output root>/<run name>``. The
 pipeline's root, the directory that holds its pytask state, is
@@ -98,7 +98,7 @@ the order pytask would run them. A step that would run is printed as ``run <step
 followed by pytask's reasons, separated by semicolons. A step that would not run is
 printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
 ``--until`` leaves it out. A last line, such as ``2 of 3 steps would run.``, counts
-the steps that would run. Each reason names an artifact by its key, a step's code as
+the steps that would run. Each reason names a file by its key, a step's code as
 ``code of '<step>'``, and a step as ``step '<step>'``, never by a file path. For this
 example, before its first run, the output starts like this::
 
@@ -385,7 +385,7 @@ Each of these exits with status 2 before any step runs:
   does not return a ``Pipeline``. ``dagger`` prints a one-line message.
 - The definition's code raises an error, or calls ``sys.exit``, while it is imported
   or while its function runs. ``dagger`` prints the traceback as described below. For a
-  step that reads an artifact that no step produces and that is not a root input, the
+  step that reads a file that no step produces and that is not a root input, the
   error names the step and the file key, with the closest key that does exist. If
   no key is close, it lists the keys registered so far instead, which are the root
   inputs and the products of the steps defined before the one that reads the key.
@@ -421,6 +421,42 @@ prints only the file, the line number, the line with a caret under the error, an
 ``SyntaxError``, as Python does.
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.
+
+Steps with several products
+---------------------------
+
+A Python step can write more than one file. Pass ``produces`` a mapping of product names
+to file keys, and have the function return a dict with exactly those names, each mapped
+to a DataFrame. Each DataFrame is saved at its key in the format that the key's suffix
+names, ``.parquet`` or ``.csv``, so one step can write files in both formats. In this
+example, ``split`` writes the children's rows to a CSV file and the adults' rows to a
+Parquet file, and ``summary`` reads only the Parquet file:
+
+.. literalinclude:: ../../tests/frontend/several_products_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+Every key in the mapping is a product of the step. A later step reads one of them by
+naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each product
+is a separate file, so a ``dagger preview`` reason about one product names it by its
+key, such as ``file 'children.csv' is missing``. In this example the line for ``split``
+shows only ``step 'population' would run first``, because ``population`` is a Python
+step and re-runs on every build for now.
+
+A step with one product is named after its key by default. A step with more than one
+product has no default name, so pass ``name=``. A product name must be a valid Python
+identifier, must not be a Python keyword or one of the reserved names ``__code_id__``,
+``__command__``, ``__executed__`` and ``__notebook__``, and must not be the name of one
+of the step's inputs. These rules, and the rules for each key, are checked when the step
+is added, before any of its keys is registered.
+
+If the function returns something other than a dict, a dict with a missing or extra
+name, or a value that is not a DataFrame, the step fails and nothing is saved. The
+message names the function and the product names:
+
+.. code-block:: text
+
+   Step 'split' failed: ValueError: Python step target split_by_age returned a dict whose keys do not match its product names: the product 'children' is missing. The product names are 'adults' and 'children'.
 
 Steps that run a command
 ------------------------

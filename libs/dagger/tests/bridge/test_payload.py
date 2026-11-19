@@ -18,11 +18,13 @@ import pandas as pd
 import pytest
 from pytask import PNode, PythonNode
 
+from tests.bridge import step_targets
 from vivarium.dagger import harness
 from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
 from vivarium.dagger.backend.env import resolve_env_bin_path
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
+from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.payload import (
     PATH_TAG,
     Payload,
@@ -33,7 +35,7 @@ from vivarium.dagger.bridge.payload import (
 )
 from vivarium.dagger.frontend import load_pipeline
 from vivarium.dagger.frontend.builder import freeze
-from vivarium.dagger.frontend.python_step import PythonStepRun
+from vivarium.dagger.frontend.python_step import PythonStepRun, python_step
 from vivarium.dagger.harness import _double, build_fixture
 
 
@@ -265,6 +267,29 @@ def test_payload_for_a_python_step_names_its_target_suffix_arguments_and_cwd(
         "sys_path": [str(Path(os.path.abspath(harness.__file__)).parents[2])],
         "suffix": ".parquet",
         "kwargs": {"raw": {PATH_TAG: str(raw)}, "product": {PATH_TAG: str(product)}},
+    }
+    assert json.loads(json.dumps(payload)) == dict(payload)
+
+
+def test_payload_for_a_python_step_with_several_products_maps_each_name_to_its_suffix(
+    tmp_path: Path, pytask_kwargs: Callable[[Task], dict[str, Any]]
+) -> None:
+    """For a python step whose produces maps 'population' and 'deaths' to a Parquet and a CSV key, the payload's suffix maps each name to its suffix, its kwargs tag each product path by name, and it round-trips through JSON."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+    task = python_step(
+        step_targets.split_frames,
+        inputs={},
+        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        registry=registry,
+        name="split",
+    )
+
+    payload = _as_python(payload_for(task, pytask_kwargs(task)))
+
+    assert payload["suffix"] == {"population": ".parquet", "deaths": ".csv"}
+    assert payload["kwargs"] == {
+        "population": {PATH_TAG: str(registry.path_for("population.parquet"))},
+        "deaths": {PATH_TAG: str(registry.path_for("deaths.csv"))},
     }
     assert json.loads(json.dumps(payload)) == dict(payload)
 

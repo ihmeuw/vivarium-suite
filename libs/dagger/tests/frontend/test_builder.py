@@ -497,6 +497,140 @@ def test_a_command_step_with_several_products_and_no_name_raises_the_step_functi
     assert freeze(p).tasks == ()
 
 
+def _split() -> dict[str, pd.DataFrame]:
+    """Return a population table and a deaths table by product name."""
+    return {
+        "population": pd.DataFrame({"n": [10, 20]}),
+        "deaths": pd.DataFrame({"n": [1, 2]}),
+    }
+
+
+def _read_csv(source: Path) -> pd.DataFrame:
+    """Read a CSV table."""
+    return pd.read_csv(source)
+
+
+def _only() -> dict[str, pd.DataFrame]:
+    """Return the fixed table under the product name 'out'."""
+    return {"out": _constant()}
+
+
+def test_a_python_step_with_several_products_registers_each_and_runs(tmp_path: Path) -> None:
+    """p.add_python_step with produces mapping 'population' and 'deaths' registers both keys; steps added later read each of them, and the pipeline runs and writes every product."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(
+        _split,
+        inputs={},
+        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        name="split",
+    )
+    p.add_python_step(
+        _increment, inputs={"source": "population.parquet"}, produces="more.parquet"
+    )
+    p.add_python_step(_read_csv, inputs={"source": "deaths.csv"}, produces="copy.csv")
+
+    assert _registered(p, "population.parquet") and _registered(p, "deaths.csv")
+    result = run(p)
+
+    steps = ["split", "more.parquet", "copy.csv"]
+    assert result == dict.fromkeys(steps, TaskOutcome.SUCCESS)
+    more = pd.read_parquet(_registry_of(p).path_for("more.parquet"))
+    assert more["n"].tolist() == [11, 21]
+    assert pd.read_csv(_registry_of(p).path_for("copy.csv"))["n"].tolist() == [1, 2]
+
+
+def test_a_second_producer_of_a_key_of_a_python_step_with_several_products_is_refused(
+    tmp_path: Path,
+) -> None:
+    """After a python step 'split' producing 'population.parquet' and 'deaths.csv', a python step producing 'deaths.csv' raises WiringError naming 'split' and the key, and is not added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(
+        _split,
+        inputs={},
+        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        name="split",
+    )
+
+    with pytest.raises(WiringError) as info:
+        p.add_python_step(_constant, inputs={}, produces="deaths.csv", name="other")
+
+    assert str(info.value) == (
+        "Step 'other': output 'deaths.csv' is already produced by step 'split'; each file "
+        "key can have only one producing step."
+    )
+    assert [task.name for task in freeze(p).tasks] == ["split"]
+
+
+def test_a_python_step_with_several_products_and_no_name_raises_the_step_functions_error(
+    tmp_path: Path,
+) -> None:
+    """p.add_python_step with two produces keys and no name raises python_step's ValueError, which starts with 'python_step:' and says to pass name=, and adds nothing."""
+    p = Pipeline(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError) as info:
+        p.add_python_step(_split, inputs={}, produces={"a": "a.csv", "b": "b.csv"})
+
+    message = str(info.value)
+    assert message.startswith("python_step:"), message
+    assert "pass name=" in message, message
+    assert freeze(p).tasks == ()
+    assert not _registered(p, "a.csv")
+
+
+def test_a_python_step_with_several_products_whose_later_key_is_already_produced_is_refused(
+    tmp_path: Path,
+) -> None:
+    """After a step 'first' producing 'deaths.csv', a python step 'split' producing 'population.parquet' and 'deaths.csv' raises WiringError naming 'first', and neither 'split' nor 'population.parquet' is added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(_constant, inputs={}, produces="deaths.csv", name="first")
+
+    with pytest.raises(WiringError) as info:
+        p.add_python_step(
+            _split,
+            inputs={},
+            produces={"population": "population.parquet", "deaths": "deaths.csv"},
+            name="split",
+        )
+
+    assert str(info.value) == (
+        "Step 'split': output 'deaths.csv' is already produced by step 'first'; each file "
+        "key can have only one producing step."
+    )
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+    assert not _registered(p, "population.parquet")
+
+
+def test_a_python_step_with_several_products_and_no_name_is_not_named_after_its_first_key(
+    tmp_path: Path,
+) -> None:
+    """With a step already named 'a.csv' that does not produce it, a python step producing 'a.csv' and 'b.csv' with no name raises python_step's no-default-name ValueError, not the error for a name already added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(_constant, inputs={}, produces="z.csv", name="a.csv")
+
+    with pytest.raises(ValueError) as info:
+        p.add_python_step(_split, inputs={}, produces={"a": "a.csv", "b": "b.csv"})
+
+    message = str(info.value)
+    assert message.startswith("python_step:"), message
+    assert "has no default name" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["a.csv"]
+
+
+def test_a_python_step_with_one_mapped_product_and_no_name_is_named_after_its_key(
+    tmp_path: Path,
+) -> None:
+    """A python step whose produces maps one name to 'x.csv' and has no name is named 'x.csv', and a second step whose name is 'x.csv' is refused as a name already added."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_python_step(_only, inputs={}, produces={"out": "x.csv"})
+
+    with pytest.raises(ValueError) as info:
+        p.add_python_step(_constant, inputs={}, produces="y.csv", name="x.csv")
+
+    assert [task.name for task in freeze(p).tasks] == ["x.csv"]
+    message = str(info.value)
+    assert message.startswith("Step 'x.csv': a step named 'x.csv' was already added"), message
+
+
 # Refusing a second step with a name or a product already added
 
 

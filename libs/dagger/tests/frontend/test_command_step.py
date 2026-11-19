@@ -694,6 +694,24 @@ def test_a_product_that_is_a_root_input_raises_a_wiring_error_naming_the_step(
     assert error.__suppress_context__
 
 
+def test_a_later_product_that_is_a_root_input_registers_no_product(tmp_path: Path) -> None:
+    """A produces mapping whose second key is a declared root input raises WiringError naming the step and the key, and the first product is not registered."""
+    registry = _registry(tmp_path)
+    before = _registered(registry)
+
+    with pytest.raises(WiringError) as info:
+        command_step(
+            "printf x > {first}",
+            produces={"first": "first.csv", "second": _POPULATION},
+            registry=registry,
+            name="clobber",
+        )
+
+    expected = f"Step 'clobber': output {_POPULATION!r} is a declared root input"
+    assert str(info.value).startswith(expected), str(info.value)
+    assert _registered(registry) == before
+
+
 def test_a_product_at_another_steps_product_path_raises_a_wiring_error_naming_the_step(
     tmp_path: Path,
 ) -> None:
