@@ -49,7 +49,7 @@
 #   for each location.
 # - **Running `dagger`.** `dagger(...)` runs the command, prints what a modeler would see in
 #   the terminal with its exit status and time, and returns the result so the cell can check
-#   it. `products` and `plan` read the output folder and the preview lines for those checks.
+#   it. `outputs` and `plan` read the output folder and the preview lines for those checks.
 # - **Checks.** The `assert` lines turn the walkthrough into a test of what each section
 #   claims. A modeler reads the output instead.
 # - **`--local`.** `dagger run` and `dagger force` send a definition's stale steps through
@@ -199,7 +199,7 @@ JOBMON_ENV = (
 )
 
 
-def products(folder):
+def outputs(folder):
     """Return the files under a definition's output folder, relative to it, without its state."""
     out = folder / "output"
     return (
@@ -253,7 +253,7 @@ print((GOOD / "pipeline.py").read_text())
 
 # %%
 first = dagger("preview", "-c", "pipeline.py", cwd=GOOD)
-assert first.returncode == 0 and products(GOOD) == []
+assert first.returncode == 0 and outputs(GOOD) == []
 assert set(plan(first)) == {
     "population",
     "adults",
@@ -312,7 +312,7 @@ for verb in (["preview"], ["run", "--local"]):
 wrong = dagger("run", "-c", "pipeline.py", "--local", "-P", "proj_simscience", cwd=GOOD)
 assert wrong.returncode == 2, wrong.returncode
 assert "--project" in wrong.stderr and "not with --local" in wrong.stderr
-assert products(GOOD) == []
+assert outputs(GOOD) == []
 
 FAILS = make_defs(
     "c3_fails", edits=[('frame["age_group"] == "0-14"', 'frame["age"] == "0-14"')]
@@ -343,8 +343,8 @@ assert "0-14" not in adults["age_group"].tolist() and len(adults) == 2, adults
 # %%
 UNTIL = make_defs("c4_c6")
 dagger("run", "-c", "pipeline.py", "--local", "--until", "adults", cwd=UNTIL)
-print("products:", products(UNTIL))
-assert products(UNTIL) == [
+print("outputs:", outputs(UNTIL))
+assert outputs(UNTIL) == [
     "walk/adults.parquet",
     "walk/children.csv",
     "walk/population.parquet",
@@ -617,9 +617,9 @@ FAILED_FOLDER, _ = show_error(
 )
 print(
     "the independent branch completed:",
-    [p for p in products(FAILED_FOLDER) if "coverage" in p],
+    [p for p in outputs(FAILED_FOLDER) if "coverage" in p],
 )
-assert any("nigeria/mean_coverage" in p for p in products(FAILED_FOLDER))
+assert any("nigeria/mean_coverage" in p for p in outputs(FAILED_FOLDER))
 show_error(
     "T4 a notebook raises",
     report_edits=[("frame['adults'][0]", "frame['adult'][0]")],
@@ -826,7 +826,7 @@ else:
     dagger("preview", "-c", DEF, cwd=MNCNH)
     real = dagger("run", "-c", DEF, "--local", cwd=MNCNH)
     assert real.returncode == 0
-    print("products:", products(SLICE))
+    print("outputs:", outputs(SLICE))
     nb = json.loads(
         (
             SLICE / "output/nigeria/notebooks/hemorrhage_split_proportions_executed.ipynb"
@@ -945,15 +945,15 @@ else:
     GOOD_DEF, GOOD_STATE = "jobmon_good/pipeline.py", GOOD_JOBMON / "output/.dagger/walk"
     no_project = jobmon_dagger("run", "-c", GOOD_DEF)
     assert no_project.returncode == 2 and "-P/--project" in no_project.stderr
-    assert products(GOOD_JOBMON) == [] and not bridged_runs(GOOD_STATE)
+    assert outputs(GOOD_JOBMON) == [] and not bridged_runs(GOOD_STATE)
 
     # 2. The good copy.
     first = jobmon_dagger("run", "-c", GOOD_DEF, "-P", PROJECT)
     first_runs = bridged_runs(GOOD_STATE)
     show_runs(first_runs)
     assert first.returncode == 0 and len(first_runs) == 1
-    print("products:", products(GOOD_JOBMON))
-    assert len(products(GOOD_JOBMON)) == 9
+    print("outputs:", outputs(GOOD_JOBMON))
+    assert len(outputs(GOOD_JOBMON)) == 9
 
     # 3. Force through Jobmon.
     forced = jobmon_dagger("force", "-c", GOOD_DEF, "-P", PROJECT, "adults")
