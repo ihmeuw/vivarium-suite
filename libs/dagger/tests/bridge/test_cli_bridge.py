@@ -77,7 +77,7 @@ def pipeline():
         python_step(
             target,
             inputs=inputs,
-            produces=f"{name}.parquet",
+            outputs=f"{name}.parquet",
             registry=registry,
             resources=STEP_RESOURCES.get(name),
             name=name,
@@ -125,7 +125,7 @@ def make_table():
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
     step = python_step(
-        make_table, inputs={}, produces="table.parquet", registry=registry, name="table"
+        make_table, inputs={}, outputs="table.parquet", registry=registry, name="table"
     )
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     p.add_task(step)
@@ -272,7 +272,7 @@ def _labels(directory: Path) -> list[str]:
 
 
 def _product(directory: Path, step: str) -> Path:
-    """Return the path of ``step``'s product for a definition in ``directory``."""
+    """Return the path of ``step``'s output for a definition in ``directory``."""
     return directory / "out" / "run1" / f"{step}.parquet"
 
 
@@ -313,7 +313,7 @@ def _report_jobmon(monkeypatch: pytest.MonkeyPatch, versions: Mapping[str, str])
 def test_dagger_run_without_local_runs_every_step_through_the_bridge(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: 'dagger run -c def.py -P proj_test' on a three-step chain whose functions are defined in the definition file exits 0, binds one plan with the three steps in order, runs each step body in a process other than the test's, and writes every product."""
+    """End to end: 'dagger run -c def.py -P proj_test' on a three-step chain whose functions are defined in the definition file exits 0, binds one plan with the three steps in order, runs each step body in a process other than the test's, and writes every output."""
     path = _definition(tmp_path)
 
     result = _dagger("run", "-c", str(path), "-P", "proj_test")
@@ -349,7 +349,7 @@ def test_dagger_force_without_local_runs_through_the_bridge_and_exits_zero(
 def test_dagger_run_until_binds_only_the_named_step_and_its_ancestors(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """'dagger run -c def.py -P proj_test --until b' on the chain a -> b -> c binds a plan with exactly a and b, and c's product is not written."""
+    """'dagger run -c def.py -P proj_test --until b' on the chain a -> b -> c binds a plan with exactly a and b, and c's output is not written."""
     path = _definition(tmp_path)
 
     result = _dagger("run", "-c", str(path), "-P", "proj_test", "--until", "b")
@@ -395,7 +395,7 @@ def test_a_bridged_run_records_its_steps_so_a_local_run_then_skips_them(
 def test_a_step_from_a_definition_file_runs_on_a_node_without_pythonpath(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fake_jobmon: FakeJobmon
 ) -> None:
-    """End to end: a definition file in a directory that is not on PYTHONPATH, whose step function is defined in the file and imports a helper module that sits beside it, runs through the real node runner in a child process whose PYTHONPATH does not contain that directory; 'dagger run' exits 0 and the product exists."""
+    """End to end: a definition file in a directory that is not on PYTHONPATH, whose step function is defined in the file and imports a helper module that sits beside it, runs through the real node runner in a child process whose PYTHONPATH does not contain that directory; 'dagger run' exits 0 and the output exists."""
     directory = tmp_path / "definitions"
     helper = f"helper_{uuid.uuid4().hex[:12]}"
     make_dir(directory)

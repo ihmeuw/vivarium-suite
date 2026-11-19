@@ -30,7 +30,7 @@ from vivarium.dagger.frontend import run
 from vivarium.dagger.frontend.simulation_step import simulation_step
 
 _KEY = "sims/toy"
-"""The simulation step's produces key."""
+"""The simulation step's outputs key."""
 
 
 def _recorded_argv(
@@ -52,7 +52,7 @@ def _recorded_argv(
     task = simulation_step(
         spec=write_spec(base / "model" / "toy_model.yaml"),
         branches=write_branches(base / "model" / "branches.yaml"),
-        produces=_KEY,
+        outputs=_KEY,
         registry=registry,
         env=str(make_stub_env(base / "env")),
         options=options,

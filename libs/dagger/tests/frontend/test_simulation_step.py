@@ -71,13 +71,13 @@ from vivarium.dagger.frontend.simulation_step import (
 from vivarium.dagger.harness import Perturbed, with_stable_code_id
 
 _KEY = "sims/toy"
-"""The simulation step's produces key, which is also its name unless one is given."""
+"""The simulation step's outputs key, which is also its name unless one is given."""
 
 _CONSUMER = "summary"
 """The name of the python step that reads the run directory."""
 
 _SUMMARY_KEY = "summary.parquet"
-"""The consumer's product key."""
+"""The consumer's output key."""
 
 _NAMED_ENV = "simulation-env"
 """An env name for steps that are compiled but never built; an env is resolved at build."""
@@ -130,7 +130,7 @@ class _Model:
         return scratch_for(self.run_dir)
 
     def registry(self, root_inputs: Mapping[str, Path] | None = None) -> FileRegistry:
-        """Return a new registry whose products go under ``base / "out"``."""
+        """Return a new registry whose outputs go under ``base / "out"``."""
         return FileRegistry(self.base / "out", "run1", root_inputs=root_inputs)
 
     def calls(self) -> list[list[str]]:
@@ -169,7 +169,7 @@ def _step(model: _Model, registry: FileRegistry, **overrides: Any) -> Task:
     arguments: dict[str, Any] = {
         "spec": model.spec,
         "branches": model.branches,
-        "produces": _KEY,
+        "outputs": _KEY,
         "registry": registry,
         "env": str(model.env),
         "options": _OPTIONS,
@@ -197,7 +197,7 @@ def _pipeline(
             python_step(
                 summarize_run,
                 inputs={"simulation": _KEY},
-                produces=_SUMMARY_KEY,
+                outputs=_SUMMARY_KEY,
                 registry=registry,
                 name=_CONSUMER,
             )
@@ -254,7 +254,7 @@ def _sentinel(model: _Model) -> bytes:
 
 
 def _summary(model: _Model) -> pd.DataFrame:
-    """Return the consumer's product."""
+    """Return the consumer's output."""
     return pd.read_parquet(model.registry().path_for(_SUMMARY_KEY))
 
 
@@ -311,8 +311,8 @@ def test_resources_are_carried_and_default_to_empty(model: _Model) -> None:
     assert _step(model, model.registry()).resources == {}
 
 
-def test_name_defaults_to_produces_and_can_be_overridden(model: _Model) -> None:
-    """The task's name is produces when name is omitted, and name when given."""
+def test_name_defaults_to_outputs_and_can_be_overridden(model: _Model) -> None:
+    """The task's name is outputs when name is omitted, and name when given."""
     assert _step(model, model.registry()).name == _KEY
     assert _step(model, model.registry(), name="toy_simulation").name == "toy_simulation"
 
@@ -333,7 +333,7 @@ def test_inputs_are_the_spec_and_branches_file_nodes(model: _Model) -> None:
 def test_an_artifact_from_a_producing_step_is_an_input_with_the_producers_node(
     model: _Model,
 ) -> None:
-    """With artifact naming another step's product, the task's '__artifact__' input is the identical node that step registered."""
+    """With artifact naming another step's output, the task's '__artifact__' input is the identical node that step registered."""
     registry = model.registry()
     produced = registry.register_output("artifacts/model.hdf")
 
@@ -357,8 +357,8 @@ def test_an_artifact_from_a_root_input_is_an_input_at_its_path(model: _Model) ->
     assert node.path == artifact.resolve()
 
 
-def test_the_one_output_is_a_run_directory_node_at_the_produces_path(model: _Model) -> None:
-    """The task has one output, '__run__', a RunDirectoryNode whose path is registry.path_for(produces), and resolve_input(produces) returns that node."""
+def test_the_one_output_is_a_run_directory_node_at_the_outputs_path(model: _Model) -> None:
+    """The task has one output, '__run__', a RunDirectoryNode whose path is registry.path_for(outputs), and resolve_input(outputs) returns that node."""
     registry = model.registry()
 
     task = _step(model, registry)
@@ -665,10 +665,10 @@ def _definition_errors(model: _Model) -> dict[str, dict[str, Any]]:
     return {
         "empty-name": {"name": ""},
         "empty-env": {"env": ""},
-        "empty-produces": {"produces": "", "name": "toy"},
-        "produces-ends-in-a-slash": {"produces": "sims/toy/", "name": "toy"},
-        "produces-is-the-output-directory": {"produces": ".", "name": "toy"},
-        "produces-is-absolute": {"produces": str(model.base / "elsewhere"), "name": "toy"},
+        "empty-outputs": {"outputs": "", "name": "toy"},
+        "outputs-ends-in-a-slash": {"outputs": "sims/toy/", "name": "toy"},
+        "outputs-is-the-output-directory": {"outputs": ".", "name": "toy"},
+        "outputs-is-absolute": {"outputs": str(model.base / "elsewhere"), "name": "toy"},
         "missing-spec": {"spec": missing},
         "spec-is-a-directory": {"spec": directory},
         "missing-branches": {"branches": missing},
@@ -685,10 +685,10 @@ def _definition_errors(model: _Model) -> dict[str, dict[str, Any]]:
 _DEFINITION_ERRORS = [
     "empty-name",
     "empty-env",
-    "empty-produces",
-    "produces-ends-in-a-slash",
-    "produces-is-the-output-directory",
-    "produces-is-absolute",
+    "empty-outputs",
+    "outputs-ends-in-a-slash",
+    "outputs-is-the-output-directory",
+    "outputs-is-absolute",
     "missing-spec",
     "spec-is-a-directory",
     "missing-branches",
@@ -726,35 +726,35 @@ def test_empty_name_or_env_is_rejected(model: _Model) -> None:
     assert _value_error(model, name="toy", env="").startswith("Step 'toy':")
 
 
-@pytest.mark.parametrize("produces", ["", "sims/toy/"])
-def test_empty_produces_or_one_ending_in_a_slash_is_rejected(
-    model: _Model, produces: str
+@pytest.mark.parametrize("outputs", ["", "sims/toy/"])
+def test_empty_outputs_or_one_ending_in_a_slash_is_rejected(
+    model: _Model, outputs: str
 ) -> None:
-    """produces='' or 'sims/toy/' raises ValueError starting "Step '<name>':"."""
-    message = _value_error(model, produces=produces, name="toy")
+    """outputs='' or 'sims/toy/' raises ValueError starting "Step '<name>':"."""
+    message = _value_error(model, outputs=outputs, name="toy")
 
     assert message.startswith("Step 'toy':"), message
 
 
-@pytest.mark.parametrize("produces", [".", "..", "sims/../..", "/tmp/sims/toy"])
-def test_produces_outside_the_output_directory_is_rejected(
-    model: _Model, produces: str
+@pytest.mark.parametrize("outputs", [".", "..", "sims/../..", "/tmp/sims/toy"])
+def test_outputs_outside_the_output_directory_is_rejected(
+    model: _Model, outputs: str
 ) -> None:
-    """produces '.', '..' or an absolute path outside the output directory raises ValueError starting "Step '<name>':", naming produces and the output directory and saying produces must name a directory under it."""
+    """outputs '.', '..' or an absolute path outside the output directory raises ValueError starting "Step '<name>':", naming outputs and the output directory and saying outputs must name a directory under it."""
     registry = model.registry()
     output = model.base / "out" / "run1"
 
     with pytest.raises(ValueError) as excinfo:
-        _step(model, registry, produces=produces, name="toy")
+        _step(model, registry, outputs=outputs, name="toy")
 
     message = str(excinfo.value)
     assert message.startswith("Step 'toy':"), message
-    assert produces in message, message
+    assert outputs in message, message
     assert str(output) in message, message
     assert "under" in message, message
     with pytest.raises(WiringError):
-        registry.resolve_input(produces)
-    assert registry.key_for(registry.path_for(produces)) is None
+        registry.resolve_input(outputs)
+    assert registry.key_for(registry.path_for(outputs)) is None
 
 
 @pytest.mark.parametrize("argument", ["spec", "branches"])
@@ -873,7 +873,7 @@ def test_a_slack_tag_without_a_slack_channel_is_rejected(model: _Model) -> None:
 
 @pytest.mark.parametrize("case", _DEFINITION_ERRORS)
 def test_definition_errors_register_nothing(model: _Model, case: str) -> None:
-    """After each ValueError above, resolve_input of produces still raises WiringError, so nothing was registered."""
+    """After each ValueError above, resolve_input of outputs still raises WiringError, so nothing was registered."""
     cases = _definition_errors(model)
     assert set(cases) == set(_DEFINITION_ERRORS)
     registry = model.registry()
@@ -896,10 +896,10 @@ def test_an_unknown_file_key_raises_a_wiring_error_naming_the_step(model: _Model
     assert "artifacts/missing.hdf" in message
 
 
-def test_produces_on_a_root_input_raises_a_wiring_error_naming_the_step(
+def test_outputs_on_a_root_input_raises_a_wiring_error_naming_the_step(
     model: _Model,
 ) -> None:
-    """produces equal to a declared root input's key raises WiringError starting "Step '<name>':"."""
+    """outputs equal to a declared root input's key raises WiringError starting "Step '<name>':"."""
     registry = model.registry({_KEY: model.spec})
 
     with pytest.raises(WiringError) as excinfo:
@@ -908,10 +908,10 @@ def test_produces_on_a_root_input_raises_a_wiring_error_naming_the_step(
     assert str(excinfo.value).startswith(f"Step '{_KEY}':"), str(excinfo.value)
 
 
-def test_produces_already_registered_as_a_file_output_raises_a_wiring_error_naming_the_step(
+def test_outputs_already_registered_as_a_file_output_raises_a_wiring_error_naming_the_step(
     model: _Model,
 ) -> None:
-    """produces that another step registered as a file output raises WiringError starting "Step '<name>':" and naming the key."""
+    """outputs that another step registered as a file output raises WiringError starting "Step '<name>':" and naming the key."""
     registry = model.registry()
     registry.register_output(_KEY)
 
@@ -931,7 +931,7 @@ def test_a_simulation_step_sharing_a_name_with_another_step_is_reported_by_run(
     tasks = [
         _step(model, registry),
         python_step(
-            _constant, inputs={}, produces="other.parquet", registry=registry, name=_KEY
+            _constant, inputs={}, outputs="other.parquet", registry=registry, name=_KEY
         ),
     ]
 
@@ -994,7 +994,7 @@ def test_a_run_with_an_artifact_root_input_passes_its_path_to_psimulate(
 def test_a_downstream_python_step_receives_the_run_directory_and_reads_the_results(
     model: _Model,
 ) -> None:
-    """A python_step that names produces runs after the simulation step, its target receives a Path equal to registry.path_for(produces), and its summary is computed from the stub's parquet files."""
+    """A python_step that names outputs runs after the simulation step, its target receives a Path equal to registry.path_for(outputs), and its summary is computed from the stub's parquet files."""
     pipeline = _pipeline(model)
     simulation, consumer = freeze(pipeline).tasks
 
@@ -1011,7 +1011,7 @@ def test_a_downstream_python_step_receives_the_run_directory_and_reads_the_resul
 def test_a_notebook_step_that_names_the_key_gets_the_run_directory_as_a_str(
     model: _Model,
 ) -> None:
-    """A notebook_step with inputs={'run_dir': produces} has the quoted run directory path as that parameter's value in its command."""
+    """A notebook_step with inputs={'run_dir': outputs} has the quoted run directory path as that parameter's value in its command."""
     registry = model.registry()
     simulation = _step(model, registry)
     source = write_source_notebook(model.base / "notebooks" / "report.ipynb", "run_dir = ''")
@@ -1284,7 +1284,7 @@ def test_describe_simulation_failure_is_none_for_a_task_that_is_not_a_simulation
     """describe_simulation_failure returns None for a python step and for a plain command task, whatever the error."""
     registry = model.registry()
     _write_message(model, _COUNTS_MESSAGE)
-    python = python_step(_constant, inputs={}, produces="table.parquet", registry=registry)
+    python = python_step(_constant, inputs={}, outputs="table.parquet", registry=registry)
     plain = Task(
         name="plain",
         run="exit 1",
@@ -1406,12 +1406,12 @@ def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_casc
     p.add_simulation_step(
         spec=model.spec,
         branches=model.branches,
-        produces=_KEY,
+        outputs=_KEY,
         env=str(model.env),
         options=_OPTIONS,
     )
     p.add_python_step(
-        summarize_run, inputs={"simulation": _KEY}, produces=_SUMMARY_KEY, name=_CONSUMER
+        summarize_run, inputs={"simulation": _KEY}, outputs=_SUMMARY_KEY, name=_CONSUMER
     )
     # The step methods wire the steps through the pipeline's registry, so the preview
     # names the run directory by key.

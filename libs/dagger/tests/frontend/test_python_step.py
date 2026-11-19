@@ -150,7 +150,7 @@ from vivarium.dagger.frontend.python_step import PythonStepRun, resolve_referenc
 
 for reference, suffix, inputs, product in json.loads(sys.argv[1]):
     step_run = PythonStepRun(resolve_reference(reference), suffix)
-    step_run(product=Path(product), **{name: Path(path) for name, path in inputs.items()})
+    step_run(__output__=Path(product), **{name: Path(path) for name, path in inputs.items()})
 """
 
 
@@ -167,7 +167,7 @@ def _without_identity(message: str, target: Callable[..., Any]) -> str:
 
 
 def test_python_step_returns_a_task_wired_to_the_registry(tmp_path: Path) -> None:
-    """python_step returns one Task whose product and inputs are the registry's nodes."""
+    """python_step returns one Task whose output and inputs are the registry's nodes."""
     src = tmp_path / "src.parquet"
     pd.DataFrame({"n": [1]}).to_parquet(src)
     reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": src})
@@ -175,20 +175,20 @@ def test_python_step_returns_a_task_wired_to_the_registry(tmp_path: Path) -> Non
     task = python_step(
         _read_frame,
         inputs={"data": "src"},
-        produces="mid.parquet",
+        outputs="mid.parquet",
         registry=reg,
         resources={},
     )
 
     assert isinstance(task, Task)
     [product] = list(task.outputs.values())
-    assert product is reg.resolve_input("mid.parquet")  # the registry's shared product node
+    assert product is reg.resolve_input("mid.parquet")  # the registry's shared output node
     [dependency] = list(task.inputs.values())
     assert isinstance(dependency, PathNode)
     assert dependency.path == src.resolve()  # input resolved to the root-input file node
 
 
-def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) -> None:
+def test_running_a_step_calls_the_target_and_writes_the_output(tmp_path: Path) -> None:
     """Running the built task calls the target with loaded inputs and autosaves its DataFrame."""
     src = tmp_path / "src.parquet"
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(src)
@@ -204,7 +204,7 @@ def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) 
     task = python_step(
         scale,
         inputs={"data": "src"},
-        produces="scaled.parquet",
+        outputs="scaled.parquet",
         registry=reg,
         resources={},
     )
@@ -212,7 +212,7 @@ def test_running_a_step_calls_the_target_and_writes_the_product(tmp_path: Path) 
     assert outcomes(build([task], tmp_path / "state")) == {task.name: TaskOutcome.SUCCESS}
     assert calls == ["ran"]  # the target ran exactly once with its input path loaded
     saved = pd.read_parquet(reg.path_for("scaled.parquet"))
-    assert saved["n"].tolist() == [2, 4, 6]  # the returned frame was autosaved to the product
+    assert saved["n"].tolist() == [2, 4, 6]  # the returned frame was autosaved to the output
 
 
 def test_python_step_carries_resources_and_runs_in_the_pipeline_env(tmp_path: Path) -> None:
@@ -223,7 +223,7 @@ def test_python_step_carries_resources_and_runs_in_the_pipeline_env(tmp_path: Pa
     task = python_step(
         _constant,
         inputs={},
-        produces="out.parquet",
+        outputs="out.parquet",
         registry=reg,
         resources=resources,
     )
@@ -237,17 +237,17 @@ def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
     reg = FileRegistry(tmp_path / "out", "run1")
 
     def grow(mid: Path) -> pd.DataFrame:
-        """Read the upstream product path and add ten to its column."""
+        """Read the upstream output path and add ten to its column."""
         frame = pd.read_parquet(mid)
         return frame.assign(n=frame["n"] + 10)
 
     producer = python_step(
-        _constant, inputs={}, produces="mid.parquet", registry=reg, resources={}
+        _constant, inputs={}, outputs="mid.parquet", registry=reg, resources={}
     )
     consumer = python_step(
         grow,
         inputs={"mid": "mid.parquet"},
-        produces="final.parquet",
+        outputs="final.parquet",
         registry=reg,
         resources={},
     )
@@ -260,11 +260,11 @@ def test_two_steps_run_end_to_end_through_a_shared_key(tmp_path: Path) -> None:
     assert final["n"].tolist() == [11, 12, 13]  # the producer's data flowed to the consumer
 
 
-def test_csv_product_round_trips(tmp_path: Path) -> None:
-    """A ".csv" product is autosaved so it round-trips through pd.read_csv."""
+def test_csv_output_round_trips(tmp_path: Path) -> None:
+    """A ".csv" output is autosaved so it round-trips through pd.read_csv."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    task = python_step(_constant, inputs={}, produces="table.csv", registry=reg, resources={})
+    task = python_step(_constant, inputs={}, outputs="table.csv", registry=reg, resources={})
 
     assert outcomes(build([task], tmp_path / "state")) == {task.name: TaskOutcome.SUCCESS}
     saved = pd.read_csv(reg.path_for("table.csv"))
@@ -280,58 +280,78 @@ def test_unknown_input_key_surfaces_a_did_you_mean(tmp_path: Path) -> None:
         python_step(
             _read_frame,
             inputs={"data": "caps/ethiopa.csv"},
-            produces="out.parquet",
+            outputs="out.parquet",
             registry=reg,
             resources={},
         )
 
 
-def test_unsupported_product_suffix_is_rejected(tmp_path: Path) -> None:
-    """A produces key whose suffix is not a supported save format is rejected."""
+def test_unsupported_output_suffix_is_rejected(tmp_path: Path) -> None:
+    """An outputs key whose suffix is not a supported save format is rejected."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError):
         python_step(
             _constant,
             inputs={},
-            produces="out.txt",
+            outputs="out.txt",
             registry=reg,
             resources={},
         )
 
 
-def test_a_step_that_writes_no_product_is_a_failure(tmp_path: Path) -> None:
-    """A target that fails to produce its product is reported a failure (via a raising target)."""
+def test_a_step_that_writes_no_output_is_a_failure(tmp_path: Path) -> None:
+    """A target that fails to produce its output is reported a failure (via a raising target)."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     def boom() -> pd.DataFrame:
-        """Raise before returning, so no product is written."""
-        raise RuntimeError("no product written")
+        """Raise before returning, so no output is written."""
+        raise RuntimeError("no output written")
 
-    task = python_step(boom, inputs={}, produces="out.parquet", registry=reg, resources={})
+    task = python_step(boom, inputs={}, outputs="out.parquet", registry=reg, resources={})
 
     assert outcomes(build([task], tmp_path / "state")) == {task.name: TaskOutcome.FAIL}
 
 
-def test_product_parameter_name_collision_is_rejected(tmp_path: Path) -> None:
-    """An input whose parameter name is the reserved product name is rejected with a message that starts with the step's name."""
+def test_the_reserved_input_name_output_is_rejected(tmp_path: Path) -> None:
+    """An input named '__output__' beside one output key raises ValueError with the shared reserved-name message, which lists every reserved name, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    with pytest.raises(ValueError, match=r"(?s)^Step 'out\.parquet': .*collides"):
+    with pytest.raises(ValueError) as info:
         python_step(
             _constant,
-            inputs={"product": "src"},
-            produces="out.parquet",
+            inputs={"__output__": "src"},
+            outputs="out.parquet",
             registry=reg,
             resources={},
         )
 
+    assert str(info.value) == (
+        "Step 'out.parquet': name '__output__' in inputs is reserved; the reserved names "
+        "are '__code_id__', '__command__', '__executed__', '__notebook__', '__output__'."
+    )
+    _assert_unregistered(reg, "out.parquet")
 
-def test_python_step_run_holds_the_target_and_product_suffix(tmp_path: Path) -> None:
-    """python_step's Task.run is a PythonStepRun of the given target and the produces suffix."""
+
+def test_an_input_named_product_is_allowed_with_one_output(tmp_path: Path) -> None:
+    """With one output key, an input may be named 'product': the step builds and its output holds the input's data."""
+    source = tmp_path / "src.parquet"
+    _population().to_parquet(source)
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": source})
+
+    task = python_step(
+        _read_product, inputs={"product": "src"}, outputs="out.csv", registry=reg
+    )
+
+    assert outcomes(build([task], tmp_path / "state")) == {"out.csv": TaskOutcome.SUCCESS}
+    pd.testing.assert_frame_equal(pd.read_csv(reg.path_for("out.csv")), _population())
+
+
+def test_python_step_run_holds_the_target_and_output_suffix(tmp_path: Path) -> None:
+    """python_step's Task.run is a PythonStepRun of the given target and the outputs suffix."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    task = python_step(_constant, inputs={}, produces="tables/out.csv", registry=reg)
+    task = python_step(_constant, inputs={}, outputs="tables/out.csv", registry=reg)
 
     assert task.run == PythonStepRun(_constant, ".csv")
 
@@ -357,40 +377,40 @@ def test_python_step_run_rejects_an_unsupported_suffix() -> None:
 
 
 def test_unsupported_suffix_leaves_the_registry_unchanged(tmp_path: Path) -> None:
-    """A rejected produces suffix registers nothing, so the key can still be registered afterwards."""
+    """A rejected outputs suffix registers nothing, so the key can still be registered afterwards."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError):
-        python_step(_constant, inputs={}, produces="out.txt", registry=reg)
+        python_step(_constant, inputs={}, outputs="out.txt", registry=reg)
 
     with pytest.raises(WiringError):
         reg.resolve_input("out.txt")
     assert reg.register_output("out.txt").path == reg.path_for("out.txt")
 
 
-def test_name_sets_the_task_name_and_defaults_to_the_produces_key(tmp_path: Path) -> None:
-    """python_step(name=...) becomes Task.name; without name the task is named by its produces key."""
+def test_name_sets_the_task_name_and_defaults_to_the_outputs_key(tmp_path: Path) -> None:
+    """python_step(name=...) becomes Task.name; without name the task is named by its outputs key."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     named = python_step(
-        _constant, inputs={}, produces="a.parquet", registry=reg, name="make_a"
+        _constant, inputs={}, outputs="a.parquet", registry=reg, name="make_a"
     )
-    unnamed = python_step(_constant, inputs={}, produces="b.parquet", registry=reg)
+    unnamed = python_step(_constant, inputs={}, outputs="b.parquet", registry=reg)
 
     assert named.name == "make_a"
     assert unnamed.name == "b.parquet"
 
 
 @pytest.mark.parametrize(
-    "produces",
+    "outputs",
     [pytest.param("a.parquet", id="one_key"), pytest.param({"a": "a.parquet"}, id="mapping")],
 )
-def test_an_empty_name_is_rejected(tmp_path: Path, produces: str | dict[str, str]) -> None:
+def test_an_empty_name_is_rejected(tmp_path: Path, outputs: str | dict[str, str]) -> None:
     """python_step(name='') raises ValueError starting with 'python_step:' for a single key and for a mapping, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError, match="^python_step: name must be a non-empty"):
-        python_step(_constant, inputs={}, produces=produces, registry=reg, name="")
+        python_step(_constant, inputs={}, outputs=outputs, registry=reg, name="")
 
     with pytest.raises(WiringError):
         reg.resolve_input("a.parquet")
@@ -456,8 +476,8 @@ def test_resolve_reference_rejects_a_malformed_reference(reference: str) -> None
         resolve_reference(reference)
 
 
-def test_a_run_rebuilt_in_a_fresh_process_writes_the_same_product(tmp_path: Path) -> None:
-    """A PythonStepRun rebuilt in a fresh isolated interpreter from the harness targets' references and suffixes writes products equal to a local build's."""
+def test_a_run_rebuilt_in_a_fresh_process_writes_the_same_output(tmp_path: Path) -> None:
+    """A PythonStepRun rebuilt in a fresh isolated interpreter from the harness targets' references and suffixes writes outputs equal to a local build's."""
     fixture = build_fixture(tmp_path)
     ran = dict.fromkeys(fixture.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(fixture.tasks, fixture.state)) == ran
@@ -481,14 +501,14 @@ def test_a_run_rebuilt_in_a_fresh_process_writes_the_same_product(tmp_path: Path
         pd.testing.assert_frame_equal(pd.read_parquet(remote), pd.read_parquet(local))
 
 
-def test_unsupported_suffix_error_names_the_step_and_produces_key(tmp_path: Path) -> None:
-    """python_step's error for an unsupported product suffix names the step and the produces key."""
+def test_unsupported_suffix_error_names_the_step_and_outputs_key(tmp_path: Path) -> None:
+    """python_step's error for an unsupported output suffix names the step and the outputs key."""
     cases: list[tuple[str | None, str]] = [(None, "out.txt"), ("clean", "clean")]
     for name, step in cases:
         reg = FileRegistry(tmp_path / "out", "run1")
 
         with pytest.raises(ValueError) as info:
-            python_step(_constant, inputs={}, produces="out.txt", registry=reg, name=name)
+            python_step(_constant, inputs={}, outputs="out.txt", registry=reg, name=name)
 
         assert "out.txt" in str(info.value)
         assert str(info.value).startswith(f"Step {step!r}: "), info.value
@@ -497,13 +517,13 @@ def test_unsupported_suffix_error_names_the_step_and_produces_key(tmp_path: Path
 def test_a_target_that_does_not_return_a_dataframe_fails_naming_it(tmp_path: Path) -> None:
     """Building a step whose target returns None fails with a TypeError that names the target, the returned type, and a missing return."""
     reg = FileRegistry(tmp_path / "out", "run1")
-    task = python_step(_builds_a_frame, inputs={}, produces="out.parquet", registry=reg)
+    task = python_step(_builds_a_frame, inputs={}, outputs="out.parquet", registry=reg)
     step_run, direct = task.run, tmp_path / "direct.parquet"
     assert isinstance(step_run, PythonStepRun)
 
     session = build([task], tmp_path / "state")
     with pytest.raises(TypeError) as info:
-        step_run(product=direct)
+        step_run(__output__=direct)
 
     assert outcomes(session) == {task.name: TaskOutcome.FAIL}
     [report] = session.execution_reports
@@ -527,7 +547,7 @@ def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) ->
         python_step(
             _read_frame,
             inputs={"data": "caps/ethiopa.csv"},
-            produces="out.parquet",
+            outputs="out.parquet",
             registry=reg,
             name="b",
         )
@@ -539,27 +559,27 @@ def test_an_unresolved_input_error_names_the_step_and_the_key(tmp_path: Path) ->
 
 
 def test_producing_a_root_input_error_names_the_step(tmp_path: Path) -> None:
-    """A python_step named 'b' whose produces key is a declared root input raises WiringError whose message starts with "Step 'b': "."""
+    """A python_step named 'b' whose outputs key is a declared root input raises WiringError whose message starts with "Step 'b': "."""
     source = tmp_path / "src.parquet"
     reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src.parquet": source})
 
     with pytest.raises(WiringError) as info:
-        python_step(_constant, inputs={}, produces="src.parquet", registry=reg, name="b")
+        python_step(_constant, inputs={}, outputs="src.parquet", registry=reg, name="b")
 
     message = str(info.value)
     assert message.startswith("Step 'b': "), message
     assert "'src.parquet'" in message
 
 
-def test_the_step_name_prefix_defaults_to_the_produces_key(tmp_path: Path) -> None:
-    """Without name=, the WiringError message for an unresolved input starts with "Step '<produces key>': "."""
+def test_the_step_name_prefix_defaults_to_the_outputs_key(tmp_path: Path) -> None:
+    """Without name=, the WiringError message for an unresolved input starts with "Step '<outputs key>': "."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(WiringError) as info:
         python_step(
             _read_frame,
             inputs={"data": "missing.parquet"},
-            produces="out.parquet",
+            outputs="out.parquet",
             registry=reg,
         )
 
@@ -578,12 +598,12 @@ def test_a_target_that_returns_another_type_gets_no_missing_return_hint(
     """A target that returns a dict fails naming dict, without the missing-return hint that only None gets."""
     reg = FileRegistry(tmp_path / "out", "run1")
     step_run = python_step(
-        _returns_a_dict, inputs={}, produces="out.parquet", registry=reg
+        _returns_a_dict, inputs={}, outputs="out.parquet", registry=reg
     ).run
     assert isinstance(step_run, PythonStepRun)
 
     with pytest.raises(TypeError) as info:
-        step_run(product=tmp_path / "direct.parquet")
+        step_run(__output__=tmp_path / "direct.parquet")
 
     assert "returned dict" in str(info.value)
     assert "missing return" not in str(info.value)
@@ -612,13 +632,13 @@ def test_target_reference_names_a_reloaded_module_and_says_to_rebuild_the_steps(
     assert "top level" not in message
 
 
-# A python step with several products (MIC-7827)
+# A python step with several outputs (MIC-7827)
 
 _SPLIT = {"population": "population.parquet", "deaths": "deaths.csv"}
-"""The products of the step 'split' that most of these tests compile."""
+"""The outputs of the step 'split' that most of these tests compile."""
 
-_SPLIT_NAMES = "The product names are 'deaths' and 'population'."
-"""The sentence that lists ``_SPLIT``'s product names in a run-time message."""
+_SPLIT_NAMES = "The output names are 'deaths' and 'population'."
+"""The sentence that lists ``_SPLIT``'s output names in a run-time message."""
 
 
 def _population() -> pd.DataFrame:
@@ -632,27 +652,27 @@ def _deaths() -> pd.DataFrame:
 
 
 def _split() -> dict[str, pd.DataFrame]:
-    """Return a population frame and a deaths frame by product name."""
+    """Return a population frame and a deaths frame by output name."""
     return {"population": _population(), "deaths": _deaths()}
 
 
 def _split_fails() -> dict[str, pd.DataFrame]:
-    """Raise before returning, so no product is written."""
+    """Raise before returning, so no output is written."""
     raise RuntimeError("the split broke")
 
 
 def _split_without_deaths() -> dict[str, pd.DataFrame]:
-    """Return only the population frame, leaving out the deaths product."""
+    """Return only the population frame, leaving out the deaths output."""
     return {"population": _population()}
 
 
 def _split_with_extra_keys() -> dict[Any, pd.DataFrame]:
-    """Return both frames and two frames under keys that are not product names."""
+    """Return both frames and two frames under keys that are not output names."""
     return {**_split(), "births": _population(), 7: _population()}
 
 
 def _population_only_as_other() -> dict[str, pd.DataFrame]:
-    """Return the population frame under a key that is not a product name."""
+    """Return the population frame under a key that is not an output name."""
     return {"other": _population()}
 
 
@@ -677,38 +697,43 @@ def _split_returns_a_frame() -> pd.DataFrame:
 
 
 def _constant_by_name() -> dict[str, pd.DataFrame]:
-    """Return the fixed frame under the product name 'out'."""
+    """Return the fixed frame under the output name 'out'."""
     return {"out": _constant()}
 
 
 def _read_population(population: Path) -> pd.DataFrame:
-    """Read the population product and return it doubled."""
+    """Read the population output and return it doubled."""
     frame = pd.read_parquet(population)
     return frame.assign(count=frame["count"] * 2)
 
 
 def _read_deaths(deaths: Path) -> pd.DataFrame:
-    """Read the deaths product and return it unchanged."""
+    """Read the deaths output and return it unchanged."""
     return pd.read_csv(deaths)
 
 
+def _read_product(product: Path) -> pd.DataFrame:
+    """Read and return the input named 'product'."""
+    return pd.read_parquet(product)
+
+
 def _copy_product(product: Path) -> dict[str, pd.DataFrame]:
-    """Read the input named 'product' and return it under the product name 'out'."""
+    """Read the input named 'product' and return it under the output name 'out'."""
     return {"out": pd.read_parquet(product)}
 
 
 def _split_task(reg: FileRegistry, target: Callable[..., Any] = _split) -> Task:
-    """Return the step 'split' that writes ``_SPLIT``'s two products with ``target``."""
-    return python_step(target, inputs={}, produces=_SPLIT, registry=reg, name="split")
+    """Return the step 'split' that writes ``_SPLIT``'s two outputs with ``target``."""
+    return python_step(target, inputs={}, outputs=_SPLIT, registry=reg, name="split")
 
 
 def _split_paths(reg: FileRegistry) -> dict[str, Path]:
-    """Return the path of each of ``_SPLIT``'s products by product name."""
+    """Return the path of each of ``_SPLIT``'s outputs by output name."""
     return {name: reg.path_for(key) for name, key in _SPLIT.items()}
 
 
 def _call_directly(step_run: object, paths: dict[str, Path]) -> None:
-    """Call the PythonStepRun ``step_run`` with ``paths`` as its product arguments."""
+    """Call the PythonStepRun ``step_run`` with ``paths`` as its output arguments."""
     assert isinstance(step_run, PythonStepRun)
     step_run(**paths)
 
@@ -719,10 +744,10 @@ def _assert_unregistered(reg: FileRegistry, *keys: str) -> None:
         assert reg.key_for(reg.path_for(key)) is None, key
 
 
-def test_a_mapping_step_has_one_output_per_product_and_a_run_of_its_suffixes(
+def test_a_mapping_step_has_one_output_per_output_and_a_run_of_its_suffixes(
     tmp_path: Path,
 ) -> None:
-    """With produces mapping 'population' and 'deaths' to two keys, python_step returns a Task whose outputs are the registry's node for each key under its name and whose run is a PythonStepRun of the target and each name's suffix."""
+    """With outputs mapping 'population' and 'deaths' to two keys, python_step returns a Task whose outputs are the registry's node for each key under its name and whose run is a PythonStepRun of the target and each name's suffix."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     task = _split_task(reg)
@@ -737,12 +762,10 @@ def test_a_mapping_step_has_one_output_per_product_and_a_run_of_its_suffixes(
 
 
 def test_a_mapping_with_one_entry_and_no_name_is_named_after_its_key(tmp_path: Path) -> None:
-    """A mapping step with one product and no name is named after that product's key."""
+    """A mapping step with one output and no name is named after that output's key."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
-    task = python_step(
-        _constant_by_name, inputs={}, produces={"out": "out.csv"}, registry=reg
-    )
+    task = python_step(_constant_by_name, inputs={}, outputs={"out": "out.csv"}, registry=reg)
 
     assert task.name == "out.csv"
     assert list(task.outputs) == ["out"]
@@ -760,21 +783,21 @@ def test_building_a_mapping_step_saves_each_frame_in_its_keys_format(tmp_path: P
 
 
 def _with_consumers(reg: FileRegistry, target: Callable[..., Any] = _split) -> list[Task]:
-    """Return the split step and one python step that reads each of its products."""
+    """Return the split step and one python step that reads each of its outputs."""
     split = _split_task(reg, target)
     population = python_step(
         _read_population,
         inputs={"population": "population.parquet"},
-        produces="doubled.parquet",
+        outputs="doubled.parquet",
         registry=reg,
     )
     deaths = python_step(
-        _read_deaths, inputs={"deaths": "deaths.csv"}, produces="copied.csv", registry=reg
+        _read_deaths, inputs={"deaths": "deaths.csv"}, outputs="copied.csv", registry=reg
     )
     return [split, population, deaths]
 
 
-def test_a_downstream_step_reads_each_product_of_a_mapping_step(tmp_path: Path) -> None:
+def test_a_downstream_step_reads_each_output_of_a_mapping_step(tmp_path: Path) -> None:
     """A python step that reads population.parquet and one that reads deaths.csv build after the split step and read the data it saved."""
     reg = FileRegistry(tmp_path / "out", "run1")
     tasks = _with_consumers(reg)
@@ -790,7 +813,7 @@ def test_a_downstream_step_reads_each_product_of_a_mapping_step(tmp_path: Path) 
 
 
 def test_the_consumers_of_a_failed_mapping_step_are_skipped(tmp_path: Path) -> None:
-    """When the split step's target raises, the step fails and the consumer of each of its products is skipped because it failed."""
+    """When the split step's target raises, the step fails and the consumer of each of its outputs is skipped because it failed."""
     reg = FileRegistry(tmp_path / "out", "run1")
     tasks = _with_consumers(reg, _split_fails)
 
@@ -803,8 +826,8 @@ def test_the_consumers_of_a_failed_mapping_step_are_skipped(tmp_path: Path) -> N
     }
 
 
-def test_a_dict_missing_a_product_fails_the_step_and_writes_nothing(tmp_path: Path) -> None:
-    """A target whose dict leaves out 'deaths' makes the build fail, and calling the run directly raises ValueError that names the target, the missing product and the product names; neither product is written."""
+def test_a_dict_missing_an_output_fails_the_step_and_writes_nothing(tmp_path: Path) -> None:
+    """A target whose dict leaves out 'deaths' makes the build fail, and calling the run directly raises ValueError that names the target, the missing output and the output names; neither output is written."""
     reg = FileRegistry(tmp_path / "out", "run1")
     task = _split_task(reg, _split_without_deaths)
     direct = {
@@ -818,14 +841,14 @@ def test_a_dict_missing_a_product_fails_the_step_and_writes_nothing(tmp_path: Pa
     assert outcomes(session) == {"split": TaskOutcome.FAIL}
     assert str(info.value) == (
         "Python step target _split_without_deaths returned a dict whose keys do not match "
-        f"its product names: the product 'deaths' is missing. {_SPLIT_NAMES}"
+        f"its output names: the output 'deaths' is missing. {_SPLIT_NAMES}"
     )
     for path in [*_split_paths(reg).values(), *direct.values()]:
         assert not path.exists(), path
 
 
-def test_a_dict_with_keys_that_are_not_products_raises_naming_them(tmp_path: Path) -> None:
-    """A target whose dict has the keys 'births' and 7 beside both products raises ValueError naming both keys, and writes neither product."""
+def test_a_dict_with_keys_that_are_not_outputs_raises_naming_them(tmp_path: Path) -> None:
+    """A target whose dict has the keys 'births' and 7 beside both outputs raises ValueError naming both keys, and writes neither output."""
     reg = FileRegistry(tmp_path / "out", "run1")
     task = _split_task(reg, _split_with_extra_keys)
 
@@ -834,14 +857,14 @@ def test_a_dict_with_keys_that_are_not_products_raises_naming_them(tmp_path: Pat
 
     assert str(info.value) == (
         "Python step target _split_with_extra_keys returned a dict whose keys do not match "
-        "its product names: the keys 'births' and 7 are not product names. "
+        "its output names: the keys 'births' and 7 are not output names. "
         f"{_SPLIT_NAMES}"
     )
     assert not any(path.exists() for path in _split_paths(reg).values())
 
 
-def test_a_dict_missing_one_product_with_an_extra_key_names_both(tmp_path: Path) -> None:
-    """A dict that lacks both products and has one other key gives a message that names the two missing products and then the extra key."""
+def test_a_dict_missing_one_output_with_an_extra_key_names_both(tmp_path: Path) -> None:
+    """A dict that lacks both outputs and has one other key gives a message that names the two missing outputs and then the extra key."""
     step_run = PythonStepRun(_population_only_as_other, {"a": ".csv", "b": ".csv"})
 
     with pytest.raises(ValueError) as info:
@@ -849,8 +872,8 @@ def test_a_dict_missing_one_product_with_an_extra_key_names_both(tmp_path: Path)
 
     assert str(info.value) == (
         "Python step target _population_only_as_other returned a dict whose keys do not "
-        "match its product names: the products 'a' and 'b' are missing; the key 'other' "
-        "is not a product name. The product names are 'a' and 'b'."
+        "match its output names: the outputs 'a' and 'b' are missing; the key 'other' "
+        "is not an output name. The output names are 'a' and 'b'."
     )
 
 
@@ -868,7 +891,7 @@ def test_a_dict_missing_one_product_with_an_extra_key_names_both(tmp_path: Path)
 def test_a_dict_value_that_is_not_a_dataframe_raises_and_writes_nothing(
     tmp_path: Path, target: Callable[..., Any], wrong: str
 ) -> None:
-    """A dict whose value for a product is not a DataFrame raises TypeError naming each such product and its type, in the mapping's order, and writes no product, not even the valid frame."""
+    """A dict whose value for an output is not a DataFrame raises TypeError naming each such output and its type, in the mapping's order, and writes no output, not even the valid frame."""
     reg = FileRegistry(tmp_path / "out", "run1")
     task = _split_task(reg, target)
 
@@ -897,7 +920,7 @@ def test_a_dict_value_that_is_not_a_dataframe_raises_and_writes_nothing(
 def test_a_mapping_step_whose_target_does_not_return_a_dict_raises(
     tmp_path: Path, target: Callable[..., Any], returned: str, hint: str
 ) -> None:
-    """A mapping step whose target returns a DataFrame, or None, raises TypeError that names the target and the type, says to return a dict of frames and lists the product names; only None gets the missing-return hint."""
+    """A mapping step whose target returns a DataFrame, or None, raises TypeError that names the target and the type, says to return a dict of frames and lists the output names; only None gets the missing-return hint."""
     reg = FileRegistry(tmp_path / "out", "run1")
     task = _split_task(reg, target)
 
@@ -905,34 +928,34 @@ def test_a_mapping_step_whose_target_does_not_return_a_dict_raises(
         _call_directly(task.run, _split_paths(reg))
 
     assert str(info.value) == (
-        f"Python step target {target.__name__} returned {returned}; a python step whose "
-        "produces is a mapping must return a dict that maps each product name to a pandas "
+        f"Python step target {target.__name__} returned {returned}; a python step with a "
+        "mapping of outputs must return a dict that maps each output name to a pandas "
         f"DataFrame. {_SPLIT_NAMES}{hint}"
     )
     assert not any(path.exists() for path in _split_paths(reg).values())
 
 
-def test_one_product_name_is_listed_in_the_singular(tmp_path: Path) -> None:
-    """A mapping step with one product whose target returns a DataFrame says 'The product name is' and names the one product."""
+def test_one_output_name_is_listed_in_the_singular(tmp_path: Path) -> None:
+    """A mapping step with one output whose target returns a DataFrame says 'The output name is' and names the one output."""
     step_run = PythonStepRun(_split_returns_a_frame, {"adults": ".csv"})
 
-    with pytest.raises(TypeError, match=r"The product name is 'adults'\.$"):
+    with pytest.raises(TypeError, match=r"The output name is 'adults'\.$"):
         step_run(adults=tmp_path / "adults.csv")
 
 
-def test_a_single_product_target_that_returns_a_dict_is_told_to_map_produces(
+def test_a_single_output_target_that_returns_a_dict_is_told_to_map_outputs(
     tmp_path: Path,
 ) -> None:
-    """A target that returns a dict for a step with one product key raises TypeError that says to pass produces a mapping of product names to file keys."""
+    """A target that returns a dict for a step with one output key raises TypeError that says to pass outputs a mapping of output names to file keys."""
     reg = FileRegistry(tmp_path / "out", "run1")
-    task = python_step(_split, inputs={}, produces="out.parquet", registry=reg)
+    task = python_step(_split, inputs={}, outputs="out.parquet", registry=reg)
 
     with pytest.raises(TypeError) as info:
-        _call_directly(task.run, {"product": tmp_path / "out.parquet"})
+        _call_directly(task.run, {"__output__": tmp_path / "out.parquet"})
 
     assert str(info.value) == (
         "Python step target _split returned dict; a python step must return a pandas "
-        "DataFrame. To write several products, pass produces a mapping of product names "
+        "DataFrame. To write several outputs, pass outputs= a mapping of output names "
         "to file keys."
     )
 
@@ -940,20 +963,20 @@ def test_a_single_product_target_that_returns_a_dict_is_told_to_map_produces(
 def test_an_unsupported_suffix_on_a_later_key_names_it_and_registers_nothing(
     tmp_path: Path,
 ) -> None:
-    """A mapping whose second key has the suffix '.txt' raises ValueError that starts with the step's name and names the product and the key, and the first key is not registered."""
+    """A mapping whose second key has the suffix '.txt' raises ValueError that starts with the step's name and names the output and the key, and the first key is not registered."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
         python_step(
             _split,
             inputs={},
-            produces={"population": "population.parquet", "deaths": "deaths.txt"},
+            outputs={"population": "population.parquet", "deaths": "deaths.txt"},
             registry=reg,
             name="split",
         )
 
     assert str(info.value) == (
-        "Step 'split': product 'deaths' (key 'deaths.txt') has unsupported suffix '.txt'; "
+        "Step 'split': output 'deaths' (key 'deaths.txt') has unsupported suffix '.txt'; "
         "supported suffixes are .csv, .parquet."
     )
     with pytest.raises(WiringError):
@@ -962,79 +985,80 @@ def test_an_unsupported_suffix_on_a_later_key_names_it_and_registers_nothing(
 
 @pytest.mark.parametrize("name, prefix", [(None, "python_step"), ("x", "Step 'x'")])
 def test_an_empty_mapping_is_refused(tmp_path: Path, name: str | None, prefix: str) -> None:
-    """An empty produces mapping raises ValueError that says a step needs a product, starting with 'python_step:' without a name and with "Step 'x':" with one."""
+    """An empty outputs mapping raises ValueError that says a step needs an output, starting with 'python_step:' without a name and with "Step 'x':" with one."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
-        python_step(_split, inputs={}, produces={}, registry=reg, name=name)
+        python_step(_split, inputs={}, outputs={}, registry=reg, name=name)
 
     assert str(info.value) == (
-        f"{prefix}: produces must have at least one entry; a step with no product cannot "
+        f"{prefix}: outputs must have at least one entry; a step with no output cannot "
         "be consumed and cannot be skipped."
     )
 
 
-def test_several_products_with_no_name_are_refused_listing_the_keys(tmp_path: Path) -> None:
-    """A mapping with two products and no name raises ValueError starting with 'python_step:' that lists the keys sorted and says to pass name=, and registers nothing."""
+def test_several_outputs_with_no_name_are_refused_listing_the_keys(tmp_path: Path) -> None:
+    """A mapping with two outputs and no name raises ValueError starting with 'python_step:' that lists the keys sorted and says to pass name=, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
-        python_step(_split, inputs={}, produces=_SPLIT, registry=reg)
+        python_step(_split, inputs={}, outputs=_SPLIT, registry=reg)
 
     assert str(info.value) == (
-        "python_step: produces has more than one entry, with keys 'deaths.csv' and "
+        "python_step: the outputs mapping has more than one entry, with keys 'deaths.csv' and "
         "'population.parquet', so the step has no default name; pass name= to name it."
     )
     _assert_unregistered(reg, *_SPLIT.values())
 
 
-def test_a_product_name_that_is_also_an_input_name_is_refused(tmp_path: Path) -> None:
-    """A product named 'population' beside an input named 'population' raises ValueError naming the step and the name, and registers nothing."""
+def test_an_output_name_that_is_also_an_input_name_is_refused(tmp_path: Path) -> None:
+    """An output named 'population' beside an input named 'population' raises ValueError naming the step and the name, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": tmp_path / "raw.csv"})
 
     with pytest.raises(ValueError) as info:
         python_step(
-            _split, inputs={"population": "raw"}, produces=_SPLIT, registry=reg, name="split"
+            _split, inputs={"population": "raw"}, outputs=_SPLIT, registry=reg, name="split"
         )
 
     assert str(info.value) == (
-        "Step 'split': name 'population' in produces also appears in inputs; a name may "
-        "appear in only one of inputs and produces."
+        "Step 'split': name 'population' in outputs also appears in inputs; a name may "
+        "appear in only one of inputs and outputs."
     )
     _assert_unregistered(reg, *_SPLIT.values())
 
 
 @pytest.mark.parametrize(
-    "product, problem",
+    "output, problem",
     [
         ("two words", "is not a valid Python identifier"),
         ("class", "is a Python keyword"),
         ("return", "is a Python keyword"),
         ("__code_id__", "is reserved"),
+        ("__output__", "is reserved"),
     ],
 )
-def test_a_product_name_that_is_not_a_parameter_name_is_refused(
-    tmp_path: Path, product: str, problem: str
+def test_an_output_name_that_is_not_a_parameter_name_is_refused(
+    tmp_path: Path, output: str, problem: str
 ) -> None:
-    """A product name that is not an identifier, is a keyword or is reserved raises ValueError that starts with "Step 'x':" and says what is wrong, and registers nothing."""
+    """An output name that is not an identifier, is a keyword or is reserved raises ValueError that starts with "Step 'x':" and says what is wrong, and registers nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
-        python_step(_split, inputs={}, produces={product: "a.csv"}, registry=reg, name="x")
+        python_step(_split, inputs={}, outputs={output: "a.csv"}, registry=reg, name="x")
 
     message = str(info.value)
-    assert message.startswith(f"Step 'x': name {product!r} in produces {problem}"), message
+    assert message.startswith(f"Step 'x': name {output!r} in outputs {problem}"), message
     _assert_unregistered(reg, "a.csv")
 
 
 def test_an_input_named_product_is_allowed_with_a_mapping(tmp_path: Path) -> None:
-    """With produces a mapping, an input may be named 'product': the step builds and its 'out' product holds the input's data."""
+    """With outputs a mapping, an input may be named 'product': the step builds and its 'out' output holds the input's data."""
     source = tmp_path / "src.parquet"
     _population().to_parquet(source)
     reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"src": source})
 
     task = python_step(
-        _copy_product, inputs={"product": "src"}, produces={"out": "out.csv"}, registry=reg
+        _copy_product, inputs={"product": "src"}, outputs={"out": "out.csv"}, registry=reg
     )
 
     assert outcomes(build([task], tmp_path / "state")) == {"out.csv": TaskOutcome.SUCCESS}
@@ -1051,7 +1075,7 @@ def test_a_later_key_that_is_a_root_input_registers_no_key(tmp_path: Path) -> No
         python_step(
             _split,
             inputs={},
-            produces={"population": "population.parquet", "deaths": "raw.csv"},
+            outputs={"population": "population.parquet", "deaths": "raw.csv"},
             registry=reg,
             name="split",
         )
@@ -1072,7 +1096,7 @@ def test_a_later_key_at_another_keys_path_registers_no_key(tmp_path: Path) -> No
         python_step(
             _split,
             inputs={},
-            produces={"population": "population.parquet", "deaths": "b/../a.csv"},
+            outputs={"population": "population.parquet", "deaths": "b/../a.csv"},
             registry=reg,
             name="split",
         )
@@ -1084,29 +1108,29 @@ def test_a_later_key_at_another_keys_path_registers_no_key(tmp_path: Path) -> No
     _assert_unregistered(reg, "population.parquet")
 
 
-def test_two_products_at_one_key_are_refused(tmp_path: Path) -> None:
-    """Two product names that map to one key raise ValueError naming both products and the path, and register nothing."""
+def test_two_outputs_at_one_key_are_refused(tmp_path: Path) -> None:
+    """Two output names that map to one key raise ValueError naming both outputs and the path, and register nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
         python_step(
             _split,
             inputs={},
-            produces={"population": "x.csv", "deaths": "x.csv"},
+            outputs={"population": "x.csv", "deaths": "x.csv"},
             registry=reg,
             name="split",
         )
 
     assert str(info.value) == (
-        "Step 'split': product 'population' (key 'x.csv') and product 'deaths' (key "
-        f"'x.csv') resolve to one path {str(reg.path_for('x.csv'))!r}; each product must "
+        "Step 'split': output 'population' (key 'x.csv') and output 'deaths' (key "
+        f"'x.csv') resolve to one path {str(reg.path_for('x.csv'))!r}; each output must "
         "be written to its own path."
     )
     _assert_unregistered(reg, "x.csv")
 
 
-def test_an_input_and_a_product_at_one_key_are_refused(tmp_path: Path) -> None:
-    """An input and a product with the same key raise ValueError naming both as one file, and register nothing."""
+def test_an_input_and_an_output_at_one_key_are_refused(tmp_path: Path) -> None:
+    """An input and an output with the same key raise ValueError naming both as one file, and register nothing."""
     reg = FileRegistry(tmp_path / "out", "run1")
     reg.register_output("p.csv")
 
@@ -1114,13 +1138,13 @@ def test_an_input_and_a_product_at_one_key_are_refused(tmp_path: Path) -> None:
         python_step(
             _copy_product,
             inputs={"population": "p.csv"},
-            produces={"p": "p.csv", "q": "q.csv"},
+            outputs={"p": "p.csv", "q": "q.csv"},
             registry=reg,
             name="split",
         )
 
     assert str(info.value) == (
-        "Step 'split': input 'population' (key 'p.csv') and product 'p' (key 'p.csv') are "
+        "Step 'split': input 'population' (key 'p.csv') and output 'p' (key 'p.csv') are "
         "one file; a step cannot read and write the same file."
     )
     _assert_unregistered(reg, "q.csv")
@@ -1142,7 +1166,7 @@ def test_a_mapping_run_compares_and_hashes_by_its_entries_and_is_frozen() -> Non
     assert step_run.suffix == {"population": ".parquet", "deaths": ".csv"}
 
 
-def test_a_single_product_run_hashes_as_before() -> None:
+def test_a_single_output_run_hashes_as_before() -> None:
     """A PythonStepRun with one suffix hashes as the tuple of its target and suffix, as the dataclass hash did."""
     assert hash(PythonStepRun(_constant, ".parquet")) == hash((_constant, ".parquet"))
 
@@ -1152,12 +1176,12 @@ def test_a_single_product_run_hashes_as_before() -> None:
     [
         pytest.param(
             {},
-            "A python step run needs at least one product suffix, got an empty mapping.",
+            "A python step run needs at least one output suffix, got an empty mapping.",
             id="empty",
         ),
         pytest.param(
             {"population": ".parquet", "deaths": ".txt"},
-            "Product 'deaths' has unsupported suffix '.txt'; supported suffixes are .csv, "
+            "Output 'deaths' has unsupported suffix '.txt'; supported suffixes are .csv, "
             ".parquet.",
             id="txt",
         ),

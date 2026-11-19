@@ -46,7 +46,7 @@ percentage as a float, as in ``Workflow 100.0% complete (2/2 tasks)``."""
 def test_a_two_step_chain_runs_through_jobmon_on_the_multiprocess_plugin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """End to end against the production server: the harness fixture built with jobmon=True and jobmon_cluster='multiprocess', with no fake, exits OK and writes both products, and the bound workflow ends with status 'D' for the workflow and for each task."""
+    """End to end against the production server: the harness fixture built with jobmon=True and jobmon_cluster='multiprocess', with no fake, exits OK and writes both outputs, and the bound workflow ends with status 'D' for the workflow and for each task."""
     fx = build_fixture(tmp_path)
     runs: list[JobmonRun] = []
     adapter_run = _jobmon_adapter.run
@@ -84,7 +84,7 @@ def test_a_three_step_chain_is_recorded_and_a_second_build_submits_nothing(
     last = python_step(
         harness._offset,
         inputs={"mid": "final.parquet"},
-        produces="last.parquet",
+        outputs="last.parquet",
         registry=fx.registry,
     )
     chain = [*fx.tasks, last]

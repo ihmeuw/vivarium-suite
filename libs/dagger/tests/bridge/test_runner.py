@@ -122,7 +122,7 @@ def _python_payload(task: str, cwd: Path, target: str) -> PythonPayload:
         "target": target,
         "sys_path": [],
         "suffix": ".parquet",
-        "kwargs": {"product": _tag(cwd / "out" / f"{task}.parquet")},
+        "kwargs": {"__output__": _tag(cwd / "out" / f"{task}.parquet")},
     }
 
 
@@ -204,12 +204,12 @@ def _identity(fd: int) -> tuple[int, int]:
     return status.st_dev, status.st_ino
 
 
-def test_runner_runs_the_harness_chain_with_products_equal_to_a_local_build(
+def test_runner_runs_the_harness_chain_with_outputs_equal_to_a_local_build(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     pytask_kwargs: Callable[[Task], dict[str, Any]],
 ) -> None:
-    """End to end: payload_for each harness task, run runner_command for each in topological order in a subprocess started from another directory; each exits 0 with success=True, and both products equal a local build()'s."""
+    """End to end: payload_for each harness task, run runner_command for each in topological order in a subprocess started from another directory; each exits 0 with success=True, and both outputs equal a local build()'s."""
     local = build_fixture(_mkdir(tmp_path / "local"))
     ran = dict.fromkeys(local.steps, TaskOutcome.SUCCESS)
     assert outcomes(build(local.tasks, local.state)) == ran
@@ -764,13 +764,13 @@ def test_a_successful_result_has_no_exception_fields_and_a_duration(tmp_path: Pa
 
 
 def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
-    """A python payload whose input and product path tags are relative, run by a runner started in another directory, reads its input from and writes its product under the payload's cwd, with success=True."""
+    """A python payload whose input and output path tags are relative, run by a runner started in another directory, reads its input from and writes its output under the payload's cwd, with success=True."""
     step_cwd = _mkdir(tmp_path / "step_cwd")
     pd.DataFrame({"n": [1, 2, 3]}).to_parquet(step_cwd / "raw.parquet")
     payload = _python_payload("relative_step", step_cwd, "vivarium.dagger.harness:_double")
     payload["kwargs"] = {
         "raw": _tag(Path("raw.parquet")),
-        "product": _tag(Path("out", "mid.parquet")),
+        "__output__": _tag(Path("out", "mid.parquet")),
     }
 
     process, result = _run_step(tmp_path, payload)
@@ -797,7 +797,7 @@ def _split_payload(cwd: Path, target: str) -> PythonPayload:
     }
 
 
-def test_runner_saves_each_product_of_a_python_step_with_several_products(
+def test_runner_saves_each_output_of_a_python_step_with_several_outputs(
     tmp_path: Path,
 ) -> None:
     """main() on a python payload whose suffix maps 'population' to '.parquet' and 'deaths' to '.csv' returns 0, writes population.parquet as Parquet and deaths.csv as CSV, and records success=True."""
@@ -814,10 +814,10 @@ def test_runner_saves_each_product_of_a_python_step_with_several_products(
     assert pd.read_csv(step_cwd / "out" / "deaths.csv")["n"].tolist() == [1, 2, 3]
 
 
-def test_runner_records_a_dict_missing_a_product_as_a_failure_naming_it(
+def test_runner_records_a_dict_missing_an_output_as_a_failure_naming_it(
     tmp_path: Path,
 ) -> None:
-    """main() on a python payload with several products whose target leaves out 'deaths' returns 1, records success=False with a ValueError that names the target and 'deaths', and writes no product."""
+    """main() on a python payload with several outputs whose target leaves out 'deaths' returns 1, records success=False with a ValueError that names the target and 'deaths', and writes no output."""
     step_cwd = _mkdir(tmp_path / "step_cwd")
     target = target_reference(step_targets.split_frames_without_deaths)
     payload = _write_payload(tmp_path / "step.payload.json", _split_payload(step_cwd, target))
@@ -830,7 +830,7 @@ def test_runner_records_a_dict_missing_a_product_as_a_failure_naming_it(
     assert result["exc_type"] is not None and result["exc_type"].endswith("ValueError")
     assert result["exc_message"] == (
         "Python step target split_frames_without_deaths returned a dict whose keys do not "
-        "match its product names: the product 'deaths' is missing. The product names are "
+        "match its output names: the output 'deaths' is missing. The output names are "
         "'deaths' and 'population'."
     )
     assert not (step_cwd / "out" / "population.parquet").exists()
@@ -945,7 +945,7 @@ def _observed(path: Path) -> list[str]:
 def test_runner_imports_a_target_from_the_payloads_sys_path_without_pythonpath(
     tmp_path: Path,
 ) -> None:
-    """A runner subprocess whose PYTHONPATH lacks a module's directory runs a python payload naming a target in that module, with sys_path holding the directory, writes a successful result and the product."""
+    """A runner subprocess whose PYTHONPATH lacks a module's directory runs a python payload naming a target in that module, with sys_path holding the directory, writes a successful result and the output."""
     modules = tmp_path / "modules"
     name = _sys_path_module(modules, 1, tmp_path / "observed.json")
     assert str(modules) not in _subprocess_env()["PYTHONPATH"].split(os.pathsep)

@@ -31,7 +31,7 @@ from vivarium.dagger.harness import (
 )
 
 _SAME_OUTPUT = "There are some tasks which produce the same output"
-"""The start of pytask's message when two tasks claim one product."""
+"""The start of pytask's message when two tasks claim one output."""
 
 
 def _increment(source: Path) -> pd.DataFrame:
@@ -82,7 +82,7 @@ def _report_step(fixture: Fixture) -> Task:
     return python_step(
         _increment,
         inputs={"source": "final.parquet"},
-        produces="report.parquet",
+        outputs="report.parquet",
         registry=fixture.registry,
     )
 
@@ -92,7 +92,7 @@ def _side_step(fixture: Fixture) -> Task:
     return python_step(
         _increment,
         inputs={"source": "raw"},
-        produces="side.parquet",
+        outputs="side.parquet",
         registry=fixture.registry,
     )
 
@@ -100,24 +100,24 @@ def _side_step(fixture: Fixture) -> Task:
 def _failing_pipeline(tmp_path: Path) -> Pipeline:
     """Return a raising step with two descendants and one independent step as a pipeline."""
     p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
-    p.add_python_step(_explode, inputs={}, produces="broken.parquet")
+    p.add_python_step(_explode, inputs={}, outputs="broken.parquet")
     p.add_python_step(
-        _increment, inputs={"source": "broken.parquet"}, produces="child.parquet"
+        _increment, inputs={"source": "broken.parquet"}, outputs="child.parquet"
     )
     p.add_python_step(
-        _increment, inputs={"source": "child.parquet"}, produces="grandchild.parquet"
+        _increment, inputs={"source": "child.parquet"}, outputs="grandchild.parquet"
     )
-    p.add_python_step(_constant, inputs={}, produces="independent.parquet")
+    p.add_python_step(_constant, inputs={}, outputs="independent.parquet")
     return p
 
 
 def _product(pipeline: Pipeline, key: str) -> Path:
-    """Return the path of the product ``key`` of a step added with a step method."""
+    """Return the path of the output ``key`` of a step added with a step method."""
     return pipeline.output_root / pipeline.run_name / key
 
 
 def _double_claimed(tmp_path: Path) -> _PipelineSnapshot:
-    """Return a snapshot whose two command steps claim one product file.
+    """Return a snapshot whose two command steps claim one output file.
 
     A Pipeline refuses the second step when it is added, so only a snapshot made directly
     reaches the private verbs with this fault.
@@ -229,7 +229,7 @@ def test_run_only_selects_exactly_so_a_parquet_does_not_run_data_parquet(
     """With steps 'a.parquet' and 'data.parquet', only=['a.parquet'] never runs data.parquet."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
-        python_step(_constant, inputs={}, produces=key, registry=registry)
+        python_step(_constant, inputs={}, outputs=key, registry=registry)
         for key in ("a.parquet", "data.parquet")
     ]
     pipeline = pipeline_of(tasks, tmp_path / "state")
@@ -389,7 +389,7 @@ def test_step_failed_outcomes_show_the_failure_and_skip_its_descendants(
 def test_an_independent_step_still_completes_when_another_step_fails(
     tmp_path: Path,
 ) -> None:
-    """A step on an independent branch reports SUCCESS in StepFailed.outcomes and writes its product."""
+    """A step on an independent branch reports SUCCESS in StepFailed.outcomes and writes its output."""
     pipeline = _failing_pipeline(tmp_path)
 
     with pytest.raises(StepFailed) as info:
@@ -406,9 +406,9 @@ def test_two_failing_steps_are_both_reported_and_the_first_is_the_cause(
     """Two independent failures both appear in StepFailed.failures; __cause__ is the first in report order."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
-        python_step(_explode, inputs={}, produces="first.parquet", registry=registry),
+        python_step(_explode, inputs={}, outputs="first.parquet", registry=registry),
         python_step(
-            _explode_differently, inputs={}, produces="second.parquet", registry=registry
+            _explode_differently, inputs={}, outputs="second.parquet", registry=registry
         ),
     ]
 
@@ -544,14 +544,14 @@ def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> Non
     pipeline = Pipeline(
         tmp_path / "out", "run1", root_inputs=fixture.inputs, state=fixture.state
     )
-    pipeline.add_python_step(_increment, inputs={"source": "raw"}, produces="mid.parquet")
+    pipeline.add_python_step(_increment, inputs={"source": "raw"}, outputs="mid.parquet")
     pipeline.add_python_step(
-        _increment, inputs={"source": "mid.parquet"}, produces="final.parquet"
+        _increment, inputs={"source": "mid.parquet"}, outputs="final.parquet"
     )
     pipeline.add_command_step(
         "cp {src} {dst}",
         inputs={"src": "raw"},
-        produces={"dst": "raw_copy.parquet"},
+        outputs={"dst": "raw_copy.parquet"},
         name="copy",
     )
 
@@ -574,7 +574,7 @@ def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> Non
 
 
 def _split() -> dict[str, pd.DataFrame]:
-    """Return a population table and a deaths table by product name."""
+    """Return a population table and a deaths table by output name."""
     return {
         "population": pd.DataFrame({"n": [10, 20]}),
         "deaths": pd.DataFrame({"n": [1, 2]}),
@@ -586,18 +586,18 @@ def _read_csv(source: Path) -> pd.DataFrame:
     return pd.read_csv(source)
 
 
-def test_preview_names_each_product_of_a_python_step_with_several_products(
+def test_preview_names_each_output_of_a_python_step_with_several_outputs(
     tmp_path: Path,
 ) -> None:
-    """Before the first run, preview names both products of a python step with several products by file key; after a run, deleting deaths.csv makes preview name "file 'deaths.csv'" for that step, and its consumer cascades."""
+    """Before the first run, preview names both outputs of a python step with several outputs by file key; after a run, deleting deaths.csv makes preview name "file 'deaths.csv'" for that step, and its consumer cascades."""
     pipeline = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
     pipeline.add_python_step(
         _split,
         inputs={},
-        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        outputs={"population": "population.parquet", "deaths": "deaths.csv"},
         name="split",
     )
-    pipeline.add_python_step(_read_csv, inputs={"source": "deaths.csv"}, produces="copy.csv")
+    pipeline.add_python_step(_read_csv, inputs={"source": "deaths.csv"}, outputs="copy.csv")
 
     first = preview(pipeline)
 
@@ -752,7 +752,7 @@ def test_run_force_with_an_unreadable_lockfile_raises_pipeline_error(
 def test_an_interrupt_raised_in_a_step_propagates_as_itself(tmp_path: Path) -> None:
     """A python_step target that raises KeyboardInterrupt makes run() raise KeyboardInterrupt, not StepFailed."""
     registry = FileRegistry(tmp_path / "out", "run1")
-    task = python_step(_interrupt, inputs={}, produces="stop.parquet", registry=registry)
+    task = python_step(_interrupt, inputs={}, outputs="stop.parquet", registry=registry)
 
     with pytest.raises(KeyboardInterrupt):
         run(pipeline_of([task], tmp_path / "state"))
@@ -772,7 +772,7 @@ def test_pipeline_error_carries_pytasks_exit_code_when_pytask_stops(tmp_path: Pa
 
 
 def test_pipeline_error_exit_code_names_a_planning_failure(tmp_path: Path) -> None:
-    """When two hand-built tasks claim one product, _run and _preview raise PipelineError whose exit_code is ExitCode.DAG_FAILED."""
+    """When two hand-built tasks claim one output, _run and _preview raise PipelineError whose exit_code is ExitCode.DAG_FAILED."""
     errors = _errors_from_snapshot(_double_claimed(tmp_path))
 
     for verb, error in errors.items():
@@ -830,7 +830,7 @@ def _notebook_pipeline(
         source,
         executed=_EXECUTED_KEY,
         env=env,
-        produces={"summary_path": _SUMMARY_KEY},
+        outputs={"summary_path": _SUMMARY_KEY},
         name="summarize",
     )
     return p
@@ -963,10 +963,10 @@ def test_an_error_left_by_an_earlier_run_is_not_reported_as_this_runs(tmp_path: 
 
 
 @pytest.mark.usefixtures("jupyter_dirs")
-def test_a_notebook_step_that_does_not_write_a_product_keeps_the_generic_description(
+def test_a_notebook_step_that_does_not_write_an_output_keeps_the_generic_description(
     tmp_path: Path,
 ) -> None:
-    """A notebook that finishes without writing a declared product makes StepFailed's line give pytask's NodeNotFoundError type and message, as before."""
+    """A notebook that finishes without writing a declared output makes StepFailed's line give pytask's NodeNotFoundError type and message, as before."""
     pipeline = _notebook_pipeline(tmp_path, body="pass")
 
     error = _step_failed(pipeline)
@@ -1010,9 +1010,7 @@ def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_messa
 ) -> None:
     """A python_step whose own code raises CalledProcessError is described as 'CalledProcessError: <its message>', with its command, since that command is the user's own."""
     registry = FileRegistry(tmp_path / "out", "run1")
-    task = python_step(
-        _run_own_command, inputs={}, produces="tool.parquet", registry=registry
-    )
+    task = python_step(_run_own_command, inputs={}, outputs="tool.parquet", registry=registry)
 
     error = _step_failed(pipeline_of([task], tmp_path / "state"))
 
@@ -1026,7 +1024,7 @@ def test_a_python_step_that_raises_called_process_error_keeps_its_type_and_messa
 def test_a_python_step_failure_is_still_described_by_type_and_message(tmp_path: Path) -> None:
     """A python_step that raises KeyError('no_such_column') is still described as "KeyError: 'no_such_column'"."""
     registry = FileRegistry(tmp_path / "out", "run1")
-    task = python_step(_missing_column, inputs={}, produces="read.parquet", registry=registry)
+    task = python_step(_missing_column, inputs={}, outputs="read.parquet", registry=registry)
 
     error = _step_failed(pipeline_of([task], tmp_path / "state"))
 
@@ -1059,7 +1057,7 @@ def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> 
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         _command_step(tmp_path, "shout", "exit 3"),
-        python_step(_explode, inputs={}, produces="broken.parquet", registry=registry),
+        python_step(_explode, inputs={}, outputs="broken.parquet", registry=registry),
     ]
     expected = {
         "shout": f"Step 'shout' failed: the command exited with status 3; {_REPORT}",
@@ -1193,7 +1191,7 @@ def _exiting(tmp_path: Path, target: Callable[[], pd.DataFrame]) -> Pipeline:
     """Return a pipeline of one python step 'leave' that runs ``target``."""
     registry = FileRegistry(tmp_path / "out", "run1")
     task = python_step(
-        target, inputs={}, produces="leave.parquet", registry=registry, name="leave"
+        target, inputs={}, outputs="leave.parquet", registry=registry, name="leave"
     )
     return pipeline_of([task], tmp_path / "state")
 
@@ -1262,25 +1260,25 @@ def test_step_exited_is_caught_by_an_except_system_exit_clause(tmp_path: Path) -
 
 
 def _write_first(first: Path) -> None:
-    """Write the first step's product."""
+    """Write the first step's output."""
     first.write_text("first")
 
 
 def _read_and_leave(first: Path, leave: Path) -> None:
-    """Read the first step's product, then end the process with code 3."""
+    """Read the first step's output, then end the process with code 3."""
     first.read_text()
     sys.exit(3)
 
 
 def _read_leave(leave: Path, after: Path) -> None:
-    """Read the exiting step's product and write the last product."""
+    """Read the exiting step's output and write the last output."""
     after.write_text(leave.read_text())
 
 
 def test_a_middle_step_that_exits_stops_the_build_after_its_upstream_step(
     tmp_path: Path,
 ) -> None:
-    """In a chain first -> leave -> after where 'leave' calls sys.exit(3), run() raises StepExited for 'leave' with code 3; 'first' wrote its product and 'after' did not."""
+    """In a chain first -> leave -> after where 'leave' calls sys.exit(3), run() raises StepExited for 'leave' with code 3; 'first' wrote its output and 'after' did not."""
     out = tmp_path / "out"
     first, leave, after = out / "first.txt", out / "leave.txt", out / "after.txt"
 

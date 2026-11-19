@@ -64,7 +64,7 @@ def make_table():
 
 def pipeline():
     registry = FileRegistry(HERE / "out", "run1")
-    task = python_step(make_table, inputs={}, produces="table.parquet", registry=registry)
+    task = python_step(make_table, inputs={}, outputs="table.parquet", registry=registry)
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     p.add_task(task)
     return p
@@ -201,7 +201,7 @@ def test_text_after_the_last_colon_that_is_not_an_identifier_is_part_of_the_path
 
 
 def test_load_pipeline_builds_nothing_and_writes_no_state(tmp_path: Path) -> None:
-    """After loading a definition whose steps would write products, the root has no pytask.lock, no .pytask directory and no pytask.toml, and no product file exists."""
+    """After loading a definition whose steps would write outputs, the root has no pytask.lock, no .pytask directory and no pytask.toml, and no output file exists."""
     path = _write(tmp_path, _PRODUCING)
 
     pipeline = freeze(load_pipeline(str(path)))
@@ -391,7 +391,7 @@ def make_table():
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1")
-    p.add_python_step(make_table, inputs={}, produces="table.parquet", name="table")
+    p.add_python_step(make_table, inputs={}, outputs="table.parquet", name="table")
     return p
 """
 """A definition that makes a Pipeline, adds one step named 'table', and returns it."""

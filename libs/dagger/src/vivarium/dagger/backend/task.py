@@ -22,7 +22,7 @@ class Task:
     inputs: Mapping[str, PNode]
     """Dependency nodes keyed by name."""
     outputs: Mapping[str, PNode]
-    """Product nodes keyed by name."""
+    """Output nodes keyed by name."""
     resources: dict[str, Any]
     """Compute resources following Jobmon's ``compute_resources``."""
     env: str | None

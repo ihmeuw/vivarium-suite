@@ -7,9 +7,9 @@ command-line tool or a script; otherwise use
 :func:`~vivarium.dagger.frontend.python_step.python_step`, which always runs in the
 pipeline's own process.
 
-The step's inputs and products are wired through the shared
+The step's inputs and outputs are wired through the shared
 :class:`~vivarium.dagger.backend.wiring.FileRegistry`, so downstream steps get real
-edges to its products, and each one reaches the command as its absolute path through a
+edges to its outputs, and each one reaches the command as its absolute path through a
 named ``{placeholder}``. With an ``env``,
 :func:`~vivarium.dagger.backend.build.run_command` puts that environment's ``bin``
 directories first on ``PATH`` for the whole command.
@@ -38,7 +38,7 @@ from vivarium.dagger.frontend.notebook_step import _RESERVED_NAMES
 def command_step(
     command: str,
     *,
-    produces: Mapping[str, FileKey],
+    outputs: Mapping[str, FileKey],
     registry: FileRegistry,
     inputs: Mapping[str, FileKey] | None = None,
     env: str | None = None,
@@ -48,11 +48,11 @@ def command_step(
     """Compile the shell ``command`` into one task wired through ``registry``.
 
     Each ``{name}`` placeholder in ``command`` is replaced by the absolute path of the
-    input or product of that name, quoted for the shell. Do not put quotes around a
+    input or output of that name, quoted for the shell. Do not put quotes around a
     placeholder. Write ``{{`` and ``}}`` for a literal brace, as with
     :meth:`str.format`: a shell variable ``${VAR}`` is written ``${{VAR}}``, and the
     ``awk`` program ``'{print $1}'`` is written ``'{{print $1}}'``. The command does not
-    have to use every input and product name.
+    have to use every input and output name.
 
     The command runs under ``/bin/sh`` (POSIX sh, which is dash on Ubuntu), not bash,
     both locally and on a compute node. Bash syntax such as ``[[ ]]``, ``source``,
@@ -61,19 +61,19 @@ def command_step(
     put the work in a script. The command runs in the working directory of the
     ``dagger`` process.
 
-    Before the command runs, the parent directory of every product is created; if that
-    fails, the command does not run. Products that an earlier run left are not removed,
-    so the command must write every product on every run: a product left by an earlier
+    Before the command runs, the parent directory of every output is created; if that
+    fails, the command does not run. Outputs that an earlier run left are not removed,
+    so the command must write every output on every run: an output left by an earlier
     run counts as written.
 
     Parameters
     ----------
     command
-        The shell command, with a ``{name}`` placeholder for each input or product path
+        The shell command, with a ``{name}`` placeholder for each input or output path
         it uses.
-    produces
+    outputs
         Maps placeholder names to the file keys of the files the command writes. Each
-        key is registered with ``registry`` as a product of the step. It must have at
+        key is registered with ``registry`` as an output of the step. It must have at
         least one entry, and each key must resolve to its own path.
     registry
         The producer/consumer registry that resolves keys to shared nodes.
@@ -96,16 +96,16 @@ def command_step(
         Jobmon-shaped compute resources, carried on the task for the cluster bridge to
         read later.
     name
-        The step's name, which becomes the task name. Defaults to the ``produces`` key
-        when ``produces`` has one entry, and is required when it has more than one.
+        The step's name, which becomes the task name. Defaults to the ``outputs`` key
+        when ``outputs`` has one entry, and is required when it has more than one.
 
     Returns
     -------
         One :class:`~vivarium.dagger.backend.task.Task` whose ``run`` is the command with
-        its placeholders replaced, preceded by the creation of the product directories;
+        its placeholders replaced, preceded by the creation of the output directories;
         whose ``env`` is ``env``; whose inputs are the resolved input nodes (the
         producing step's own node for a produced key, or a node at the file's path for a
-        root input) and whose outputs are the registry's nodes for the ``produces`` keys,
+        root input) and whose outputs are the registry's nodes for the ``outputs`` keys,
         each keyed by its placeholder name; and whose resources are ``resources``, or
         ``{}`` when it is ``None``. Equal arguments give an identical command, whatever
         the order of the mappings.
@@ -113,24 +113,24 @@ def command_step(
     Raises
     ------
     vivarium.dagger.backend.wiring.WiringError
-        If an input key resolves to no producer and no root input, or a ``produces`` key
+        If an input key resolves to no producer and no root input, or an ``outputs`` key
         is a declared root input or resolves to the path of a different key that is
-        already registered (another step's product or a root input). The message starts
+        already registered (another step's output or a root input). The message starts
         with ``Step '<name>':``, followed by the registry's message, which names the
         file key. The same key claimed by two steps is left for the build to reject.
     ValueError
         If ``command`` is empty or only whitespace; ``name`` or ``env`` is given and
-        empty; ``produces`` is empty; ``name`` is ``None`` and ``produces`` has more than
-        one entry; a name in ``inputs`` or ``produces`` is not a valid Python identifier,
+        empty; ``outputs`` is empty; ``name`` is ``None`` and ``outputs`` has more than
+        one entry; a name in ``inputs`` or ``outputs`` is not a valid Python identifier,
         is a Python keyword, is reserved (``__code_id__``, ``__command__``,
-        ``__executed__``, ``__notebook__``) or appears in both; two ``produces`` keys
-        resolve to one path (the message names both); an input and a product are one
-        file, by key or by resolved path (the message names both, with their keys);
-        a placeholder in ``command`` is not exactly an input or product name, as for an
-        unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute or an
-        index; or ``command`` has a single ``{`` or ``}`` that is not part of a
+        ``__executed__``, ``__notebook__``, ``__output__``) or appears in both; two
+        ``outputs`` keys resolve to one path (the message names both); an input and an
+        output are one file, by key or by resolved path (the message names both, with
+        their keys); a placeholder in ``command`` is not exactly an input or output name,
+        as for an unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute
+        or an index; or ``command`` has a single ``{`` or ``}`` that is not part of a
         placeholder. A placeholder message quotes the placeholder as written, lists the
-        input and product names in sorted order, suggests the closest name when one is
+        input and output names in sorted order, suggests the closest name when one is
         close, and says how to write a literal brace. The message for a single brace
         says that the command has a single ``{`` or ``}`` that is not part of a
         placeholder, lists the names and says how to write a literal brace. A ``{``
@@ -138,11 +138,11 @@ def command_step(
         placeholder follows it, as in ``sh { {script}``. A placeholder that cannot be
         parsed, such as ``{out!}`` or ``{out!rr}``, is not a single brace; its message
         lists the names and says how to write a literal brace. Each message starts with
-        ``Step '<name>':``, except that an empty ``name``, an empty ``produces`` with no
-        ``name``, and more than one product with no ``name`` start with
+        ``Step '<name>':``, except that an empty ``name``, an empty ``outputs`` with no
+        ``name``, and more than one output with no ``name`` start with
         ``command_step:``. Every one of these is raised before anything is registered.
     """
-    task_name = _step_name(produces, name, "command_step")
+    task_name = _step_name(outputs, name, "command_step")
     if not command.strip():
         raise ValueError(
             f"Step {task_name!r}: command must not be empty or only whitespace, "
@@ -152,13 +152,13 @@ def command_step(
         raise ValueError(
             f"Step {task_name!r}: env must be a non-empty string or None, got {env!r}."
         )
-    if not produces:
-        raise ValueError(_no_product(f"Step {task_name!r}"))
+    if not outputs:
+        raise ValueError(_no_output(f"Step {task_name!r}"))
     input_keys: dict[str, FileKey] = dict(inputs or {})
-    product_keys: dict[str, FileKey] = dict(produces)
-    _check_names(task_name, input_keys, product_keys)
-    segments = _parse_command(task_name, command, sorted({*input_keys, *product_keys}))
-    _check_shared_keys(task_name, input_keys, product_keys)
+    output_keys: dict[str, FileKey] = dict(outputs)
+    _check_names(task_name, input_keys, output_keys)
+    segments = _parse_command(task_name, command, sorted({*input_keys, *output_keys}))
+    _check_shared_keys(task_name, input_keys, output_keys)
 
     try:
         dependencies = {
@@ -166,54 +166,52 @@ def command_step(
         }
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
-    product_paths = {param: registry.path_for(key) for param, key in product_keys.items()}
-    _check_paths(task_name, input_keys, dependencies, product_keys, product_paths)
+    output_paths = {param: registry.path_for(key) for param, key in output_keys.items()}
+    _check_paths(task_name, input_keys, dependencies, output_keys, output_paths)
     try:
-        for key in product_keys.values():
+        for key in output_keys.values():
             registry.check_output(key)
-        products = {
-            param: registry.register_output(key) for param, key in product_keys.items()
-        }
+        nodes = {param: registry.register_output(key) for param, key in output_keys.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
 
     paths = {param: Path(str(node.path)) for param, node in dependencies.items()}
-    paths.update(product_paths)
+    paths.update(output_paths)
     # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
     # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
-        run=_shell_command(segments, paths, product_paths.values()),
+        run=_shell_command(segments, paths, output_paths.values()),
         inputs=dependencies,
-        outputs=products,
+        outputs=nodes,
         resources={} if resources is None else resources,
         env=env,
     )
 
 
-def _no_product(prefix: str) -> str:
-    """Return the message for a step with no product, starting with ``prefix``."""
+def _no_output(prefix: str) -> str:
+    """Return the message for a step with no output, starting with ``prefix``."""
     return (
-        f"{prefix}: produces must have at least one entry; a step with no product cannot "
+        f"{prefix}: outputs must have at least one entry; a step with no output cannot "
         "be consumed and cannot be skipped."
     )
 
 
-def _step_name(produces: Mapping[str, FileKey], name: str | None, caller: str) -> str:
+def _step_name(outputs: Mapping[str, FileKey], name: str | None, caller: str) -> str:
     """Return the step's name; raise the errors that have no name to report, as ``caller``."""
     if name is not None:
         if not name:
             raise ValueError(f"{caller}: name must be a non-empty string, got {name!r}.")
         return name
-    if not produces:
-        raise ValueError(_no_product(caller))
-    if len(produces) > 1:
+    if not outputs:
+        raise ValueError(_no_output(caller))
+    if len(outputs) > 1:
         raise ValueError(
-            f"{caller}: produces has more than one entry, with keys "
-            f"{_quoted(sorted(produces.values()))}, so the step has no default name; "
+            f"{caller}: the outputs mapping has more than one entry, with keys "
+            f"{_quoted(sorted(outputs.values()))}, so the step has no default name; "
             "pass name= to name it."
         )
-    return next(iter(produces.values()))
+    return next(iter(outputs.values()))
 
 
 def _quoted(names: Sequence[str]) -> str:
@@ -225,26 +223,34 @@ def _quoted(names: Sequence[str]) -> str:
 
 
 def _check_names(
-    task_name: str, inputs: Mapping[str, FileKey], produces: Mapping[str, FileKey]
+    task_name: str, inputs: Mapping[str, FileKey], outputs: Mapping[str, FileKey]
 ) -> None:
     """Reject a name that is not an identifier, is a keyword or reserved, or is used twice."""
-    for group, names in (("inputs", inputs), ("produces", produces)):
+    for group, names in (("inputs", inputs), ("outputs", outputs)):
         for name in names:
             if not name.isidentifier():
                 problem = "is not a valid Python identifier"
             elif keyword.iskeyword(name):
                 problem = "is a Python keyword"
             elif name in _RESERVED_NAMES:
-                reserved = ", ".join(repr(each) for each in sorted(_RESERVED_NAMES))
-                problem = f"is reserved; the reserved names are {reserved}"
-            elif group == "produces" and name in inputs:
+                raise _reserved_name(task_name, name, group)
+            elif group == "outputs" and name in inputs:
                 problem = (
                     "also appears in inputs; a name may appear in only one of inputs "
-                    "and produces"
+                    "and outputs"
                 )
             else:
                 continue
             raise ValueError(f"Step {task_name!r}: name {name!r} in {group} {problem}.")
+
+
+def _reserved_name(task_name: str, name: str, group: str) -> ValueError:
+    """Return the error for a reserved ``name`` in ``group``."""
+    reserved = ", ".join(repr(each) for each in sorted(_RESERVED_NAMES))
+    return ValueError(
+        f"Step {task_name!r}: name {name!r} in {group} is reserved; the reserved names "
+        f"are {reserved}."
+    )
 
 
 def _names_and_hint(names: Sequence[str], suggestion: str = "") -> str:
@@ -308,11 +314,11 @@ def _placeholder_text(field: str, spec: str | None, conversion: str | None) -> s
 def _placeholder_error(step: str, written: str, field: str, names: Sequence[str]) -> str:
     """Return the message for a placeholder that is not exactly a valid name."""
     if field.isidentifier() and written == f"{{{field}}}":
-        problem = f"names {written}, which is not an input or product of the step"
+        problem = f"names {written}, which is not an input or output of the step"
     else:
         problem = (
             f"has the placeholder {written}, but a placeholder must be exactly the name of "
-            "an input or product, with no conversion, format spec, attribute or index"
+            "an input or output, with no conversion, format spec, attribute or index"
         )
     close = difflib.get_close_matches(field.split(".")[0].split("[")[0], names, n=1)
     suggestion = f" Did you mean {close[0]!r}?" if close else ""
@@ -320,15 +326,15 @@ def _placeholder_error(step: str, written: str, field: str, names: Sequence[str]
 
 
 def _check_shared_keys(
-    task_name: str, inputs: Mapping[str, FileKey], produces: Mapping[str, FileKey]
+    task_name: str, inputs: Mapping[str, FileKey], outputs: Mapping[str, FileKey]
 ) -> None:
-    """Reject an input and a product that name the same file key."""
+    """Reject an input and an output that name the same file key."""
     pairs = [
-        f"input {name!r} (key {key!r}) and product {product!r} (key {product_key!r}) are "
+        f"input {name!r} (key {key!r}) and output {output!r} (key {output_key!r}) are "
         "one file"
         for name, key in inputs.items()
-        for product, product_key in produces.items()
-        if key == product_key
+        for output, output_key in outputs.items()
+        if key == output_key
     ]
     if pairs:
         raise ValueError(_same_file_message(task_name, pairs))
@@ -338,17 +344,17 @@ def _check_paths(
     task_name: str,
     inputs: Mapping[str, FileKey],
     dependencies: Mapping[str, PathNode],
-    produces: Mapping[str, FileKey],
-    product_paths: Mapping[str, Path],
+    outputs: Mapping[str, FileKey],
+    output_paths: Mapping[str, Path],
 ) -> None:
-    """Reject two products at one path, or an input at a product's path."""
+    """Reject two outputs at one path, or an input at an output's path."""
     claimed: dict[Path, str] = {}
-    for product, path in product_paths.items():
-        label = f"product {product!r} (key {produces[product]!r})"
+    for output, path in output_paths.items():
+        label = f"output {output!r} (key {outputs[output]!r})"
         if path in claimed:
             raise ValueError(
                 f"Step {task_name!r}: {claimed[path]} and {label} resolve to one path "
-                f"{str(path)!r}; each product must be written to its own path."
+                f"{str(path)!r}; each output must be written to its own path."
             )
         claimed[path] = label
     pairs: list[str] = []
@@ -364,7 +370,7 @@ def _check_paths(
 
 
 def _same_file_message(task_name: str, pairs: Iterable[str]) -> str:
-    """Return the message for inputs and products that are one file."""
+    """Return the message for inputs and outputs that are one file."""
     return (
         f"Step {task_name!r}: {'; '.join(pairs)}; a step cannot read and write the same "
         "file."
@@ -374,14 +380,14 @@ def _same_file_message(task_name: str, pairs: Iterable[str]) -> str:
 def _shell_command(
     segments: Iterable[tuple[str, str | None]],
     paths: Mapping[str, Path],
-    products: Iterable[Path],
+    outputs: Iterable[Path],
 ) -> str:
-    """Return the command that makes the product directories, then runs the author's."""
+    """Return the command that makes the output directories, then runs the author's."""
     body = "".join(
         literal + ("" if field is None else shlex.quote(str(paths[field])))
         for literal, field in segments
     )
-    directories = sorted({str(path.parent) for path in products})
+    directories = sorted({str(path.parent) for path in outputs})
     # The author's text follows on its own line, unwrapped, so exit, cd, a trailing
     # comment and a heredoc behave as written.
     return f"mkdir -p {shlex.join(directories)} || exit $?\n{body}"

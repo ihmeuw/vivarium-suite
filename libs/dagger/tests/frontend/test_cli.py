@@ -66,7 +66,7 @@ def plus_one(path):
 def step(target, name, registry, **sources):
     inputs = {param: f"{source}.parquet" for param, source in sources.items()}
     return python_step(
-        target, inputs=inputs, produces=f"{name}.parquet", registry=registry, name=name
+        target, inputs=inputs, outputs=f"{name}.parquet", registry=registry, name=name
     )
 
 
@@ -74,7 +74,7 @@ def stable(tasks):
     return [with_stable_code_id(t) for t in tasks]
 """
 """The start of every definition. ``log`` records that a step body ran, ``step`` wires step
-'<name>' to produce '<name>.parquet' from its sources' products, and ``stable`` gives each
+'<name>' to produce '<name>.parquet' from its sources' outputs, and ``stable`` gives each
 step a fixed code identity so that a current step is skipped."""
 
 _CHAIN = (
@@ -117,9 +117,9 @@ _KEYED_CHAIN = _CHAIN.replace(
     _CHAIN[_CHAIN.index("def pipeline():") :],
     """def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.add_python_step(make_a, inputs={}, produces="a.parquet", name="a")
-    p.add_python_step(make_b, inputs={"source": "a.parquet"}, produces="b.parquet", name="b")
-    p.add_python_step(make_c, inputs={"source": "b.parquet"}, produces="c.parquet", name="c")
+    p.add_python_step(make_a, inputs={}, outputs="a.parquet", name="a")
+    p.add_python_step(make_b, inputs={"source": "a.parquet"}, outputs="b.parquet", name="b")
+    p.add_python_step(make_c, inputs={"source": "b.parquet"}, outputs="c.parquet", name="c")
     return p
 """,
 )
@@ -315,8 +315,8 @@ def make_b(x):
 
 def pipeline():
     reg = FileRegistry(HERE / "out", "run1")
-    a = python_step(make_a, inputs={}, produces="population.parquet", registry=reg)
-    b = python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", registry=reg)
+    a = python_step(make_a, inputs={}, outputs="population.parquet", registry=reg)
+    b = python_step(make_b, inputs={"x": "populaton.parquet"}, outputs="b.csv", registry=reg)
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     p.add_task(a)
     p.add_task(b)
@@ -334,8 +334,8 @@ def make_shared():
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.add_python_step(make_shared, inputs={}, produces="shared.parquet", name=FIRST)
-    p.add_python_step(make_shared, inputs={}, produces="shared.parquet", name=SECOND)
+    p.add_python_step(make_shared, inputs={}, outputs="shared.parquet", name=FIRST)
+    p.add_python_step(make_shared, inputs={}, outputs="shared.parquet", name=SECOND)
     return p
 """
 """The end of a definition whose steps FIRST and SECOND both produce 'shared.parquet'."""
@@ -687,7 +687,7 @@ def _calls(directory: Path) -> list[str]:
 
 
 def _product(directory: Path, step: str) -> Path:
-    """Return the path of ``step``'s product for a definition in ``directory``."""
+    """Return the path of ``step``'s output for a definition in ``directory``."""
     return directory / "out" / "run1" / f"{step}.parquet"
 
 
@@ -784,8 +784,8 @@ def test_the_installed_dagger_script_exit_status_can_gate_a_shell_chain(
 # dagger run
 
 
-def test_run_exits_zero_and_writes_every_product(tmp_path: Path) -> None:
-    """'dagger run -c def.py' on a three-step chain exits 0 and every step's product exists."""
+def test_run_exits_zero_and_writes_every_output(tmp_path: Path) -> None:
+    """'dagger run -c def.py' on a three-step chain exits 0 and every step's output exists."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("run", str(path))
@@ -795,7 +795,7 @@ def test_run_exits_zero_and_writes_every_product(tmp_path: Path) -> None:
 
 
 def test_run_until_runs_the_named_step_and_its_ancestors_only(tmp_path: Path) -> None:
-    """'dagger run -c def.py --until b' on the chain a -> b -> c exits 0, runs a and b, and leaves c's product unwritten."""
+    """'dagger run -c def.py --until b' on the chain a -> b -> c exits 0, runs a and b, and leaves c's output unwritten."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("run", str(path), "--until", "b")
@@ -943,8 +943,8 @@ def test_preview_prints_one_line_per_step_in_file_key_terms(tmp_path: Path) -> N
     assert str(tmp_path.resolve()) not in result.output
 
 
-def test_preview_writes_no_product_and_prints_no_pytask_output(tmp_path: Path) -> None:
-    """After 'dagger preview', no product exists and the output contains none of pytask's own output, such as its 'Start pytask session' banner or its table."""
+def test_preview_writes_no_output_and_prints_no_pytask_output(tmp_path: Path) -> None:
+    """After 'dagger preview', no output exists and the output contains none of pytask's own output, such as its 'Start pytask session' banner or its table."""
     path = _write_definition(tmp_path, _CHAIN)
 
     result = _invoke("preview", str(path))
@@ -1064,7 +1064,7 @@ def test_force_without_a_step_is_a_usage_error(tmp_path: Path) -> None:
 def test_an_unknown_step_exits_two_and_lists_the_valid_step_names(
     tmp_path: Path, command: str, hint: str
 ) -> None:
-    """An unknown step name given to run --until, preview --until or force exits 2 with click's usage error for '--until' or 'STEP...' carrying the verb's message, which lists every valid step name, and no pytask state or product is written."""
+    """An unknown step name given to run --until, preview --until or force exits 2 with click's usage error for '--until' or 'STEP...' carrying the verb's message, which lists every valid step name, and no pytask state or output is written."""
     path = _write_definition(tmp_path, _CHAIN)
     verb, *option = command.split()
 
@@ -1115,7 +1115,7 @@ def test_a_missing_producer_exits_two_naming_the_step_and_the_key(tmp_path: Path
 def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
     tmp_path: Path,
 ) -> None:
-    """Two python steps with different names and the same produces key exit 2 when the Pipeline refuses the second, with a message naming the second step, the file key and the first step, before any build."""
+    """Two python steps with different names and the same outputs key exit 2 when the Pipeline refuses the second, with a message naming the second step, the file key and the first step, before any build."""
     path = _write_definition(tmp_path, _double_claim("first", "second"))
 
     result = _invoke("run", str(path))
@@ -1126,10 +1126,10 @@ def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
     assert _calls(tmp_path) == []
 
 
-def test_the_same_produces_key_with_default_names_is_reported_as_a_double_claim(
+def test_the_same_outputs_key_with_default_names_is_reported_as_a_double_claim(
     tmp_path: Path,
 ) -> None:
-    """Two python steps with the same produces key and default names exit 2 with the Pipeline's message naming the key as already produced, not the message for a name already added or the backend's duplicate-task-name message."""
+    """Two python steps with the same outputs key and default names exit 2 with the Pipeline's message naming the key as already produced, not the message for a name already added or the backend's duplicate-task-name message."""
     path = _write_definition(tmp_path, _double_claim(None, None))
 
     result = _invoke("run", str(path))
@@ -1479,7 +1479,7 @@ def test_a_root_under_a_file_exits_two_naming_the_root(tmp_path: Path) -> None:
 def test_an_error_writing_pytasks_state_after_the_build_exits_one_naming_the_root(
     tmp_path: Path,
 ) -> None:
-    """When pytask cannot write its lockfile at the end of a build (a directory already sits at <root>/pytask.lock.tmp), 'dagger run' exits 1, not 2, the step's product exists, and stderr has 'Could not read or write the pipeline's state under <root>: ' with no traceback."""
+    """When pytask cannot write its lockfile at the end of a build (a directory already sits at <root>/pytask.lock.tmp), 'dagger run' exits 1, not 2, the step's output exists, and stderr has 'Could not read or write the pipeline's state under <root>: ' with no traceback."""
     path = _write_definition(tmp_path, _CHAIN)
     root = tmp_path.resolve() / "state"
     # pytask writes the lockfile to pytask.lock.tmp and then renames it, so a directory at
@@ -1761,13 +1761,13 @@ def pipeline():
         executed="executed/summarize.ipynb",
         registry=registry,
         env=ENV,
-        produces={"summary_path": "summary.csv"},
+        outputs={"summary_path": "summary.csv"},
         name="summarize",
     )
     report = python_step(
         read_summary,
         inputs={"summary": "summary.csv"},
-        produces="report.parquet",
+        outputs="report.parquet",
         registry=registry,
         name="report",
     )
@@ -1783,7 +1783,7 @@ _RAISES_KEY_ERROR = "{}['no_such_column']"
 """A notebook body that raises KeyError('no_such_column')."""
 
 _WRITES_SUMMARY = "from pathlib import Path\nPath(summary_path).write_text('n\\n1\\n')"
-"""A notebook body that writes the summary product."""
+"""A notebook body that writes the summary output."""
 
 
 def _notebook_definition(directory: Path, body: str, env: Path | None = None) -> Path:
@@ -1841,7 +1841,7 @@ def test_a_failing_notebooks_generated_command_is_in_pytasks_report_not_in_dagge
 
 @pytest.mark.usefixtures("jupyter_dirs")
 def test_a_failing_notebook_lists_its_downstream_step_as_not_run(tmp_path: Path) -> None:
-    """A python step that reads the failing notebook's product is listed on stderr as not run because an upstream step failed."""
+    """A python step that reads the failing notebook's output is listed on stderr as not run because an upstream step failed."""
     path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
 
     result = _invoke("run", str(path))
@@ -1902,7 +1902,7 @@ def test_the_installed_dagger_script_reports_a_failing_notebook_end_to_end(
 def test_an_operator_fixes_the_notebook_named_in_the_message_and_reruns(
     tmp_path: Path,
 ) -> None:
-    """Use case: after 'dagger run' reports a notebook's KeyError, editing that notebook to stop raising and running the same command again exits 0, and the notebook step and its downstream step both run and write their products."""
+    """Use case: after 'dagger run' reports a notebook's KeyError, editing that notebook to stop raising and running the same command again exits 0, and the notebook step and its downstream step both run and write their outputs."""
     path = _notebook_definition(tmp_path, _RAISES_KEY_ERROR)
     failed = _invoke("run", str(path))
     assert failed.exit_code == 1, _describe(failed)
@@ -1986,7 +1986,7 @@ def pipeline():
     tasks = [
         step(frame, "population", reg),
         step(plus_one, "adults", reg, path="population"),
-        python_step(plus_one, inputs=BAD, produces="s.csv", registry=reg, name="s"),
+        python_step(plus_one, inputs=BAD, outputs="s.csv", registry=reg, name="s"),
     ]
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
     for task in tasks:
@@ -2005,12 +2005,12 @@ NAME = "population"
 
 def pipeline():
     p = Pipeline(HERE / "out", "run1", state=HERE / "state")
-    p.add_python_step(frame, inputs={}, produces="a.parquet", name=NAME)
-    p.add_python_step(frame, inputs={}, produces="b.parquet", name=NAME)
+    p.add_python_step(frame, inputs={}, outputs="a.parquet", name=NAME)
+    p.add_python_step(frame, inputs={}, outputs="b.parquet", name=NAME)
     return p
 """
 )
-"""A definition that adds two steps with different products that are both named
+"""A definition that adds two steps with different outputs that are both named
 'population', so the Pipeline refuses the second."""
 
 _NAME_ADDED = (
@@ -2029,7 +2029,7 @@ def _shared_name_snapshot(tmp_path: Path) -> _PipelineSnapshot:
     """Return a snapshot, which a Pipeline would refuse, of two steps named 'population'."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
-        python_step(_frame, inputs={}, produces=key, registry=registry, name="population")
+        python_step(_frame, inputs={}, outputs=key, registry=registry, name="population")
         for key in ("a.parquet", "b.parquet")
     ]
     return _PipelineSnapshot(tasks, tmp_path / "state", registry)
@@ -2123,7 +2123,7 @@ def test_an_input_key_with_no_close_match_exits_two_listing_the_registered_keys(
 def test_two_steps_with_one_name_exit_two_with_the_name_and_how_to_tell_them_apart(
     tmp_path: Path,
 ) -> None:
-    """A definition that adds two steps with different products and the same name makes 'dagger run' and 'dagger preview' exit 2 with the Pipeline's message "Step 'population': a step named 'population' was already added to the pipeline; give each step a different name= to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
+    """A definition that adds two steps with different outputs and the same name makes 'dagger run' and 'dagger preview' exit 2 with the Pipeline's message "Step 'population': a step named 'population' was already added to the pipeline; give each step a different name= to tell them apart." on stderr, no "Task names must be unique", no "['", and nothing run."""
     path = _write_definition(tmp_path, _SHARED_NAME)
 
     for verb in ("run", "preview"):
@@ -2190,7 +2190,7 @@ def _definition_problem(call: Callable[[], object]) -> click.ClickException:
 def test_the_single_producer_check_names_the_key_and_both_steps(tmp_path: Path) -> None:
     """On a snapshot of two python steps 'first' and 'second' that produce 'shared.parquet' through one registry, the command's single-producer check raises a click error with exit status 2 and the message "Output 'shared.parquet' is produced by more than one step: 'first', 'second'."."""
     registry = FileRegistry(tmp_path / "out", "run1")
-    claim: dict[str, Any] = {"inputs": {}, "produces": "shared.parquet", "registry": registry}
+    claim: dict[str, Any] = {"inputs": {}, "outputs": "shared.parquet", "registry": registry}
     tasks = [python_step(_frame, name=name, **claim) for name in ("first", "second")]
     snapshot = _PipelineSnapshot(tasks, tmp_path / "state", registry)
 
@@ -2414,9 +2414,9 @@ def _imported_modules(definition: Path) -> dict[str, set[str]]:
 
 
 def test_the_example_definitions_use_pipeline_and_import_no_registry() -> None:
-    """Each of the pipeline, location inputs, command, simulation and several products example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
+    """Each of the pipeline, location inputs, command, simulation and several outputs example definitions imports Pipeline from vivarium.dagger.frontend, imports nothing from vivarium.dagger.backend, and neither imports nor names FileRegistry or passes registry=."""
     backend_parts = ["vivarium", "dagger", "backend"]
-    examples = ("pipeline", "location_inputs", "command", "simulation", "several_products")
+    examples = ("pipeline", "location_inputs", "command", "simulation", "several_outputs")
     for example in examples:
         definition = Path(__file__).parent / f"{example}_example" / "pipeline.py"
         imported = _imported_modules(definition)
@@ -2451,7 +2451,7 @@ def _copy_command_example(directory: Path) -> Path:
 
 
 def _example_product(directory: Path, key: str) -> Path:
-    """Return the path of product ``key`` of the command example copied to ``directory``."""
+    """Return the path of output ``key`` of the command example copied to ``directory``."""
     return directory / "output" / "example" / key
 
 
@@ -2469,7 +2469,7 @@ def test_the_command_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
 
 
 def test_the_command_example_previews_every_step_before_its_first_run(tmp_path: Path) -> None:
-    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/command_example exits 0, lists population, adults and summary as would-run in that order, and writes no product."""
+    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/command_example exits 0, lists population, adults and summary as would-run in that order, and writes no output."""
     definition = _copy_command_example(tmp_path)
 
     result = _invoke("preview", str(definition))
@@ -2494,23 +2494,23 @@ def test_editing_the_command_example_script_makes_preview_name_it(tmp_path: Path
     assert "file 'select_adults.py'" in nodes, adults.reasons
 
 
-# The several products example (MIC-7827)
+# The several outputs example (MIC-7827)
 
-_SEVERAL_PRODUCTS_EXAMPLE = Path(__file__).parent / "several_products_example"
-"""The example of a python step with several products, whose definition the docs include."""
+_SEVERAL_OUTPUTS_EXAMPLE = Path(__file__).parent / "several_outputs_example"
+"""The example of a python step with several outputs, whose definition the docs include."""
 
 _SPLIT_EXAMPLE_STEPS = ["population", "split", "summary"]
-"""The several products example's steps, in dependency order."""
+"""The several outputs example's steps, in dependency order."""
 
 
-def _copy_several_products_example(directory: Path) -> Path:
-    """Copy the several products example's definition to ``directory``; return the copy."""
-    return Path(shutil.copy(_SEVERAL_PRODUCTS_EXAMPLE / "pipeline.py", directory))
+def _copy_several_outputs_example(directory: Path) -> Path:
+    """Copy the several outputs example's definition to ``directory``; return the copy."""
+    return Path(shutil.copy(_SEVERAL_OUTPUTS_EXAMPLE / "pipeline.py", directory))
 
 
-def test_the_several_products_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
-    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/several_products_example in tmp_path exits 0; children.csv holds the 0-14 row, adults.parquet the two adult rows, and summary.csv the adult total of 70."""
-    definition = _copy_several_products_example(tmp_path)
+def test_the_several_outputs_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/several_outputs_example in tmp_path exits 0; children.csv holds the 0-14 row, adults.parquet the two adult rows, and summary.csv the adult total of 70."""
+    definition = _copy_several_outputs_example(tmp_path)
 
     result = _invoke("run", str(definition))
 
@@ -2523,11 +2523,11 @@ def test_the_several_products_example_runs_with_dagger_run_local(tmp_path: Path)
     assert summary == ["adults", "70"]
 
 
-def test_the_several_products_example_previews_every_step_before_its_first_run(
+def test_the_several_outputs_example_previews_every_step_before_its_first_run(
     tmp_path: Path,
 ) -> None:
-    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/several_products_example exits 0 and lists population, split and summary as would-run in that order."""
-    definition = _copy_several_products_example(tmp_path)
+    """'dagger preview -c pipeline.py' on a fresh copy of tests/frontend/several_outputs_example exits 0 and lists population, split and summary as would-run in that order."""
+    definition = _copy_several_outputs_example(tmp_path)
 
     result = _invoke("preview", str(definition))
 
@@ -2535,11 +2535,11 @@ def test_the_several_products_example_previews_every_step_before_its_first_run(
     assert _would_run(result) == _SPLIT_EXAMPLE_STEPS
 
 
-def test_preview_of_the_several_products_example_names_each_missing_product(
+def test_preview_of_the_several_outputs_example_names_each_missing_output(
     tmp_path: Path,
 ) -> None:
     """With the copy's pipeline loaded by load_pipeline and frozen with a stable code identity on each step, after a successful _run() the removal of children.csv and adults.parquet makes _preview() report that split would run with "file 'children.csv'" and "file 'adults.parquet'" among its reasons."""
-    pipeline = stable_snapshot(load_pipeline(str(_copy_several_products_example(tmp_path))))
+    pipeline = stable_snapshot(load_pipeline(str(_copy_several_outputs_example(tmp_path))))
     assert _run(pipeline) == dict.fromkeys(_SPLIT_EXAMPLE_STEPS, TaskOutcome.SUCCESS)
 
     for key in ("children.csv", "adults.parquet"):
@@ -2573,22 +2573,22 @@ def make_b(x):
 """The start of every Pipeline definition: ``make_a`` and ``make_b`` log that they ran."""
 
 _FIRST_STEP = (
-    'p.add_python_step(make_a, inputs={}, produces="population.parquet", name="first")'
+    'p.add_python_step(make_a, inputs={}, outputs="population.parquet", name="first")'
 )
 """A step 'first' that produces 'population.parquet'."""
 
 _SAME_NAME_STEP = (
-    'p.add_python_step(make_a, inputs={}, produces="other.parquet", name="first")'
+    'p.add_python_step(make_a, inputs={}, outputs="other.parquet", name="first")'
 )
-"""A step with :data:`_FIRST_STEP`'s name and another product."""
+"""A step with :data:`_FIRST_STEP`'s name and another output."""
 
 _SAME_KEY_STEP = (
-    'p.add_python_step(make_a, inputs={}, produces="population.parquet", name="second")'
+    'p.add_python_step(make_a, inputs={}, outputs="population.parquet", name="second")'
 )
-"""A step 'second' with :data:`_FIRST_STEP`'s product."""
+"""A step 'second' with :data:`_FIRST_STEP`'s output."""
 
 _MISTYPED_STEP = (
-    'p.add_python_step(make_b, inputs={"x": "populaton.parquet"}, produces="b.csv", name="b")'
+    'p.add_python_step(make_b, inputs={"x": "populaton.parquet"}, outputs="b.csv", name="b")'
 )
 """A step 'b' that reads the mistyped key 'populaton.parquet'."""
 
@@ -2699,7 +2699,7 @@ def test_a_preview_of_a_pipeline_definition_does_not_import_jobmon(tmp_path: Pat
 def test_the_pipeline_example_keeps_its_state_under_the_output_roots_dagger_directory(
     tmp_path: Path,
 ) -> None:
-    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/pipeline_example writes the products under output/example and pytask.lock under output/.dagger/example, and creates no state directory beside the definition."""
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/pipeline_example writes the outputs under output/example and pytask.lock under output/.dagger/example, and creates no state directory beside the definition."""
     shutil.copy(Path(__file__).parent / "pipeline_example" / "pipeline.py", tmp_path)
 
     result = _invoke("run", str(tmp_path / "pipeline.py"))
@@ -2718,7 +2718,7 @@ def test_dagger_preview_run_and_force_of_a_definition_that_returns_its_pipeline_
 ) -> None:
     """For a definition that makes a Pipeline, adds two steps and returns it, 'dagger preview' lists both steps as would-run, 'dagger run --local' runs both and exits 0, and 'dagger force --local first' runs 'first' again and exits 0."""
     second = (
-        'p.add_python_step(make_b, inputs={"x": "population.parquet"}, produces="b.csv", '
+        'p.add_python_step(make_b, inputs={"x": "population.parquet"}, outputs="b.csv", '
         'name="b")'
     )
     path = _write_definition(tmp_path, _builder_definition(_FIRST_STEP, second))
