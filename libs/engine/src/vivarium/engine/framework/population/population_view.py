@@ -17,7 +17,6 @@ import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, overload
 
-import numpy as np
 import pandas as pd
 
 import vivarium.engine.framework.population.utilities as pop_utils
@@ -459,31 +458,13 @@ class PopulationView:
             self._component, index=index, columns=columns
         )
         previous_index = current_data.index
-        previous_dtypes = (
-            current_data.dtypes
-            if isinstance(current_data, pd.DataFrame)
-            else current_data.to_frame().dtypes
-        )
         result = modifier(current_data)
         result_df = self._coerce_update_result(result, column_list, previous_index)
 
         if result_df.empty:
             return
 
-        casts = {}
-        for column in result_df.columns:
-            update_dtype = result_df[column].dtype
-            existing_dtype = previous_dtypes[column]
-            if update_dtype == existing_dtype:
-                continue
-            if not self._compatible_non_equal_dtypes(update_dtype, existing_dtype):
-                raise PopulationError(
-                    "A component is corrupting the population table by modifying the "
-                    f"dtype of the {column} column from {existing_dtype} to {update_dtype}."
-                )
-            casts[column] = existing_dtype
-
-        self._manager.update(result_df.astype(casts) if casts else result_df)
+        self._manager.update(result_df)
 
     def __repr__(self) -> str:
         name = self._component.name if self._component else "None"
@@ -619,35 +600,6 @@ class PopulationView:
             )
 
         return update
-
-    # TODO MIC-6808: once simulation environments are pandas>=3 only, replace this
-    #  predicate and the cast in update() with a native setitem
-    #  (existing.loc[update.index] = update), which enforces the same policy
-    #  (existing dtype wins; lossy or incompatible updates raise).
-    @staticmethod
-    def _compatible_non_equal_dtypes(
-        update_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
-        existing_dtype: np.dtype[Any] | pd.api.extensions.ExtensionDtype,
-    ) -> bool:
-        """Check whether two differing column dtypes can represent the same data.
-
-        String columns infer as ``object`` under pandas 2 but ``str`` under
-        pandas 3, and datetime and timedelta columns can differ only in unit
-        (pandas 3 infers microseconds or seconds where pandas 2 inferred
-        nanoseconds). Neither difference indicates a component corrupting the
-        population table.
-        """
-        if pd.api.types.is_datetime64_any_dtype(
-            update_dtype
-        ) and pd.api.types.is_datetime64_any_dtype(existing_dtype):
-            return True
-        if pd.api.types.is_timedelta64_dtype(
-            update_dtype
-        ) and pd.api.types.is_timedelta64_dtype(existing_dtype):
-            return True
-        return pd.api.types.is_string_dtype(update_dtype) and pd.api.types.is_string_dtype(
-            existing_dtype
-        )
 
     def _build_query(self, query: str, include_untracked: bool | None) -> str:
         """Builds the full query for this PopulationView.

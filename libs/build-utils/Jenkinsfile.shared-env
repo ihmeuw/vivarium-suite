@@ -5,6 +5,13 @@
  * Each run archives the current environment (via conda-pack), rebuilds it fresh in-place,
  * and notifies Slack if packages changed.
  *
+ * Model repos in ACTIVE_MODELS get one environment, named <model>_current. Model repos in
+ * TYPE_SPECIFIC_ACTIVE_MODELS get one environment per type in ENV_TYPES, named
+ * <model>_<type>_current. A repo belongs in the list that matches its main branch, because
+ * that is the branch the job builds. When a repo moves to ACTIVE_MODELS, its old
+ * type-specific environments and archives are no longer rebuilt or cleaned up, and have
+ * to be deleted by hand.
+ *
  * Environments are stored in a read-only (except by Jenkins) directory accessible to all users.
  * Archives are portable .tar.gz files that can restore a previous environment:
  *   mkdir /tmp/restore && tar xzf <archive>.tar.gz -C /tmp/restore && /tmp/restore/bin/conda-unpack
@@ -26,13 +33,18 @@ pipeline {
     parameters {
         string(
             name: 'ACTIVE_MODELS',
-            defaultValue: 'vivarium_gates_mncnh,vivarium_gates_lsff_2026,vivarium_gates_nutrition_optimization,vivarium_gates_nutrition_optimization_child',
-            description: 'Comma-separated list of model repositories to build environments for'
+            defaultValue: 'vivarium_gates_lsff_2026',
+            description: 'Comma-separated list of model repositories to build a single environment for'
+        )
+        string(
+            name: 'TYPE_SPECIFIC_ACTIVE_MODELS',
+            defaultValue: 'vivarium_gates_mncnh,vivarium_gates_nutrition_optimization,vivarium_gates_nutrition_optimization_child',
+            description: 'Comma-separated list of model repositories to build one environment per type for'
         )
         string(
             name: 'ENV_TYPES',
             defaultValue: 'simulation,artifact',
-            description: 'Comma-separated list of environment types to build (simulation, artifact)'
+            description: 'Comma-separated list of environment types to build (simulation, artifact) for each repository in TYPE_SPECIFIC_ACTIVE_MODELS'
         )
         string(
             name: 'SHARED_ENV_DIR',
@@ -74,7 +86,8 @@ pipeline {
             steps {
                 script {
                     echo "=== Shared Environment Builder ==="
-                    echo "Models: ${params.ACTIVE_MODELS}"
+                    echo "Models (single environment): ${params.ACTIVE_MODELS}"
+                    echo "Models (one environment per type): ${params.TYPE_SPECIFIC_ACTIVE_MODELS}"
                     echo "Environment Types: ${params.ENV_TYPES}"
                     echo "Shared Directory: ${params.SHARED_ENV_DIR}"
                     echo "Build Timestamp: ${env.BUILD_TIMESTAMP}"
@@ -92,13 +105,17 @@ pipeline {
         stage('Build Environments') {
             steps {
                 script {
-                    def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
-                    def types = params.ENV_TYPES.split(',').collect { it.trim() }
+                    def models = parseList(params.ACTIVE_MODELS)
+                    def typeSpecificModels = parseList(params.TYPE_SPECIFIC_ACTIVE_MODELS)
+                    def types = parseList(params.ENV_TYPES)
 
                     // Build environments sequentially to avoid conda package cache contention.
                     // Parallel conda operations sharing the same cache can cause lock conflicts,
                     // partial writes, and solver resource exhaustion.
                     for (model in models) {
+                        buildEnvironment(model, null)
+                    }
+                    for (model in typeSpecificModels) {
                         for (envType in types) {
                             buildEnvironment(model, envType)
                         }
@@ -187,17 +204,24 @@ pipeline {
  *   4. Rebuild fresh at the _current path
  *   5. Generate new lock files and diff against step 1
  *   6. If packages changed, track for Slack notification
+ *
+ * @param envType  'simulation' or 'artifact' for a repo in TYPE_SPECIFIC_ACTIVE_MODELS, or
+ *                 null for a repo in ACTIVE_MODELS. The single environment is named
+ *                 <model>_current, which is where the repo's build-shared-env target
+ *                 looks for it.
  */
 def buildEnvironment(String model, String envType) {
-    def envName = "${model}_${envType}"
+    def envName = envType ? "${model}_${envType}" : model
     def currentName = "${envName}_current"
     def currentPath = "${params.SHARED_ENV_DIR}/${currentName}"
     def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
+    def stageLabel = envType ? "${model} - ${envType}" : model
+    def typeArg = envType ? "type=${envType}" : ""
 
     // Track the archive file path so we can remove it if no packages changed
     def archiveFile = null
 
-    stage("Archive ${model} - ${envType}") {
+    stage("Archive ${stageLabel}") {
         script {
             def currentExists = fileExists(currentPath)
 
@@ -213,7 +237,7 @@ def buildEnvironment(String model, String envType) {
         }
     }
 
-    stage("Build ${model} - ${envType}") {
+    stage("Build ${stageLabel}") {
         echo "=== Building environment: ${envName} ==="
         echo "Path: ${currentPath}"
 
@@ -234,7 +258,7 @@ def buildEnvironment(String model, String envType) {
             // Build the environment directly at the _current path.
             sh """
                 ${env.ACTIVATE_BASE}
-                make build-env type=${envType} name=${currentName} path=${currentPath}
+                make build-env ${typeArg} name=${currentName} path=${currentPath}
             """
         }
 
@@ -252,7 +276,7 @@ EOF
         """
     }
 
-    stage("Diff ${model} - ${envType}") {
+    stage("Diff ${stageLabel}") {
         script {
             def hasChanges = detectChanges(currentPath, envName)
 
@@ -430,19 +454,32 @@ def detectChanges(String envPath, String envName) {
 }
 
 /**
- * Clean up old conda-pack archives in parallel for all model/type combinations.
+ * Split a comma-separated parameter into trimmed, non-empty items.
+ */
+def parseList(String value) {
+    return (value ?: '').split(',').collect { it.trim() }.findAll { it }
+}
+
+/**
+ * Clean up old conda-pack archives in parallel for every environment this job builds.
  * Removes .tar.gz files older than RETENTION_DAYS.
  */
 def cleanupOldArchives() {
     echo "=== Cleaning up old conda-pack archives ==="
     echo "Retention period: ${params.RETENTION_DAYS} days"
 
-    def models = params.ACTIVE_MODELS.split(',').collect { it.trim() }
-    def types = params.ENV_TYPES.split(',').collect { it.trim() }
+    def models = parseList(params.ACTIVE_MODELS)
+    def typeSpecificModels = parseList(params.TYPE_SPECIFIC_ACTIVE_MODELS)
+    def types = parseList(params.ENV_TYPES)
 
     def parallelCleanups = [:]
 
     models.each { model ->
+        parallelCleanups["Cleanup ${model}"] = {
+            cleanupArchivesForType(model, null)
+        }
+    }
+    typeSpecificModels.each { model ->
         types.each { envType ->
             def envName = "${model}_${envType}"
             parallelCleanups["Cleanup ${envName}"] = {
@@ -457,9 +494,11 @@ def cleanupOldArchives() {
 /**
  * Clean up old conda-pack archives for a specific model and environment type.
  * Uses find with mtime to identify .tar.gz files older than the retention period.
+ *
+ * @param envType  The environment type, or null for a model's single environment.
  */
 def cleanupArchivesForType(String model, String envType) {
-    def envName = "${model}_${envType}"
+    def envName = envType ? "${model}_${envType}" : model
     def archiveDir = "${params.SHARED_ENV_DIR}/archive/${envName}"
 
     echo "Cleaning up old archives in: ${archiveDir}"

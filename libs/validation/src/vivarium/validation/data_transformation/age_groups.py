@@ -655,7 +655,7 @@ def rebin_count_dataframe(
         # Stack the new age group columns into the index, preserving rows with
         # NaN values for age groups with no source data
         stacked_series_for_col = result_matrix_for_col.stack(
-            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP, future_stack=True
+            level=INPUT_DATA_INDEX_NAMES.AGE_GROUP
         )
         stacked_series_for_col.name = val_col
 
