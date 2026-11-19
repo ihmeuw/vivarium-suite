@@ -573,6 +573,49 @@ def test_preview_names_reasons_by_file_key_and_step_label(tmp_path: Path) -> Non
     _assert_no_path(edited, tmp_path)
 
 
+def _split() -> dict[str, pd.DataFrame]:
+    """Return a population table and a deaths table by product name."""
+    return {
+        "population": pd.DataFrame({"n": [10, 20]}),
+        "deaths": pd.DataFrame({"n": [1, 2]}),
+    }
+
+
+def _read_csv(source: Path) -> pd.DataFrame:
+    """Read a CSV table."""
+    return pd.read_csv(source)
+
+
+def test_preview_names_each_product_of_a_python_step_with_several_products(
+    tmp_path: Path,
+) -> None:
+    """Before the first run, preview names both products of a python step with several products by file key; after a run, deleting deaths.csv makes preview name "file 'deaths.csv'" for that step, and its consumer cascades."""
+    pipeline = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
+    pipeline.add_python_step(
+        _split,
+        inputs={},
+        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        name="split",
+    )
+    pipeline.add_python_step(_read_csv, inputs={"source": "deaths.csv"}, produces="copy.csv")
+
+    first = preview(pipeline)
+
+    assert {"file 'population.parquet'", "file 'deaths.csv'"} <= _nodes(
+        _reasons(first)["split"]
+    )
+    _assert_no_path(first, tmp_path)
+
+    run(pipeline)
+    _product(pipeline, "deaths.csv").unlink()
+    after = preview(pipeline)
+
+    reasons = _reasons(after)
+    assert "file 'deaths.csv'" in _nodes(reasons["split"]), reasons["split"]
+    assert Reason("step 'split'", "cascade") in reasons["copy.csv"], reasons["copy.csv"]
+    _assert_no_path(after, tmp_path)
+
+
 def test_preview_of_added_tasks_keeps_file_paths(tmp_path: Path) -> None:
     """For tasks added with add_task, whose keys the pipeline's registry does not know, preview does not fail and file reasons keep pytask's path names."""
     fixture = build_fixture(tmp_path)

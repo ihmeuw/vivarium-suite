@@ -1,6 +1,7 @@
 """Unit tests for the producer/consumer wiring registry (``backend.wiring``)."""
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -541,3 +542,40 @@ def test_a_directory_output_key_cannot_then_be_a_file_output(tmp_path: Path) -> 
         reg.register_output(_RUN_KEY)
 
     assert _RUN_KEY in _message(excinfo)
+
+
+def _wiring_message(call: Callable[[str], object], key: str) -> str:
+    """Return the WiringError message that ``call(key)`` raises."""
+    with pytest.raises(WiringError) as info:
+        call(key)
+    return str(info.value)
+
+
+def test_check_output_returns_the_keys_path_and_registers_nothing(tmp_path: Path) -> None:
+    """check_output of a new key returns path_for(key), and afterwards the key is not registered: key_for of its path is None and resolve_input raises."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    assert reg.check_output("a.csv") == reg.path_for("a.csv")
+    assert reg.key_for(reg.path_for("a.csv")) is None
+    with pytest.raises(WiringError):
+        reg.resolve_input("a.csv")
+
+
+def test_check_output_accepts_a_key_already_registered_as_a_file(tmp_path: Path) -> None:
+    """check_output of a key that register_output already registered returns its path, as register_output would return its node again."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_output("a.csv")
+
+    assert reg.check_output("a.csv") == reg.path_for("a.csv")
+
+
+def test_check_output_raises_what_register_output_raises(tmp_path: Path) -> None:
+    """For a root input's key, a key at another key's path, and a key registered as a run directory, check_output raises the same WiringError message as register_output, and registers nothing."""
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": tmp_path / "raw.csv"})
+    reg.register_output("a.csv")
+    reg.register_directory_output(_RUN_KEY, _DONE)
+
+    for key in ("raw", "b/../a.csv", _RUN_KEY):
+        message = _wiring_message(reg.check_output, key)
+        assert message == _wiring_message(reg.register_output, key), key
+    assert reg.key_for(reg.path_for("b/../a.csv")) == "a.csv"

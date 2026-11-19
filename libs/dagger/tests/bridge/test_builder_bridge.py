@@ -12,6 +12,7 @@ from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
@@ -31,7 +32,7 @@ from tests.bridge.helpers import (
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.constants import DEFAULT_RESOURCES
-from vivarium.dagger.frontend import Pipeline, PipelineError, RunRefused, run
+from vivarium.dagger.frontend import Pipeline, PipelineError, RunRefused, StepFailed, run
 from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.harness import FakeJobmon
 
@@ -232,3 +233,77 @@ def test_a_step_added_after_a_run_through_jobmon_is_in_the_next_run_and_not_the_
     assert len(fake_jobmon.plans) == 2
     assert C in bound_names(fake_jobmon)[1]
     assert third.is_file()
+
+
+def _split_and_consumers(p: Pipeline, target: Any) -> Pipeline:
+    """Add the step 'split' with ``target`` and a step that copies each of its products."""
+    p.add_python_step(
+        target,
+        inputs={},
+        produces={"population": "population.parquet", "deaths": "deaths.csv"},
+        name="split",
+    )
+    p.add_python_step(
+        step_targets.copy_table,
+        inputs={"source": "population.parquet"},
+        produces="population_copy.parquet",
+    )
+    p.add_python_step(
+        step_targets.copy_table, inputs={"source": "deaths.csv"}, produces="deaths_copy.csv"
+    )
+    return p
+
+
+_SPLIT_STEPS = ["split", "population_copy.parquet", "deaths_copy.csv"]
+"""The steps that :func:`_split_and_consumers` adds, in the order it adds them."""
+
+
+@pytest.mark.usefixtures("node_pythonpath")
+def test_a_python_step_with_several_products_runs_through_jobmon(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """End to end: a python step whose produces maps 'population' and 'deaths' to a Parquet and a CSV key, and a consumer of each, run with run(p, jobmon=True); every step succeeds, one plan binds the three steps, and the products are under output_root/run_name in their formats."""
+    p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
+    _split_and_consumers(p, step_targets.split_frames)
+
+    result = run(p, jobmon=True)
+
+    assert result == dict.fromkeys(_SPLIT_STEPS, TaskOutcome.SUCCESS)
+    [bound] = bound_names(fake_jobmon)
+    assert sorted(bound) == sorted(_SPLIT_STEPS)
+    assert bound[0] == "split"
+    run_directory = tmp_path.resolve() / "out" / "run1"
+    expected = [1, 2, 3]
+    assert pd.read_parquet(run_directory / "population.parquet")["n"].tolist() == expected
+    assert pd.read_csv(run_directory / "deaths.csv")["n"].tolist() == expected
+    assert (
+        pd.read_parquet(run_directory / "population_copy.parquet")["n"].tolist() == expected
+    )
+    assert pd.read_csv(run_directory / "deaths_copy.csv")["n"].tolist() == expected
+
+
+@pytest.mark.usefixtures("node_pythonpath")
+def test_a_dict_missing_a_product_fails_the_step_through_jobmon(
+    tmp_path: Path, fake_jobmon: FakeJobmon
+) -> None:
+    """Through Jobmon, a python step with several products whose dict leaves out 'deaths' makes run raise StepFailed whose line names the step and the missing product; its consumers are skipped and write nothing."""
+    p = Pipeline(tmp_path / "out", "run1", resources=_PROJECT)
+    _split_and_consumers(p, step_targets.split_frames_without_deaths)
+
+    with pytest.raises(StepFailed) as info:
+        run(p, jobmon=True)
+
+    line = str(info.value)
+    assert line.startswith("Step 'split' failed:"), line
+    assert (
+        "returned a dict whose keys do not match its product names: the product 'deaths' "
+        "is missing." in line
+    ), line
+    assert info.value.outcomes == {
+        "split": TaskOutcome.FAIL,
+        "population_copy.parquet": TaskOutcome.SKIP_PREVIOUS_FAILED,
+        "deaths_copy.csv": TaskOutcome.SKIP_PREVIOUS_FAILED,
+    }
+    run_directory = tmp_path.resolve() / "out" / "run1"
+    assert not (run_directory / "population_copy.parquet").exists()
+    assert not (run_directory / "deaths_copy.csv").exists()

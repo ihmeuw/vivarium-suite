@@ -2,9 +2,9 @@
 
 The controller calls :func:`payload_for` for each step it sends to a node. A recipe is
 plain JSON: a python step crosses as its target's import reference, the directory its
-target's module imports from, its product suffix, and its arguments, and a command step
-crosses as its command string and the ``bin``
-directories of its env, resolved on the controller. No pickled code or data crosses, so
+target's module imports from, its product suffix or suffixes, and its arguments, and a
+command step crosses as its command string and the ``bin`` directories of its env,
+resolved on the controller. No pickled code or data crosses, so
 an argument must be JSON or a path, and a step that cannot be named by reference is
 refused before anything is sent. :mod:`~vivarium.dagger.bridge.runner` runs a recipe.
 """
@@ -48,8 +48,9 @@ class PythonPayload(TypedDict):
     appends it to ``sys.path`` while the step runs, so a step function defined in a
     pipeline definition file that was loaded by path imports on the node without
     ``PYTHONPATH``."""
-    suffix: str
-    """The product suffix, which names the save format (``.parquet`` or ``.csv``)."""
+    suffix: str | dict[str, str]
+    """The product suffix, which names the save format (``.parquet`` or ``.csv``), or, for
+    a step whose produces is a mapping, each product name mapped to its suffix."""
     kwargs: dict[str, JSONValue]
     """The step's arguments, each encoded by :func:`encode`."""
 
@@ -255,7 +256,7 @@ def payload_for(
         cwd=os.getcwd(),
         target=target,
         sys_path=_import_roots(target),
-        suffix=run.suffix,
+        suffix=run.suffix if isinstance(run.suffix, str) else dict(run.suffix),
         kwargs=encoded,
     )
 

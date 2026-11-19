@@ -170,14 +170,14 @@ class Pipeline:
 
     def add_python_step(
         self,
-        target: Callable[..., pd.DataFrame],
+        target: Callable[..., pd.DataFrame | Mapping[str, pd.DataFrame]],
         *,
         inputs: Mapping[str, FileKey],
-        produces: FileKey,
+        produces: FileKey | Mapping[str, FileKey],
         resources: dict[str, Any] | None = None,
         name: str | None = None,
     ) -> None:
-        """Add a step that calls ``target`` and saves the DataFrame it returns.
+        """Add a step that calls ``target`` and saves each DataFrame it returns.
 
         The step runs in the pipeline's own environment. It is compiled by
         :func:`~vivarium.dagger.frontend.python_step.python_step` with the pipeline's
@@ -189,21 +189,25 @@ class Pipeline:
         Parameters
         ----------
         target
-            A function returning a pandas DataFrame, defined at the top level of an
-            importable module. Each input reaches it, under its parameter name, as the
-            input's file path.
+            A function returning a pandas DataFrame, or a dict of them when ``produces``
+            is a mapping, defined at the top level of an importable module. Each input
+            reaches it, under its parameter name, as the input's file path.
         inputs
             Maps each of ``target``'s parameter names to the file key of a product
             of a step already added, or of a root input.
         produces
-            The file key of the step's product. Its suffix, ``.parquet`` or
-            ``.csv``, names the format the returned DataFrame is saved in.
+            The file key of the step's product, or a mapping of product names to file
+            keys; with a mapping, ``target`` returns a dict with exactly those names.
+            Each key's suffix, ``.parquet`` or ``.csv``, names the format its DataFrame
+            is saved in.
         resources
             Compute resources for this step in a run through Jobmon, such as
             ``{"memory": 16, "runtime": 7200}``. They override the pipeline's
             ``resources`` key by key.
         name
-            The step's name. Defaults to ``produces``.
+            The step's name. Defaults to ``produces`` when it is a key, or to its one key
+            when it is a mapping with one entry, and is required when the mapping has
+            more than one.
 
         Raises
         ------
@@ -213,7 +217,7 @@ class Pipeline:
             Also for each case in which
             :func:`~vivarium.dagger.frontend.python_step.python_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
-            If ``produces`` is a product of a step already added; the message starts
+            If a ``produces`` key is a product of a step already added; the message starts
             with ``Step '<name>':`` and names the key and the step that produces it.
             If the step's name and one of its products are both already in the
             pipeline, this error is raised, not the ``ValueError`` for the name.
@@ -222,8 +226,11 @@ class Pipeline:
             an input key that no step already added produces and that is not a root
             input.
         """
-        products = [produces]
-        self._check_new(produces if name is None else name, products)
+        products = list(produces.values()) if isinstance(produces, Mapping) else [produces]
+        # With no name and other than one product, python_step has no default name and
+        # raises before registering anything, so it reports the step.
+        default = products[0] if len(products) == 1 else None
+        self._check_new(default if name is None else name, products)
         task = compile_python_step(
             target,
             inputs=inputs,

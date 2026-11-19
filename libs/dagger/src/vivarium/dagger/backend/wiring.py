@@ -101,6 +101,35 @@ class FileRegistry:
         """
         return self._key_by_path.get(Path(path).resolve())
 
+    def check_output(self, key: FileKey) -> Path:
+        """Return ``key``'s path, raising as :meth:`register_output` would for it.
+
+        Nothing is registered, so a step with several products can check every key before
+        it registers any.
+
+        Parameters
+        ----------
+        key
+            The output's logical key.
+
+        Returns
+        -------
+            The absolute path that ``key`` resolves to.
+
+        Raises
+        ------
+        WiringError
+            In each case in which :meth:`register_output` raises it for ``key``, with the
+            same message.
+        """
+        resolved = self._claim_output_path(key)
+        if isinstance(self._producers.get(key), RunDirectoryNode):
+            raise WiringError(
+                f"output {key!r} is already registered as a run directory; a step cannot "
+                "also produce it as a file."
+            )
+        return resolved
+
     def register_output(self, key: FileKey) -> PathNode:
         """Register ``key`` as produced by a step and return its file node.
 
@@ -125,24 +154,8 @@ class FileRegistry:
             a directory output by :meth:`register_directory_output`. The last message
             names the key.
         """
-        source = self._root_inputs.get(key)
-        if source is not None:
-            raise WiringError(
-                f"output {key!r} is a declared root input at {source}; a step cannot "
-                "also produce it."
-            )
-        resolved = self.path_for(key)
-        claimant = self._key_by_path.get(resolved)
-        if claimant is not None and claimant != key:
-            raise WiringError(
-                f"keys {claimant!r} and {key!r} resolve to one path {resolved}."
-            )
+        resolved = self.check_output(key)
         node = self._producers.get(key)
-        if isinstance(node, RunDirectoryNode):
-            raise WiringError(
-                f"output {key!r} is already registered as a run directory; a step cannot "
-                "also produce it as a file."
-            )
         if node is None:
             node = file_node(resolved)
             self._producers[key] = node
@@ -195,7 +208,6 @@ class FileRegistry:
 
     def _claim_output_path(self, key: FileKey) -> Path:
         """Return ``key``'s path, refusing a root input's key or a path another key holds."""
-        # The messages match register_output's, which keeps its own copy of these guards.
         source = self._root_inputs.get(key)
         if source is not None:
             raise WiringError(

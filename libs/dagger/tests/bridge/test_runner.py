@@ -781,6 +781,62 @@ def test_runner_runs_a_python_step_in_the_payload_cwd(tmp_path: Path) -> None:
     assert not (tmp_path / "elsewhere" / "out").exists()
 
 
+def _split_payload(cwd: Path, target: str) -> PythonPayload:
+    """Return a recipe that runs ``target`` and saves 'population' and 'deaths' under ``cwd``."""
+    return {
+        "kind": "python",
+        "task": "split",
+        "cwd": str(cwd),
+        "target": target,
+        "sys_path": [],
+        "suffix": {"population": ".parquet", "deaths": ".csv"},
+        "kwargs": {
+            "population": _tag(cwd / "out" / "population.parquet"),
+            "deaths": _tag(cwd / "out" / "deaths.csv"),
+        },
+    }
+
+
+def test_runner_saves_each_product_of_a_python_step_with_several_products(
+    tmp_path: Path,
+) -> None:
+    """main() on a python payload whose suffix maps 'population' to '.parquet' and 'deaths' to '.csv' returns 0, writes population.parquet as Parquet and deaths.csv as CSV, and records success=True."""
+    step_cwd = _mkdir(tmp_path / "step_cwd")
+    target = target_reference(step_targets.split_frames)
+    payload = _write_payload(tmp_path / "step.payload.json", _split_payload(step_cwd, target))
+    result_path = tmp_path / _RESULT_NAME
+
+    status = main([str(payload), str(result_path)])
+
+    result = _read(result_path)
+    assert (status, result["task"], result["success"]) == (0, "split", True), result["exc"]
+    assert pd.read_parquet(step_cwd / "out" / "population.parquet")["n"].tolist() == [1, 2, 3]
+    assert pd.read_csv(step_cwd / "out" / "deaths.csv")["n"].tolist() == [1, 2, 3]
+
+
+def test_runner_records_a_dict_missing_a_product_as_a_failure_naming_it(
+    tmp_path: Path,
+) -> None:
+    """main() on a python payload with several products whose target leaves out 'deaths' returns 1, records success=False with a ValueError that names the target and 'deaths', and writes no product."""
+    step_cwd = _mkdir(tmp_path / "step_cwd")
+    target = target_reference(step_targets.split_frames_without_deaths)
+    payload = _write_payload(tmp_path / "step.payload.json", _split_payload(step_cwd, target))
+    result_path = tmp_path / _RESULT_NAME
+
+    status = main([str(payload), str(result_path)])
+
+    result = _read(result_path)
+    assert (status, result["success"]) == (1, False)
+    assert result["exc_type"] is not None and result["exc_type"].endswith("ValueError")
+    assert result["exc_message"] == (
+        "Python step target split_frames_without_deaths returned a dict whose keys do not "
+        "match its product names: the product 'deaths' is missing. The product names are "
+        "'deaths' and 'population'."
+    )
+    assert not (step_cwd / "out" / "population.parquet").exists()
+    assert not (step_cwd / "out" / "deaths.csv").exists()
+
+
 def test_runner_exits_with_status_one_when_a_succeeding_step_result_cannot_be_written(
     tmp_path: Path,
 ) -> None:
