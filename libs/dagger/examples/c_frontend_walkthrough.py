@@ -243,7 +243,9 @@ def show_runs(runs):
 # The definition below has python steps, a fan-out over two locations' input files, a
 # notebook step, and a command step, all added to one `Pipeline` and wired by file key. No
 # file path appears in the wiring. Loading the definition runs nothing, so `preview` plans
-# the whole DAG before any product exists, and names every file by its key.
+# the whole DAG before any product exists, and names every file by its key. The step
+# `adults` writes two files from one function, `children.csv` and `adults.parquet`
+# (MIC-7827, #449); C3 reads both after the definition's first run.
 
 # %%
 GOOD = make_defs("good")
@@ -302,7 +304,9 @@ for verb in (["preview"], ["run", "--local"]):
 #
 # The first command gives a Jobmon option together with `--local`, which is refused before
 # the definition is loaded. Then a failed step exits 1, so the status can gate the next
-# command in a shell. The failing definition here is C9's.
+# command in a shell. The failing definition here is C9's. After the good run, the cell
+# reads the two products of `adults`: `children.csv` as CSV, with only the age group 0-14,
+# and `adults.parquet` as Parquet, without it.
 
 # %%
 wrong = dagger("run", "-c", "pipeline.py", "--local", "-P", "proj_simscience", cwd=GOOD)
@@ -311,7 +315,7 @@ assert "--project" in wrong.stderr and "not with --local" in wrong.stderr
 assert products(GOOD) == []
 
 FAILS = make_defs(
-    "c3_fails", edits=[('frame["age_group"] != "0-14"', 'frame["age"] != "0-14"')]
+    "c3_fails", edits=[('frame["age_group"] == "0-14"', 'frame["age"] == "0-14"')]
 )
 line = f"{shlex.quote(str(DAGGER))} run -c pipeline.py --local > /dev/null 2>&1 && echo 'next command ran' || echo \"stopped: dagger exited $?\""
 for folder in (GOOD, FAILS):
@@ -322,18 +326,29 @@ for folder in (GOOD, FAILS):
     assert chain.stdout.strip() == (
         "next command ran" if folder is GOOD else "stopped: dagger exited 1"
     )
+children = pd.read_csv(GOOD / "output/walk/children.csv")
+adults = pd.read_parquet(GOOD / "output/walk/adults.parquet")
+print("children.csv:", children.to_dict("list"))
+print("adults.parquet:", adults.to_dict("list"))
+assert children["age_group"].tolist() == ["0-14"], children
+assert "0-14" not in adults["age_group"].tolist() and len(adults) == 2, adults
 
 # %% [markdown]
 # ## C4 — `--until S` runs S and its ancestors only (local)
 #
-# From an empty state, `run --until adults` makes population and adults and nothing else.
-# A preview limited the same way marks the other steps "not selected".
+# From an empty state, `run --until adults` runs population and adults and nothing else, so
+# it writes the population file and both products of adults. A preview limited the same
+# way marks the other steps "not selected".
 
 # %%
 UNTIL = make_defs("c4_c6")
 dagger("run", "-c", "pipeline.py", "--local", "--until", "adults", cwd=UNTIL)
 print("products:", products(UNTIL))
-assert products(UNTIL) == ["walk/adults.parquet", "walk/population.parquet"]
+assert products(UNTIL) == [
+    "walk/adults.parquet",
+    "walk/children.csv",
+    "walk/population.parquet",
+]
 limited = dagger("preview", "-c", "pipeline.py", "--until", "adults", cwd=UNTIL)
 assert "not selected" in plan(limited)["summary"]
 
@@ -595,7 +610,7 @@ _, wide = show_error(
 assert len(wide.stderr) < 1500, f"the message is {len(wide.stderr)} characters"
 FAILED_FOLDER, _ = show_error(
     "T2 a python step raises",
-    edits=[('frame["age_group"] != "0-14"', 'frame["age"] != "0-14"')],
+    edits=[('frame["age_group"] == "0-14"', 'frame["age"] == "0-14"')],
     args=("run", "-c", "pipeline.py", "--local"),
     exit_code=1,
     names=["adults", "KeyError", "summary", "report", "archive"],
@@ -688,7 +703,7 @@ _, no_jobmon = show_error(
 # %%
 fixed = FAILED_FOLDER / "pipeline.py"
 fixed.write_text(
-    fixed.read_text().replace('frame["age"] != "0-14"', 'frame["age_group"] != "0-14"')
+    fixed.read_text().replace('frame["age"] == "0-14"', 'frame["age_group"] == "0-14"')
 )
 again = dagger("run", "-c", "pipeline.py", "--local", cwd=FAILED_FOLDER, stdout=False)
 assert again.returncode == 0
@@ -938,7 +953,7 @@ else:
     show_runs(first_runs)
     assert first.returncode == 0 and len(first_runs) == 1
     print("products:", products(GOOD_JOBMON))
-    assert len(products(GOOD_JOBMON)) == 8
+    assert len(products(GOOD_JOBMON)) == 9
 
     # 3. Force through Jobmon.
     forced = jobmon_dagger("force", "-c", GOOD_DEF, "-P", PROJECT, "adults")

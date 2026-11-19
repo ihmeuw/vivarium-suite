@@ -1,4 +1,4 @@
-"""Track C walkthrough definition: python steps, location inputs, a notebook step and a command step."""
+"""Track C walkthrough definition: python steps, one with two products, location inputs, a notebook step and a command step."""
 
 import sys
 from pathlib import Path
@@ -17,10 +17,14 @@ def make_population() -> pd.DataFrame:
     return pd.DataFrame({"age_group": ["0-14", "15-64", "65+"], "count": [30, 55, 15]})
 
 
-def select_adults(population: Path) -> pd.DataFrame:
-    """Keep the age groups of 15 and older."""
+def split_by_age(population: Path) -> dict[str, pd.DataFrame]:
+    """Split the population into the children's and the adults' age groups."""
     frame = pd.read_parquet(population)
-    return frame[frame["age_group"] != "0-14"][["age_group", "count"]].reset_index(drop=True)
+    is_child = frame["age_group"] == "0-14"
+    return {
+        "children": frame[is_child][["age_group", "count"]].reset_index(drop=True),
+        "adults": frame[~is_child][["age_group", "count"]].reset_index(drop=True),
+    }
 
 
 def total_adults(adults: Path) -> pd.DataFrame:
@@ -45,9 +49,9 @@ def pipeline() -> Pipeline:
         make_population, inputs={}, produces="population.parquet", name="population"
     )
     p.add_python_step(
-        select_adults,
+        split_by_age,
         inputs={"population": "population.parquet"},
-        produces="adults.parquet",
+        produces={"children": "children.csv", "adults": "adults.parquet"},
         name="adults",
     )
     p.add_python_step(
