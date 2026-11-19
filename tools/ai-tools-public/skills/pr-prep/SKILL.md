@@ -35,9 +35,9 @@ the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
    Otherwise use the default branch. Run `git fetch origin <base-branch>`, then
    compute the merge-base with `origin/<base-branch>`. State the base branch and
    the number of commits ahead of it, so the user can catch a wrong base before
-   the review. **If you cannot compute the merge-base, stop** — the lookup fails
-   when `origin/<base-branch>` was never fetched, and the shell can be
-   unavailable outright. Say which step failed and stop. Do **not** reconstruct
+   the review. Do not wait for an answer. **If you cannot compute the
+   merge-base, stop** — the lookup fails when `origin/<base-branch>` was never
+   fetched, and the shell can be unavailable outright. Say which step failed and stop. Do **not** reconstruct
    the change from git internals, commit messages, or the current contents of
    the files and review that instead: a review of an inferred diff indicts code
    the change may never have touched, and every downstream step — the
