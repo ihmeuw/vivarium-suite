@@ -52,7 +52,7 @@ def test_refuses_in_standalone_repo_with_lock(
     result = _make_install(tmp_path / "repo", stub_env, with_lock=True)
     assert result.returncode != 0
     assert GUARD_MESSAGE in result.stdout
-    assert "source environment.sh" in result.stdout
+    assert "make build-env" in result.stdout
     assert STUB_MARKER not in result.stdout
 
 
@@ -104,6 +104,6 @@ def test_help_lists_the_build_steps_for_the_repo(
         text=True,
     )
     assert result.returncode == 0
-    assert ("uv sync --locked" in result.stdout) is uv_steps
+    assert ("Build .venv from uv.lock" in result.stdout) is uv_steps
     assert ("create-env" in result.stdout) is not uv_steps
     assert "including this repo's own" in result.stdout
