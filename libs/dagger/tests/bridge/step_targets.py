@@ -94,12 +94,12 @@ def constant() -> pd.DataFrame:
 
 
 def split_frames() -> dict[str, pd.DataFrame]:
-    """Return a small frame under each of the product names 'population' and 'deaths'."""
+    """Return a small frame under each of the output names 'population' and 'deaths'."""
     return {"population": _frame(), "deaths": _frame()}
 
 
 def split_frames_without_deaths() -> dict[str, pd.DataFrame]:
-    """Return a small frame under 'population' only, leaving out the product 'deaths'."""
+    """Return a small frame under 'population' only, leaving out the output 'deaths'."""
     return {"population": _frame()}
 
 
@@ -122,7 +122,7 @@ def record_pid(**upstreams: Path) -> pd.DataFrame:
 
 
 def raise_step_failure_reading(**upstreams: Path) -> pd.DataFrame:
-    """Accept any upstream products, then fail with StepFailure."""
+    """Accept any upstream outputs, then fail with StepFailure."""
     raise StepFailure(FAILURE_MESSAGE)
 
 

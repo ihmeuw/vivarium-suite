@@ -9,10 +9,10 @@ on a cluster compute node, and it submits and waits for its own Jobmon workflow,
 step holds its node, or its local process, for the whole simulation.
 
 psimulate writes each run to a new timestamped directory. The step instead keeps one
-fixed run directory, the path its ``produces`` key resolves to. psimulate writes into a
+fixed run directory, the path its ``outputs`` key resolves to. psimulate writes into a
 scratch directory beside it, ``<run directory>.psimulate``. A check then confirms that
 every simulation finished, moves the run to the run directory, replacing the previous
-one, and writes a sentinel file into it last. The run directory is the step's product,
+one, and writes a sentinel file into it last. The run directory is the step's output,
 and its state is the sentinel's content, which is new on every run. A consumer names the
 same key and receives the run directory's path. When a simulation did not finish, the
 step fails, the previous complete run stays in the run directory, and the partial run
@@ -98,7 +98,7 @@ def simulation_step(
     *,
     spec: Path | str,
     branches: Path | str,
-    produces: FileKey,
+    outputs: FileKey,
     registry: FileRegistry,
     env: str,
     options: Mapping[str, str | int | float | bool],
@@ -106,7 +106,7 @@ def simulation_step(
     resources: dict[str, Any] | None = None,
     name: str | None = None,
 ) -> Task:
-    """Compile a ``psimulate run`` into one task whose product is its run directory.
+    """Compile a ``psimulate run`` into one task whose output is its run directory.
 
     The command, run from any directory, does the following, each part only if the one
     before it succeeded:
@@ -137,9 +137,9 @@ def simulation_step(
     branches
         Path to the branches file, a file that must exist. It is a declared input of the
         step.
-    produces
+    outputs
         The file key for the run directory, registered with ``registry`` as the
-        step's product. A step that names this key as an input gets an edge to this
+        step's output. A step that names this key as an input gets an edge to this
         step and receives the run directory's path: a ``pathlib.Path`` in a
         :func:`~vivarium.dagger.frontend.python_step.python_step` target, and a ``str``
         in a :func:`~vivarium.dagger.frontend.notebook_step.notebook_step` notebook. The
@@ -174,7 +174,7 @@ def simulation_step(
         read later. They must cover the whole simulation, since psimulate waits for its
         own workflow.
     name
-        The step's name, which becomes the task name. Defaults to ``produces``.
+        The step's name, which becomes the task name. Defaults to ``outputs``.
 
     Returns
     -------
@@ -185,12 +185,12 @@ def simulation_step(
         resolves it to under ``"__artifact__"``, and whose one output, under
         ``"__run__"``, is the
         :class:`~vivarium.dagger.backend.nodes.RunDirectoryNode` the registry registers
-        for ``produces``, at the path ``produces`` resolves to.
+        for ``outputs``, at the path ``outputs`` resolves to.
 
     Raises
     ------
     vivarium.dagger.backend.wiring.WiringError
-        If ``artifact`` resolves to no producer and no root input, or ``produces`` is a
+        If ``artifact`` resolves to no producer and no root input, or ``outputs`` is a
         declared root input, resolves to the path of a different registered key, or is
         already registered as a file output. The message starts with
         ``Step '<name>':``, followed by the registry's message, which names the artifact
@@ -199,11 +199,11 @@ def simulation_step(
         Raised before anything is registered, with a message that starts with
         ``Step '<name>':``, if:
 
-        - ``name`` or ``env`` is empty, or ``produces`` is empty or ends in ``/``;
-        - ``produces`` resolves to a path that is not strictly inside the registry's
+        - ``name`` or ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
+        - ``outputs`` resolves to a path that is not strictly inside the registry's
           output directory, such as ``.``, ``..`` or an absolute path outside it, since
-          the step replaces that directory on every run; the message names ``produces``
-          and the output directory, and says that ``produces`` must name a directory
+          the step replaces that directory on every run; the message names ``outputs``
+          and the output directory, and says that ``outputs`` must name a directory
           under the output directory;
         - ``spec`` or ``branches`` does not exist or is not a file (the message names
           the path);
@@ -222,18 +222,18 @@ def simulation_step(
           ``slack_tag`` is given without ``slack_channel``, which psimulate refuses; the
           message names the keys.
     """
-    step = produces if name is None else name
-    if not produces or produces.endswith("/"):
+    step = outputs if name is None else name
+    if not outputs or outputs.endswith("/"):
         raise ValueError(
-            f"Step '{step}': produces must be a non-empty file key that does not end "
-            f"in '/', got {produces!r}."
+            f"Step '{step}': outputs must be a non-empty file key that does not end "
+            f"in '/', got {outputs!r}."
         )
-    run_dir = registry.path_for(produces)
+    run_dir = registry.path_for(outputs)
     output_dir = registry.path_for(".")
     if output_dir not in run_dir.parents:
         raise ValueError(
-            f"Step '{step}': produces {produces!r} is not inside the registry's output "
-            f"directory {output_dir}; produces must name a directory under the output "
+            f"Step '{step}': the outputs key {outputs!r} is not inside the registry's "
+            f"output directory {output_dir}; outputs must name a directory under the output "
             "directory, since the step replaces that directory on every run."
         )
     if not step:
@@ -254,7 +254,7 @@ def simulation_step(
             artifact_node = registry.resolve_input(artifact)
             inputs[_ARTIFACT_INPUT] = artifact_node
             artifact_path = _node_path(artifact_node)
-        run_node = registry.register_directory_output(produces, sentinel=_SENTINEL)
+        run_node = registry.register_directory_output(outputs, sentinel=_SENTINEL)
     except WiringError as error:
         raise WiringError(f"Step {step!r}: {error}") from None
     command = _psimulate_command(spec_path, branches_path, artifact_path, run_dir, options)

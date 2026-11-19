@@ -67,7 +67,7 @@ whose results are already written, reports every other step as failed or skipped
 writes pytask's lockfile. The build then ends with pytask's summary and is not killed,
 and it fails unless every step was recorded as successful. The bridge does not cancel
 the workflow, so its jobs that are already on compute nodes can still be running and
-writing products, and the next build prints a warning that names the run. The next
+writing outputs, and the next build prints a warning that names the run. The next
 build runs every step that was not recorded as successful and every step after one,
 and skips any other recorded step whose inputs and code identity are unchanged. With
 the default code identity no step counts as unchanged, so every step runs again.

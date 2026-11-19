@@ -59,7 +59,7 @@ root and a run name, adds each step to it with a method such as
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_python_step`, and returns the
 pipeline. Add a step after the steps that produce the files it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
-:doc:`root_inputs`). A step's products go under ``<output root>/<run name>``. The
+:doc:`root_inputs`). A step's outputs go under ``<output root>/<run name>``. The
 pipeline's root, the directory that holds its pytask state, is
 ``<output root>/.dagger/<run name>``, so two runs with different run names under one
 output root keep separate state. Pass ``state=`` to the
@@ -93,7 +93,7 @@ Previewing a run
 
    $ dagger preview -c pipeline.py
 
-``dagger preview`` runs nothing and writes no product. It prints one line per step, in
+``dagger preview`` runs nothing and writes no output. It prints one line per step, in
 the order pytask would run them. A step that would run is printed as ``run <step>``,
 followed by pytask's reasons, separated by semicolons. A step that would not run is
 printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
@@ -259,7 +259,7 @@ that the step runs in must last for the whole simulation, and so must the step's
 when the allocation's time runs out, and the step then fails because some simulations
 did not finish.
 
-``produces`` names the run directory. A step that reads the simulation's results names
+``outputs`` names the run directory. A step that reads the simulation's results names
 the same key as an input and receives the run directory's path: a ``pathlib.Path`` in a
 Python step's function, and a ``str`` in a notebook step. The run directory holds
 psimulate's run, with one file per simulation for each metric in
@@ -286,7 +286,7 @@ takes ``True`` or ``False``. psimulate sends a Slack message when the run ends u
 you pass ``no_slack=True``. ``no_slack=True`` cannot be combined with ``slack_channel``
 or ``slack_tag``, and ``slack_tag`` needs ``slack_channel``. The step sets the model
 specification, the branches file, the artifact and the result directory itself, from
-``spec``, ``branches``, ``artifact`` and ``produces``. Any other key is refused when the
+``spec``, ``branches``, ``artifact`` and ``outputs``. Any other key is refused when the
 step is defined.
 
 This example runs a toy model with two draws and two seeds, so four simulations, and
@@ -388,15 +388,15 @@ Each of these exits with status 2 before any step runs:
   step that reads a file that no step produces and that is not a root input, the
   error names the step and the file key, with the closest key that does exist. If
   no key is close, it lists the keys registered so far instead, which are the root
-  inputs and the products of the steps defined before the one that reads the key.
+  inputs and the outputs of the steps defined before the one that reads the key.
   A notebook step that passes a name its notebook's ``parameters`` cell does not
   assign, or passes names to a notebook with no such cell, is rejected with an error
   that names the step, the notebook and each name.
 - A step is added to a ``Pipeline`` with the name of a step already added, or with a
-  product that a step already added produces. The ``Pipeline`` refuses the step when it
+  output that a step already added produces. The ``Pipeline`` refuses the step when it
   is added, so the traceback ends on the line of the definition that adds it, and the
-  message names the step and, for a product, the file key and the step that already
-  produces it. When both apply, the message is the one for the product.
+  message names the step and, for an output, the file key and the step that already
+  produces it. When both apply, the message is the one for the output.
 - A step name given to ``--until`` or ``dagger force`` is not a step of the pipeline.
   ``dagger`` lists the valid step names.
 - A location's primary data fails the location inputs check (see
@@ -422,41 +422,41 @@ prints only the file, the line number, the line with a caret under the error, an
 
 The full reference for the command and its options is in :mod:`vivarium.dagger.cli`.
 
-Steps with several products
----------------------------
+Steps with several outputs
+--------------------------
 
-A Python step can write more than one file. Pass ``produces`` a mapping of product names
+A Python step can write more than one file. Pass ``outputs`` a mapping of output names
 to file keys, and have the function return a dict with exactly those names, each mapped
 to a DataFrame. Each DataFrame is saved at its key in the format that the key's suffix
 names, ``.parquet`` or ``.csv``, so one step can write files in both formats. In this
 example, ``split`` writes the children's rows to a CSV file and the adults' rows to a
 Parquet file, and ``summary`` reads only the Parquet file:
 
-.. literalinclude:: ../../tests/frontend/several_products_example/pipeline.py
+.. literalinclude:: ../../tests/frontend/several_outputs_example/pipeline.py
    :language: python
    :caption: pipeline.py
 
-Every key in the mapping is a product of the step. A later step reads one of them by
-naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each product
-is a separate file, so a ``dagger preview`` reason about one product names it by its
+Every key in the mapping is an output of the step. A later step reads one of them by
+naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each output
+is a separate file, so a ``dagger preview`` reason about one output names it by its
 key, such as ``file 'children.csv' is missing``. In this example the line for ``split``
 shows only ``step 'population' would run first``, because ``population`` is a Python
 step and re-runs on every build for now.
 
-A step with one product is named after its key by default. A step with more than one
-product has no default name, so pass ``name=``. A product name must be a valid Python
+A step with one output is named after its key by default. A step with more than one
+output has no default name, so pass ``name=``. An output name must be a valid Python
 identifier, must not be a Python keyword or one of the reserved names ``__code_id__``,
-``__command__``, ``__executed__`` and ``__notebook__``, and must not be the name of one
-of the step's inputs. These rules, and the rules for each key, are checked when the step
-is added, before any of its keys is registered.
+``__command__``, ``__executed__``, ``__notebook__`` and ``__output__``, and must not be
+the name of one of the step's inputs. These rules, and the rules for each key, are
+checked when the step is added, before any of its keys is registered.
 
 If the function returns something other than a dict, a dict with a missing or extra
 name, or a value that is not a DataFrame, the step fails and nothing is saved. The
-message names the function and the product names:
+message names the function and the output names:
 
 .. code-block:: text
 
-   Step 'split' failed: ValueError: Python step target split_by_age returned a dict whose keys do not match its product names: the product 'children' is missing. The product names are 'adults' and 'children'.
+   Step 'split' failed: ValueError: Python step target split_by_age returned a dict whose keys do not match its output names: the output 'children' is missing. The output names are 'adults' and 'children'.
 
 Steps that run a command
 ------------------------
@@ -488,12 +488,12 @@ It runs like any other definition:
    dagger preview -c pipeline.py
    dagger run -c pipeline.py --local
 
-``inputs`` and ``produces`` map names to file keys. Each ``{name}`` in the command is
-replaced by the absolute path of the input or product of that name, quoted for the
+``inputs`` and ``outputs`` map names to file keys. Each ``{name}`` in the command is
+replaced by the absolute path of the input or output of that name, quoted for the
 shell, so do not put quotes around a placeholder. The placeholders follow Python's
 :meth:`str.format`, so a literal brace in the command must be doubled: write the shell
 variable ``${VAR}`` as ``${{VAR}}``, and the ``awk`` program ``'{print $1}'`` as
-``'{{print $1}}'``. A placeholder that is not an input or product name is refused when
+``'{{print $1}}'``. A placeholder that is not an input or output name is refused when
 the definition is loaded, with the valid names and, when one is close, the closest one.
 The command does not have to use every name. An input that it does not name still runs
 the step after the input's producer and makes the step stale when the input changes.
@@ -523,9 +523,9 @@ the example does with ``{script}``. Like a Python step, a command step re-runs o
 every build for now, because a step cannot yet declare a fingerprint of its code; these
 rules apply once it can.
 
-Before the command runs, ``dagger`` creates the directory of each product. Products from
-an earlier run are not removed first, so the command must write every product on every
-run; a product left by an earlier run counts as written.
+Before the command runs, ``dagger`` creates the directory of each output. Outputs from
+an earlier run are not removed first, so the command must write every output on every
+run; an output left by an earlier run counts as written.
 
 When the command exits with a status other than 0, the step fails, and ``dagger``'s
 line for it gives the status, or the signal that stopped the command:

@@ -8,9 +8,9 @@ ends with ``return p``::
 
     def pipeline() -> Pipeline:
         p = Pipeline(HERE / "output", run_name="example")
-        p.add_python_step(make_population, inputs={}, produces="population.parquet")
+        p.add_python_step(make_population, inputs={}, outputs="population.parquet")
         p.add_python_step(
-            total, inputs={"population": "population.parquet"}, produces="total.csv"
+            total, inputs={"population": "population.parquet"}, outputs="total.csv"
         )
         return p
 
@@ -18,8 +18,8 @@ Each step method calls the step function of the same name, such as
 :func:`~vivarium.dagger.frontend.python_step.python_step`, with the pipeline's registry,
 so a step added through the pipeline is the same task, with the same checks and
 messages, as one compiled against the registry by hand. The pipeline also refuses a step
-whose name, or one of whose products, another step in the pipeline already has, when the
-step is added; when both apply, the error names the product. A step that reads a
+whose name, or one of whose outputs, another step in the pipeline already has, when the
+step is added; when both apply, the error names the output. A step that reads a
 file must still be added after the step that produces it. :meth:`Pipeline.add_task` is
 the lower layer: it adds a task that was compiled with a step function directly or built
 by hand.
@@ -32,7 +32,7 @@ snapshot. A step added after a run has started is in the next run, not that one.
 
 By default the pipeline keeps its pytask state in ``<output root>/.dagger/<run name>``,
 outside the run's output directory ``<output root>/<run name>``. Two pipelines with
-different run names under one output root therefore write their products to different
+different run names under one output root therefore write their outputs to different
 directories and keep separate state, so they do not share a lock.
 """
 
@@ -72,7 +72,7 @@ class Pipeline:
     Parameters
     ----------
     output_root
-        Directory under which the run's products live, in ``<output root>/<run name>``.
+        Directory under which the run's outputs live, in ``<output root>/<run name>``.
         A relative path is resolved against the current directory when the pipeline is
         made.
     run_name
@@ -105,7 +105,7 @@ class Pipeline:
         directory, ``<output root>/<run name>`` with ``.`` and ``..`` collapsed
         (symlinks are not followed), is not strictly inside the output root (as for an
         empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a directory inside
-        it (as for the run name ``.dagger``), since the run's products would then share
+        it (as for the run name ``.dagger``), since the run's outputs would then share
         a directory with the state of every run; or if ``state`` is a relative path,
         which would move the run's state with the current directory. The message names
         the run name or the state path.
@@ -173,7 +173,7 @@ class Pipeline:
         target: Callable[..., pd.DataFrame | Mapping[str, pd.DataFrame]],
         *,
         inputs: Mapping[str, FileKey],
-        produces: FileKey | Mapping[str, FileKey],
+        outputs: FileKey | Mapping[str, FileKey],
         resources: dict[str, Any] | None = None,
         name: str | None = None,
     ) -> None:
@@ -183,20 +183,20 @@ class Pipeline:
         :func:`~vivarium.dagger.frontend.python_step.python_step` with the pipeline's
         registry, which describes each parameter in full.
 
-        The pipeline checks the step's name and products before anything is registered,
+        The pipeline checks the step's name and outputs before anything is registered,
         and a step that is refused is not added.
 
         Parameters
         ----------
         target
-            A function returning a pandas DataFrame, or a dict of them when ``produces``
+            A function returning a pandas DataFrame, or a dict of them when ``outputs``
             is a mapping, defined at the top level of an importable module. Each input
             reaches it, under its parameter name, as the input's file path.
         inputs
-            Maps each of ``target``'s parameter names to the file key of a product
+            Maps each of ``target``'s parameter names to the file key of an output
             of a step already added, or of a root input.
-        produces
-            The file key of the step's product, or a mapping of product names to file
+        outputs
+            The file key of the step's output, or a mapping of output names to file
             keys; with a mapping, ``target`` returns a dict with exactly those names.
             Each key's suffix, ``.parquet`` or ``.csv``, names the format its DataFrame
             is saved in.
@@ -205,7 +205,7 @@ class Pipeline:
             ``{"memory": 16, "runtime": 7200}``. They override the pipeline's
             ``resources`` key by key.
         name
-            The step's name. Defaults to ``produces`` when it is a key, or to its one key
+            The step's name. Defaults to ``outputs`` when it is a key, or to its one key
             when it is a mapping with one entry, and is required when the mapping has
             more than one.
 
@@ -217,29 +217,29 @@ class Pipeline:
             Also for each case in which
             :func:`~vivarium.dagger.frontend.python_step.python_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
-            If a ``produces`` key is a product of a step already added; the message starts
+            If an ``outputs`` key is an output of a step already added; the message starts
             with ``Step '<name>':`` and names the key and the step that produces it.
-            If the step's name and one of its products are both already in the
+            If the step's name and one of its outputs are both already in the
             pipeline, this error is raised, not the ``ValueError`` for the name.
             Also for each case in which
             :func:`~vivarium.dagger.frontend.python_step.python_step` raises it, such as
             an input key that no step already added produces and that is not a root
             input.
         """
-        products = list(produces.values()) if isinstance(produces, Mapping) else [produces]
-        # With no name and other than one product, python_step has no default name and
+        keys = list(outputs.values()) if isinstance(outputs, Mapping) else [outputs]
+        # With no name and other than one output, python_step has no default name and
         # raises before registering anything, so it reports the step.
-        default = products[0] if len(products) == 1 else None
-        self._check_new(default if name is None else name, products)
+        default = keys[0] if len(keys) == 1 else None
+        self._check_new(default if name is None else name, keys)
         task = compile_python_step(
             target,
             inputs=inputs,
-            produces=produces,
+            outputs=outputs,
             registry=self._registry,
             resources=resources,
             name=name,
         )
-        self._add(task, products)
+        self._add(task, keys)
 
     def add_notebook_step(
         self,
@@ -248,7 +248,7 @@ class Pipeline:
         executed: FileKey,
         env: str,
         inputs: Mapping[str, FileKey] | None = None,
-        produces: Mapping[str, FileKey] | None = None,
+        outputs: Mapping[str, FileKey] | None = None,
         parameters: Mapping[str, NotebookParameter] | None = None,
         resources: dict[str, Any] | None = None,
         name: str | None = None,
@@ -260,26 +260,26 @@ class Pipeline:
         registry, which describes each parameter, the notebook's ``parameters`` cell and
         the failure message in full.
 
-        The pipeline checks the step's name and products before anything is registered,
+        The pipeline checks the step's name and outputs before anything is registered,
         and a step that is refused is not added.
 
         Parameters
         ----------
         notebook
             Path to the source notebook, an existing ``.ipynb`` file. Every name passed
-            in ``inputs``, ``produces`` or ``parameters`` must be assigned in its first
+            in ``inputs``, ``outputs`` or ``parameters`` must be assigned in its first
             cell tagged ``parameters``.
         executed
-            The file key, ending in ``.ipynb``, of the executed notebook, which is a
-            product of the step.
+            The file key, ending in ``.ipynb``, of the executed notebook, which is an
+            output of the step.
         env
             The environment the notebook runs in: a conda env or venv name, or a path to
             its prefix. It must have ``papermill`` and ``ipykernel`` installed.
         inputs
-            Maps notebook parameter names to the file keys of products of steps
+            Maps notebook parameter names to the file keys of outputs of steps
             already added, or of root inputs. Each reaches the notebook as its path, as
             a ``str``.
-        produces
+        outputs
             Maps notebook parameter names to the file keys of the data files the
             notebook writes. Each reaches the notebook as its path, as a ``str``.
         parameters
@@ -299,33 +299,33 @@ class Pipeline:
             Also for each case in which
             :func:`~vivarium.dagger.frontend.notebook_step.notebook_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
-            If ``executed`` or a ``produces`` key is a product of a step already added;
+            If ``executed`` or an ``outputs`` key is an output of a step already added;
             the message starts with ``Step '<name>':`` and names the key and the step
-            that produces it. If the step's name and one of its products are both
+            that produces it. If the step's name and one of its outputs are both
             already in the pipeline, this error is raised, not the ``ValueError`` for
             the name. Also for each case in which
             :func:`~vivarium.dagger.frontend.notebook_step.notebook_step` raises it.
         """
-        products = [executed, *(produces or {}).values()]
-        self._check_new(executed if name is None else name, products)
+        keys = [executed, *(outputs or {}).values()]
+        self._check_new(executed if name is None else name, keys)
         task = compile_notebook_step(
             notebook,
             executed=executed,
             registry=self._registry,
             env=env,
             inputs=inputs,
-            produces=produces,
+            outputs=outputs,
             parameters=parameters,
             resources=resources,
             name=name,
         )
-        self._add(task, products)
+        self._add(task, keys)
 
     def add_command_step(
         self,
         command: str,
         *,
-        produces: Mapping[str, FileKey],
+        outputs: Mapping[str, FileKey],
         inputs: Mapping[str, FileKey] | None = None,
         env: str | None = None,
         resources: dict[str, Any] | None = None,
@@ -335,22 +335,22 @@ class Pipeline:
 
         The step is compiled by
         :func:`~vivarium.dagger.frontend.command_step.command_step` with the pipeline's
-        registry, which describes the placeholders, the shell, ``env`` and the products
+        registry, which describes the placeholders, the shell, ``env`` and the outputs
         in full.
 
-        The pipeline checks the step's name and products before anything is registered,
+        The pipeline checks the step's name and outputs before anything is registered,
         and a step that is refused is not added.
 
         Parameters
         ----------
         command
-            The shell command, with a ``{name}`` placeholder for each input or product
+            The shell command, with a ``{name}`` placeholder for each input or output
             path it uses. Write ``{{`` and ``}}`` for a literal brace.
-        produces
+        outputs
             Maps placeholder names to the file keys of the files the command writes.
             It must have at least one entry.
         inputs
-            Maps placeholder names to the file keys of products of steps already
+            Maps placeholder names to the file keys of outputs of steps already
             added, or of root inputs.
         env
             The environment whose ``bin`` directories go first on ``PATH`` while the
@@ -360,7 +360,7 @@ class Pipeline:
             Compute resources for this step in a run through Jobmon. They override the
             pipeline's ``resources`` key by key.
         name
-            The step's name. Defaults to the ``produces`` key when ``produces`` has one
+            The step's name. Defaults to the ``outputs`` key when ``outputs`` has one
             entry, and is required when it has more than one.
 
         Raises
@@ -371,35 +371,35 @@ class Pipeline:
             Also for each case in which
             :func:`~vivarium.dagger.frontend.command_step.command_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
-            If a ``produces`` key is a product of a step already added; the message
+            If an ``outputs`` key is an output of a step already added; the message
             starts with ``Step '<name>':`` and names the key and the step that produces
-            it. If the step's name and one of its products are both already in the
+            it. If the step's name and one of its outputs are both already in the
             pipeline, this error is raised, not the ``ValueError`` for the name. Also
             for each case in which
             :func:`~vivarium.dagger.frontend.command_step.command_step` raises it.
         """
-        products = list(produces.values())
-        # With no name and other than one product, command_step has no default name and
+        keys = list(outputs.values())
+        # With no name and other than one output, command_step has no default name and
         # raises before registering anything, so it reports the step.
-        default = products[0] if len(products) == 1 else None
-        self._check_new(default if name is None else name, products)
+        default = keys[0] if len(keys) == 1 else None
+        self._check_new(default if name is None else name, keys)
         task = compile_command_step(
             command,
-            produces=produces,
+            outputs=outputs,
             registry=self._registry,
             inputs=inputs,
             env=env,
             resources=resources,
             name=name,
         )
-        self._add(task, products)
+        self._add(task, keys)
 
     def add_simulation_step(
         self,
         *,
         spec: Path | str,
         branches: Path | str,
-        produces: FileKey,
+        outputs: FileKey,
         env: str,
         options: Mapping[str, str | int | float | bool],
         artifact: FileKey | None = None,
@@ -413,7 +413,7 @@ class Pipeline:
         pipeline's registry, which describes the command, the run directory, the options
         and the failure message in full. psimulate runs only on a cluster compute node.
 
-        The pipeline checks the step's name and products before anything is registered,
+        The pipeline checks the step's name and outputs before anything is registered,
         and a step that is refused is not added.
 
         Parameters
@@ -422,8 +422,8 @@ class Pipeline:
             Path to the model specification, an existing file.
         branches
             Path to the branches file, an existing file.
-        produces
-            The file key of the run directory, the step's product. A step that names
+        outputs
+            The file key of the run directory, the step's output. A step that names
             this key as an input receives the run directory's path.
         env
             The environment psimulate runs in: a conda env or venv name, or a path to
@@ -433,14 +433,14 @@ class Pipeline:
             The options of ``psimulate run``, keyed by long option name with ``_`` for
             ``-``, such as ``peak_memory``. ``project`` is required.
         artifact
-            The file key of the model's artifact, a product of a step already added
+            The file key of the model's artifact, an output of a step already added
             or a root input. Without it, psimulate reads the artifact the model
             specification names.
         resources
             Compute resources for this step in a run through Jobmon. They must cover the
             whole simulation, and they override the pipeline's ``resources`` key by key.
         name
-            The step's name. Defaults to ``produces``.
+            The step's name. Defaults to ``outputs``.
 
         Raises
         ------
@@ -450,19 +450,19 @@ class Pipeline:
             Also for each case in which
             :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
-            If ``produces`` is a product of a step already added; the message starts
+            If ``outputs`` is an output of a step already added; the message starts
             with ``Step '<name>':`` and names the key and the step that produces it.
-            If the step's name and one of its products are both already in the
+            If the step's name and one of its outputs are both already in the
             pipeline, this error is raised, not the ``ValueError`` for the name.
             Also for each case in which
             :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` raises it.
         """
-        products = [produces]
-        self._check_new(produces if name is None else name, products)
+        keys = [outputs]
+        self._check_new(outputs if name is None else name, keys)
         task = compile_simulation_step(
             spec=spec,
             branches=branches,
-            produces=produces,
+            outputs=outputs,
             registry=self._registry,
             env=env,
             options=options,
@@ -470,7 +470,7 @@ class Pipeline:
             resources=resources,
             name=name,
         )
-        self._add(task, products)
+        self._add(task, keys)
 
     def add_task(self, task: Task) -> None:
         """Add ``task``, a step that is already compiled, to the end of the pipeline.
@@ -479,7 +479,7 @@ class Pipeline:
         function directly, such as
         :func:`~vivarium.dagger.frontend.python_step.python_step`, or built by hand as a
         :class:`~vivarium.dagger.backend.task.Task`. The pipeline's registry is private
-        and knows only the root inputs and the products of steps added with the step
+        and knows only the root inputs and the outputs of steps added with the step
         methods. So :func:`~vivarium.dagger.frontend.execution.preview` names by path
         each output of such a task and each input whose key the pipeline does not know,
         and a step added with a step method cannot name one of its outputs as an input.
@@ -523,14 +523,14 @@ class Pipeline:
         for path in paths:
             self._task_outputs[path] = task.name
 
-    def _check_new(self, step: str | None, products: Iterable[FileKey]) -> None:
-        """Refuse a step whose name or one of whose products an added step already has."""
+    def _check_new(self, step: str | None, keys: Iterable[FileKey]) -> None:
+        """Refuse a step whose name or one of whose outputs an added step already has."""
         # A missing or empty name is the step function's error to report.
         if not step:
             return
-        # Products first: two unnamed steps that produce one key also share a default
+        # Outputs first: two unnamed steps that produce one key also share a default
         # name, and a different name= would not fix that.
-        for key in products:
+        for key in keys:
             producer = self._producers.get(key)
             if producer is None and self._task_outputs:
                 producer = self._task_outputs.get(self._registry.path_for(key))
@@ -556,10 +556,10 @@ class Pipeline:
             return self._producers[key]
         return self._task_outputs.get(path)
 
-    def _add(self, task: Task, products: Iterable[FileKey]) -> None:
-        """Append ``task`` and record it as the producer of each of ``products``."""
+    def _add(self, task: Task, keys: Iterable[FileKey]) -> None:
+        """Append ``task`` and record it as the producer of each of ``keys``."""
         self._tasks.append(task)
-        for key in products:
+        for key in keys:
             self._producers[key] = task.name
 
 

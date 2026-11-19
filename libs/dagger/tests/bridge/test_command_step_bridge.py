@@ -47,7 +47,7 @@ def test_payload_for_a_command_step_carries_its_command_and_the_env_bin_path(
     env = str(_make_env(tmp_path / "env"))
     task = command_step(
         _TOOL + " ran {out}",
-        produces={"out": "out.txt"},
+        outputs={"out": "out.txt"},
         registry=FileRegistry(tmp_path / "out", "run1"),
         env=env,
         name="tooled",
@@ -67,7 +67,7 @@ def test_payload_for_a_command_step_without_an_env_has_no_env_path(
     """payload_for on a command_step task with env=None gives kind "command", command equal to the task's run, and env_path None."""
     task = command_step(
         "printf x > {out}",
-        produces={"out": "out.txt"},
+        outputs={"out": "out.txt"},
         registry=FileRegistry(tmp_path / "out", "run1"),
         name="plain",
     )
@@ -83,19 +83,19 @@ def test_payload_for_a_command_step_without_an_env_has_no_env_path(
 def test_two_chained_command_steps_run_through_fake_jobmon_and_the_env_tool_runs(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """frontend.run(pipeline, jobmon=True) under FakeJobmon on two chained command steps, the second under a fake env given by its prefix path, gives SUCCESS for both, writes both products, and the second product records that the env's tool ran."""
+    """frontend.run(pipeline, jobmon=True) under FakeJobmon on two chained command steps, the second under a fake env given by its prefix path, gives SUCCESS for both, writes both outputs, and the second output records that the env's tool ran."""
     env = _make_env(tmp_path / "env")
     registry = FileRegistry(tmp_path / "out", "run1")
     first = command_step(
         "printf 'first\\n' > {first}",
-        produces={"first": "chain/first.txt"},
+        outputs={"first": "chain/first.txt"},
         registry=registry,
         name="first",
     )
     second = command_step(
         "cat {upstream} > {second} && " + _TOOL + " tool-ran {second}",
         inputs={"upstream": "chain/first.txt"},
-        produces={"second": "chain/second.txt"},
+        outputs={"second": "chain/second.txt"},
         registry=registry,
         env=str(env),
         name="second",
@@ -128,7 +128,7 @@ def test_a_command_step_that_fails_on_its_node_is_described_as_a_local_failure(
     registry = FileRegistry(tmp_path / "out", "run1")
     step = command_step(
         command + " && printf 'never' > {out}",
-        produces={"out": "out.txt"},
+        outputs={"out": "out.txt"},
         registry=registry,
         name="failing",
     )

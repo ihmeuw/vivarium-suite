@@ -110,7 +110,7 @@ def test_missing_output_marks_its_producer(
     assert _would_run(plan) == {"build", "pafs"}
 
 
-def test_preview_writes_no_product(
+def test_preview_writes_no_output(
     converged: tuple[list[Task], Path, Path, Path],
 ) -> None:
     tasks, root, raw, artifact = converged

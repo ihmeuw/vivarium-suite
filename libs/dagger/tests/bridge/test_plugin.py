@@ -252,7 +252,7 @@ def test_preview_with_jobmon_stays_local(tmp_path: Path, fake_jobmon: FakeJobmon
 def test_a_dry_run_or_explanation_with_jobmon_stays_local(
     tmp_path: Path, mode: str, fake_jobmon: FakeJobmon
 ) -> None:
-    """A build with jobmon=True and dry_run or explain set (explain without dry_run) binds no plan, writes no product, and creates no run directory."""
+    """A build with jobmon=True and dry_run or explain set (explain without dry_run) binds no plan, writes no output, and creates no run directory."""
     fx = build_fixture(tmp_path)
     flags: dict[str, Any] = {mode: True}
 

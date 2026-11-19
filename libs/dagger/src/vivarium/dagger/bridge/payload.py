@@ -2,7 +2,7 @@
 
 The controller calls :func:`payload_for` for each step it sends to a node. A recipe is
 plain JSON: a python step crosses as its target's import reference, the directory its
-target's module imports from, its product suffix or suffixes, and its arguments, and a
+target's module imports from, its output suffix or suffixes, and its arguments, and a
 command step crosses as its command string and the ``bin`` directories of its env,
 resolved on the controller. No pickled code or data crosses, so
 an argument must be JSON or a path, and a step that cannot be named by reference is
@@ -49,8 +49,8 @@ class PythonPayload(TypedDict):
     pipeline definition file that was loaded by path imports on the node without
     ``PYTHONPATH``."""
     suffix: str | dict[str, str]
-    """The product suffix, which names the save format (``.parquet`` or ``.csv``), or, for
-    a step whose produces is a mapping, each product name mapped to its suffix."""
+    """The output suffix, which names the save format (``.parquet`` or ``.csv``), or, for
+    a step whose ``outputs`` is a mapping, each output name mapped to its suffix."""
     kwargs: dict[str, JSONValue]
     """The step's arguments, each encoded by :func:`encode`."""
 

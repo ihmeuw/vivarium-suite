@@ -21,7 +21,7 @@ as its output (which would otherwise shadow the root input for every consumer), 
 hard error when one key is registered as both a file output and a run directory
 output, and a did-you-mean on a mistyped key. An unresolved input (no producer and no root-input
 file) is caught here with a did-you-mean; everything heavier (a cycle, two tasks
-claiming one product) is left to pytask, which fails safe.
+claiming one output) is left to pytask, which fails safe.
 """
 
 import difflib
@@ -104,7 +104,7 @@ class FileRegistry:
     def check_output(self, key: FileKey) -> Path:
         """Return ``key``'s path, raising as :meth:`register_output` would for it.
 
-        Nothing is registered, so a step with several products can check every key before
+        Nothing is registered, so a step with several outputs can check every key before
         it registers any.
 
         Parameters
@@ -134,7 +134,7 @@ class FileRegistry:
         """Register ``key`` as produced by a step and return its file node.
 
         Registering the same key again returns the same node, so two tasks claiming
-        one product is left for pytask to reject.
+        one output is left for pytask to reject.
 
         Parameters
         ----------

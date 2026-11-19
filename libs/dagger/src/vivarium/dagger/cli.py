@@ -387,7 +387,7 @@ def restart(
 def preview(config: Path | str, until: tuple[str, ...]) -> None:
     """Show which steps of a pipeline definition would run, and why.
 
-    Nothing runs and no product is written. --until plans only the named steps and
+    Nothing runs and no output is written. --until plans only the named steps and
     the steps they depend on.
     """
     definition = _require_definition(click.get_current_context(), config)

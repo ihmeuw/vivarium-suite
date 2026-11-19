@@ -129,7 +129,7 @@ def _mean_step(root: Path, key: str) -> Task:
     inputs = location_inputs(root, ["ethiopia"], _FILES)
     registry = FileRegistry(root / "out", "run1", root_inputs=inputs)
     return python_step(
-        _mean_coverage, inputs={"coverage": key}, produces="mean.parquet", registry=registry
+        _mean_coverage, inputs={"coverage": key}, outputs="mean.parquet", registry=registry
     )
 
 
@@ -442,7 +442,7 @@ def test_mistyped_location_key_suggests_the_declared_one(tmp_path: Path) -> None
 
 
 def test_location_input_file_feeds_a_python_step_end_to_end(tmp_path: Path) -> None:
-    """A python_step reading a location key gets the file's path as its input, and build() writes its product."""
+    """A python_step reading a location key gets the file's path as its input, and build() writes its output."""
     path = _deliver(tmp_path, "ethiopia", "coverage.csv")
     task = _mean_step(tmp_path, location_key("ethiopia", "coverage.csv"))
 

@@ -54,7 +54,7 @@ _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 
 def registry(tmp_path: Path) -> FileRegistry:
-    """Return a registry whose products go under ``tmp_path / "out"``."""
+    """Return a registry whose outputs go under ``tmp_path / "out"``."""
     return FileRegistry(output_root=tmp_path / "out", run_name="run1")
 
 
@@ -77,7 +77,7 @@ def chain_and_independent(
 ) -> list[Task]:
     """Return the chain ``a -> b -> c`` and the independent step ``d``, in that order.
 
-    Each step records its node's process id in its product, after the ids its upstream
+    Each step records its node's process id in its output, after the ids its upstream
     recorded. A step named in ``failing`` raises ``StepFailure`` on its node instead, and
     one named in ``killed`` ends its runner without a result.
     """
@@ -91,12 +91,12 @@ def chain_and_independent(
         else:
             target = step_targets.record_pid
         inputs = {"upstream": upstream_of[name]} if name in upstream_of else {}
-        tasks.append(python_step(target, inputs=inputs, produces=name, registry=artifacts))
+        tasks.append(python_step(target, inputs=inputs, outputs=name, registry=artifacts))
     return tasks
 
 
 def recorded_pids(artifacts: FileRegistry, names: Collection[str]) -> set[int]:
-    """Return every process id recorded in the products of ``names`` that exist."""
+    """Return every process id recorded in the outputs of ``names`` that exist."""
     pids: set[int] = set()
     for name in names:
         path = artifacts.path_for(name)
@@ -184,7 +184,7 @@ def chain_build(
 ) -> Session:
     """Build a -> b -> c plus d under ``tmp_path`` with jobmon=True through ``jobmon``.
 
-    The products go under ``tmp_path / "out"`` and the root is :func:`build_root`. A step
+    The outputs go under ``tmp_path / "out"`` and the root is :func:`build_root`. A step
     named in ``failing`` raises on its node, and one named in ``killed`` ends its runner
     without a result. ``stable_ids`` gives every step a stable code identity.
     """

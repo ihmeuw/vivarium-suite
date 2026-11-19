@@ -94,18 +94,18 @@ def _sigterm_handler(handler: Callable[[int, FrameType | None], Any]) -> Iterato
         signal.signal(signal.SIGTERM, previous)
 
 
-def test_build_fixture_runs_and_writes_its_products(tmp_path: Path) -> None:
-    """The fixture builds a runnable pipeline; running it succeeds and writes products."""
+def test_build_fixture_runs_and_writes_its_outputs(tmp_path: Path) -> None:
+    """The fixture builds a runnable pipeline; running it succeeds and writes outputs."""
     fx = build_fixture(tmp_path)
 
     assert run(fx) == {name: TaskOutcome.SUCCESS for name in fx.steps}
 
     for step in fx.steps:
         product = fx.registry.path_for(step)
-        assert product.exists()  # the step wrote its product
+        assert product.exists()  # the step wrote its output
         frame = pd.read_parquet(product)
         assert isinstance(frame, pd.DataFrame)
-        assert not frame.empty  # the product reads back as a non-empty frame
+        assert not frame.empty  # the output reads back as a non-empty frame
 
     final = pd.read_parquet(fx.registry.path_for("final.parquet"))
     assert final["n"].tolist() == [12, 14, 16]  # the chain is wired: mid feeds final

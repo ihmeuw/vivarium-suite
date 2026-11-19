@@ -158,7 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     output keeps its order with a child process's. The runner changes to the payload's
     ``cwd`` and runs a python recipe as
     ``PythonStepRun(resolve_reference(target), suffix)(**decode(kwargs))``, where
-    ``suffix`` is a suffix or a mapping of product names to suffixes, or a command recipe
+    ``suffix`` is a suffix or a mapping of output names to suffixes, or a command recipe
     through :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. Any
     exception is a failure, including :class:`SystemExit` or :class:`KeyboardInterrupt`
     from the step, an unreadable payload, and an unknown ``kind``. On a failure the runner

@@ -146,7 +146,7 @@ def build_fixture(tmp_path: Path) -> Fixture:
     """Build a small two-step ``python_step`` pipeline under ``tmp_path``.
 
     The pipeline reads a root-input table, doubles it into an intermediate
-    product, then offsets that into a final product: a producer/consumer chain
+    output, then offsets that into a final output: a producer/consumer chain
     wired through one registry, enough for a scenario to perturb one input and
     inspect the plan. The returned :class:`Fixture` carries the tasks, the
     registry, the pytask state directory, the perturbable input paths, and the
@@ -161,10 +161,10 @@ def build_fixture(tmp_path: Path) -> Fixture:
         root_inputs={"raw": raw_path},
     )
     double = python_step(
-        _double, inputs={"raw": "raw"}, produces="mid.parquet", registry=registry
+        _double, inputs={"raw": "raw"}, outputs="mid.parquet", registry=registry
     )
     offset = python_step(
-        _offset, inputs={"mid": "mid.parquet"}, produces="final.parquet", registry=registry
+        _offset, inputs={"mid": "mid.parquet"}, outputs="final.parquet", registry=registry
     )
 
     state = tmp_path / "state"
