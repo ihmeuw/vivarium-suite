@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
 import click
 import pytest
 
+from vivarium.cluster_tools.core import notifications
 from vivarium.cluster_tools.core.cli_tools import validate_slack_options
-from vivarium.cluster_tools.core.notifications import send_slack_notification
+from vivarium.cluster_tools.core.notifications import _read_token, send_slack_notification
 
 BOT_TOKEN = "xoxb-test-token"
 MONITORING_URL = "https://jobmon.example.com/#/workflow/123"
@@ -17,6 +19,14 @@ WORKFLOW_NAME = "my_pipeline"
 COMMAND_LABEL = "dagger run"
 
 SLACK_API = "https://slack.com/api"
+
+
+@pytest.fixture(autouse=True)
+def no_team_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Point the team config at a missing file, so tests never read the real token."""
+    config = tmp_path / "slack_bot_config.sh"
+    monkeypatch.setattr(notifications, "SLACK_BOT_CONFIG", config)
+    return config
 
 
 def _mock_slack_responses() -> MagicMock:
@@ -42,7 +52,7 @@ def _mock_slack_responses() -> MagicMock:
 
 
 def test_no_token_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When PSIMULATE_SLACK_BOT_TOKEN is unset, no Slack API calls are made."""
+    """With no token in the environment or the team config, no Slack API calls are made."""
     monkeypatch.delenv("PSIMULATE_SLACK_BOT_TOKEN", raising=False)
     with patch(
         "vivarium.cluster_tools.core.notifications.requests.post",
@@ -51,6 +61,55 @@ def test_no_token_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
             workflow_name=WORKFLOW_NAME, status="D", command_label=COMMAND_LABEL
         )
         mock_post.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'export PSIMULATE_SLACK_BOT_TOKEN="xoxb-from-file"',
+        "PSIMULATE_SLACK_BOT_TOKEN='xoxb-from-file'",
+        "  export PSIMULATE_SLACK_BOT_TOKEN=xoxb-from-file  ",
+    ],
+)
+def test_token_read_from_team_config(
+    monkeypatch: pytest.MonkeyPatch, no_team_config: Path, line: str
+) -> None:
+    """With the variable unset, the token comes from the team config file."""
+    monkeypatch.delenv("PSIMULATE_SLACK_BOT_TOKEN", raising=False)
+    no_team_config.write_text(f"# Slack bot token.\n{line}\n")
+    assert _read_token() == "xoxb-from-file"
+
+
+def test_environment_token_wins_over_team_config(
+    monkeypatch: pytest.MonkeyPatch, no_team_config: Path
+) -> None:
+    monkeypatch.setenv("PSIMULATE_SLACK_BOT_TOKEN", BOT_TOKEN)
+    no_team_config.write_text('export PSIMULATE_SLACK_BOT_TOKEN="xoxb-from-file"\n')
+    assert _read_token() == BOT_TOKEN
+
+
+def test_team_config_without_token_line(
+    monkeypatch: pytest.MonkeyPatch, no_team_config: Path
+) -> None:
+    monkeypatch.delenv("PSIMULATE_SLACK_BOT_TOKEN", raising=False)
+    no_team_config.write_text("# no token here\n")
+    assert _read_token() is None
+
+
+def test_team_config_token_sends_notification(
+    monkeypatch: pytest.MonkeyPatch, no_team_config: Path
+) -> None:
+    """A run with no token in the environment still notifies through the file's token."""
+    monkeypatch.delenv("PSIMULATE_SLACK_BOT_TOKEN", raising=False)
+    monkeypatch.setenv("USER", "testuser")
+    no_team_config.write_text(f'export PSIMULATE_SLACK_BOT_TOKEN="{BOT_TOKEN}"\n')
+    mock_post = _mock_slack_responses()
+    with patch("vivarium.cluster_tools.core.notifications.requests.post", mock_post):
+        send_slack_notification(
+            workflow_name=WORKFLOW_NAME, status="D", command_label=COMMAND_LABEL
+        )
+    assert mock_post.call_count == 3
+    assert mock_post.call_args.kwargs["headers"]["Authorization"] == f"Bearer {BOT_TOKEN}"
 
 
 def test_mute_skips_notification(monkeypatch: pytest.MonkeyPatch) -> None:
