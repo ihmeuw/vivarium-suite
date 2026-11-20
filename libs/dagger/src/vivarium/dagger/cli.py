@@ -177,13 +177,13 @@ def dagger() -> None:
     -c/--config names a workflow YAML file or a Python pipeline definition. A YAML
     file lists each step's command, compute resources, and environment (a conda env
     or a venv, given by name or prefix path), and runs as one Jobmon workflow; use
-    ``run`` to launch it and ``restart`` to resume it from its output directory. A
+    'run' to launch it and 'restart' to resume it from its output directory. A
     pipeline definition is a Python file or module with a function (by default
-    ``pipeline``) that returns a Pipeline; ``run`` runs its stale steps, ``preview``
-    shows which would run and why, and ``force`` runs named steps even if current.
+    'pipeline') that returns a Pipeline; 'run' runs its stale steps, 'preview'
+    shows which would run and why, and 'force' runs named steps even if current.
 
-    A pipeline definition's ``run`` and ``force`` go through Jobmon unless given
-    ``--local``. -P/--project and -q/--queue then set the project and queue of every
+    A pipeline definition's 'run' and 'force' go through Jobmon unless given
+    --local. -P/--project and -q/--queue then set the project and queue of every
     step that does not set its own, and -m/--max-attempts sets how many times Jobmon
     tries each step.
 
@@ -256,7 +256,7 @@ def run(
     """Run a workflow YAML file through Jobmon, or the stale steps of a pipeline definition.
 
     For a workflow YAML file, every top-level configuration value other than
-    ``steps`` can be overridden from the command line via the corresponding flag.
+    'steps' can be overridden from the command line via the corresponding flag.
     For a pipeline definition, the stale steps run through Jobmon, or in this process
     with --local, and --until runs only the named steps and the steps they depend on.
     -P/--project, -q/--queue and -m/--max-attempts apply to a definition only when it
@@ -357,10 +357,10 @@ def restart(
 ) -> None:
     """Restart a previously started workflow.
 
-    RESULTS_DIRECTORY is the output directory of a previous ``dagger run``.
+    RESULTS_DIRECTORY is the output directory of a previous 'dagger run'.
     Reloads the saved configuration and persisted Jobmon workflow and resumes
-    it, skipping tasks that already completed. ``--project``, ``--queue``, and
-    ``--max-attempts`` override the saved configuration.
+    it, skipping tasks that already completed. --project, --queue, and
+    --max-attempts override the saved configuration.
     """
     from vivarium.dagger import runner
 
@@ -411,7 +411,7 @@ def force(
 
     Every other stale step of the definition runs too. The steps run through Jobmon, or
     in this process with --local. -P/--project, -q/--queue and -m/--max-attempts are as
-    for ``run`` and apply only to a run through Jobmon.
+    for 'run' and apply only to a run through Jobmon.
     """
     ctx = click.get_current_context()
     definition = _require_definition(ctx, config)

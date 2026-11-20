@@ -2741,3 +2741,171 @@ def test_dagger_preview_run_and_force_of_a_definition_that_returns_its_pipeline_
 
     assert forced.exit_code == 0, _describe(forced)
     assert _calls(tmp_path)[2:3] == ["a"]
+
+
+# Errors and terminal output (MIC-7848)
+
+_FIRST_BAD_VALUE = 'raise ValueError("bad value 0")'
+_SECOND_BAD_VALUE = 'raise ValueError("bad value 1")'
+
+_GROUP_WHILE_LOADING = f"""
+def first_check():
+    {_FIRST_BAD_VALUE}
+
+
+def second_check():
+    {_SECOND_BAD_VALUE}
+
+
+def failures(*checks):
+    errors = []
+    for check in checks:
+        try:
+            check()
+        except ValueError as error:
+            errors.append(error)
+    return errors
+
+
+def pipeline():
+    raise ExceptionGroup("two checks failed", failures(first_check, second_check))
+"""
+"""A definition whose pipeline() raises an ExceptionGroup of the ValueErrors that two
+checks raised, each on its own line."""
+
+_INNER_BAD_TYPE = 'raise TypeError("bad inner type")'
+_OUTER_BAD_VALUE = 'raise ValueError("bad outer value")'
+
+_NESTED_GROUP_WHILE_LOADING = f"""
+def caught(check):
+    try:
+        check()
+    except Exception as error:
+        return error
+
+
+def inner_check():
+    {_INNER_BAD_TYPE}
+
+
+def outer_check():
+    {_OUTER_BAD_VALUE}
+
+
+def inner_checks():
+    raise ExceptionGroup("inner checks failed", [caught(inner_check)])
+
+
+def pipeline():
+    raise ExceptionGroup("outer checks failed", [caught(outer_check), caught(inner_checks)])
+"""
+"""A definition whose pipeline() raises an ExceptionGroup of a ValueError and an inner
+ExceptionGroup that holds a TypeError."""
+
+
+def _shown_frames(errors: str) -> list[str]:
+    """Return the ``File`` lines of a traceback, including an exception group's."""
+    return [line for line in errors.splitlines() if line.lstrip(" |").startswith('File "')]
+
+
+def _assert_no_framework_frames(errors: str, path: Path) -> None:
+    """Assert that ``errors`` shows a frame of ``path`` and no framework frame."""
+    frames = _shown_frames(errors)
+    assert any(path.name in line for line in frames), errors
+    for line in frames:
+        assert not any(part in line for part in _FRAMEWORK_FILES), line
+        assert "vivarium/dagger/" not in line, line
+
+
+def _with_closed_stdout(directory: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run the installed dagger script with ``args``, its stdout a pipe that no one reads."""
+    script = Path(sys.executable).parent / "dagger"
+    assert script.is_file(), f"No dagger console script next to {sys.executable}."
+    read_end, write_end = os.pipe()
+    # Closing the read end first makes every write to stdout fail, as it does once a
+    # reader such as 'head -1' has exited, without depending on when the reader exits.
+    os.close(read_end)
+    try:
+        return subprocess.run(
+            [str(script), *args],
+            cwd=directory,
+            stdout=write_end,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=300,
+        )
+    finally:
+        os.close(write_end)
+
+
+def test_an_exception_group_raised_while_loading_shows_each_sub_exception(
+    tmp_path: Path,
+) -> None:
+    """A definition that raises ExceptionGroup('two checks failed', [ValueError('bad value 0'), ValueError('bad value 1')]) while it loads makes 'dagger preview -c' exit 2; stderr shows the group's message, both sub-exceptions' types and messages and the user lines that raised them, and no framework frames."""
+    path = _write_definition(tmp_path, _GROUP_WHILE_LOADING)
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert "two checks failed" in errors, errors
+    assert _in_order(errors, _FIRST_BAD_VALUE, "ValueError: bad value 0"), errors
+    assert _in_order(errors, _SECOND_BAD_VALUE, "ValueError: bad value 1"), errors
+    _assert_no_framework_frames(errors, path)
+
+
+def test_a_nested_exception_group_shows_the_inner_groups_sub_exceptions(
+    tmp_path: Path,
+) -> None:
+    """A definition whose ExceptionGroup holds a second ExceptionGroup makes 'dagger preview -c' show the inner group's sub-exceptions' types and messages as well as the outer ones."""
+    path = _write_definition(tmp_path, _NESTED_GROUP_WHILE_LOADING)
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert "outer checks failed" in errors, errors
+    assert "inner checks failed" in errors, errors
+    assert _in_order(errors, _OUTER_BAD_VALUE, "ValueError: bad outer value"), errors
+    assert _in_order(errors, _INNER_BAD_TYPE, "TypeError: bad inner type"), errors
+    _assert_no_framework_frames(errors, path)
+
+
+def test_run_local_with_a_closed_stdout_exits_one_without_blaming_the_build(
+    tmp_path: Path,
+) -> None:
+    """'dagger run -c <definition> --local' run in a subprocess whose stdout is a pipe with its read end closed exits with status 1, and its stderr contains neither 'The build exited' nor "Could not read or write the pipeline's state"."""
+    path = _write_definition(tmp_path, _PASSES)
+
+    completed = _with_closed_stdout(tmp_path, "run", "-c", str(path), "--local")
+
+    assert completed.returncode == 1, completed.stderr
+    assert "The build exited" not in completed.stderr, completed.stderr
+    assert (
+        "Could not read or write the pipeline's state" not in completed.stderr
+    ), completed.stderr
+
+
+def test_preview_with_a_closed_stdout_exits_one_without_blaming_the_build(
+    tmp_path: Path,
+) -> None:
+    """'dagger preview -c <definition>' run in a subprocess whose stdout is a pipe with its read end closed exits with status 1, and its stderr contains neither 'The build exited' nor "Could not read or write the pipeline's state"."""
+    path = _write_definition(tmp_path, _PASSES)
+
+    completed = _with_closed_stdout(tmp_path, "preview", "-c", str(path))
+
+    assert completed.returncode == 1, completed.stderr
+    assert "The build exited" not in completed.stderr, completed.stderr
+    assert (
+        "Could not read or write the pipeline's state" not in completed.stderr
+    ), completed.stderr
+
+
+def test_help_shows_no_rst_double_backticks() -> None:
+    """'dagger --help' and '--help' for each of run, preview, force and restart print no double backtick (``)."""
+    commands: list[list[str]] = [[], ["run"], ["preview"], ["force"], ["restart"]]
+    for command in commands:
+        result = _dagger(*command, "--help")
+
+        assert result.exit_code == 0, (command, _describe(result))
+        assert "``" not in result.output, (command, result.output)

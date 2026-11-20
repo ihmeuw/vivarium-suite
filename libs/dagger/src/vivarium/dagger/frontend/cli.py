@@ -23,9 +23,10 @@ output when pytask stops a preview's plan for a reason other than a definition e
 """
 
 import os
+import sys
 import traceback
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import FrameType
 from typing import Any, NoReturn
@@ -288,7 +289,9 @@ def _verb_errors(
     :class:`~vivarium.dagger.frontend.execution.RunRefused` is reported with its own
     message, which names the lock file and its holder, and exits with status 1. A
     :class:`~vivarium.dagger.frontend.execution.RunInterrupted` is reported by
-    :func:`_interrupted` with its workflow id and exits with status 130.
+    :func:`_interrupted` with its workflow id and exits with status 130. A
+    :class:`SystemExit` raised because standard output was closed, as when a reader such
+    as ``head`` stops reading, ends the command with status 1 and no message.
     """
     try:
         yield
@@ -307,10 +310,24 @@ def _verb_errors(
     except StepExited as error:
         raise click.ClickException(str(error)) from None
     except SystemExit as error:
+        # rich's console raises SystemExit(1) while handling a BrokenPipeError.
+        if isinstance(error.__context__, BrokenPipeError):
+            _stdout_closed()
         # A step's own exit arrives as StepExited, so this one came from pytask itself.
         raise click.ClickException(
             f"The build exited with code {error.code!r} before it finished."
         ) from None
+
+
+def _stdout_closed() -> NoReturn:
+    """Exit with status 1 and no message because standard output was closed."""
+    # As Python's docs advise for SIGPIPE, point standard output at devnull so that
+    # flushing it at exit does not fail again.
+    with suppress(OSError, ValueError):
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    raise click.exceptions.Exit(1)
 
 
 def _failure_summary(error: StepFailed) -> str:
@@ -441,19 +458,56 @@ def _user_traceback(error: BaseException) -> str:
 
 
 def _trimmed(error: BaseException) -> list[str]:
-    """Format ``error`` without its chain or its framework frames."""
+    """Format ``error`` without its chain or its framework frames.
+
+    An exception group's sub-exceptions follow it, each formatted the same way, nested
+    groups included, laid out as Python lays out an exception group.
+    """
+    if isinstance(error, BaseExceptionGroup):
+        return _group_lines(error, level=1)
+    frames = _kept_frames(error)
+    header = ["Traceback (most recent call last):\n"] if frames else []
+    return header + frames + traceback.format_exception_only(error)
+
+
+def _group_lines(group: BaseExceptionGroup[BaseException], level: int) -> list[str]:
+    """Format ``group``, ``level`` groups deep, and its sub-exceptions as Python does."""
+    indent = "  " * level
+    lines: list[str] = []
+    frames = _kept_frames(group)
+    if frames:
+        # Python marks the first line of an outermost group with '+'.
+        margin = "+" if level == 1 else "|"
+        lines.append(f"{indent}{margin} Exception Group Traceback (most recent call last):\n")
+    lines.extend(_indented(frames + traceback.format_exception_only(group), f"{indent}| "))
+    for number, sub_error in enumerate(group.exceptions, start=1):
+        corner = "+-" if number == 1 else "  "
+        lines.append(f"{indent}{corner}+---------------- {number} ----------------\n")
+        if isinstance(sub_error, BaseExceptionGroup):
+            lines.extend(_group_lines(sub_error, level + 1))
+        else:
+            lines.extend(_indented(_trimmed(sub_error), f"{indent}  | "))
+    # A nested group that comes last draws the closing line for both groups.
+    if not isinstance(group.exceptions[-1], BaseExceptionGroup):
+        lines.append(f"{indent}  +------------------------------------\n")
+    return lines
+
+
+def _kept_frames(error: BaseException) -> list[str]:
+    """Format the frames of ``error``'s traceback that are not framework frames."""
     entries = traceback.extract_tb(error.__traceback__)
-    if not entries:
-        return traceback.format_exception_only(error)
     frames = (frame for frame, _ in traceback.walk_tb(error.__traceback__))
     kept = [entry for entry, frame in zip(entries, frames) if not _is_framework(frame)]
     hidden = len(entries) - len(kept)
-    lines = ["Traceback (most recent call last):\n"]
-    lines.extend(traceback.StackSummary.from_list(kept).format())
+    lines = list(traceback.StackSummary.from_list(kept).format())
     if hidden:
         lines.append(f"  [{hidden} framework frame{'' if hidden == 1 else 's'} hidden]\n")
-    lines.extend(traceback.format_exception_only(error))
     return lines
+
+
+def _indented(chunks: list[str], prefix: str) -> list[str]:
+    """Return each line of ``chunks`` with ``prefix`` before it."""
+    return [prefix + line for chunk in chunks for line in chunk.splitlines(keepends=True)]
 
 
 def _is_framework(frame: FrameType) -> bool:
