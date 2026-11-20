@@ -1,4 +1,6 @@
 import math
+import subprocess
+import sys
 from collections.abc import Callable, Generator
 from itertools import product
 from pathlib import Path
@@ -538,6 +540,59 @@ def test_Simulation_load_from_backup(
     # Load from backup
     sim_backup = Simulation.load_from_backup(backup_path)
     assert isinstance(sim_backup, Simulation)
+
+
+_BACKUP_ROUND_TRIP_SCRIPT = """
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+from vivarium.engine.framework.engine import Simulation
+
+model_spec, backup_path = Path(sys.argv[1]), Path(sys.argv[2])
+sim = Simulation(model_spec, configuration={"population": {"population_size": 1_000}})
+sim.setup()
+sim.initialize_simulants()
+for _ in range(3):
+    sim.step()
+sim.write_backup(backup_path)
+
+sim_backup = Simulation.load_from_backup(backup_path)
+
+assert sim_backup.current_time == sim.current_time
+remaining_steps = sim.get_number_of_steps_remaining()
+assert remaining_steps > 0
+assert sim_backup.get_number_of_steps_remaining() == remaining_steps
+for simulation in (sim, sim_backup):
+    for _ in range(remaining_steps):
+        simulation.step()
+    simulation.finalize()
+results = sim.get_results()
+backup_results = sim_backup.get_results()
+assert results.keys() == backup_results.keys()
+for measure, df in results.items():
+    pd.testing.assert_frame_equal(df, backup_results[measure])
+"""
+
+
+def test_Simulation_backup_resumes_with_same_results(
+    disease_model_spec: Path, tmp_path: Path
+) -> None:
+    # Run in a fresh interpreter. Under pytest, the global loguru sink is pytest's
+    # stdout capture, which dill cannot pickle (see MIC-5216).
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            _BACKUP_ROUND_TRIP_SCRIPT,
+            str(disease_model_spec),
+            str(tmp_path / "backup.pkl"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_private_columns_get_registered() -> None:

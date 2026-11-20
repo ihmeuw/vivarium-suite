@@ -1,3 +1,10 @@
+**6.1.1 - 11/19/26**
+
+- Fix bugs preventing a simulation from being able to be unpickled
+- Remove ``Pipeline.__hash__`` and ``Column.__eq__`` and ``__hash__``, which were left
+  from when ``Resource`` was a dataclass. Pipelines and columns now compare and hash
+  by identity
+
 **6.1.0 - 11/17/26**
 
 - Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's
