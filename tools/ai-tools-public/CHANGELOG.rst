@@ -1,3 +1,11 @@
+**0.5.1 - 11/19/26**
+
+- Fetch from the remote in ``/simsci:framework-development`` Phase 0 and base
+  the work branch on the fetched base branch
+- Have ``_finalize-core`` take a base branch from its caller and use it for the
+  merge-base, the test summary, and the PR's base
+- Let ``/simsci:pr-prep`` take a base branch and review the diff against it
+
 **0.5.0 - 10/28/26**
 
 - Add a ``_test_summarizer`` agent that summarizes a PR's tests: one table per

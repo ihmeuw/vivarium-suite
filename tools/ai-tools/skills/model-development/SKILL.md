@@ -9,7 +9,8 @@ description:
   or names a MIC ticket that points at one."
 argument-hint:
   "A MIC ticket key, a vivarium-research doc/section, or a description of the
-  model iteration to build."
+  model iteration to build. Optional: the base branch if it is not the default
+  branch, or an existing branch to continue."
 allowed-tools:
   Read, Grep, Glob, Bash, Edit, Write, Agent(simsci-internal:_model_implementer,
   simsci-internal:_vv_writer, simsci:_validator, simsci:_review_maintainability,
@@ -68,7 +69,18 @@ finalize & PR = finalize_core         # Finalize: artifacts held out; user-gated
    e.g. `vivarium_gates_mncnh`) and `cd` there. This workflow runs in the model
    repo, not in `vivarium-suite`.
 2. Activate the right conda env.
-3. Create a **feature branch** for the iteration.
+3. Get the latest code from the remote: run `git fetch origin`. If the fetch
+   fails, tell the user and ask whether to continue from the local state.
+4. Choose the **base branch**. If $ARGUMENTS names one, use it. Otherwise use
+   the default branch (`git rev-parse --abbrev-ref origin/HEAD`). If $ARGUMENTS
+   names no base and the current branch is not the default branch, ask the user
+   which branch to use. Do not guess. Record the base, because Finalize passes
+   it on.
+5. Create a **feature branch** for the iteration from the fetched base branch
+   (`git switch -c <branch> origin/<base>`), not from a local branch that may be
+   out of date. If $ARGUMENTS names an existing branch to continue, switch to it
+   and report whether it is behind its upstream instead. The base from step 4
+   still applies.
 
 **Exit criterion — a runnable env.** Before leaving setup, confirm the repo
 imports and the simulation entry points are on PATH. The verify step
@@ -227,9 +239,11 @@ triage.
    work out on its own: the critic loop already settled what is being addressed,
    so the **scope line is already drawn**; its residual issues are the **leftover**
    set; the hold-out paths from step 1 stay uncommitted; and the partition rule
-   from step 2 governs. Carry any "unverified" status through as the verification
-   verdict. For the test summary, pass the plan's per-layer change list and
-   quantitative expectations as the **strategy items**, and the verification
+   from step 2 governs. Pass the **base branch** from Setup for the first PR.
+   For each later PR in a stack, pass the branch of the PR before it. Carry any
+   "unverified" status through as the verification verdict. For the test
+   summary, pass the plan's per-layer change list and quantitative
+   expectations as the **strategy items**, and the verification
    checks and local `simulate` run as the **outside-suite checks**, each with its
    result or "unverified" status.
 4. **Post the verification traces to each PR.** Once the PR exists, attach the key

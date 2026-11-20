@@ -59,8 +59,9 @@ In more detail:
 - ``/simsci:pr-prep <description>`` — takes a change you have already written on
   the current branch through to a PR ready for review, opening a new PR or
   updating the branch's existing one; the argument is optional context, not a PR
-  reference. It opens with a parallel multi-agent review that fans out to
-  specialist sub-agents focused on:
+  reference. The argument can also name the base branch. Otherwise the base is
+  the base of the branch's open PR, or the default branch. It opens with a
+  parallel multi-agent review that fans out to specialist sub-agents focused on:
 
   - Maintainability
   - DRY
@@ -126,12 +127,15 @@ In more detail:
 
 - ``/simsci:framework-development <ticket or feature description>`` — an
   end-to-end design → implement → verify → PR loop on a single well-scoped
-  feature. The main session owns the design and the interface stubs, then runs
-  a **black-box TDD** build. The design includes a short
-  testing strategy: the feature requirements, and the use cases and edge
-  cases that test them. It owns the contract: it writes **source stubs** (the API) plus
-  **body-less test stubs** that enumerate the acceptance criteria, commits them, and
-  creates two git worktrees from that baseline. It then fans out
+  feature. The argument can also name the base branch or an existing branch to
+  continue. Otherwise the work branch starts from the fetched default branch. If
+  you are on another branch, the skill asks which base to use. The main session
+  owns the design and the interface stubs, then runs a **black-box TDD** build.
+  The design includes a short testing strategy: the feature requirements, and
+  the use cases and edge cases that test them. It owns the contract: it writes
+  **source stubs** (the API) plus **body-less test stubs** that enumerate the
+  acceptance criteria, commits them, and creates two git worktrees from that
+  baseline. It then fans out
   ``_feature_implementer`` and ``_test_writer`` in
   parallel — the tester fleshes out the test stubs, the implementer fills the
   source bodies treating those stubs as read-only criteria — each confined to its
