@@ -1,3 +1,10 @@
+**5.1.0 - 11/20/26**
+
+- Report conda's own reason, the JSON message it prints, when the ``conda env list --json``
+  lookup behind environment resolution fails, instead of only its standard error
+- Raise a ``RuntimeError`` that names the environment when the venv under ``.venv`` for an
+  environment name cannot be checked, instead of letting the ``OSError`` escape
+
 **5.0.1 - 11/17/26**
 
 - Cap ``vivarium-dependencies`` below 3.0.0

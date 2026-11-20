@@ -122,6 +122,41 @@ class TestResolveEnvPrefix:
         for env in (str(alias / "my_env"), "./alias/my_env", "~/alias/my_env"):
             assert resolve_env_prefix(env) == str(venv.resolve())
 
+    def test_conda_env_matches_only_on_the_last_component_of_its_prefix(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Listed prefixes that hold the name only as an earlier component or
+        inside a longer name do not match it."""
+        monkeypatch.chdir(tmp_path)
+        _patch_conda_env_list(
+            monkeypatch,
+            [
+                "/opt/conda/envs/my_env/sub",
+                "/opt/conda/envs/my_env_old",
+                "/opt/conda/envs/other_my_env",
+            ],
+        )
+        with pytest.raises(RuntimeError, match="'my_env'") as info:
+            resolve_env_prefix("my_env")
+        assert "no conda env of that name is listed" in str(info.value)
+
+    def test_tilde_env_without_a_separator_is_a_path_not_a_name(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """An env starting with ``~`` and holding no separator is a path: an
+        unknown ``~user`` is reported as a path that could not be checked, and
+        conda is never called."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("CONDA_EXE", "/opt/conda/bin/conda")
+        calls: list[object] = []
+        monkeypatch.setattr(
+            env_module.subprocess, "run", lambda *args, **kwargs: calls.append(args)
+        )
+        with pytest.raises(RuntimeError, match=re.escape("'~no_such_user_xyz_vw'")) as info:
+            resolve_env_prefix("~no_such_user_xyz_vw")
+        assert "could not be checked" in str(info.value)
+        assert calls == []
+
 
 class TestResolveEnvPrefixFailures:
     """Every failure to resolve raises a ``RuntimeError`` that names the env."""
@@ -164,6 +199,63 @@ class TestResolveEnvPrefixFailures:
             resolve_env_prefix("ghost")
         assert "Could not resolve environment 'ghost'" in str(info.value)
         assert cause in str(info.value)
+
+    @pytest.mark.parametrize(
+        "stdout, stderr, wanted, unwanted",
+        [
+            (
+                json.dumps(
+                    {"exception_name": "CondaError", "message": "Bad condarc  at line 3"}
+                ),
+                "warning: unrelated",
+                "Bad condarc at line 3",
+                "unrelated",
+            ),
+            ("not json", "the real reason", "the real reason", "not json"),
+            (json.dumps({"error": "only an error field"}), "", "only an error field", None),
+        ],
+        ids=["json_message", "stderr_without_json", "json_error_field"],
+    )
+    def test_failing_conda_lookup_gives_condas_json_reason_before_stderr(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        stdout: str,
+        stderr: str,
+        wanted: str,
+        unwanted: str | None,
+    ) -> None:
+        """When conda exits non-zero, the message quotes the JSON message conda
+        printed on stdout, and quotes stderr only when stdout holds no JSON."""
+        conda = tmp_path / "fake_conda"
+        conda.write_text(f"#!/bin/sh\necho '{stdout}'\necho '{stderr}' >&2\nexit 1\n")
+        conda.chmod(0o755)
+        monkeypatch.setenv("CONDA_EXE", str(conda))
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(RuntimeError) as info:
+            resolve_env_prefix("ghost")
+        message = str(info.value)
+        assert "'ghost'" in message and "exited with status 1" in message, message
+        assert wanted in message, message
+        if unwanted is not None:
+            assert unwanted not in message, message
+
+    def test_unsearchable_local_venv_directory_raises(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A name whose ``.venv`` directory cannot be searched raises a
+        ``RuntimeError`` naming the env, never a raw ``PermissionError``."""
+        if os.geteuid() == 0:
+            pytest.skip("root can search a directory without permission")
+        monkeypatch.chdir(tmp_path)
+        venvs = tmp_path / ".venv"
+        _make_env_prefix(venvs / "ghost")
+        venvs.chmod(0o000)
+        try:
+            with pytest.raises(RuntimeError, match="'ghost'"):
+                resolve_env_prefix("ghost")
+        finally:
+            venvs.chmod(0o755)
 
     @pytest.mark.parametrize("case", ["unknown_user", "unsearchable_parent"])
     def test_path_that_cannot_be_checked_raises(
