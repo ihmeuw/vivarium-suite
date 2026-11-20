@@ -65,10 +65,6 @@ help:
 endif
 
 build-env: # Create a new environment with installed packages
-	@command -v uv > /dev/null || { \
-		echo "Error: uv is not on PATH. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2; \
-		exit 1; \
-	}
 #	Validate arguments - exit if unsupported arguments are passed
 	@allowed="type name lfs py include_timestamp artifactory_access keep_env"; \
 	for arg in $(filter-out build-env,$(MAKECMDGOALS)) $(MAKEFLAGS); do \
@@ -137,11 +133,10 @@ ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
 .PHONY: _build-env
 _build-env:
 	conda create -n $(name) python=$(py) --yes
-# 	Without VIRTUAL_ENV, uv targets the conda env that conda run activates, not a stale venv.
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
-	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip install vivarium-build-utils
+	conda run --no-capture-output -n $(name) pip install vivarium-build-utils
 # 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS
-	env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
+	conda run --no-capture-output -n $(name) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) $(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 	@if [ "$(type)" = "simulation" ]; then \
 		conda install -n $(name) redis -c anaconda -y; \
 	fi
@@ -152,5 +147,5 @@ _build-env:
 		conda run --no-capture-output -n $(name) git lfs install; \
 	fi
 # 	A fresh env's only editable install is this checkout, so an empty list means it never installed.
-	@env -u VIRTUAL_ENV conda run --no-capture-output -n $(name) uv pip list --editable --format=freeze | grep -q . \
+	@conda run --no-capture-output -n $(name) pip list --editable --format=freeze | grep -q . \
 		|| { echo "Error: nothing was installed into '$(name)' from $(CURDIR)." >&2; exit 1; }
