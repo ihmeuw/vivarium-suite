@@ -3,7 +3,7 @@
 - ``model-development``: fetch from the remote in Setup, base the feature branch
   on the fetched base branch, and pass the base to ``_finalize-core``
 
-**0.32.0 - 11/10/26**
+**0.32.0 - 11/19/26**
 
 - ``team-conventions``: apply the hub page's rules for the epic or fix version, labels,
   and story points to every ticket draft, and ask the user before changing a ticket's
