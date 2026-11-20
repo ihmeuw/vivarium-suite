@@ -53,7 +53,8 @@ Step 2. It returns one table per changed source file to post as a comment on
 that file. Each link
 has ``{sha}`` where the head commit goes. Step 4 regroups commits but never changes file contents, so the
 line numbers in those links stay valid. In a stack, dispatch one per PR, each with
-that PR's slice of the diff.
+that PR's slice of the diff. Use the three-dot diff from the merge-base
+(`git diff <base>...HEAD`), as GitHub does.
 
 ## Step 2 — Triage the leftover findings
 
@@ -122,20 +123,15 @@ when the two differ.
 Either way, put Step 1's summary and the validation verdict, residuals included, in
 the body.
 
-Once the PR exists, post the per-file test tables. Replace each ``{sha}`` with
-``git rev-parse HEAD`` as pushed. Each ``## File: <path>`` part, with the
-``## File:`` line removed, becomes a file-level review comment on ``<path>`` at
-the head commit. With the GitHub MCP, open one pending review, add every file
-comment to it, and submit it with the event ``COMMENT``, so reviewers get one
-notification. Without the MCP, post each comment with
-``gh api repos/<owner>/<repo>/pulls/<number>/comments`` and the fields
-``path``, ``commit_id``, ``subject_type=file``, and ``body``.
+Once the PR exists, post the per-file test tables. Follow the posting rules in
+the `simsci:_test-summary-refresh` skill: the hidden marker, the table of edit,
+delete, and post actions, and the API calls. Those rules also bring the
+summaries on an existing PR up to date. Each ``## File: <path>`` part becomes a
+file-level review comment on ``<path>`` at the head commit, with each ``{sha}``
+replaced by ``git rev-parse HEAD`` as pushed.
 
-On an existing PR, edit the earlier comment that starts with **Test summary for**
-on each file rather than adding a second one, and post new ones only for files
-that have none. GitHub
-rejects a comment longer than 65,536 characters. If one file's table is longer,
-split its rows across two comments on that file.
+The push in this step triggers the plugin's push hook, which asks for a refresh.
+This step is that refresh, so do not run the summarizer again.
 
 Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
 available: the MCP needs no shell access and works in sandboxed environments where
