@@ -13,6 +13,7 @@ from typing import Any
 
 import pytask
 
+from vivarium.dagger.backend._pickling import reduce_exception
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
 from vivarium.dagger.backend.task import Task, check_unique_task_names
 from vivarium.dagger.bridge.plugin import LOCAL_ONLY_MODES
@@ -65,6 +66,10 @@ class TaskExited(SystemExit):
     def __init__(self, task: str, code: str | int | None) -> None:
         super().__init__(code)
         self.task = task
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Rebuild the error with its task and exit code when it is copied or pickled."""
+        return reduce_exception(self)
 
 
 def run_command(command: str, env: str | None) -> None:
