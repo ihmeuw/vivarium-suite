@@ -1,7 +1,7 @@
 ---
 name: pr-prep
 description: "Take a change you have already written from raw branch to a PR ready for review: multi-agent review, a per-finding disposition (fix now / ticket / drop), apply the fixes, re-validate, then organize the commits and open the draft PR. Use when the user says \"review this and open a PR\", \"prep this for review\", \"I'm done, ship it\", \"review my branch\", or \"code review\". For a feature not yet written use a development workflow instead; to split a diff you are not reviewing use commit-splitter; for branch, ticket, or PR mechanics alone use your team's conventions skill."
-argument-hint: "Optional: a description of the change. Omit to work from the current branch."
+argument-hint: "Optional: a description of the change, and the base branch if it is not the open PR's base or the default branch. The skill always works on the current branch."
 allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Agent(simsci:_validator, simsci:_review_maintainability, simsci:_review_dry, simsci:_review_design, simsci:_review_tests, simsci:_review_documentation, simsci:_review_scorer)
 ---
 
@@ -30,14 +30,17 @@ the review — a fan-out spent on a mid-rebase repo is a fan-out thrown away.
    the per-finding commits in Step 4 are the recovery story, and a fix is only
    isolated if it is the only thing in its commit. Stop if the repo is mid-rebase
    or mid-merge.
-2. **Fix the base.** Compute the merge-base with the default branch. **If you
-   cannot, stop** — the lookup fails when `origin/<default-branch>` was never
-   fetched, and the shell can be unavailable outright. Say which step failed and
-   stop. Do **not** reconstruct the change from git internals, commit messages, or
-   the current contents of the files and review that instead: a review of an
-   inferred diff indicts code the change may never have touched, and every
-   downstream step — the dispositions, the fixes, the PR — inherits that error
-   while looking exactly like a real run.
+2. **Fix the base.** First choose the **base branch**. If $ARGUMENTS names one,
+   use it. Otherwise, if the branch already has an open PR, use that PR's base.
+   Otherwise use the default branch. Run `git fetch origin <base-branch>`, then
+   compute the merge-base with `origin/<base-branch>`. State the base branch and
+   the number of commits ahead of it, so the user can catch a wrong base before
+   the review. Do not wait for an answer. **If you cannot compute the
+   merge-base, stop** and say which step failed. The lookup fails when
+   `origin/<base-branch>` was never fetched, or when the shell is unavailable.
+   Do not guess the change from commit messages or from the files as they are
+   now. A review of a guessed diff can blame code that the branch did not
+   change, and every later step would build on that mistake.
 3. **Find out whether the tree is already green.** Unless this session already saw
    the checks pass on this branch, dispatch `simsci:_validator` (inputs per Step 5)
    in the same turn as the Step 3 proposal, so it costs no extra round trip.
@@ -167,7 +170,8 @@ reverting every fix you applied, **stop before Step 6** and surface it.
 Invoke the `simsci:_finalize-core` skill and follow it. Two things it can't work out
 on its own: **the scope line is already drawn** by the Step 3 dispositions, and the
 Step 1 ref is its **pre-apply ref** — anything blocked in Step 4 or reverted in
-Step 5 belongs in the leftover set. Pass **strategy items** only when the user
+Step 5 belongs in the leftover set. Pass the **base branch** from Step 1. Pass
+**strategy items** only when the user
 already gave you a design or ticket with a testing strategy; do not go looking for
 one. Without them, the test summary lists the cases the diff's tests cover.
 If it is unavailable, report the three buckets and the validation verdict and
