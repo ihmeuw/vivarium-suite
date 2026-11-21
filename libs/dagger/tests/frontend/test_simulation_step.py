@@ -1650,9 +1650,78 @@ def test_dagger_run_with_two_run_directories_exits_one_naming_them(
 # --- Messages (MIC-7848) ---
 
 
+_RUN_TIMESTAMP = "2026_11_20_10_00_00"
+"""The timestamp of the run directory that :func:`_worker_logs` writes under scratch."""
+
+
+def _worker_logs(scratch: Path, launch: str = f"{_RUN_TIMESTAMP}_run") -> Path:
+    """Create the worker_logs directory of one launch, in psimulate's layout; return it."""
+    path = scratch / "toy_model" / _RUN_TIMESTAMP / "logs" / launch / "worker_logs"
+    path.mkdir(parents=True)
+    return path
+
+
+def _command_failures() -> list[BaseException]:
+    """Return a local CalledProcessError and a command failure reported from a node."""
+    return [
+        subprocess.CalledProcessError(1, "psimulate run"),
+        _RemoteFailure("subprocess.CalledProcessError"),
+    ]
+
+
 def test_simulation_step_with_an_empty_name_names_simulation_step(model: _Model) -> None:
     """simulation_step() called directly with name='' raises ValueError "simulation_step: name must be a non-empty string, got ''." and the message does not contain "Step ''"."""
     message = _value_error(model, name="")
 
     assert message == "simulation_step: name must be a non-empty string, got ''.", message
     assert "Step ''" not in message, message
+
+
+def test_describe_simulation_failure_names_the_worker_logs_after_the_checks_message(
+    model: _Model,
+) -> None:
+    """A failed simulation step whose scratch holds a check message and one <model>/<timestamp>/logs/<launch>/worker_logs directory is described as the message followed by "psimulate's worker logs are in <that directory>."."""
+    task = _step(model, model.registry())
+    _write_message(model, _COUNTS_MESSAGE)
+    sentence = f"psimulate's worker logs are in {_worker_logs(model.scratch)}."
+
+    for error in _command_failures():
+        described = describe_simulation_failure(task, error)
+
+        assert described == f"{_COUNTS_MESSAGE} {sentence}", described
+
+
+def test_describe_simulation_failure_names_the_worker_logs_when_the_command_failed_early(
+    model: _Model,
+) -> None:
+    """A simulation step whose command failed with CalledProcessError, with no check message and one worker_logs directory in scratch, is described with "psimulate's worker logs are in <that directory>" and not "psimulate's logs are under <scratch>"; the same holds for a failure reported from a Jobmon node."""
+    task = _step(model, model.registry())
+    worker_logs = _worker_logs(model.scratch)
+
+    for error in _command_failures():
+        described = describe_simulation_failure(task, error)
+
+        assert described is not None
+        assert f"psimulate's worker logs are in {worker_logs}" in described, described
+        assert f"psimulate's logs are under {model.scratch}" not in described, described
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_describe_simulation_failure_keeps_the_scratch_wording_without_one_worker_logs_directory(
+    model: _Model, count: int
+) -> None:
+    """With no worker_logs directory in scratch, and with two of them, the description keeps "psimulate's logs are under <scratch>" and a check message is returned unchanged."""
+    task = _step(model, model.registry())
+    model.scratch.mkdir(parents=True)
+    for launch in range(count):
+        _worker_logs(model.scratch, f"{_RUN_TIMESTAMP}_run_{launch}")
+
+    for error in _command_failures():
+        described = describe_simulation_failure(task, error)
+        assert described is not None
+        assert f"psimulate's logs are under {model.scratch}." in described, described
+        assert "worker logs" not in described, described
+
+    _write_message(model, _COUNTS_MESSAGE)
+    for error in _command_failures():
+        assert describe_simulation_failure(task, error) == _COUNTS_MESSAGE
