@@ -1147,7 +1147,7 @@ def test_a_location_input_error_exits_two_and_prints_only_its_message(tmp_path: 
     result = _invoke("run", str(path))
 
     assert result.exit_code == 2, _describe(result)
-    assert "ethiopia: coverage.csv is missing" in result.stderr
+    assert "Location 'ethiopia': coverage.csv is missing" in result.stderr
     assert "Traceback" not in result.output
     assert not re.search(r"frames? hidden", result.output)
 

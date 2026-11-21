@@ -65,6 +65,9 @@ _RUN_OUTPUT = "__run__"
 _SCRATCH_SUFFIX = ".psimulate"
 """Appended to the run directory's name to give the scratch directory psimulate writes to."""
 
+_WORKER_LOGS = "*/*/logs/*/worker_logs"
+"""psimulate's layout for its workers' logs under the scratch directory."""
+
 _VALUE_OPTIONS = frozenset(
     {
         "backup_freq",
@@ -196,10 +199,11 @@ def simulation_step(
         ``Step '<name>':``, followed by the registry's message, which names the artifact
         key.
     ValueError
-        Raised before anything is registered, with a message that starts with
-        ``Step '<name>':``, if:
+        If ``name`` is empty, with the message ``simulation_step: name must be a
+        non-empty string, got ''.`` Also raised before anything is registered, with a
+        message that starts with ``Step '<name>':``, if:
 
-        - ``name`` or ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
+        - ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
         - ``outputs`` resolves to a path that is not strictly inside the registry's
           output directory, such as ``.``, ``..`` or an absolute path outside it, since
           the step replaces that directory on every run; the message names ``outputs``
@@ -222,6 +226,8 @@ def simulation_step(
           ``slack_tag`` is given without ``slack_channel``, which psimulate refuses; the
           message names the keys.
     """
+    if name is not None and not name:
+        raise ValueError(f"simulation_step: name must be a non-empty string, got {name!r}.")
     step = outputs if name is None else name
     if not outputs or outputs.endswith("/"):
         raise ValueError(
@@ -236,8 +242,6 @@ def simulation_step(
             f"output directory {output_dir}; outputs must name a directory under the output "
             "directory, since the step replaces that directory on every run."
         )
-    if not step:
-        raise ValueError(f"Step '{step}': name must be a non-empty string, got {step!r}.")
     if not env:
         raise ValueError(f"Step '{step}': env must be a non-empty string, got {env!r}.")
     spec_path = _existing_file(step, "spec", spec)
@@ -319,6 +323,13 @@ def describe_simulation_failure(task: Task, error: BaseException) -> str | None:
         directory> was kept.`` when the run directory holds its sentinel, and ``There
         was no previous run.`` otherwise.
 
+        When exactly one directory in the scratch directory matches psimulate's layout
+        for its workers' logs, ``<model>/<timestamp>/logs/<launch>/worker_logs``, the
+        description names it: the check's message is followed by ``psimulate's worker
+        logs are in <directory>.``, and in the two forms above ``psimulate's logs are
+        under <scratch>`` reads ``psimulate's worker logs are in <directory>``. No log
+        file is read.
+
         ``None`` for a task that is not a simulation step, and for a simulation step
         whose command did not run.
     """
@@ -331,23 +342,30 @@ def describe_simulation_failure(task: Task, error: BaseException) -> str | None:
     if run_dir is None:
         return None
     scratch = _scratch_for(run_dir)
+    worker_logs = _worker_logs(scratch)
     try:
         message = (scratch / _MESSAGE_FILE).read_text(encoding="utf-8").strip()
     except (OSError, ValueError):
         message = ""
     if message:
-        return message
+        if worker_logs is None:
+            return message
+        return f"{message} psimulate's worker logs are in {worker_logs}."
+    if worker_logs is None:
+        logs = f"psimulate's logs are under {scratch}"
+    else:
+        logs = f"psimulate's worker logs are in {worker_logs}"
     previous = previous_run_sentence(run_dir, has_complete_run(run_dir))
     if isinstance(error, subprocess.CalledProcessError):
         exit_status = describe_exit(error.returncode)
         return (
             f"the simulation step's command failed ({exit_status}) before writing a "
-            "message; its output is in pytask's report for the step, and psimulate's "
-            f"logs are under {scratch}. {previous}"
+            f"message; its output is in pytask's report for the step, and {logs}. "
+            f"{previous}"
         )
     return (
         "the simulation step's command failed before writing a message; its output is "
-        f"in the step's report, and psimulate's logs are under {scratch}. {previous}"
+        f"in the step's report, and {logs}. {previous}"
     )
 
 
@@ -456,6 +474,15 @@ def _collect_script_hash() -> str:
 def _scratch_for(run_dir: Path) -> Path:
     """Return the scratch directory psimulate writes to, beside ``run_dir``."""
     return run_dir.with_name(run_dir.name + _SCRATCH_SUFFIX)
+
+
+def _worker_logs(scratch: Path) -> Path | None:
+    """Return the worker_logs directory under ``scratch`` if exactly one matches."""
+    try:
+        found = [path for path in scratch.glob(_WORKER_LOGS) if path.is_dir()]
+    except OSError:
+        return None
+    return found[0] if len(found) == 1 else None
 
 
 def _existing_file(step: str, label: str, path: Path | str) -> Path:

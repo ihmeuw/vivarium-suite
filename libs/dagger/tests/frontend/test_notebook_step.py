@@ -2531,3 +2531,22 @@ def test_importing_notebook_step_imports_neither_papermill_nor_nbformat() -> Non
     )
 
     assert completed.returncode == 0, completed.stderr
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_notebook_step_with_an_empty_name_names_notebook_step(tmp_path: Path) -> None:
+    """notebook_step() called directly with name='' raises ValueError "notebook_step: name must be a non-empty string, got ''." and the message does not contain 'Task name'."""
+    with pytest.raises(ValueError) as info:
+        notebook_step(
+            _source(tmp_path),
+            executed=_EXECUTED_KEY,
+            registry=_registry(tmp_path),
+            env=_ENV,
+            name="",
+        )
+
+    message = str(info.value)
+    assert message == "notebook_step: name must be a non-empty string, got ''.", message
+    assert "Task name" not in message, message

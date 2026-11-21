@@ -485,14 +485,14 @@ def test_a_consumer_added_before_its_producer_is_refused(tmp_path: Path) -> None
 def test_a_command_step_with_several_outputs_and_no_name_raises_the_step_functions_error(
     tmp_path: Path,
 ) -> None:
-    """p.add_command_step with two outputs keys and no name raises command_step's ValueError, which starts with 'command_step:' and says to pass name=."""
+    """p.add_command_step with two outputs keys and no name raises a ValueError that starts with 'add_command_step:' and says to pass name=."""
     p = Pipeline(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
         p.add_command_step("touch {a} {b}", outputs={"a": "a.csv", "b": "b.csv"})
 
     message = str(info.value)
-    assert message.startswith("command_step:"), message
+    assert message.startswith("add_command_step:"), message
     assert "pass name=" in message, message
     assert freeze(p).tasks == ()
 
@@ -564,14 +564,14 @@ def test_a_second_producer_of_a_key_of_a_python_step_with_several_outputs_is_ref
 def test_a_python_step_with_several_outputs_and_no_name_raises_the_step_functions_error(
     tmp_path: Path,
 ) -> None:
-    """p.add_python_step with two outputs keys and no name raises python_step's ValueError, which starts with 'python_step:' and says to pass name=, and adds nothing."""
+    """p.add_python_step with two outputs keys and no name raises a ValueError that starts with 'add_python_step:' and says to pass name=, and adds nothing."""
     p = Pipeline(tmp_path / "out", "run1")
 
     with pytest.raises(ValueError) as info:
         p.add_python_step(_split, inputs={}, outputs={"a": "a.csv", "b": "b.csv"})
 
     message = str(info.value)
-    assert message.startswith("python_step:"), message
+    assert message.startswith("add_python_step:"), message
     assert "pass name=" in message, message
     assert freeze(p).tasks == ()
     assert not _registered(p, "a.csv")
@@ -603,7 +603,7 @@ def test_a_python_step_with_several_outputs_whose_later_key_is_already_produced_
 def test_a_python_step_with_several_outputs_and_no_name_is_not_named_after_its_first_key(
     tmp_path: Path,
 ) -> None:
-    """With a step already named 'a.csv' that does not produce it, a python step producing 'a.csv' and 'b.csv' with no name raises python_step's no-default-name ValueError, not the error for a name already added."""
+    """With a step already named 'a.csv' that does not produce it, a python step producing 'a.csv' and 'b.csv' with no name raises the no-default-name ValueError starting 'add_python_step:', not the error for a name already added."""
     p = Pipeline(tmp_path / "out", "run1")
     p.add_python_step(_constant, inputs={}, outputs="z.csv", name="a.csv")
 
@@ -611,7 +611,7 @@ def test_a_python_step_with_several_outputs_and_no_name_is_not_named_after_its_f
         p.add_python_step(_split, inputs={}, outputs={"a": "a.csv", "b": "b.csv"})
 
     message = str(info.value)
-    assert message.startswith("python_step:"), message
+    assert message.startswith("add_python_step:"), message
     assert "has no default name" in message, message
     assert [task.name for task in freeze(p).tasks] == ["a.csv"]
 
@@ -1484,3 +1484,41 @@ def test_preview_names_the_files_of_an_added_task_by_path(tmp_path: Path) -> Non
     assert out.resolve().as_posix() in nodes, step.reasons
     assert "command of 'touch'" in nodes, step.reasons
     assert not any(node.startswith("file ") for node in nodes), step.reasons
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_add_command_step_and_add_python_step_with_no_name_and_no_outputs_report_their_own_names(
+    tmp_path: Path,
+) -> None:
+    """Pipeline.add_command_step and add_python_step (mapping form) with no name and empty outputs raise ValueErrors starting 'add_command_step:' and 'add_python_step:'."""
+    p = Pipeline(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError) as command:
+        p.add_command_step("true", outputs={})
+    with pytest.raises(ValueError) as python:
+        p.add_python_step(_split, inputs={}, outputs={})
+
+    assert str(command.value).startswith("add_command_step:"), str(command.value)
+    assert str(python.value).startswith("add_python_step:"), str(python.value)
+
+
+@pytest.mark.parametrize("kind", _STEP_KINDS)
+def test_every_add_method_reports_an_empty_name_in_one_form(
+    tmp_path: Path, kind: str
+) -> None:
+    """Each of add_python_step, add_command_step, add_notebook_step and add_simulation_step called with name='' raises ValueError with the message "add_<kind>_step: name must be a non-empty string, got ''.", and no message contains 'Task name' or "Step ''"; nothing is added to the pipeline."""
+    p = _pipeline(tmp_path)
+    arguments = _arguments(kind, tmp_path, "only", name="")
+
+    with pytest.raises(ValueError) as info:
+        _add(p, kind, arguments)
+
+    message = str(info.value)
+    assert message == f"add_{kind}_step: name must be a non-empty string, got ''.", message
+    assert "Task name" not in message, message
+    assert "Step ''" not in message, message
+    assert freeze(p).tasks == ()
+    for key in _output_keys(kind, arguments):
+        assert not _registered(p, key), key

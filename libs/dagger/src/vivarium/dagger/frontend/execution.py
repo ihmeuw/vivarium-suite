@@ -91,7 +91,9 @@ class StepFailed(PipelineError):
     for it; otherwise it is its error's type and message, which takes more than one line
     when the message does. An error that carries ``exc_type`` and ``exc_message``
     attributes, as a failure reported from another process does, is then described by
-    those attributes instead of its own type and message.
+    those attributes instead of its own type and message. A message that starts with
+    ``Step '<name>':`` for the same step is described without that prefix, so the
+    entry names the step once.
 
     Parameters
     ----------
@@ -120,7 +122,8 @@ class StepFailed(PipelineError):
         self.outcomes = outcomes
         given: Mapping[str, str] = {} if descriptions is None else descriptions
         lines = (
-            f"Step {step!r} failed: {given[step] if step in given else _describe(error)}"
+            f"Step {step!r} failed: "
+            f"{given[step] if step in given else _describe(step, error)}"
             for step, error in failures.items()
         )
         super().__init__("\n".join(lines), exit_code=ExitCode.FAILED)
@@ -628,7 +631,7 @@ def _step_description(task: Task, error: BaseException) -> str:
             return (
                 f"{describe_exit(returncode)}; its output is in pytask's report for the step."
             )
-    return _describe(error)
+    return _describe(task.name, error)
 
 
 def _command_returncode(error: BaseException) -> int | None:
@@ -650,12 +653,13 @@ def _command_returncode(error: BaseException) -> int | None:
     return None
 
 
-def _describe(error: BaseException) -> str:
-    """Return ``error``'s type and message, from ``exc_type`` and ``exc_message`` if set."""
+def _describe(step: str, error: BaseException) -> str:
+    """Return ``error``'s type and message, without a leading ``Step '<step>': ``."""
     exc_type = getattr(error, "exc_type", None)
     exc_message = getattr(error, "exc_message", None)
     kind = type(error).__name__ if exc_type is None else str(exc_type)
     message = str(error) if exc_message is None else str(exc_message)
+    message = message.removeprefix(f"Step {step!r}: ")
     return f"{kind}: {message}" if message else kind
 
 

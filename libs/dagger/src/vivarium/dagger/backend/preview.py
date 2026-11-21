@@ -118,7 +118,8 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
     PlanFailed
         If the build does not complete (for example a collection or DAG failure), since
         the session's reports are then empty or partial and would misreport as an
-        all-skip plan. The message carries pytask's reason, as
+        all-skip plan. The message starts ``Preview could not build the plan:`` and
+        carries pytask's reason, including any step that failed, as
         :func:`~vivarium.dagger.backend.build.failure_message` gives it, and
         ``exit_code`` is pytask's exit code. It is a ``RuntimeError``.
     ValueError
@@ -128,7 +129,7 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
     if session.exit_code != pytask.ExitCode.OK:
         raise PlanFailed(
-            f"preview could not build the plan: {failure_message(session)}",
+            f"Preview could not build the plan: {failure_message(session)}",
             exit_code=session.exit_code,
         )
     return [_step_preview(report) for report in session.execution_reports]

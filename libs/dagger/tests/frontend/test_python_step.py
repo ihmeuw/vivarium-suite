@@ -1195,3 +1195,17 @@ def test_a_mapping_run_rejects_an_empty_mapping_or_an_unsupported_suffix(
         PythonStepRun(_split, suffix)
 
     assert str(info.value) == message
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_python_step_called_directly_keeps_its_own_prefix(tmp_path: Path) -> None:
+    """python_step() called directly with no name and a two-entry outputs mapping still raises a message starting 'python_step:'."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError) as info:
+        python_step(_split, inputs={}, outputs=_SPLIT, registry=reg)
+
+    message = str(info.value)
+    assert message.startswith("python_step:"), message

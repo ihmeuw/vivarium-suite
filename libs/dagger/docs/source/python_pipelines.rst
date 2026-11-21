@@ -343,6 +343,17 @@ status, where psimulate's logs are, and whether the previous complete run was ke
 the check itself failed with an unexpected error, the line names the check and the
 error.
 
+When psimulate started its workers, the line also names the directory of the workers'
+logs, ``<model>/<timestamp>/logs/<launch>/worker_logs`` under the scratch directory
+``<run directory>.psimulate``. That is where to find why a simulation failed. ``dagger``
+does not show the simulation's own traceback, because the simulations run in psimulate's
+Jobmon workers, which write their errors to those log files. A worker that was killed
+for running out of memory or time leaves no traceback at all. ``dagger`` names the
+directory and does not read the files, because their layout belongs to psimulate and to
+the Jobmon Slurm plugin and can change with them. If no workers' log directory exists,
+for example because psimulate failed before it started any workers, or if more than one
+matches, the line names the scratch directory instead.
+
 If pytask stops the build for another reason, for example because its configuration
 file or lockfile under the root cannot be read or a pytask plugin failed, pytask's
 output shows the cause and ``dagger`` names pytask's exit code. (``dagger force`` reads the
