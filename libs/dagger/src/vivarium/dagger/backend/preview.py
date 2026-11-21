@@ -14,6 +14,7 @@ from typing import Any
 
 import pytask
 
+from vivarium.dagger.backend._pickling import reduce_exception
 from vivarium.dagger.backend.build import build, failure_message
 from vivarium.dagger.backend.task import Task
 
@@ -84,6 +85,10 @@ class PlanFailed(RuntimeError):
     def __init__(self, message: str, *, exit_code: pytask.ExitCode) -> None:
         super().__init__(message)
         self.exit_code = exit_code
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Rebuild the error with its message and exit code when it is copied or pickled."""
+        return reduce_exception(self)
 
 
 def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPreview]:

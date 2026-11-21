@@ -30,6 +30,7 @@ from typing import Any
 from _pytask.lockfile import LockfileError, LockfileState
 from pytask import ExitCode, PathNode, Session, TaskOutcome
 
+from vivarium.dagger.backend._pickling import reduce_exception
 from vivarium.dagger.backend.build import (
     COMMAND_KEY,
     TaskExited,
@@ -124,6 +125,10 @@ class StepFailed(PipelineError):
         )
         super().__init__("\n".join(lines), exit_code=ExitCode.FAILED)
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Rebuild the error with its message and attributes when it is copied or pickled."""
+        return reduce_exception(self)
+
 
 class RunRefused(PipelineError):
     """Another run holds the run lock on the pipeline's root, so :func:`run` ran nothing.
@@ -185,6 +190,10 @@ class RunInterrupted(PipelineError):
         self.run_directory = run_directory
         self.outcomes = outcomes
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Rebuild the error with its message and attributes when it is copied or pickled."""
+        return reduce_exception(self)
+
 
 class StepExited(SystemExit):
     """A step raised :class:`SystemExit`, as ``sys.exit`` does, and stopped the build.
@@ -209,6 +218,10 @@ class StepExited(SystemExit):
     def __init__(self, step: str, code: str | int | None) -> None:
         super().__init__(code)
         self.step = step
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Rebuild the error with its step and exit code when it is copied or pickled."""
+        return reduce_exception(self)
 
     def __str__(self) -> str:
         """Return a sentence that names the step and its exit code."""
