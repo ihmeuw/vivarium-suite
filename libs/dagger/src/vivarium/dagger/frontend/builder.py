@@ -17,7 +17,8 @@ ends with ``return p``::
 Each step method calls the step function of the same name, such as
 :func:`~vivarium.dagger.frontend.python_step.python_step`, with the pipeline's registry,
 so a step added through the pipeline is the same task, with the same checks and
-messages, as one compiled against the registry by hand. The pipeline also refuses a step
+messages, as one compiled against the registry by hand, except that a missing or empty
+name is reported under the step method's own name. The pipeline also refuses a step
 whose name, or one of whose outputs, another step in the pipeline already has, when the
 step is added; when both apply, the error names the output. A step that reads a
 file must still be added after the step that produces it. :meth:`Pipeline.add_task` is
@@ -47,6 +48,7 @@ from pytask import PathNode
 
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
+from vivarium.dagger.frontend.command_step import _step_name
 from vivarium.dagger.frontend.command_step import command_step as compile_command_step
 from vivarium.dagger.frontend.notebook_step import NotebookParameter
 from vivarium.dagger.frontend.notebook_step import notebook_step as compile_notebook_step
@@ -214,6 +216,10 @@ class Pipeline:
         ValueError
             If the step's name is the name of a step already added; the message starts
             with ``Step '<name>':`` and says to give each step a different ``name=``.
+            If ``name`` is empty, the message is ``add_python_step: name must be a
+            non-empty string, got ''.`` With no ``name``, an empty ``outputs`` and an
+            ``outputs`` mapping with more than one entry each raise a message that starts
+            with ``add_python_step:``.
             Also for each case in which
             :func:`~vivarium.dagger.frontend.python_step.python_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
@@ -226,11 +232,11 @@ class Pipeline:
             an input key that no step already added produces and that is not a root
             input.
         """
-        keys = list(outputs.values()) if isinstance(outputs, Mapping) else [outputs]
-        # With no name and other than one output, python_step has no default name and
-        # raises before registering anything, so it reports the step.
-        default = keys[0] if len(keys) == 1 else None
-        self._check_new(default if name is None else name, keys)
+        named: Mapping[str, FileKey] = (
+            outputs if isinstance(outputs, Mapping) else {"outputs": outputs}
+        )
+        keys = list(named.values())
+        self._check_new(_step_name(named, name, "add_python_step"), keys)
         task = compile_python_step(
             target,
             inputs=inputs,
@@ -296,6 +302,8 @@ class Pipeline:
         ValueError
             If the step's name is the name of a step already added; the message starts
             with ``Step '<name>':`` and says to give each step a different ``name=``.
+            If ``name`` is empty, the message is ``add_notebook_step: name must be a
+            non-empty string, got ''.``
             Also for each case in which
             :func:`~vivarium.dagger.frontend.notebook_step.notebook_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
@@ -307,7 +315,7 @@ class Pipeline:
             :func:`~vivarium.dagger.frontend.notebook_step.notebook_step` raises it.
         """
         keys = [executed, *(outputs or {}).values()]
-        self._check_new(executed if name is None else name, keys)
+        self._check_new(_step_name({"executed": executed}, name, "add_notebook_step"), keys)
         task = compile_notebook_step(
             notebook,
             executed=executed,
@@ -368,6 +376,10 @@ class Pipeline:
         ValueError
             If the step's name is the name of a step already added; the message starts
             with ``Step '<name>':`` and says to give each step a different ``name=``.
+            If ``name`` is empty, the message is ``add_command_step: name must be a
+            non-empty string, got ''.`` With no ``name``, an empty ``outputs`` and an
+            ``outputs`` mapping with more than one entry each raise a message that starts
+            with ``add_command_step:``.
             Also for each case in which
             :func:`~vivarium.dagger.frontend.command_step.command_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
@@ -379,10 +391,7 @@ class Pipeline:
             :func:`~vivarium.dagger.frontend.command_step.command_step` raises it.
         """
         keys = list(outputs.values())
-        # With no name and other than one output, command_step has no default name and
-        # raises before registering anything, so it reports the step.
-        default = keys[0] if len(keys) == 1 else None
-        self._check_new(default if name is None else name, keys)
+        self._check_new(_step_name(outputs, name, "add_command_step"), keys)
         task = compile_command_step(
             command,
             outputs=outputs,
@@ -447,6 +456,8 @@ class Pipeline:
         ValueError
             If the step's name is the name of a step already added; the message starts
             with ``Step '<name>':`` and says to give each step a different ``name=``.
+            If ``name`` is empty, the message is ``add_simulation_step: name must be a
+            non-empty string, got ''.``
             Also for each case in which
             :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` raises it.
         vivarium.dagger.backend.wiring.WiringError
@@ -458,7 +469,7 @@ class Pipeline:
             :func:`~vivarium.dagger.frontend.simulation_step.simulation_step` raises it.
         """
         keys = [outputs]
-        self._check_new(outputs if name is None else name, keys)
+        self._check_new(_step_name({"outputs": outputs}, name, "add_simulation_step"), keys)
         task = compile_simulation_step(
             spec=spec,
             branches=branches,
@@ -523,9 +534,9 @@ class Pipeline:
         for path in paths:
             self._task_outputs[path] = task.name
 
-    def _check_new(self, step: str | None, keys: Iterable[FileKey]) -> None:
+    def _check_new(self, step: str, keys: Iterable[FileKey]) -> None:
         """Refuse a step whose name or one of whose outputs an added step already has."""
-        # A missing or empty name is the step function's error to report.
+        # An empty output key as the default name is the step function's error to report.
         if not step:
             return
         # Outputs first: two unnamed steps that produce one key also share a default

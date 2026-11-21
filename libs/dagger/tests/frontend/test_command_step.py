@@ -1362,3 +1362,17 @@ def test_python_command_python_chain_runs_through_run_with_the_right_final_outpu
     assert result == dict.fromkeys(["people", "adults", "total"], TaskOutcome.SUCCESS)
     total = pd.read_csv(registry.path_for("total.csv"))
     assert total["total_age"].tolist() == [34 + 56]
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_command_step_called_directly_keeps_its_own_prefix(tmp_path: Path) -> None:
+    """command_step() called directly with no name and two outputs still raises a message starting 'command_step:'."""
+    registry = FileRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError) as info:
+        command_step("touch {a} {b}", outputs={"a": "a.csv", "b": "b.csv"}, registry=registry)
+
+    message = str(info.value)
+    assert message.startswith("command_step:"), message

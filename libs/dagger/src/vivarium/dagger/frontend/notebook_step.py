@@ -174,7 +174,8 @@ def notebook_step(
         to one path, as when an ``outputs`` key equals ``executed`` or is given twice (the
         message names both).
         Except for an empty ``name``, each of these messages starts with
-        ``Step '<name>':``.
+        ``Step '<name>':``. An empty ``name`` gives ``notebook_step: name must be a
+        non-empty string, got ''.``
         When ``inputs``, ``outputs`` and ``parameters`` hold at least one name between
         them, also if ``notebook`` cannot be read as an nbformat 4 notebook, has no cell
         tagged ``parameters``, or its first cell tagged ``parameters`` is not a code cell,
@@ -187,7 +188,9 @@ def notebook_step(
     """
     task_name = executed if name is None else name
     if not task_name:
-        raise ValueError(f"Task name must be a non-empty string, got {task_name!r}.")
+        raise ValueError(
+            f"notebook_step: name must be a non-empty string, got {task_name!r}."
+        )
     if not env:
         raise ValueError(f"Step {task_name!r}: env must be a non-empty string, got {env!r}.")
     input_keys: dict[str, FileKey] = dict(inputs or {})

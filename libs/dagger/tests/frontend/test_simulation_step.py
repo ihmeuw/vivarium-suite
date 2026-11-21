@@ -721,8 +721,10 @@ def _assert_allowed_keys_in_order(message: str) -> None:
 
 
 def test_empty_name_or_env_is_rejected(model: _Model) -> None:
-    """An empty name or env raises ValueError starting "Step '<name>':"."""
-    assert _value_error(model, name="").startswith("Step '':")
+    """An empty name raises ValueError "simulation_step: name must be a non-empty string, got ''.", and an empty env one starting "Step '<name>':"."""
+    assert _value_error(model, name="") == (
+        "simulation_step: name must be a non-empty string, got ''."
+    )
     assert _value_error(model, name="toy", env="").startswith("Step 'toy':")
 
 
@@ -1643,3 +1645,14 @@ def test_dagger_run_with_two_run_directories_exits_one_naming_them(
     assert f"psimulate wrote 2 run directories under {example.scratch}" in errors, errors
     for path in runs:
         assert str(path) in errors, errors
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_simulation_step_with_an_empty_name_names_simulation_step(model: _Model) -> None:
+    """simulation_step() called directly with name='' raises ValueError "simulation_step: name must be a non-empty string, got ''." and the message does not contain "Step ''"."""
+    message = _value_error(model, name="")
+
+    assert message == "simulation_step: name must be a non-empty string, got ''.", message
+    assert "Step ''" not in message, message

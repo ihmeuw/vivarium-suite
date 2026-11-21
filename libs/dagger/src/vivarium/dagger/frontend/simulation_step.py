@@ -196,10 +196,11 @@ def simulation_step(
         ``Step '<name>':``, followed by the registry's message, which names the artifact
         key.
     ValueError
-        Raised before anything is registered, with a message that starts with
-        ``Step '<name>':``, if:
+        If ``name`` is empty, with the message ``simulation_step: name must be a
+        non-empty string, got ''.`` Also raised before anything is registered, with a
+        message that starts with ``Step '<name>':``, if:
 
-        - ``name`` or ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
+        - ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
         - ``outputs`` resolves to a path that is not strictly inside the registry's
           output directory, such as ``.``, ``..`` or an absolute path outside it, since
           the step replaces that directory on every run; the message names ``outputs``
@@ -222,6 +223,8 @@ def simulation_step(
           ``slack_tag`` is given without ``slack_channel``, which psimulate refuses; the
           message names the keys.
     """
+    if name is not None and not name:
+        raise ValueError(f"simulation_step: name must be a non-empty string, got {name!r}.")
     step = outputs if name is None else name
     if not outputs or outputs.endswith("/"):
         raise ValueError(
@@ -236,8 +239,6 @@ def simulation_step(
             f"output directory {output_dir}; outputs must name a directory under the output "
             "directory, since the step replaces that directory on every run."
         )
-    if not step:
-        raise ValueError(f"Step '{step}': name must be a non-empty string, got {step!r}.")
     if not env:
         raise ValueError(f"Step '{step}': env must be a non-empty string, got {env!r}.")
     spec_path = _existing_file(step, "spec", spec)
