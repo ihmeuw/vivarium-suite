@@ -1007,6 +1007,38 @@ def _failing_module(directory: Path, body: str) -> str:
     return name
 
 
+_TOP_LEVEL_FAILURE = "the module's top-level code failed on purpose"
+"""The message of the AttributeError that a module's own top-level code raises."""
+
+
+def _import_note_in(exc: str, task: str, reference: str) -> str:
+    """Return the text of ``exc`` from the start of the step's import note to its end."""
+    start = f"The step {task!r} could not import its target {reference!r} on this node"
+    assert start in exc, exc
+    return exc[exc.index(start) :]
+
+
+def _assert_import_time_attribute_error_note(
+    tmp_path: Path, modules: Path, name: str
+) -> None:
+    """Assert that importing ``name`` from ``modules`` fails with the import-time note."""
+    reference = f"{name}:make"
+    payload = _sys_path_payload("import_step", tmp_path, reference, [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert result["exc_type"] == "AttributeError", exc
+    assert exc is not None
+    assert _TOP_LEVEL_FAILURE in exc, exc
+    note = _import_note_in(exc, "import_step", reference)
+    assert "own code" in note, note
+    assert "in a module it imports" in note, note
+    assert "traceback shows where" in note, note
+    assert "must be readable" not in note, note
+
+
 def test_import_note_names_a_missing_dependency_of_a_module_under_sys_path(
     tmp_path: Path,
 ) -> None:
@@ -1131,3 +1163,49 @@ def test_main_called_in_process_keeps_a_sys_path_entry_that_was_already_there(
     assert status == 0, _read(tmp_path / _RESULT_NAME)["exc"]
     assert _observed(observed).count(str(modules)) == 1
     assert sys.path == before
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_import_note_for_a_module_whose_own_code_raises_attribute_error(
+    tmp_path: Path,
+) -> None:
+    """A python payload whose target module raises AttributeError in its own top-level code fails with that AttributeError, and its note says the module was found but importing it raised the AttributeError in the module's own code or in a module it imports, that the traceback shows where, and nothing about readable directories."""
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, f"raise AttributeError({_TOP_LEVEL_FAILURE!r})")
+
+    _assert_import_time_attribute_error_note(tmp_path, modules, name)
+
+
+def test_import_note_for_a_module_whose_import_raises_attribute_error(
+    tmp_path: Path,
+) -> None:
+    """A python payload whose target module imports a helper module, under the same sys_path root, that raises AttributeError at its top level fails with that AttributeError and gets the same note as an AttributeError in the target module's own code."""
+    modules = tmp_path / "modules"
+    helper = _failing_module(modules, f"raise AttributeError({_TOP_LEVEL_FAILURE!r})")
+    name = _failing_module(modules, f"import {helper}")
+
+    _assert_import_time_attribute_error_note(tmp_path, modules, name)
+
+
+def test_import_note_for_a_module_without_the_named_target_names_the_loaded_file(
+    tmp_path: Path,
+) -> None:
+    """A python payload whose module imports but has no object at the target's name fails with AttributeError whose note names the file the module was loaded from (module.__file__) and the missing name."""
+    modules = tmp_path / "modules"
+    name = _failing_module(modules, "")
+    missing = f"absent_step_{uuid.uuid4().hex[:8]}"
+    reference = f"{name}:{missing}"
+    payload = _sys_path_payload("lookup_step", tmp_path, reference, [str(modules)])
+
+    process, result = _run_step(tmp_path, payload)
+
+    exc = result["exc"]
+    assert process.returncode == 1
+    assert result["exc_type"] == "AttributeError", exc
+    assert exc is not None
+    note = _import_note_in(exc, "lookup_step", reference)
+    assert str(modules / f"{name}.py") in note, note
+    # The reference names the missing name too, so look for it after the reference.
+    assert missing in note.replace(reference, ""), note

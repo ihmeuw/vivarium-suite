@@ -23,6 +23,7 @@ import inspect
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 import pandas as pd
@@ -330,11 +331,21 @@ def resolve_reference(reference: str) -> Callable[..., Any]:
     AttributeError
         If the module has no object at the qualified name.
     """
+    module_name, qualname = _split_reference(reference)
+    return _lookup_qualname(importlib.import_module(module_name), qualname)
+
+
+def _split_reference(reference: str) -> tuple[str, str]:
+    """Return ``reference``'s module name and qualified name; reject any other form."""
     parts = reference.split(":")
     if len(parts) != 2 or not all(parts):
         raise ValueError(f"Reference {reference!r} is not of the form 'module:qualname'.")
-    module_name, qualname = parts
-    found: Any = importlib.import_module(module_name)
+    return parts[0], parts[1]
+
+
+def _lookup_qualname(module: ModuleType, qualname: str) -> Callable[..., Any]:
+    """Return the object at the dotted ``qualname`` in the imported ``module``."""
+    found: Any = module
     for attribute in qualname.split("."):
         found = getattr(found, attribute)
     return cast(Callable[..., Any], found)

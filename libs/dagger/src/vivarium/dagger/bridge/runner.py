@@ -15,6 +15,7 @@ files keep the output up to the kill.
 """
 
 import argparse
+import importlib
 import io
 import json
 import os
@@ -31,7 +32,11 @@ from typing import Any, TextIO, TypedDict, cast
 
 from vivarium.dagger.backend.build import run_command_with_bin_path
 from vivarium.dagger.bridge.payload import Payload, PythonPayload, decode
-from vivarium.dagger.frontend.python_step import PythonStepRun, resolve_reference
+from vivarium.dagger.frontend.python_step import (
+    PythonStepRun,
+    _lookup_qualname,
+    _split_reference,
+)
 
 RESULT_SUFFIX = ".result.json"
 """Suffix of a result file's name, which tells it apart from the payload, capture and
@@ -298,19 +303,43 @@ def _run_step(payload: Payload) -> None:
 
 def _resolve_target(payload: PythonPayload) -> Callable[..., Any]:
     """Import the payload's target, adding a note that names the step if the import fails."""
+    module_name, qualname = _split_reference(payload["target"])
     try:
-        return resolve_reference(payload["target"])
-    except (ImportError, AttributeError) as error:
+        module = importlib.import_module(module_name)
+    except ImportError as error:
         error.add_note(_import_note(payload, error))
+        raise
+    except AttributeError as error:
+        error.add_note(
+            f"{_note_start(payload)}. Its module {module_name!r} was found, but importing "
+            "it raised this AttributeError, in the module's own code or in a module it "
+            "imports; the traceback shows where."
+        )
+        raise
+    try:
+        return _lookup_qualname(module, qualname)
+    except AttributeError as error:
+        loaded = getattr(module, "__file__", None)
+        source = f"from {loaded}" if loaded else "with no file"
+        error.add_note(
+            f"{_note_start(payload)}. Its module {module_name!r} was imported {source}, "
+            f"and it has no object named {qualname!r}. An older copy of the module may "
+            "come first on the node's sys.path."
+        )
         raise
 
 
-def _import_note(payload: PythonPayload, error: BaseException) -> str:
-    """Return the note for a target that could not be imported on this node."""
-    start = (
+def _note_start(payload: PythonPayload) -> str:
+    """Return the start that every import note shares."""
+    return (
         f"The step {payload['task']!r} could not import its target "
         f"{payload['target']!r} on this node"
     )
+
+
+def _import_note(payload: PythonPayload, error: BaseException) -> str:
+    """Return the note for a target whose module could not be imported on this node."""
+    start = _note_start(payload)
     module = payload["target"].partition(":")[0]
     missing = _missing_dependency(error, module)
     if missing is not None and isinstance(error, ModuleNotFoundError):
