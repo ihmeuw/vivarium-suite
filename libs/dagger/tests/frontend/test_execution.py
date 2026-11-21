@@ -55,6 +55,20 @@ def _explode_differently() -> pd.DataFrame:
     raise RuntimeError("another step broke")
 
 
+_REFUSAL = "cannot run on a compute node, because its env is missing there."
+"""A refusal message, as the bridge raises it, without its step prefix."""
+
+
+def _refuse_as_x() -> pd.DataFrame:
+    """Raise a ValueError whose message starts with the prefix of the step 'x'."""
+    raise ValueError(f"Step 'x': {_REFUSAL}")
+
+
+def _refuse_as_y() -> pd.DataFrame:
+    """Raise a ValueError whose message starts with the prefix of another step, 'y'."""
+    raise ValueError(f"Step 'y': {_REFUSAL}")
+
+
 def _interrupt() -> pd.DataFrame:
     """Raise KeyboardInterrupt, as a step body stopped by the user."""
     raise KeyboardInterrupt
@@ -1389,3 +1403,31 @@ def test_run_interrupted_keeps_its_workflow_id_run_directory_outcomes_and_exit_c
     assert error.outcomes == reported
     assert error.exit_code == ExitCode.FAILED
     assert str(error) == "msg"
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_step_failed_names_a_step_whose_error_repeats_its_name_once(tmp_path: Path) -> None:
+    """When a step 'x' fails with an exception whose message starts "Step 'x': ", str(StepFailed) contains "Step 'x'" exactly once and keeps the rest of the message."""
+    p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
+    p.add_python_step(_refuse_as_x, inputs={}, outputs="x.parquet", name="x")
+
+    with pytest.raises(StepFailed) as info:
+        run(p)
+
+    message = str(info.value)
+    assert message.count("Step 'x'") == 1, message
+    assert _REFUSAL in message, message
+
+
+def test_step_failed_keeps_a_prefix_that_names_another_step(tmp_path: Path) -> None:
+    """When a step 'x' fails with an exception whose message starts "Step 'y': ", str(StepFailed) keeps "Step 'y': " in its description."""
+    p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
+    p.add_python_step(_refuse_as_y, inputs={}, outputs="x.parquet", name="x")
+
+    with pytest.raises(StepFailed) as info:
+        run(p)
+
+    message = str(info.value)
+    assert f"Step 'y': {_REFUSAL}" in message, message

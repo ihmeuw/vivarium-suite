@@ -34,6 +34,7 @@ from tests.bridge.helpers import (
 )
 from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RunLocked
+from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
 from vivarium.dagger.bridge.plugin import DEFAULT_MAX_ATTEMPTS
@@ -122,6 +123,11 @@ def _chain(
         tasks = stable(tasks)
     layer: Mapping[str, Any] = {} if resources is None else resources
     return pipeline_of(tasks, build_root(tmp_path), resources=layer)
+
+
+def _write_by_hand(product: Path) -> None:
+    """Stand in for a step function that python_step did not build."""
+    product.write_text("ran")
 
 
 def _defaults(jobmon: FakeJobmon) -> dict[str, Any]:
@@ -530,3 +536,27 @@ def test_a_node_failure_raises_step_failed_with_the_node_exception_type_and_mess
     assert error.node_traceback is not None
     assert "raise_step_failure_reading" in error.node_traceback, error.node_traceback
     assert step_targets.FAILURE_MESSAGE in error.node_traceback, error.node_traceback
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_a_bridge_refusal_names_the_step_once(tmp_path: Path) -> None:
+    """A pipeline run through the bridge with FakeJobmon, in which the bridge refuses one step (its message starts "Step '<name>':"), raises StepFailed whose str() names that step exactly once."""
+    artifacts = registry(tmp_path)
+    refused = Task(
+        name="refused",
+        run=_write_by_hand,
+        inputs={},
+        outputs={"product": artifacts.register_output("refused.txt")},
+        resources={},
+        env=None,
+    )
+    pipeline = pipeline_of([refused], build_root(tmp_path))
+
+    with FakeJobmon(), pytest.raises(StepFailed) as info:
+        run(pipeline, jobmon=True, jobmon_resources=dict(_PROJECT))
+
+    message = str(info.value)
+    assert "cannot run on a compute node" in message, message
+    assert message.count("Step 'refused'") == 1, message
