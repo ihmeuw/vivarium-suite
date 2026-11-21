@@ -1431,3 +1431,25 @@ def test_step_failed_keeps_a_prefix_that_names_another_step(tmp_path: Path) -> N
 
     message = str(info.value)
     assert f"Step 'y': {_REFUSAL}" in message, message
+
+
+def test_preview_after_a_root_input_is_deleted_names_the_step_and_the_path(
+    tmp_path: Path,
+) -> None:
+    """preview() of a pipeline whose root input file was deleted after the reading step was added raises PipelineError whose message names the reading step and the missing file's path."""
+    raw = tmp_path / "raw.parquet"
+    _constant().to_parquet(raw)
+    p = Pipeline(
+        tmp_path / "out", "run1", root_inputs={"raw.parquet": raw}, state=tmp_path / "state"
+    )
+    p.add_python_step(
+        _increment, inputs={"source": "raw.parquet"}, outputs="more.parquet", name="reader"
+    )
+    raw.unlink()
+
+    with pytest.raises(PipelineError) as info:
+        preview(p)
+
+    message = str(info.value)
+    assert "Step 'reader'" in message, message
+    assert raw.resolve().as_posix() in message, message

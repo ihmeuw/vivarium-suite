@@ -413,8 +413,10 @@ def failure_message(session: pytask.Session) -> str:
     -------
         The name of the session's exit code, followed by the message of each collection
         or DAG error pytask recorded, for example ``"DAG_FAILED: There are some tasks
-        which produce the same output. ..."``. A session that failed only because steps
-        failed gives the exit code's name alone.
+        which produce the same output. ..."``, and then one line ``Step '<name>':
+        <exception type>: <message>`` for each step that failed with an exception, as a
+        step whose input is missing does in a dry run. A session with none of these
+        gives the exit code's name alone.
     """
     errors = [
         report.exc_info[1]
@@ -424,6 +426,12 @@ def failure_message(session: pytask.Session) -> str:
     if session.dag_report is not None and session.dag_report.exc_info is not None:
         errors.append(session.dag_report.exc_info[1])
     messages = [str(error) for error in errors if error is not None]
-    if not messages:
-        return session.exit_code.name
-    return f"{session.exit_code.name}: " + "\n".join(messages)
+    heading = session.exit_code.name
+    if messages:
+        heading += ": " + "\n".join(messages)
+    lines = [heading]
+    for report in session.execution_reports:
+        error = None if report.exc_info is None else report.exc_info[1]
+        if report.outcome == pytask.TaskOutcome.FAIL and error is not None:
+            lines.append(f"Step {report.task.name!r}: {type(error).__name__}: {error}")
+    return "\n".join(lines)

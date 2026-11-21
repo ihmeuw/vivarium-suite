@@ -10,7 +10,7 @@ from typing import Any
 import pytask
 import pytest
 
-from vivarium.dagger.backend.build import build
+from vivarium.dagger.backend.build import build, failure_message
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import PlanFailed, Reason, StepPreview, preview
 from vivarium.dagger.backend.task import Task
@@ -197,3 +197,40 @@ def test_preview_raises_plan_failed_carrying_pytasks_exit_code(tmp_path: Path) -
     assert isinstance(error, RuntimeError)
     assert error.exit_code == pytask.ExitCode.DAG_FAILED
     assert "DAG_FAILED" in str(error)
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_plan_failed_message_starts_with_a_capital(tmp_path: Path) -> None:
+    """A preview whose build fails raises PlanFailed whose message starts 'Preview could not build the plan:'."""
+    src, out = tmp_path / "src.csv", tmp_path / "out.csv"
+    src.write_text("x\n")
+    tasks = [_copy_task("a", src, out), _copy_task("b", src, out)]
+
+    with pytest.raises(PlanFailed) as info:
+        preview(tasks, tmp_path / "state")
+
+    message = str(info.value)
+    assert message.startswith("Preview could not build the plan:"), message
+
+
+def test_failure_message_adds_a_line_for_each_failed_step(tmp_path: Path) -> None:
+    """failure_message for a dry-run session in which a step failed with an exception adds a line "Step '<name>': <ExceptionType>: <message>" for that step after the exit code's name."""
+    missing = tmp_path / "missing.csv"
+    tasks = [_copy_task("copy", missing, tmp_path / "copy.csv")]
+
+    session = build(tasks, tmp_path / "state", dry_run=True, explain=True)
+
+    [report] = [
+        report
+        for report in session.execution_reports
+        if report.outcome == pytask.TaskOutcome.FAIL
+    ]
+    assert report.exc_info is not None
+    error = report.exc_info[1]
+    assert error is not None
+    message = failure_message(session)
+    line = f"Step 'copy': {type(error).__name__}: {error}"
+    assert message.startswith(session.exit_code.name), message
+    assert f"\n{line}" in message, message

@@ -4,6 +4,7 @@ import subprocess
 from collections.abc import Callable, Mapping
 from importlib.metadata import entry_points
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -378,16 +379,33 @@ def test_failure_message_names_the_exit_code_and_pytasks_error(tmp_path: Path) -
     assert session.exit_code == ExitCode.DAG_FAILED
     assert message.startswith(ExitCode.DAG_FAILED.name)
     assert "There are some tasks which produce the same output" in message
+    assert "\nStep " not in message, message
 
 
-def test_failure_message_of_a_failed_step_is_the_exit_code_name(tmp_path: Path) -> None:
-    """failure_message of a session that failed only because a step failed is the exit code's name."""
+def test_failure_message_without_an_error_or_a_failed_step_is_the_exit_code_name() -> None:
+    """failure_message of a FAILED session with no collection or DAG error and no failed step is exactly the exit code's name."""
+    session = SimpleNamespace(
+        exit_code=ExitCode.FAILED,
+        collection_reports=[],
+        dag_report=None,
+        execution_reports=[],
+    )
+
+    assert failure_message(cast(Any, session)) == ExitCode.FAILED.name
+
+
+def test_failure_message_of_a_failed_step_names_the_exit_code_and_the_step(
+    tmp_path: Path,
+) -> None:
+    """failure_message of a session that failed only because a step failed is the exit code's name followed by a line "Step 'fail': CalledProcessError: ..."."""
     tasks = [_task("fail", "exit 1", outputs={"out": file_node(tmp_path / "out")})]
 
     session = build(tasks, tmp_path / "state")
 
     assert session.exit_code == ExitCode.FAILED
-    assert failure_message(session) == session.exit_code.name
+    message = failure_message(session)
+    assert message.startswith(session.exit_code.name), message
+    assert "\nStep 'fail': CalledProcessError: " in message, message
 
 
 # How a failed command's exit reads (MIC-7785)
