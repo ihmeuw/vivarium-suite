@@ -103,15 +103,22 @@ def _forbid_file_access(*args: object, **kwargs: object) -> None:
     raise AssertionError("a file was touched before the definition was checked")
 
 
+def _problem_text(message: str, fragment: str) -> str:
+    """Return the one problem in ``message`` containing ``fragment``, without its bullet."""
+    line = message.splitlines()[_line_of(message, fragment)]
+    return line.lstrip().removeprefix("- ")
+
+
 def _assert_rejected_before_reading(
-    root: Path, locations: list[str], files: Mapping[str, Sequence[str]]
-) -> None:
-    """Assert location_inputs raises ValueError without touching any file."""
+    root: Path, locations: list[str] | str, files: Mapping[str, Sequence[str]]
+) -> str:
+    """Return the message of the ValueError location_inputs raises before touching a file."""
     with pytest.MonkeyPatch.context() as patch:
         for owner, attribute in _FILE_ACCESS:
             patch.setattr(owner, attribute, _forbid_file_access)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as info:
             location_inputs(root, locations, files)
+    return str(info.value)
 
 
 def _unsupported_parquet(*args: object, **kwargs: object) -> None:
@@ -252,7 +259,7 @@ def test_file_without_read_permission_is_reported_unreadable(tmp_path: Path) -> 
 
 
 def test_all_problems_are_raised_together_by_location(tmp_path: Path) -> None:
-    """Problems across several locations and files are raised as one LocationInputError headed 'the location inputs under <root> are not ready (3 problems):', with one line each."""
+    """Problems across several locations and files are raised as one LocationInputError headed 'The location inputs under <root> are not ready (3 problems):', with one line each."""
     _deliver(tmp_path, "ethiopia", "draws.parquet", _COVERAGE.drop(columns="coverage"))
     (_primary(tmp_path, "nigeria") / "coverage.csv").write_bytes(b"")
     _deliver(tmp_path, "nigeria", "draws.parquet")
@@ -266,7 +273,7 @@ def test_all_problems_are_raised_together_by_location(tmp_path: Path) -> None:
     assert max(ethiopia) < nigeria
     assert "nigeria/primary/draws.parquet" not in message
     header = message.splitlines()[0]
-    assert header == "the location inputs under <root> are not ready (3 problems):"
+    assert header == "The location inputs under <root> are not ready (3 problems):"
 
 
 def test_location_input_error_is_a_wiring_error(tmp_path: Path) -> None:
@@ -577,3 +584,78 @@ def test_zero_column_parquet_says_it_has_no_columns_and_gives_no_hint(
     line = _problem_line(message, "<root>/ethiopia/primary/empty.parquet")
     assert line.endswith("is missing required columns 'year_id'; it has no columns."), line
     assert "may be" not in line
+
+
+# --- Messages (MIC-7848) ---
+
+
+def test_not_ready_message_starts_with_a_capital_and_labels_the_location(
+    tmp_path: Path,
+) -> None:
+    """location_inputs with location 'kenya' whose file lacks a required column raises LocationInputError whose message starts 'The location inputs under' and whose problem line contains "Location 'kenya': pop.csv"."""
+    _deliver(tmp_path, "kenya", "pop.csv", _COVERAGE.drop(columns="coverage"))
+
+    message = _location_input_error(tmp_path, ["kenya"], {"pop.csv": _COLUMNS})
+
+    assert message.startswith("The location inputs under"), message
+    line = _problem_text(message, "<root>/kenya/primary/pop.csv")
+    assert "Location 'kenya': pop.csv" in line, line
+
+
+def test_missing_and_unreadable_files_are_labelled_with_the_quoted_location(
+    tmp_path: Path,
+) -> None:
+    """A missing file and an unreadable file each give a problem line starting "Location '<loc>': ", with a location such as 'Kenya_2' quoted exactly as given."""
+    (_primary(tmp_path, "Kenya_2") / "coverage.csv").write_bytes(b"")
+
+    message = _location_input_error(tmp_path, ["Kenya_2"], _CSV_AND_PARQUET)
+
+    unreadable = _problem_text(message, "<root>/Kenya_2/primary/coverage.csv")
+    missing = _problem_text(message, "<root>/Kenya_2/primary/draws.parquet")
+    assert "could not be read" in unreadable, unreadable
+    assert "is missing" in missing, missing
+    for line in (unreadable, missing):
+        assert line.startswith("Location 'Kenya_2': "), line
+
+
+@pytest.mark.parametrize(
+    "locations, files, prefix",
+    [
+        ("ethiopia", _FILES, "Locations must be a list"),
+        (["east/africa"], _FILES, "Location 'east/africa' must be a single directory name"),
+        (
+            ["ethiopia"],
+            {"sub/coverage.csv": _COLUMNS},
+            "Input file 'sub/coverage.csv' must be a file name",
+        ),
+        (
+            ["ethiopia"],
+            {"coverage.xlsx": _COLUMNS},
+            "Input file 'coverage.xlsx' has unsupported suffix",
+        ),
+        (
+            ["ethiopia"],
+            {"coverage.csv": "coverage"},
+            "Required columns for 'coverage.csv' must be a list of names",
+        ),
+    ],
+    ids=[
+        "bare-string-locations",
+        "location-path",
+        "file-path",
+        "suffix",
+        "bare-string-columns",
+    ],
+)
+def test_declaration_errors_start_with_a_capital(
+    tmp_path: Path,
+    locations: list[str] | str,
+    files: Mapping[str, Sequence[str]],
+    prefix: str,
+) -> None:
+    """Each declaration ValueError (locations as a bare string, a location that is not one directory name, a file name that is a path, an unsupported suffix, columns as a bare string) has a message starting with a capital letter, and no file is read."""
+    message = _assert_rejected_before_reading(tmp_path, locations, files)
+
+    # The case-insensitive prefix shows which declaration error was raised.
+    assert message.lower().startswith(prefix.lower()), message
+    assert message[0].isupper(), message

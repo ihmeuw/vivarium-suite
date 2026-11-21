@@ -89,20 +89,20 @@ def _check_declaration(locations: list[str], files: Mapping[str, Sequence[str]])
     """Reject a bad location or file name, an unsupported suffix, or a string column list."""
     for location in locations:
         if not _is_single_component(location):
-            raise ValueError(f"location {location!r} must be a single directory name.")
+            raise ValueError(f"Location {location!r} must be a single directory name.")
     for filename, columns in files.items():
         if not _is_single_component(filename):
-            raise ValueError(f"input file {filename!r} must be a file name, not a path.")
+            raise ValueError(f"Input file {filename!r} must be a file name, not a path.")
         suffix = Path(filename).suffix
         if suffix not in _COLUMN_READERS:
             supported = ", ".join(sorted(_COLUMN_READERS))
             raise ValueError(
-                f"input file {filename!r} has unsupported suffix {suffix!r}; "
+                f"Input file {filename!r} has unsupported suffix {suffix!r}; "
                 f"supported suffixes are {supported}."
             )
         if isinstance(columns, str):
             raise ValueError(
-                f"required columns for {filename!r} must be a list of names, not the "
+                f"Required columns for {filename!r} must be a list of names, not the "
                 f"string {columns!r}."
             )
 
@@ -128,7 +128,7 @@ def _names(names: Sequence[str], limit: int | None = None) -> str:
 def _unreadable(location: str, path: Path, error: Exception) -> str:
     """Describe a delivered file that could not be read."""
     return (
-        f"{location}: {path.name} at {path} could not be read: "
+        f"Location {location!r}: {path.name} at {path} could not be read: "
         f"{type(error).__name__}: {error}"
     )
 
@@ -142,7 +142,7 @@ def _problem(location: str, path: Path, columns: Sequence[str]) -> str | None:
     if not is_file:
         others = _same_stem_files(path)
         found = f" (found {_names(others)})" if others else ""
-        return f"{location}: {path.name} is missing; expected at {path}{found}."
+        return f"Location {location!r}: {path.name} is missing; expected at {path}{found}."
     try:
         present = _COLUMN_READERS[path.suffix](path)
     except (ValueError, OSError, pa.ArrowException) as error:
@@ -152,7 +152,7 @@ def _problem(location: str, path: Path, columns: Sequence[str]) -> str | None:
     if missing:
         hints = _close_matches(missing, present, columns)
         return (
-            f"{location}: {path.name} at {path} is missing required columns "
+            f"Location {location!r}: {path.name} at {path} is missing required columns "
             f"{_names(missing)}; {_present_columns(present)}.{hints}"
         )
     return None
@@ -213,8 +213,10 @@ def location_inputs(
     LocationInputError
         If any declared file is missing, cannot be read (including when a directory
         on its path cannot be searched or the reader rejects the file), or lacks a
-        required column. One error lists every problem found, grouped by location,
-        and names each file's expected path. A missing-columns problem lists the
+        required column. One error, whose message starts ``The location inputs under
+        <root> are not ready``, lists every problem found, grouped by location, and
+        names each file's expected path. Each problem starts with ``Location
+        '<location>':``, the location quoted as given. A missing-columns problem lists the
         missing columns, then the first ten columns present in file order followed by
         ``, and <N> more`` for the rest, each quoted. It ends by naming a present,
         unrequired column that closely matches a missing one, as in ``'year' may be
@@ -222,11 +224,12 @@ def location_inputs(
     ValueError
         Before any file is read, if ``locations`` is a bare string, a location or
         file name is not a single path component, a file's suffix is not ``.csv`` or
-        ``.parquet``, or a column list is given as a bare string.
+        ``.parquet``, or a column list is given as a bare string. Each message starts
+        with a capital letter.
     """
     if isinstance(locations, str):
         raise ValueError(
-            f"locations must be a list of location names, not the string {locations!r}."
+            f"Locations must be a list of location names, not the string {locations!r}."
         )
     unique_locations = list(dict.fromkeys(locations))
     _check_declaration(unique_locations, files)
@@ -246,6 +249,6 @@ def location_inputs(
         count = f"{len(problems)} problem{'s' if len(problems) > 1 else ''}"
         listing = "\n".join(f"  - {problem}" for problem in problems)
         raise LocationInputError(
-            f"the location inputs under {root_dir} are not ready ({count}):\n{listing}"
+            f"The location inputs under {root_dir} are not ready ({count}):\n{listing}"
         )
     return found
