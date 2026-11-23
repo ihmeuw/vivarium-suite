@@ -150,7 +150,7 @@ def simulation_step(
         ``metadata/`` and ``logs/``. It is replaced on every run of the step, so no other
         step may write under it.
     registry
-        The producer/consumer registry that resolves keys to shared nodes.
+        The producer/consumer registry that resolves file keys to nodes.
     env
         The environment psimulate runs in: a conda env or venv name, or a path to its
         prefix. It must have ``vivarium-psimulate`` installed with its ``cluster`` extra.

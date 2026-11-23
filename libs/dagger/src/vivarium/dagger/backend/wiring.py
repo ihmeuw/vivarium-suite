@@ -1,4 +1,4 @@
-"""Producer/consumer wiring: resolve declared file keys to shared nodes.
+"""Producer/consumer wiring: resolve declared file keys to nodes.
 
 A pipeline names each file it reads or writes with a logical key. An output registers its key
 against one resolved file node under the run's output directory, or against a run
@@ -48,10 +48,12 @@ class WiringError(Exception):
 
 
 class FileRegistry:
-    """Resolve declared file keys to shared nodes for one run.
+    """Resolve declared file keys to nodes for one run.
 
     A key resolves to a file node, or to a run directory node when it is registered by
-    :meth:`register_directory_output`.
+    :meth:`register_directory_output`. An input gets the node that its producer
+    registered, so the node keeps its type, or a file node for a declared root input;
+    pytask links a producer and its consumer by the node's path.
 
     Parameters
     ----------
@@ -168,9 +170,10 @@ class FileRegistry:
         The directory is at :meth:`path_for` of ``key``, and its state is the content of
         its ``sentinel`` file, as :class:`~vivarium.dagger.backend.nodes.RunDirectoryNode`
         describes. A consumer names ``key`` as its input, and :meth:`resolve_input`
-        returns this same node, so the consumer gets an edge to the producer and receives
-        the directory's path. :meth:`key_for` of the directory's path returns ``key``.
-        Registering the same key again returns the same node.
+        returns this same node, so the consumer receives the run directory node, which
+        loads as the directory's path. pytask runs the consumer after the producer
+        because the two steps name the same path. :meth:`key_for` of the directory's
+        path returns ``key``. Registering the same key again returns the same node.
 
         Parameters
         ----------

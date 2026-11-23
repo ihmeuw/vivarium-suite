@@ -162,21 +162,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     result (each run truncates them), and Python's own streams are line-buffered so their
     output keeps its order with a child process's. The runner changes to the payload's
     ``cwd`` and runs a python recipe as
-    ``PythonStepRun(resolve_reference(target), suffix)(**decode(kwargs))``, where
-    ``suffix`` is a suffix or a mapping of output names to suffixes, or a command recipe
-    through :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. Any
+    ``PythonStepRun(function, suffix)(**decode(kwargs))``, where ``function`` is the
+    object that the reference ``target`` names and ``suffix`` is a suffix or a mapping of
+    output names to suffixes, or a command recipe through
+    :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. The runner finds
+    ``function`` as :func:`~vivarium.dagger.frontend.python_step.resolve_reference`
+    does, in two steps: it imports the reference's module, then looks up the name in it. Any
     exception is a failure, including :class:`SystemExit` or :class:`KeyboardInterrupt`
     from the step, an unreadable payload, and an unknown ``kind``. On a failure the runner
     also writes the captured standard error tail and then the traceback to its own standard
-    error, because Jobmon keeps only the end of that stream. A target that cannot be
-    imported on the node fails with a note naming the step and the target reference. Any
-    earlier result at the result path is removed before the step runs, so a result always
-    belongs to the run whose capture files sit beside it. The descriptors, the stream
-    buffering and the working directory are restored before it returns, so it can also be
-    called in-process. A python recipe's ``sys_path`` entries that are not on ``sys.path``
-    are appended to it, after the node's own entries, before the target is imported, and
-    removed again when the step ends, so a module that the node can already import is
-    imported from where the node finds it.
+    error, because Jobmon keeps only the end of that stream. A target that the node cannot
+    import fails with a note that names the step and the target reference, in three cases
+    only. For an ``ImportError`` raised while the module is imported, the note names
+    the other module when the error names one, and otherwise says where the target's
+    module must be importable from. For an ``AttributeError`` raised while the
+    module is imported, the note says so. For a module that has no object of that
+    name, the note names the file the module was loaded from. Any other error raised
+    while the module is imported gets no note. Any earlier result at the result path is
+    removed before the step runs, so a result always belongs to the run whose capture files
+    sit beside it. The descriptors, the stream buffering and the working directory are
+    restored before it returns, so it can also be called in-process. A python recipe's
+    ``sys_path`` entries that are not on ``sys.path`` are appended to it, after the node's
+    own entries, before the target is imported, and removed again when the step ends, so a
+    module that the node can already import is imported from where the node finds it.
 
     Parameters
     ----------

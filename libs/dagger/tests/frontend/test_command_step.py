@@ -591,7 +591,7 @@ def test_two_outputs_at_one_path_are_refused_naming_both(
 def test_the_same_key_as_input_and_output_is_refused_before_any_registry_lookup(
     tmp_path: Path,
 ) -> None:
-    """One key in both inputs and outputs raises ValueError, not WiringError and not a pytask cycle at build time, even when the key has no producer, naming the input and the output with their keys and saying a step cannot read and write the same artifact, and nothing is registered."""
+    """One key in both inputs and outputs raises ValueError, not WiringError and not a pytask cycle at build time, even when the key has no producer, naming the input and the output with their keys and saying a step cannot read and write the same file, and nothing is registered."""
     # 'shared.csv' has no producer and is no root input, so resolving it would raise
     # WiringError; pytest.raises(ValueError) does not catch a WiringError.
     message = _refused(

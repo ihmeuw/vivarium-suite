@@ -579,3 +579,16 @@ def test_check_output_raises_what_register_output_raises(tmp_path: Path) -> None
         message = _wiring_message(reg.check_output, key)
         assert message == _wiring_message(reg.register_output, key), key
     assert reg.key_for(reg.path_for("b/../a.csv")) == "a.csv"
+
+
+# One output key registered twice
+
+
+def test_register_output_twice_returns_the_same_node(tmp_path: Path) -> None:
+    """On FileRegistry(tmp_path / 'out', 'run1'), register_output('x.csv') called twice returns the identical node both times, and key_for(path_for('x.csv')) is 'x.csv'."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    first = reg.register_output("x.csv")
+
+    assert reg.register_output("x.csv") is first
+    assert reg.key_for(reg.path_for("x.csv")) == "x.csv"

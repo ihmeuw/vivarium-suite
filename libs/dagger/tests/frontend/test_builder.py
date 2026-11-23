@@ -4,6 +4,7 @@ import copy
 import dataclasses
 import importlib
 import inspect
+import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -224,7 +225,7 @@ def test_the_run_name_dot_dagger_is_refused(tmp_path: Path) -> None:
 def test_a_run_name_whose_output_directory_is_not_a_separate_directory_under_the_root_is_refused(
     tmp_path: Path, run_name: str
 ) -> None:
-    """A run name whose output directory, with . and .. collapsed (symlinks are not followed), is not strictly inside the output root, or is the .dagger directory or inside it, raises ValueError naming the run name."""
+    """A run name whose output directory, with . and .. collapsed, is not strictly inside the output root, or is the .dagger directory or inside it, raises ValueError naming the run name."""
     with pytest.raises(ValueError) as info:
         Pipeline(tmp_path, run_name)
 
@@ -250,20 +251,6 @@ def test_a_nested_run_name_is_accepted(tmp_path: Path) -> None:
 
     assert _registry_of(p).path_for("x.csv") == root / "study" / "run1" / "x.csv"
     assert p.state == root / ".dagger" / "study" / "run1"
-
-
-def test_a_run_directory_that_is_a_symlink_is_accepted(tmp_path: Path) -> None:
-    """With tmp_path/out/run1 a symlink to tmp_path/elsewhere, Pipeline(tmp_path / "out", "run1") is accepted, its state is tmp_path/out/.dagger/run1 and its outputs resolve under tmp_path/elsewhere."""
-    elsewhere = tmp_path / "elsewhere"
-    elsewhere.mkdir()
-    (tmp_path / "out").mkdir()
-    (tmp_path / "out" / "run1").symlink_to(elsewhere, target_is_directory=True)
-
-    p = Pipeline(tmp_path / "out", "run1")
-
-    assert p.run_name == "run1"
-    assert p.state == (tmp_path / "out").resolve() / ".dagger" / "run1"
-    assert _registry_of(p).path_for("x.csv") == elsewhere.resolve() / "x.csv"
 
 
 def test_resources_that_are_not_a_mapping_raise_type_error(tmp_path: Path) -> None:
@@ -1522,3 +1509,216 @@ def test_every_add_method_reports_an_empty_name_in_one_form(
     assert freeze(p).tasks == ()
     for key in _output_keys(kind, arguments):
         assert not _registered(p, key), key
+
+
+# A run directory behind a symbolic link
+
+
+_LINKS_FOLLOWED = "with symbolic links followed"
+"""The words of a refusal that names a run directory's real location."""
+
+
+def _directory(path: Path) -> Path:
+    """Create the directory ``path`` and its parents, and return it."""
+    path.mkdir(parents=True)
+    return path
+
+
+def _link(link: Path, target: Path | str) -> None:
+    """Make ``link`` a symbolic link to ``target``, creating the directory that holds it."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(target, link)
+
+
+def _refusal(tmp_path: Path, run_name: str) -> str:
+    """Return the message of the ValueError that Pipeline(tmp_path / "out", run_name) raises."""
+    with pytest.raises(ValueError) as info:
+        Pipeline(tmp_path / "out", run_name)
+    return str(info.value)
+
+
+def test_a_run_directory_that_links_outside_the_output_root_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/run1 a symbolic link to the existing directory tmp_path/elsewhere, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1'), the path tmp_path.resolve()/out/run1, the path tmp_path.resolve()/elsewhere and the words 'with symbolic links followed'."""
+    root = tmp_path.resolve()
+    _link(tmp_path / "out" / "run1", _directory(tmp_path / "elsewhere"))
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert str(root / "out" / "run1") in message, message
+    assert str(root / "elsewhere") in message, message
+    assert _LINKS_FOLLOWED in message, message
+
+
+def test_a_run_directory_that_links_into_the_state_folder_is_refused(tmp_path: Path) -> None:
+    """With tmp_path/out/.dagger/x a directory and tmp_path/out/run1 a symbolic link to it, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1'), the path tmp_path.resolve()/out/.dagger/x and the words 'with symbolic links followed'."""
+    _link(tmp_path / "out" / "run1", _directory(tmp_path / "out" / ".dagger" / "x"))
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert str(tmp_path.resolve() / "out" / ".dagger" / "x") in message, message
+    assert _LINKS_FOLLOWED in message, message
+
+
+def test_a_run_directory_that_links_to_the_state_folder_itself_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/.dagger a directory and tmp_path/out/run1 a symbolic link to it, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1') and the path tmp_path.resolve()/out/.dagger."""
+    _link(tmp_path / "out" / "run1", _directory(tmp_path / "out" / ".dagger"))
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert str(tmp_path.resolve() / "out" / ".dagger") in message, message
+
+
+def test_a_run_directory_that_links_inside_the_output_root_is_accepted(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/real a directory and tmp_path/out/run1 a symbolic link to it, made in one case with the absolute target and in another with the relative target 'real', Pipeline(tmp_path / 'out', 'run1') is made; its run_name is 'run1', its state is tmp_path.resolve()/out/.dagger/run1, and its registry puts the output key 'x.csv' at tmp_path.resolve()/out/real/x.csv."""
+    out = tmp_path.resolve() / "out"
+    real = _directory(tmp_path / "out" / "real")
+    link = tmp_path / "out" / "run1"
+
+    for target in (real, "real"):
+        _link(link, target)
+
+        p = Pipeline(tmp_path / "out", "run1")
+
+        assert p.run_name == "run1"
+        assert p.state == out / ".dagger" / "run1"
+        assert _registry_of(p).path_for("x.csv") == out / "real" / "x.csv"
+        link.unlink()
+
+
+def test_a_run_name_whose_parent_links_outside_the_output_root_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/study a symbolic link to the existing directory tmp_path/elsewhere, Pipeline(tmp_path / 'out', 'study/run1') raises ValueError whose message contains repr('study/run1') and the path tmp_path.resolve()/elsewhere/run1."""
+    _link(tmp_path / "out" / "study", _directory(tmp_path / "elsewhere"))
+
+    message = _refusal(tmp_path, "study/run1")
+
+    assert repr("study/run1") in message, message
+    assert str(tmp_path.resolve() / "elsewhere" / "run1") in message, message
+
+
+def test_a_link_before_dot_dot_in_the_run_name_is_followed_as_the_os_follows_it(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/link a symbolic link to the existing directory tmp_path/elsewhere/deep, Pipeline(tmp_path / 'out', 'link/../x') raises ValueError whose message contains repr('link/../x') and the path tmp_path.resolve()/elsewhere/x, although tmp_path/out/x, the run directory with '..' collapsed, is inside the output root."""
+    _link(tmp_path / "out" / "link", _directory(tmp_path / "elsewhere" / "deep"))
+
+    message = _refusal(tmp_path, "link/../x")
+
+    assert repr("link/../x") in message, message
+    assert str(tmp_path.resolve() / "elsewhere" / "x") in message, message
+
+
+def test_a_chain_of_links_is_followed_to_its_end(tmp_path: Path) -> None:
+    """With tmp_path/out/run1 a symbolic link to tmp_path/out/hop, and tmp_path/out/hop a symbolic link to the existing directory tmp_path/elsewhere, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1') and the path tmp_path.resolve()/elsewhere."""
+    _link(tmp_path / "out" / "hop", _directory(tmp_path / "elsewhere"))
+    _link(tmp_path / "out" / "run1", tmp_path / "out" / "hop")
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert str(tmp_path.resolve() / "elsewhere") in message, message
+
+
+def test_a_dangling_link_outside_the_output_root_is_refused(tmp_path: Path) -> None:
+    """With tmp_path/out/run1 a symbolic link to tmp_path/missing, which does not exist, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1') and the path tmp_path.resolve()/missing."""
+    _link(tmp_path / "out" / "run1", tmp_path / "missing")
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert str(tmp_path.resolve() / "missing") in message, message
+
+
+def test_a_run_directory_that_links_to_the_output_root_itself_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/run1 a symbolic link whose target is '.', so that it is the output root itself, Pipeline(tmp_path / 'out', 'run1') raises ValueError whose message contains repr('run1') and the words 'with symbolic links followed'."""
+    _link(tmp_path / "out" / "run1", ".")
+
+    message = _refusal(tmp_path, "run1")
+
+    assert repr("run1") in message, message
+    assert _LINKS_FOLLOWED in message, message
+
+
+def test_a_dangling_link_inside_the_output_root_is_accepted(tmp_path: Path) -> None:
+    """With tmp_path/out/run1 a symbolic link to tmp_path/out/missing, which does not exist, Pipeline(tmp_path / 'out', 'run1') is made, and its registry puts the output key 'x.csv' at tmp_path.resolve()/out/missing/x.csv."""
+    _link(tmp_path / "out" / "run1", tmp_path / "out" / "missing")
+
+    p = Pipeline(tmp_path / "out", "run1")
+
+    expected = tmp_path.resolve() / "out" / "missing" / "x.csv"
+    assert _registry_of(p).path_for("x.csv") == expected
+
+
+def test_a_run_directory_that_is_a_link_loop_is_accepted(tmp_path: Path) -> None:
+    """With tmp_path/out a directory and tmp_path/out/run1 a symbolic link to itself (os.symlink(tmp_path / 'out' / 'run1', tmp_path / 'out' / 'run1')), Pipeline(tmp_path / 'out', 'run1') is accepted when the Pipeline is made: it raises nothing, its run_name is 'run1' and its state is tmp_path.resolve()/out/.dagger/run1. The same holds for the loop made with the relative target 'run1'."""
+    link = tmp_path / "out" / "run1"
+
+    for target in (link, "run1"):
+        _link(link, target)
+
+        p = Pipeline(tmp_path / "out", "run1")
+
+        assert p.run_name == "run1"
+        assert p.state == tmp_path.resolve() / "out" / ".dagger" / "run1"
+        link.unlink()
+
+
+def test_an_output_root_given_through_a_link_is_accepted(tmp_path: Path) -> None:
+    """With tmp_path/rootlink a symbolic link to the directory tmp_path/out, tmp_path/out/real a directory and tmp_path/out/run1 a symbolic link to tmp_path/rootlink/real, Pipeline(tmp_path / 'rootlink', 'run1') is made and its output_root is tmp_path.resolve()/out."""
+    _directory(tmp_path / "out" / "real")
+    _link(tmp_path / "rootlink", tmp_path / "out")
+    _link(tmp_path / "out" / "run1", tmp_path / "rootlink" / "real")
+
+    p = Pipeline(tmp_path / "rootlink", "run1")
+
+    assert p.output_root == tmp_path.resolve() / "out"
+
+
+def test_a_run_name_inside_the_target_of_a_linked_state_folder_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With tmp_path/out/statedir a directory and tmp_path/out/.dagger a symbolic link to it, Pipeline(tmp_path / 'out', 'statedir/run1'), whose run name has no link in it, raises ValueError whose message contains repr('statedir/run1'), the path tmp_path.resolve()/out/statedir and the words 'with symbolic links followed', and does not contain 'through a symbolic link'."""
+    _link(tmp_path / "out" / ".dagger", _directory(tmp_path / "out" / "statedir"))
+
+    message = _refusal(tmp_path, "statedir/run1")
+
+    assert repr("statedir/run1") in message, message
+    assert str(tmp_path.resolve() / "out" / "statedir") in message, message
+    assert _LINKS_FOLLOWED in message, message
+    assert "through a symbolic link" not in message, message
+
+
+# Step order is not checked when a step is added
+
+
+def test_add_task_accepts_a_consumer_before_its_producer_when_it_is_added(
+    tmp_path: Path,
+) -> None:
+    """p.add_task of the hand-built command task 'consumer', which reads tmp_path/a.txt, and then of 'producer', which writes that file, raises nothing, and freeze(p).tasks names consumer and then producer: the order is checked when the pipeline is built, not when a step is added."""
+    a, b = tmp_path / "a.txt", tmp_path / "b.txt"
+    consumer = Task(
+        name="consumer",
+        run=f"cp {a} {b}",
+        inputs={"source": file_node(a)},
+        outputs={"out": file_node(b)},
+        resources={},
+        env=None,
+    )
+    p = Pipeline(tmp_path / "out", "run1")
+
+    p.add_task(consumer)
+    p.add_task(_command_task("producer", a))
+
+    assert [task.name for task in freeze(p).tasks] == ["consumer", "producer"]
