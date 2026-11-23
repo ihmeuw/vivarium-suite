@@ -1,3 +1,7 @@
+**1.1.3 - 11/23/26**
+
+- Support ``str`` dtypes when appending ``vipin`` performance data to central logs
+
 **1.1.2 - 11/19/26**
 
 - Raise ``BackupLoadError`` when a backup exists but cannot be loaded, instead of

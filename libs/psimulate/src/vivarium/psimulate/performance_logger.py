@@ -281,7 +281,10 @@ def append_perf_data_to_central_logs(
         return
 
     child_job_performance_data = transform_perf_df_for_appending(perf_df, output_paths)
-    job_number = int(child_job_performance_data["job_number"].unique().squeeze())
+    job_numbers = child_job_performance_data["job_number"].unique()
+    if len(job_numbers) != 1:
+        raise ValueError(f"Expected exactly one job number, got {list(job_numbers)}.")
+    job_number = int(job_numbers[0])
     first_file_with_data = append_child_job_data(child_job_performance_data)
 
     runner_data = generate_runner_job_data(job_number, output_paths, first_file_with_data)
