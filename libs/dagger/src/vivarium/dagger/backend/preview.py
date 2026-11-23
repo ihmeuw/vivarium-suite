@@ -1,10 +1,10 @@
 """Turn pytask's dry-run into a structured, in-memory plan.
 
 The staleness engine is pytask's, so this module is thin: it runs a dry-run and
-reads one ``(name, outcome, reasons)`` entry per step off the session, so the
-wrapper can render the plan in step-name terms and feed the same plan to the
-visualization overlay and the id-to-step translation, instead of parsing
-pytask's printed table.
+reads one ``(name, outcome, reasons)`` entry per step off the session, in the order
+of the tasks it was given, so that a caller does not parse pytask's printed table.
+:func:`vivarium.dagger.frontend.execution.preview` relabels each reason's node in
+pipeline terms, and ``dagger preview`` prints that plan.
 """
 
 from collections.abc import Iterable
@@ -15,7 +15,7 @@ from typing import Any
 import pytask
 
 from vivarium.dagger.backend._pickling import reduce_exception
-from vivarium.dagger.backend.build import build, failure_message
+from vivarium.dagger.backend.build import build, failure_message, reports_in_task_order
 from vivarium.dagger.backend.task import Task
 
 
@@ -95,13 +95,15 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
     """Return a structured plan for ``tasks`` without running anything.
 
     Runs pytask with execution off (``dry_run=True, explain=True``) and reads one
-    entry per step off the session's execution reports. A preview reads
-    ``pytask.lock`` and the ``.pytask`` store but writes no declared output.
+    entry per step off the session's execution reports, in the order of ``tasks``. A
+    preview reads ``pytask.lock`` and the ``.pytask`` store but writes no declared
+    output.
 
     Parameters
     ----------
     tasks
-        The compiled task set.
+        The compiled tasks, in dependency order, as for
+        :func:`~vivarium.dagger.backend.build.build`.
     root
         Directory holding pytask's config, state, and lockfile (see
         :func:`~vivarium.dagger.backend.build.build`).
@@ -111,7 +113,7 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
 
     Returns
     -------
-        One :class:`StepPreview` per step, in the session's report order.
+        One :class:`StepPreview` per step, in the order of ``tasks``.
 
     Raises
     ------
@@ -133,7 +135,7 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
             f"Preview could not build the plan: {failure_message(session)}",
             exit_code=session.exit_code,
         )
-    return [_step_preview(report) for report in session.execution_reports]
+    return [_step_preview(report) for report in reports_in_task_order(session)]
 
 
 def _step_preview(report: pytask.ExecutionReport) -> StepPreview:

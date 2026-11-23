@@ -21,6 +21,7 @@ import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
 
+from tests.backend.order_names import EIGHT
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from tests.frontend.pipelines import stable_snapshot
 from vivarium.dagger.backend.nodes import file_node
@@ -2941,6 +2942,53 @@ def pipeline():
 """A definition that adds with add_task the hand-built command step 'consumer', which reads
 a.txt beside the definition, and then 'producer', which writes a.txt."""
 
+_EIGHT_INDEPENDENT = f"""\
+from pathlib import Path
+
+from vivarium.dagger.frontend import Pipeline
+
+HERE = Path(__file__).resolve().parent
+
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for name in {EIGHT!r}:
+        p.add_command_step("touch {{out}}", outputs={{"out": f"{{name}}.txt"}}, name=name)
+    return p
+"""
+"""A definition of the independent command steps of ``EIGHT``, added in that order."""
+
+_FAILED_AND_BLOCKED = """\
+from pathlib import Path
+
+from vivarium.dagger.frontend import Pipeline
+
+HERE = Path(__file__).resolve().parent
+
+PAIRS = (
+    ("zulu_fails", "yankee_down"),
+    ("alpha_fails", "xray_down"),
+    ("mike_fails", "charlie_down"),
+    ("bravo_fails", "delta_down"),
+)
+
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    for fails, down in PAIRS:
+        p.add_command_step("exit 1", outputs={"out": f"{fails}.txt"}, name=fails)
+        p.add_command_step(
+            "cp {src} {out}",
+            inputs={"src": f"{fails}.txt"},
+            outputs={"out": f"{down}.txt"},
+            name=down,
+        )
+    return p
+"""
+"""A definition of four command steps that run 'exit 1', each followed by a step that reads
+its output: zulu_fails, yankee_down, alpha_fails, xray_down, mike_fails, charlie_down,
+bravo_fails, delta_down."""
+
 
 def test_run_exits_two_for_a_step_added_before_the_step_it_depends_on(tmp_path: Path) -> None:
     """'dagger run --local' on a definition that adds with add_task the hand-built command step 'consumer', which reads a.txt beside the definition, and then 'producer', which writes a.txt, exits 2; stderr has "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." and no step ran, so a.txt does not exist."""
@@ -2964,3 +3012,35 @@ def test_preview_exits_two_for_a_step_added_before_the_step_it_depends_on(
     assert result.exit_code == 2, _describe(result)
     assert _OUT_OF_ORDER in result.stderr, result.stderr
     assert not any(_PLAN_LINE.fullmatch(line) for line in _plan(result)), result.stdout
+
+
+def test_preview_prints_the_plan_in_definition_order(tmp_path: Path) -> None:
+    """'dagger preview' on a definition of the independent steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, added in that order, exits 0, prints its eight 'run <step>' lines in that order, and ends with the line '8 of 8 steps would run.' as its last line."""
+    path = _write_definition(tmp_path, _EIGHT_INDEPENDENT)
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert _would_run(result) == list(EIGHT), result.stdout
+    assert _plan(result)[-1] == "8 of 8 steps would run.", result.stdout
+
+
+def test_run_prints_failed_steps_and_blocked_steps_in_definition_order(
+    tmp_path: Path,
+) -> None:
+    """'dagger run --local' on a definition that adds eight command steps in this order, zulu_fails, yankee_down (reads the output of zulu_fails), alpha_fails, xray_down (reads the output of alpha_fails), mike_fails, charlie_down (reads the output of mike_fails), bravo_fails, delta_down (reads the output of bravo_fails), in which each *_fails step runs 'exit 1', exits 1; the lines of stderr that, once click's "Error: " prefix is removed, start with "Step '" and contain "failed" name zulu_fails, alpha_fails, mike_fails, bravo_fails in that order, and stderr has "Not run because an upstream step failed: 'yankee_down', 'xray_down', 'charlie_down', 'delta_down'.", which is the order of the definition and not the order the steps ran in."""
+    path = _write_definition(tmp_path, _FAILED_AND_BLOCKED)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 1, _describe(result)
+    # click starts the first line of the error with "Error: ".
+    lines = [line.removeprefix("Error: ") for line in result.stderr.splitlines()]
+    failed = [
+        line.split("'")[1] for line in lines if line.startswith("Step '") and "failed" in line
+    ]
+    assert failed == ["zulu_fails", "alpha_fails", "mike_fails", "bravo_fails"], result.stderr
+    blocked = "'yankee_down', 'xray_down', 'charlie_down', 'delta_down'"
+    assert (
+        f"Not run because an upstream step failed: {blocked}." in result.stderr
+    ), result.stderr

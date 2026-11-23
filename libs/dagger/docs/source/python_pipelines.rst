@@ -94,7 +94,7 @@ Previewing a run
    $ dagger preview -c pipeline.py
 
 ``dagger preview`` runs nothing and writes no output. It prints one line per step, in
-the order pytask would run them. A step that would run is printed as ``run <step>``,
+the order the definition adds the steps. A step that would run is printed as ``run <step>``,
 followed by pytask's reasons, separated by semicolons. A step that would not run is
 printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
 ``--until`` leaves it out. A last line, such as ``2 of 3 steps would run.``, counts
@@ -307,7 +307,9 @@ When a step fails
 pytask prints a failure report for each failed step. Its traceback starts in the
 step's own code, and the report includes what the step printed. ``dagger`` then prints one
 line per failed step, with its error's type and message, and lists the steps that did
-not run because a step they depend on failed. The traceback is shown only once. Steps
+not run because a step they depend on failed. Both are in the order the definition adds
+the steps. pytask's reports above them are in the order pytask recorded the steps, which
+in a local run is the order the steps failed. The traceback is shown only once. Steps
 that do not depend on a failed step still run.
 
 For a notebook step whose notebook raised an error, the line names the notebook, the

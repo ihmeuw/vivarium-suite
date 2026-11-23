@@ -9,6 +9,14 @@ with each reason naming, where it can, a file key or a step instead of a file pa
 pytask node name. :func:`run` describes a failed command or notebook step without its
 generated command and names a step that calls ``sys.exit``.
 
+Step order is the order in which the steps were added to the pipeline. The outcomes that
+:func:`run` returns, the plan that :func:`preview` returns, the failures, outcomes and
+message entries of a :class:`StepFailed` that :func:`run` raises, and the outcomes of a
+:class:`RunInterrupted` that it raises are in step order, whatever order the steps ran
+or failed in. A step must be added after the steps it depends on. Both verbs check this
+before any step runs and refuse a pipeline in which a step depends on a step added after
+it, so step order is also an order in which the steps can run.
+
 With ``jobmon=True``, :func:`run` runs the stale steps through the Jobmon bridge (see
 :mod:`~vivarium.dagger.bridge.plugin`). It then gives every step its compute resources
 in the layers that :mod:`~vivarium.dagger.constants` lists, refuses a pipeline in which
@@ -39,6 +47,7 @@ from vivarium.dagger.backend.build import (
     describe_exit,
     failure_message,
     outcomes,
+    reports_in_task_order,
 )
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RUN_REFUSED_KEY, RunLocked, run_lock
 from vivarium.dagger.backend.nodes import RunDirectoryNode
@@ -87,29 +96,36 @@ class StepFailed(PipelineError):
     """One or more steps failed during :func:`run`.
 
     The message has one entry per failed step, ``Step '<name>' failed: <description>``,
-    each starting on a new line. A step's description is the one ``descriptions`` gives
-    for it; otherwise it is its error's type and message, which takes more than one line
-    when the message does. An error that carries ``exc_type`` and ``exc_message``
-    attributes, as a failure reported from another process does, is then described by
-    those attributes instead of its own type and message. A message that starts with
-    ``Step '<name>':`` for the same step is described without that prefix, so the
-    entry names the step once.
+    each starting on a new line, in the order of ``failures``. A step's description is
+    the one ``descriptions`` gives for it; otherwise it is its error's type and message,
+    which takes more than one line when the message does. An error that carries
+    ``exc_type`` and ``exc_message`` attributes, as a failure reported from another
+    process does, is then described by those attributes instead of its own type and
+    message. A message that starts with ``Step '<name>':`` for the same step is described
+    without that prefix, so the entry names the step once.
+
+    When :func:`run` raises this error, ``failures``, ``outcomes`` and the entries of the
+    message are in step order (see :mod:`~vivarium.dagger.frontend.execution`), and the
+    error's cause is the exception of the first failed step in step order. That step is
+    not necessarily the first step that failed.
 
     Parameters
     ----------
     failures
-        Each failed step's exception, keyed by step name, in pytask's report order.
+        Each failed step's exception, keyed by step name, in step order when :func:`run`
+        raises it.
     outcomes
-        Every step's outcome from the run, keyed by step name, in pytask's report order.
+        Every step's outcome from the run, keyed by step name, in step order when
+        :func:`run` raises it.
     descriptions
         Text that replaces the error's type and message in the line of each step it
         names, keyed by step name. :func:`run` gives one for every failed step.
     """
 
     failures: dict[str, BaseException]
-    """Each failed step's exception, keyed by step name, in pytask's report order."""
+    """Each failed step's exception, keyed by step name, in step order."""
     outcomes: dict[str, TaskOutcome]
-    """Every step's outcome from the run, keyed by step name, in pytask's report order."""
+    """Every step's outcome from the run, keyed by step name, in step order."""
 
     def __init__(
         self,
@@ -177,7 +193,7 @@ class RunInterrupted(PipelineError):
     """The bridge's directory for the run, which holds its recipes, results and state
     file (see :mod:`~vivarium.dagger.bridge.state`)."""
     outcomes: dict[str, TaskOutcome]
-    """Every step's outcome from the run, keyed by step name, in pytask's report order."""
+    """Every step's outcome from the run, keyed by step name, in step order."""
 
     def __init__(
         self,
@@ -276,7 +292,7 @@ def run(
 
     Returns
     -------
-        Each step's outcome, keyed by step name.
+        Each step's outcome, keyed by step name, in step order.
 
     Raises
     ------
@@ -326,9 +342,10 @@ def run(
         outside pytask and pluggy that is not marked with ``__tracebackhide__``, which
         for a step body is the first frame of the step's own code; when no frame
         qualifies, the full traceback is kept. ``failures`` holds each step's own
-        exception, and the first failure in report order is the cause. Each step's entry
-        in the message describes its failure in step terms. A notebook step is
-        described by
+        exception, in step order, and the first of them is the cause. That step is not
+        necessarily the first step that failed, and in a run through Jobmon it can be a
+        step that has no result because the Jobmon run stopped. Each step's entry in the
+        message describes its failure in step terms. A notebook step is described by
         :func:`~vivarium.dagger.frontend.notebook_step.describe_notebook_failure` when
         that returns a description, and a simulation step by
         :func:`~vivarium.dagger.frontend.simulation_step.describe_simulation_failure`
@@ -439,16 +456,17 @@ def preview(
 
     Returns
     -------
-        One :class:`~vivarium.dagger.backend.preview.StepPreview` per step, in
-        pytask's report order.
+        One :class:`~vivarium.dagger.backend.preview.StepPreview` per step, in step
+        order.
 
     Raises
     ------
     PipelineError
         If ``only`` names a step that is not in the pipeline, the backend rejects the
-        tasks, or pytask cannot collect or plan them, as for :func:`run`. When the
-        backend raises :class:`~vivarium.dagger.backend.preview.PlanFailed`, the
-        error's ``exit_code`` is that error's; otherwise it is ``None``.
+        tasks, as it does when a step depends on a step added after it, or pytask cannot
+        collect or plan them, as for :func:`run`. When the backend raises
+        :class:`~vivarium.dagger.backend.preview.PlanFailed`, the error's ``exit_code``
+        is that error's; otherwise it is ``None``.
     TypeError
         If ``pipeline`` is not a :class:`~vivarium.dagger.frontend.builder.Pipeline`,
         as for :func:`run`.
@@ -597,9 +615,9 @@ def _reset(root: Path, steps: set[str]) -> None:
 
 
 def _failures(session: Session) -> dict[str, BaseException]:
-    """Return each failed step's exception by step name, trimmed to its first user frame."""
+    """Return each failed step's trimmed exception by step name, in step order."""
     failures: dict[str, BaseException] = {}
-    for report in session.execution_reports:
+    for report in reports_in_task_order(session):
         error = None if report.exc_info is None else report.exc_info[1]
         if report.outcome == TaskOutcome.FAIL and error is not None:
             failures[report.task.name] = _trimmed(error)

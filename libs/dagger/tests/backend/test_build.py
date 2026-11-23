@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from pytask import ExitCode, PickleNode, PNode, PythonNode, TaskOutcome
+from pytask import ExitCode, PickleNode, PNode, PythonNode, Session, TaskOutcome
 
 import vivarium.dagger.backend.build as build_module
+from tests.backend.order_names import EIGHT
 from vivarium.dagger.backend.build import (
     BRIDGE_PLUGIN,
     CODE_ID_KEY,
@@ -22,6 +23,7 @@ from vivarium.dagger.backend.build import (
     describe_exit,
     failure_message,
     outcomes,
+    reports_in_task_order,
     to_pytask_task,
 )
 from vivarium.dagger.backend.nodes import file_node
@@ -390,6 +392,7 @@ def test_failure_message_without_an_error_or_a_failed_step_is_the_exit_code_name
         collection_reports=[],
         dag_report=None,
         execution_reports=[],
+        tasks=[],
     )
 
     assert failure_message(cast(Any, session)) == ExitCode.FAILED.name
@@ -575,6 +578,19 @@ def _chain(folder: Path) -> tuple[Task, Task, Task]:
     """Build first -> middle -> last, each of which reads the file the one before it writes."""
     a, b, c = folder / "a", folder / "b", folder / "c"
     return _make("first", a), _copy("middle", a, b), _copy("last", b, c)
+
+
+def _built_eight(tmp_path: Path, failing: tuple[str, ...] = ()) -> Session:
+    """Build the independent tasks of ``EIGHT`` locally, then reverse the session's reports in place."""
+    tasks = [
+        _task(name, "exit 1", outputs={"dst": file_node(tmp_path / name)})
+        if name in failing
+        else _make(name, tmp_path / name)
+        for name in EIGHT
+    ]
+    session = build(tasks, tmp_path / "state")
+    session.execution_reports.reverse()
+    return session
 
 
 def _capture(captured: PythonNode) -> None:
@@ -778,3 +794,65 @@ def test_build_accepts_a_task_that_reads_a_file_no_task_produces(tmp_path: Path)
     tasks = [_copy("reader", raw, tmp_path / "copy"), _make("other", tmp_path / "other")]
 
     assert outcomes(build(tasks, tmp_path / "state")) == _every(tasks, TaskOutcome.SUCCESS)
+
+
+def test_reports_in_task_order_sorts_the_reports_and_leaves_the_session_as_it_was(
+    tmp_path: Path,
+) -> None:
+    """After a local build of the independent command tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, given in that order, with session.execution_reports then reversed in place, [report.task.name for report in reports_in_task_order(session)] is that order of names; the result is a new list, and session.execution_reports still holds the same reports in the reversed order."""
+    session = _built_eight(tmp_path)
+    before = list(session.execution_reports)
+
+    ordered = reports_in_task_order(session)
+
+    assert [report.task.name for report in ordered] == list(EIGHT)
+    assert ordered is not session.execution_reports
+    assert len(session.execution_reports) == len(before)
+    assert all(now is was for now, was in zip(session.execution_reports, before))
+
+
+def test_reports_in_task_order_has_no_entry_for_a_task_without_a_report(
+    tmp_path: Path,
+) -> None:
+    """After a local build of the independent command tasks zeta, alpha, mike, given in that order, with the report of 'alpha' removed from session.execution_reports, reports_in_task_order(session) names zeta and then mike."""
+    tasks = [_make(name, tmp_path / name) for name in ("zeta", "alpha", "mike")]
+    session = build(tasks, tmp_path / "state")
+    session.execution_reports[:] = [
+        report for report in session.execution_reports if report.task.name != "alpha"
+    ]
+
+    ordered = reports_in_task_order(session)
+
+    assert [report.task.name for report in ordered] == ["zeta", "mike"]
+
+
+def test_outcomes_are_in_task_order(tmp_path: Path) -> None:
+    """After a local build of the independent command tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, given in that order, with session.execution_reports then reversed in place, list(outcomes(session)) is that order of names."""
+    session = _built_eight(tmp_path)
+
+    assert list(outcomes(session)) == list(EIGHT)
+
+
+def test_failure_message_lists_failed_steps_in_task_order(tmp_path: Path) -> None:
+    """After a local build of the independent command tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, given in that order, in which alpha, mike, yankee and delta run 'exit 1', with session.execution_reports then reversed in place, the lines of failure_message(session) that start with 'Step ' name alpha, mike, yankee, delta in that order."""
+    failing = ("alpha", "mike", "yankee", "delta")
+    session = _built_eight(tmp_path, failing)
+
+    lines = [
+        line for line in failure_message(session).splitlines() if line.startswith("Step ")
+    ]
+
+    assert [line.split("'")[1] for line in lines] == list(failing), lines
+
+
+def test_failure_message_of_a_built_session_with_no_failed_step_is_the_exit_code_name(
+    tmp_path: Path,
+) -> None:
+    """For the session of a local build of two tasks that both succeed, whose exit_code is then set to ExitCode.FAILED, failure_message(session) is exactly 'FAILED'."""
+    tasks = [_make(name, tmp_path / name) for name in ("a", "b")]
+    session = build(tasks, tmp_path / "state")
+    assert outcomes(session) == _every(tasks, TaskOutcome.SUCCESS)
+
+    session.exit_code = ExitCode.FAILED
+
+    assert failure_message(session) == "FAILED"

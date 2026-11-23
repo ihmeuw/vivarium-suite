@@ -1,5 +1,7 @@
 """Tests for the pipeline verbs (``frontend.execution``)."""
 
+import json
+import os
 import re
 import subprocess
 import sys
@@ -12,6 +14,7 @@ import pytest
 from pytask import ExitCode, NodeNotFoundError, TaskOutcome
 
 import vivarium.dagger.frontend.execution
+from tests.backend.order_names import EIGHT, TEN
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.build import TaskExited
@@ -417,7 +420,7 @@ def test_an_independent_step_still_completes_when_another_step_fails(
 def test_two_failing_steps_are_both_reported_and_the_first_is_the_cause(
     tmp_path: Path,
 ) -> None:
-    """Two independent failures both appear in StepFailed.failures; __cause__ is the first in report order."""
+    """Two independent failures both appear in StepFailed.failures; __cause__ is the first in step order."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         python_step(_explode, inputs={}, outputs="first.parquet", registry=registry),
@@ -1067,7 +1070,7 @@ def test_step_failed_uses_the_given_descriptions_and_defaults_the_rest() -> None
 
 
 def test_several_failed_steps_each_get_their_own_description(tmp_path: Path) -> None:
-    """A run in which a command step and a python step both fail gives one line per step, each described its own way, in pytask's report order."""
+    """A run in which a command step and a python step both fail gives one line per step, each described its own way, in step order."""
     registry = FileRegistry(tmp_path / "out", "run1")
     tasks = [
         _command_step(tmp_path, "shout", "exit 3"),
@@ -1464,6 +1467,76 @@ _OUT_OF_ORDER = (
 )
 """The message for the step 'consumer' that is added before the step 'producer' it depends on."""
 
+_FOUR_FAILING = ("alpha", "mike", "yankee", "delta")
+
+_TEN_STEPS_SCRIPT = """
+import json
+import sys
+
+from vivarium.dagger.frontend import Pipeline, StepFailed, preview, run
+
+verb, output_root, eight, failing = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+p = Pipeline(output_root, "run1")
+for name in eight.split():
+    command = "exit 1" if name in failing.split() else "touch {out}"
+    p.add_command_step(command, outputs={"out": f"{name}.txt"}, name=name)
+for source in ("mike", "zeta"):
+    p.add_command_step(
+        "cp {src} {out}",
+        inputs={"src": f"{source}.txt"},
+        outputs={"out": f"after_{source}.txt"},
+        name=f"after_{source}",
+    )
+if verb == "preview":
+    result = [step.name for step in preview(p)]
+else:
+    try:
+        run(p)
+    except StepFailed as error:
+        lines = [line for line in str(error).splitlines() if line.startswith("Step '")]
+        result = {
+            "outcomes": list(error.outcomes),
+            "failures": list(error.failures),
+            "lines": [line.split("'")[1] for line in lines],
+            "cause_is_alpha": error.__cause__ is error.failures["alpha"],
+        }
+print()
+print(json.dumps(result))
+"""
+"""Build the ten-step pipeline of :func:`_ten_steps` under the output root given, with the
+steps named as failing running 'exit 1', and print as the last line, as JSON, the step
+names of ``preview`` or what the ``StepFailed`` that ``run`` raises reports."""
+
+
+def _ten_steps(tmp_path: Path) -> Pipeline:
+    """Return the independent command steps of ``EIGHT``, then after_mike and after_zeta, which read mike's and zeta's outputs."""
+    p = Pipeline(tmp_path / "out", "run1")
+    for name in EIGHT:
+        p.add_command_step("touch {out}", outputs={"out": f"{name}.txt"}, name=name)
+    for source in ("mike", "zeta"):
+        p.add_command_step(
+            "cp {src} {out}",
+            inputs={"src": f"{source}.txt"},
+            outputs={"out": f"after_{source}.txt"},
+            name=f"after_{source}",
+        )
+    return p
+
+
+def _ten_steps_with_hash_seed(tmp_path: Path, seed: int, verb: str) -> object:
+    """Return what ``_TEN_STEPS_SCRIPT`` prints for ``verb`` in a process with hash seed ``seed``."""
+    failing = _FOUR_FAILING if verb == "run" else ()
+    output_root = str(tmp_path / f"seed{seed}")
+    arguments = [verb, output_root, " ".join(EIGHT), " ".join(failing)]
+    result = subprocess.run(
+        [sys.executable, "-c", _TEN_STEPS_SCRIPT, *arguments],
+        env={**os.environ, "PYTHONHASHSEED": str(seed)},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout.splitlines()[-1])
+
 
 def _consumer_then_producer(tmp_path: Path) -> Pipeline:
     """Return a pipeline to which add_task added 'consumer', which reads a.txt, and then 'producer', which writes it."""
@@ -1532,3 +1605,59 @@ def test_a_notebook_step_whose_notebook_a_later_step_writes_is_refused(
 
     assert source.read_bytes() == before
     assert not _product(p, "executed.ipynb").exists()
+
+
+def test_a_step_that_reads_a_root_input_can_be_added_first(tmp_path: Path) -> None:
+    """For Pipeline(..., root_inputs={'raw.csv': <an existing file>}) with the step 'reader', which reads 'raw.csv', added first and the independent step 'other' added second, preview(p) raises nothing and returns the two steps in that order."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("n\n1\n")
+    p = Pipeline(tmp_path / "out", "run1", root_inputs={"raw.csv": raw})
+    p.add_command_step(
+        "cp {src} {out}",
+        inputs={"src": "raw.csv"},
+        outputs={"out": "copy.csv"},
+        name="reader",
+    )
+    p.add_command_step("touch {out}", outputs={"out": "other.txt"}, name="other")
+
+    assert [step.name for step in preview(p)] == ["reader", "other"]
+
+
+def test_preview_lists_steps_in_step_order_under_any_hash_seed(tmp_path: Path) -> None:
+    """A script, run with sys.executable once each under PYTHONHASHSEED=0, 1 and 2, builds a Pipeline with the independent command steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, then after_mike (reads mike's output) and after_zeta (reads zeta's output), and prints [step.name for step in preview(p)]; every run prints those ten names in that order."""
+    for seed in (0, 1, 2):
+        assert _ten_steps_with_hash_seed(tmp_path, seed, "preview") == list(TEN), seed
+
+
+def test_run_reports_outcomes_failures_and_the_cause_in_step_order_under_any_hash_seed(
+    tmp_path: Path,
+) -> None:
+    """A script, run with sys.executable once each under PYTHONHASHSEED=0, 1 and 2, builds a Pipeline with the independent command steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, then after_mike (reads mike's output) and after_zeta (reads zeta's output), in which alpha, mike, yankee and delta run 'exit 1', calls run(p) in its own process and catches StepFailed; in every run list(error.outcomes) is the ten names in that order, list(error.failures) is alpha, mike, yankee, delta, the lines of str(error) name those four steps in that order, and error.__cause__ is error.failures['alpha']."""
+    expected = {
+        "outcomes": list(TEN),
+        "failures": list(_FOUR_FAILING),
+        "lines": list(_FOUR_FAILING),
+        "cause_is_alpha": True,
+    }
+
+    for seed in (0, 1, 2):
+        assert _ten_steps_with_hash_seed(tmp_path, seed, "run") == expected, seed
+
+
+def test_run_returns_outcomes_in_step_order(tmp_path: Path) -> None:
+    """run(p) of a Pipeline with the independent command steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, then after_mike (reads mike's output) and after_zeta (reads zeta's output), none of which fails, returns a dict whose keys are those ten names in that order."""
+    result = run(_ten_steps(tmp_path))
+
+    assert list(result) == list(TEN)
+
+
+def test_preview_with_only_keeps_step_order_with_the_skipped_steps_in_place(
+    tmp_path: Path,
+) -> None:
+    """preview(p, only='after_zeta') of a Pipeline with the independent command steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, then after_mike (reads mike's output) and after_zeta (reads zeta's output), returns the ten names in that order; zeta and after_zeta are WOULD_BE_EXECUTED and every other step is SKIP, in its place."""
+    plan = preview(_ten_steps(tmp_path), only="after_zeta")
+
+    would_run, skip = TaskOutcome.WOULD_BE_EXECUTED, TaskOutcome.SKIP
+    assert [(step.name, step.outcome) for step in plan] == [
+        (name, would_run if name in ("zeta", "after_zeta") else skip) for name in TEN
+    ]

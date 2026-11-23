@@ -466,9 +466,39 @@ def _mark_selected(
             task.markers.append(pytask.Mark(SELECTED_MARKER, (), {}))
 
 
+def reports_in_task_order(session: pytask.Session) -> list[pytask.ExecutionReport]:
+    """Return ``session``'s execution reports in the order of its tasks.
+
+    pytask adds a report to ``session.execution_reports`` when a task ends, so that list
+    is in the order the tasks ran, or, in a run through Jobmon, the order in which the
+    bridge recorded them. pytask keeps the tasks themselves in ``session.tasks``, in the
+    order :func:`build` was given them. This function sorts the reports by the position
+    of each report's task in ``session.tasks``. A task that has no report, as after a
+    build that stopped early, has no entry.
+
+    Parameters
+    ----------
+    session
+        A session that :func:`build` returned.
+
+    Returns
+    -------
+        A new list of the session's execution reports, in the order of the tasks given
+        to :func:`build`. ``session.execution_reports`` is not changed.
+    """
+    position = {task.signature: index for index, task in enumerate(session.tasks)}
+    return sorted(
+        session.execution_reports, key=lambda report: position[report.task.signature]
+    )
+
+
 def outcomes(session: pytask.Session) -> dict[str, pytask.TaskOutcome]:
-    """Return the outcome of each executed task, keyed by task name."""
-    return {report.task.name: report.outcome for report in session.execution_reports}
+    """Return the outcome of each executed task, keyed by task name.
+
+    The entries are in the order of the tasks given to :func:`build`, as
+    :func:`reports_in_task_order` gives the reports.
+    """
+    return {report.task.name: report.outcome for report in reports_in_task_order(session)}
 
 
 def failure_message(session: pytask.Session) -> str:
@@ -485,8 +515,9 @@ def failure_message(session: pytask.Session) -> str:
         or DAG error pytask recorded, for example ``"DAG_FAILED: There are some tasks
         which produce the same output. ..."``, and then one line ``Step '<name>':
         <exception type>: <message>`` for each step that failed with an exception, as a
-        step whose input is missing does in a dry run. A session with none of these
-        gives the exit code's name alone.
+        step whose input is missing does in a dry run. Those lines are in the order of
+        the tasks given to :func:`build`. A session with none of these gives the exit
+        code's name alone.
     """
     errors = [
         report.exc_info[1]
@@ -500,7 +531,7 @@ def failure_message(session: pytask.Session) -> str:
     if messages:
         heading += ": " + "\n".join(messages)
     lines = [heading]
-    for report in session.execution_reports:
+    for report in reports_in_task_order(session):
         error = None if report.exc_info is None else report.exc_info[1]
         if report.outcome == pytask.TaskOutcome.FAIL and error is not None:
             lines.append(f"Step {report.task.name!r}: {type(error).__name__}: {error}")

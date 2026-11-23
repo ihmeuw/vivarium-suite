@@ -10,6 +10,7 @@ from typing import Any
 import pytask
 import pytest
 
+from tests.backend.order_names import EIGHT, TEN
 from vivarium.dagger.backend.build import build, failure_message
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import PlanFailed, Reason, StepPreview, preview
@@ -252,6 +253,15 @@ def _make_task(name: str, dst: Path) -> Task:
     )
 
 
+def _ten_tasks(folder: Path) -> list[Task]:
+    """The eight independent tasks of ``EIGHT``, then after_mike and after_zeta, which read mike's and zeta's outputs."""
+    tasks = [_make_task(name, folder / name) for name in EIGHT]
+    for source in ("mike", "zeta"):
+        name = f"after_{source}"
+        tasks.append(_copy_task(name, folder / source, folder / name))
+    return tasks
+
+
 def test_preview_refuses_a_consumer_given_before_its_producer(tmp_path: Path) -> None:
     """preview([consumer, producer], root), where 'consumer' reads the file that 'producer' writes, raises ValueError, not PlanFailed, whose message names 'consumer' and then 'producer', and root is not created."""
     root = tmp_path / "state"
@@ -263,3 +273,47 @@ def test_preview_refuses_a_consumer_given_before_its_producer(tmp_path: Path) ->
 
     assert not isinstance(info.value, PlanFailed)
     assert not root.exists()
+
+
+def test_preview_lists_steps_in_the_order_of_the_tasks_given(tmp_path: Path) -> None:
+    """preview of the independent command tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, followed by after_mike (reads mike's output) and after_zeta (reads zeta's output), given in that order, returns one StepPreview per task with the ten names in that order."""
+    plan = preview(_ten_tasks(tmp_path), tmp_path / "state")
+
+    assert all(isinstance(step, StepPreview) for step in plan)
+    assert [step.name for step in plan] == list(TEN)
+
+
+def test_preview_with_selected_steps_keeps_task_order_with_the_skips_in_place(
+    tmp_path: Path,
+) -> None:
+    """preview of the tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, after_mike, after_zeta, given in that order (after_mike reads mike's output and after_zeta reads zeta's), with selected={'after_mike'} returns the ten names in that order; mike and after_mike are WOULD_BE_EXECUTED and every other entry is SKIP, in its place."""
+    plan = preview(_ten_tasks(tmp_path), tmp_path / "state", selected={"after_mike"})
+
+    run, skip = pytask.TaskOutcome.WOULD_BE_EXECUTED, pytask.TaskOutcome.SKIP
+    assert [(step.name, step.outcome) for step in plan] == [
+        (name, run if name in ("mike", "after_mike") else skip) for name in TEN
+    ]
+
+
+def test_preview_with_an_empty_selection_keeps_task_order(tmp_path: Path) -> None:
+    """preview of the tasks zeta, alpha, mike, bravo, yankee, charlie, xray, delta, after_mike, after_zeta, given in that order, with selected=set() returns the ten names in that order, and every outcome is SKIP."""
+    plan = preview(_ten_tasks(tmp_path), tmp_path / "state", selected=set())
+
+    assert [step.name for step in plan] == list(TEN)
+    assert {step.outcome for step in plan} == {pytask.TaskOutcome.SKIP}
+
+
+def test_plan_failed_lists_failed_steps_in_the_order_of_the_tasks_given(
+    tmp_path: Path,
+) -> None:
+    """preview of the eight tasks zeta_copy, alpha_copy, mike_copy, bravo_copy, yankee_copy, charlie_copy, xray_copy, delta_copy, given in that order, each of which copies its own source file that does not exist, raises PlanFailed whose message lines that start with 'Step ' name the eight tasks in that order."""
+    names = [f"{name}_copy" for name in EIGHT]
+    tasks = [
+        _copy_task(name, tmp_path / f"{name}.missing", tmp_path / name) for name in names
+    ]
+
+    with pytest.raises(PlanFailed) as info:
+        preview(tasks, tmp_path / "state")
+
+    lines = [line for line in str(info.value).splitlines() if line.startswith("Step ")]
+    assert [line.split("'")[1] for line in lines] == names, lines
