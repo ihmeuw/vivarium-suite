@@ -459,6 +459,32 @@ def test_appending_does_not_roll_when_header_matches(
     assert len(pd.read_csv(log_file)) == len(central_perf_df)
 
 
+def test_appending_to_full_file_returns_next_file(
+    artifact_perf_df: pd.DataFrame,
+    result_directory: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full most-recent file is skipped, and the returned file is the one that has the data."""
+    max_num_rows = 4
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=max_num_rows)
+
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths).reindex(
+        columns=CENTRAL_LOG_SCHEMA
+    )
+    full_file = tmp_path / "log_summary_0000.csv"
+    central_perf_df[:max_num_rows].to_csv(full_file, index=False)
+    data_to_append = central_perf_df[:2].reset_index(drop=True)
+
+    first_file_with_data = append_child_job_data(data_to_append.copy())
+
+    next_file = tmp_path / "log_summary_0001.csv"
+    assert first_file_with_data == str(next_file)
+    assert len(pd.read_csv(full_file)) == max_num_rows
+    assert_frame_equal(pd.read_csv(next_file), data_to_append, check_dtype=False)
+
+
 def test_appending_drifted_data_rolls_across_files(
     artifact_perf_df: pd.DataFrame,
     result_directory: Path,
