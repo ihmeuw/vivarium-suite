@@ -1,3 +1,8 @@
+**1.1.3 - 11/23/26**
+
+- Fix ``psimulate run`` crashing when an artifact path is passed on the command line
+  and the model specification has no ``input_data`` section
+
 **1.1.2 - 11/19/26**
 
 - Raise ``BackupLoadError`` when a backup exists but cannot be loaded, instead of
