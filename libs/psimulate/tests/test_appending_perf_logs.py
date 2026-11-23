@@ -142,7 +142,7 @@ def test_data_parsing(
         ] * 6
     assert (central_perf_df["scenario_parameters"] == expected_scenario_parameters).all()
 
-    job_number = int(central_perf_df["job_number"].unique().squeeze())
+    job_number = int(central_perf_df["job_number"].unique()[0])
     runner_data = generate_runner_job_data(job_number, output_paths, "first_file_with_data")
 
     assert runner_data["project_name"].squeeze() == "project_name"
@@ -175,6 +175,53 @@ def test_valid_log_path(
     # test no warnings were raised
     append_perf_data_to_central_logs(artifact_perf_df, output_paths)
     assert not caplog.records
+
+
+def _set_job_number(perf_df: pd.DataFrame, job_numbers: list[str]) -> pd.DataFrame:
+    """Replace the job_number index level with str values, as a real run produces."""
+    df = perf_df.reset_index()
+    df["job_number"] = pd.Series(
+        [job_numbers[i % len(job_numbers)] for i in range(len(df))], dtype="str"
+    )
+    return df.set_index(perf_df.index.names)
+
+
+def test_append_with_str_job_number(
+    result_directory: Path,
+    artifact_perf_df: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    pd.DataFrame(columns=CENTRAL_LOG_SCHEMA).to_csv(
+        tmp_path / "log_summary_0000.csv", index=False
+    )
+    perf_df = _set_job_number(artifact_perf_df, ["12345"])
+    # The job number comes from an environment variable, so it is a string.
+    assert pd.api.types.is_string_dtype(perf_df.index.get_level_values("job_number"))
+
+    append_perf_data_to_central_logs(perf_df, output_paths)
+
+    child_data = pd.read_csv(tmp_path / "log_summary_0000.csv")
+    assert len(child_data) == len(perf_df)
+    assert (child_data["job_number"] == 12345).all()
+    runner_data = pd.read_csv(tmp_path / "runner_data.csv", header=None)
+    assert runner_data.iloc[0, 0] == 12345
+
+
+def test_append_with_multiple_job_numbers_raises(
+    result_directory: Path,
+    artifact_perf_df: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    perf_df = _set_job_number(artifact_perf_df, ["12345", "67890"])
+
+    with pytest.raises(ValueError, match="Expected exactly one job number"):
+        append_perf_data_to_central_logs(perf_df, output_paths)
 
 
 @pytest.mark.parametrize(
