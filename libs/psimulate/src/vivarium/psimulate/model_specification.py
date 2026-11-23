@@ -58,8 +58,6 @@ def parse(
             str(artifact_path),
         )
     elif artifact_path_is_cli_arg:
-        # Update from the top so that this works for a model specification
-        # that has no input_data section.
         model_specification.configuration.update(
             {INPUT_DATA_KEY: {ARTIFACT_PATH_KEY: str(artifact_path)}}, source=__file__
         )
