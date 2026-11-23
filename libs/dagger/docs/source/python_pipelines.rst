@@ -61,12 +61,22 @@ pipeline. Add a step after the steps that produce the files it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
 :doc:`root_inputs`). A step's outputs go under ``<output root>/<run name>``. The
 pipeline's root, the directory that holds its pytask state, is
-``<output root>/.dagger/<run name>``, so two runs with different run names under one
-output root keep separate state. Pass ``state=`` to the
-``Pipeline`` to put the root somewhere else; it must be an absolute path, so that the
-state does not depend on the directory ``dagger`` is run from. Building the output root
-from the definition file's own location, as the example below does, keeps the outputs
-and the state next to the definition.
+``<output root>/.dagger/<run name>``, so two runs under one output root whose run names
+name different directories, neither inside the other, keep separate state. Pass
+``state=`` to the ``Pipeline`` to put the root somewhere else; it must be an absolute
+path, so that the state does not depend on the directory ``dagger`` is run from. Building
+the output root from the definition file's own location, as the example below does, keeps
+the outputs and the state next to the definition.
+
+The run's output directory, ``<output root>/<run name>``, can be a symbolic link to a
+directory inside the output root. A ``Pipeline`` whose run directory a symbolic link puts
+outside the output root, or in ``<output root>/.dagger``, is refused when it is made, and
+so is one whose ``.dagger`` is a link to its run's output directory. ``dagger`` does not
+check a link from one run's output directory to another's, a ``.dagger`` that is a link
+to a directory inside a run's output directory, run names that name one directory
+(``run1`` and ``./run1``), or nested run names (``a`` and ``a/b``). Avoid these, because
+two runs would then share an output directory or state, one run would write inside the
+other's output directory, or a run's outputs would hold the state of every run.
 
 Write a definition with the step methods. The lower layer under them,
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, adds a task that was compiled

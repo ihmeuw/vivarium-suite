@@ -39,9 +39,14 @@ freeze it into a private snapshot of the steps added so far, and read only that
 snapshot. A step added after a run has started is in the next run, not that one.
 
 By default the pipeline keeps its pytask state in ``<output root>/.dagger/<run name>``,
-outside the run's output directory ``<output root>/<run name>``. Two pipelines with
-different run names under one output root therefore write their outputs to different
-directories and keep separate state, so they do not share a lock.
+outside the run's output directory ``<output root>/<run name>``. Two pipelines under one
+output root whose run names name different directories, neither inside the other, keep
+separate state, so they do not share a lock, and write their outputs to different
+directories. The pipeline refuses a run directory that a symbolic link puts outside the
+output root or inside ``.dagger``, but it does not compare one run's directory with
+another's. So it does not check nested run names, such as ``a`` and ``a/b``, different
+spellings of one directory, such as ``run1`` and ``./run1``, or a symbolic link that
+makes one run's output directory the other's, or a directory inside it.
 """
 
 import os
@@ -111,13 +116,24 @@ class Pipeline:
     ValueError
         If ``run_name`` is an absolute path, even one inside the output root, since the
         default state directory is built from the run name; if the run's output
-        directory, ``<output root>/<run name>`` with ``.`` and ``..`` collapsed
-        (symlinks are not followed), is not strictly inside the output root (as for an
-        empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a directory inside
-        it (as for the run name ``.dagger``), since the run's outputs would then share
-        a directory with the state of every run; or if ``state`` is a relative path,
-        which would move the run's state with the current directory. The message names
-        the run name or the state path.
+        directory, ``<output root>/<run name>``, is not strictly inside the output root
+        (as for an empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a
+        directory inside it (as for the run name ``.dagger``), since the run's outputs
+        would then share a directory with the state of every run; or if ``state`` is a
+        relative path, which would move the run's state with the current directory. The
+        output directory is checked twice: first with ``.`` and ``..`` collapsed, and
+        then with symbolic links followed as the operating system follows them, against
+        the output root and against :data:`STATE_DIR` with its own links followed. So a
+        run directory that links to a directory inside the output root is accepted, also
+        when that directory does not exist yet, and one that links outside the output
+        root, to the output root itself, or to :data:`STATE_DIR` or into it is refused.
+        The message names the run name or the state path. A message from the check with
+        symbolic links followed also names the run's output directory as the run name
+        gives it, and the directory that it is with symbolic links followed. The
+        pipeline does not check a link from one run's output directory to another's, or
+        a :data:`STATE_DIR` that is a link to a directory inside a run's output
+        directory. A :data:`STATE_DIR` that is a link to the run's output directory
+        itself is refused.
     TypeError
         If ``resources`` is not a mapping.
     """
@@ -672,8 +688,6 @@ def _check_run_name(root: Path, run_name: str) -> None:
             "name, such as 'run1', that names a directory under the output root "
             f"{root}."
         )
-    # Normalize lexically, not with resolve(), so a run directory that is a symlink to
-    # another place is still accepted, as FileRegistry accepts it.
     run_dir = Path(os.path.normpath(root / run_name))
     state_root = root / STATE_DIR
     if root not in run_dir.parents:
@@ -688,4 +702,29 @@ def _check_run_name(root: Path, run_name: str) -> None:
             f"which is {STATE_DIR!r} or inside it; that directory holds the state of every "
             f"run under the output root {root}. Give a run name outside {STATE_DIR!r}, such "
             "as 'run1'."
+        )
+    # The join is not normalized first, so a link before '..' is followed as the operating
+    # system follows it. Path.resolve raises on a link loop in Python 3.11 and 3.12;
+    # os.path.realpath does not.
+    real_run_dir = Path(os.path.realpath(root / run_name))
+    real_state_root = Path(os.path.realpath(state_root))
+    followed = (
+        f"Pipeline run name {run_name!r} puts the run's output directory at {run_dir}, "
+        f"which is {real_run_dir} with symbolic links followed"
+    )
+    if root not in real_run_dir.parents:
+        raise ValueError(
+            f"{followed}; that is not a directory inside the output root {root}. Give a "
+            "run name whose output directory, with symbolic links followed, is inside the "
+            "output root."
+        )
+    if real_run_dir == real_state_root or real_state_root in real_run_dir.parents:
+        state = str(state_root)
+        if real_state_root != state_root:
+            state += f" ({real_state_root} with symbolic links followed)"
+        raise ValueError(
+            f"{followed}; that is the state directory {state} or inside it, and that "
+            f"directory holds the state of every run under the output root {root}. Give a "
+            "run name whose output directory, with symbolic links followed, is outside "
+            "the state directory."
         )
