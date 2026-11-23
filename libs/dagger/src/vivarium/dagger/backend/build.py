@@ -6,12 +6,14 @@ import os
 import signal
 import socket
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Container, Iterable, Mapping, Sequence
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Any
 
 import pytask
+from _pytask.dag import _create_dag_from_tasks
+from _pytask.dag_graph import DAG
 
 from vivarium.dagger.backend._pickling import reduce_exception
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
@@ -292,10 +294,27 @@ def build(
 ) -> pytask.Session:
     """Build ``tasks`` with pytask, keeping its state under ``root``.
 
+    The tasks must be in dependency order: each task comes after every task it depends
+    on. Tasks that do not depend on each other can be in any order. pytask decides which
+    task depends on which, from the nodes that the tasks name as inputs and outputs, and
+    the order of ``tasks`` is checked against pytask's own graph before pytask starts.
+    pytask gives every ``PythonNode`` without ``node_info`` the same signature, whatever
+    its name, so a task with such an input depends on every task with such an output.
+
+    Tasks that depend on each other in a cycle, of any length, and a task that reads its
+    own output, are not an order error: the order check ignores tasks in a cycle. If no
+    other task is out of order, this function raises nothing and pytask reports the
+    cycle, in a session whose ``exit_code`` is ``DAG_FAILED``, after ``root`` and its
+    configuration file are written. The order check also ignores a dependency on a node
+    that more than one task produces, and pytask reports those tasks in the same way, as
+    tasks that produce the same output. The check is skipped if pytask's graph cannot be
+    built from the tasks; pytask then reports that error itself, in the session it
+    returns, as a collection or DAG failure.
+
     Parameters
     ----------
     tasks
-        Tasks to build.
+        Tasks to build, in dependency order.
     root
         Directory for pytask's configuration, state database, and lockfile; created if
         missing.
@@ -317,13 +336,18 @@ def build(
     ------
     ValueError
         If two tasks share a name, a task cannot be converted, a declared env does not
-        resolve, ``selected`` names a task that is not in ``tasks``, or ``jobmon`` is
-        set but the bridge's pytask plugin is not registered (see
-        :func:`check_bridge_registered`). Envs are checked before any task runs. The
-        error has one line per env that does not resolve, which starts with
-        ``Step '<name>':``, or ``Steps '<name>', '<name>':`` when several tasks declare
-        the env, and then names the env once and says why. Nothing is written under
-        ``root`` for any of these.
+        resolve, the tasks are not in dependency order, ``selected`` names a task that
+        is not in ``tasks``, or ``jobmon`` is set but the bridge's pytask plugin is not
+        registered (see :func:`check_bridge_registered`). Envs are checked before any
+        task runs. The error has one line per env that does not resolve, which starts
+        with ``Step '<name>':``, or ``Steps '<name>', '<name>':`` when several tasks
+        declare the env, and then names the env once and says why. The order of the
+        tasks is checked before pytask starts. The error is for the first task in
+        ``tasks`` that depends on a task that comes after it, and reads ``Step
+        '<consumer>' depends on step '<producer>', which comes after it; add step
+        '<producer>' before step '<consumer>'.`` When that task reads the outputs of
+        more than one later task, the producer named is the one of them that comes first
+        in ``tasks``. Nothing is written under ``root`` when this error is raised.
     TaskExited
         If a task raises ``SystemExit``, which stops the build.
     """
@@ -332,6 +356,7 @@ def build(
     check_unique_task_names(tasks)
     _check_envs(tasks)
     pytask_tasks = [to_pytask_task(task) for task in tasks]
+    _check_task_order(pytask_tasks)
     selection: dict[str, Any] = {}
     if selected is not None:
         _mark_selected(pytask_tasks, selected)
@@ -345,6 +370,51 @@ def build(
     return pytask.build(
         tasks=pytask_tasks, config=config, task_files=(), **selection, **kwargs
     )
+
+
+def _check_task_order(tasks: Sequence[pytask.PTask]) -> None:
+    """Raise ValueError for the first task that depends on a later one and is in no cycle."""
+    try:
+        dag = _create_dag_from_tasks(tasks=list(tasks))
+    except Exception:
+        # Skip the check if pytask's graph cannot be built. pytask meets the same error
+        # in its own build and reports it, whatever its type, in the session.
+        return
+    position = {task.signature: index for index, task in enumerate(tasks)}
+    for index, task in enumerate(tasks):
+        later = [
+            position[producer]
+            for producer in _producers(dag, task.signature, position)
+            if position[producer] > index
+        ]
+        # No order puts a task in a cycle after all it depends on; pytask reports the cycle.
+        if later and task.signature not in dag.ancestors(task.signature):
+            producer = tasks[min(later)].name
+            raise ValueError(
+                f"Step {task.name!r} depends on step {producer!r}, which comes after it; "
+                f"add step {producer!r} before step {task.name!r}."
+            )
+
+
+def _producers(dag: DAG, task: str, tasks: Container[str]) -> set[str]:
+    """Return the signatures of the tasks that produce the nodes ``task`` depends on."""
+    producers: set[str] = set()
+    seen: set[str] = set()
+    waiting = list(dag.predecessors(task))
+    while waiting:
+        signature = waiting.pop()
+        if signature in seen:
+            continue
+        seen.add(signature)
+        if signature in tasks:
+            producers.add(signature)
+            continue
+        # pytask links a node that wraps another node to the wrapped node. It fails the
+        # DAG on a node with more than one predecessor, so such a node is left to pytask.
+        before = list(dag.predecessors(signature))
+        if len(before) == 1:
+            waiting.extend(before)
+    return producers
 
 
 def check_bridge_registered(build_kwargs: Mapping[str, Any]) -> None:
@@ -396,9 +466,39 @@ def _mark_selected(
             task.markers.append(pytask.Mark(SELECTED_MARKER, (), {}))
 
 
+def reports_in_task_order(session: pytask.Session) -> list[pytask.ExecutionReport]:
+    """Return ``session``'s execution reports in the order of its tasks.
+
+    pytask adds a report to ``session.execution_reports`` when a task ends, so that list
+    is in the order the tasks ran, or, in a run through Jobmon, the order in which the
+    bridge recorded them. pytask keeps the tasks themselves in ``session.tasks``, in the
+    order :func:`build` was given them. This function sorts the reports by the position
+    of each report's task in ``session.tasks``. A task that has no report, as after a
+    build that stopped early, has no entry.
+
+    Parameters
+    ----------
+    session
+        A session that :func:`build` returned.
+
+    Returns
+    -------
+        A new list of the session's execution reports, in the order of the tasks given
+        to :func:`build`. ``session.execution_reports`` is not changed.
+    """
+    position = {task.signature: index for index, task in enumerate(session.tasks)}
+    return sorted(
+        session.execution_reports, key=lambda report: position[report.task.signature]
+    )
+
+
 def outcomes(session: pytask.Session) -> dict[str, pytask.TaskOutcome]:
-    """Return the outcome of each executed task, keyed by task name."""
-    return {report.task.name: report.outcome for report in session.execution_reports}
+    """Return the outcome of each executed task, keyed by task name.
+
+    The entries are in the order of the tasks given to :func:`build`, as
+    :func:`reports_in_task_order` gives the reports.
+    """
+    return {report.task.name: report.outcome for report in reports_in_task_order(session)}
 
 
 def failure_message(session: pytask.Session) -> str:
@@ -415,8 +515,9 @@ def failure_message(session: pytask.Session) -> str:
         or DAG error pytask recorded, for example ``"DAG_FAILED: There are some tasks
         which produce the same output. ..."``, and then one line ``Step '<name>':
         <exception type>: <message>`` for each step that failed with an exception, as a
-        step whose input is missing does in a dry run. A session with none of these
-        gives the exit code's name alone.
+        step whose input is missing does in a dry run. Those lines are in the order of
+        the tasks given to :func:`build`. A session with none of these gives the exit
+        code's name alone.
     """
     errors = [
         report.exc_info[1]
@@ -430,7 +531,7 @@ def failure_message(session: pytask.Session) -> str:
     if messages:
         heading += ": " + "\n".join(messages)
     lines = [heading]
-    for report in session.execution_reports:
+    for report in reports_in_task_order(session):
         error = None if report.exc_info is None else report.exc_info[1]
         if report.outcome == pytask.TaskOutcome.FAIL and error is not None:
             lines.append(f"Step {report.task.name!r}: {type(error).__name__}: {error}")

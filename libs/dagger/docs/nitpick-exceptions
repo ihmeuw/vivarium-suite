@@ -23,6 +23,7 @@ py:class _pytask.nodes.PathNode
 py:class NodePath
 py:class _pytask.nodes.TaskWithoutPath
 py:class _pytask.outcomes.TaskOutcome
+py:class _pytask.reports.ExecutionReport
 py:class _pytask.session.Session
 py:exc pytask.ExecutionError
 

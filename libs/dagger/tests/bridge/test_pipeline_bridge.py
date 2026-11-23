@@ -17,6 +17,7 @@ import pytest
 from pytask import ExitCode, TaskOutcome
 
 from tests.backend.lock_helpers import account_name, held_lock, lock_is_free
+from tests.backend.order_names import EIGHT
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
     LOCKFILE,
@@ -34,6 +35,7 @@ from tests.bridge.helpers import (
 )
 from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RunLocked
+from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
@@ -560,3 +562,94 @@ def test_a_bridge_refusal_names_the_step_once(tmp_path: Path) -> None:
     message = str(info.value)
     assert "cannot run on a compute node" in message, message
     assert message.count("Step 'refused'") == 1, message
+
+
+# Step order
+
+
+def _step_lines(error: StepFailed) -> list[str]:
+    """Return the step each "Step '<name>' ..." line of ``error``'s message names."""
+    lines = [line for line in str(error).splitlines() if line.startswith("Step '")]
+    return [line.split("'")[1] for line in lines]
+
+
+def test_a_bridged_run_reports_failures_and_outcomes_in_step_order(tmp_path: Path) -> None:
+    """For a pipeline whose steps, in the order added, are zulu_fails (fails on its node), yankee_down and alpha_down (both read the output of zulu_fails) and bravo_fails (fails on its node), run(p, jobmon=True) with a project, under FakeJobmon, raises StepFailed with list(error.failures) == ['zulu_fails', 'bravo_fails'], error.__cause__ is error.failures['zulu_fails'], the lines of str(error) naming those two steps in that order, and list(error.outcomes) == ['zulu_fails', 'yankee_down', 'alpha_down', 'bravo_fails'], which is step order and not name order."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_command_step("exit 1", outputs={"out": "zulu.txt"}, name="zulu_fails")
+    for name in ("yankee_down", "alpha_down"):
+        p.add_command_step(
+            "cp {src} {out}",
+            inputs={"src": "zulu.txt"},
+            outputs={"out": f"{name}.txt"},
+            name=name,
+        )
+    p.add_command_step("exit 1", outputs={"out": "bravo.txt"}, name="bravo_fails")
+
+    with FakeJobmon(), pytest.raises(StepFailed) as info:
+        run(p, jobmon=True, jobmon_resources=dict(_PROJECT))
+
+    error = info.value
+    assert list(error.failures) == ["zulu_fails", "bravo_fails"]
+    assert error.__cause__ is error.failures["zulu_fails"]
+    assert _step_lines(error) == ["zulu_fails", "bravo_fails"], str(error)
+    assert list(error.outcomes) == ["zulu_fails", "yankee_down", "alpha_down", "bravo_fails"]
+
+
+def test_an_interrupted_bridged_run_reports_outcomes_in_step_order(tmp_path: Path) -> None:
+    """For a pipeline of the independent steps zeta, alpha, mike, bravo, yankee, charlie, xray, delta, added in that order, run(p, jobmon=True) with a project, under FakeJobmon(interrupt_after=3), raises RunInterrupted whose list(error.outcomes) is those eight names in that order."""
+    p = Pipeline(tmp_path / "out", "run1")
+    for name in EIGHT:
+        p.add_command_step("echo x > {out}", outputs={"out": f"{name}.txt"}, name=name)
+
+    error = _interrupted(p, FakeJobmon(interrupt_after=3))
+
+    assert list(error.outcomes) == list(EIGHT)
+
+
+def test_the_cause_of_a_bridged_failure_is_the_first_failed_step_even_without_a_result(
+    tmp_path: Path,
+) -> None:
+    """For a pipeline of the independent steps zz_slow and then aa_fail, which runs 'exit 1', run(p, jobmon=True) with a project, under FakeJobmon(error_after=1), raises StepFailed with list(error.failures) == ['zz_slow', 'aa_fail'], and error.__cause__ is error.failures['zz_slow'], whose message starts "Step 'zz_slow' has no result because"; a step that has no result gets no special place."""
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_command_step("echo x > {out}", outputs={"out": "slow.txt"}, name="zz_slow")
+    p.add_command_step("exit 1", outputs={"out": "fail.txt"}, name="aa_fail")
+
+    with FakeJobmon(error_after=1), pytest.raises(StepFailed) as info:
+        run(p, jobmon=True, jobmon_resources=dict(_PROJECT))
+
+    error = info.value
+    assert list(error.failures) == ["zz_slow", "aa_fail"]
+    cause = error.__cause__
+    assert cause is error.failures["zz_slow"]
+    assert str(cause).startswith("Step 'zz_slow' has no result because"), str(cause)
+
+
+def test_a_bridged_run_refuses_a_step_added_before_the_step_it_depends_on(
+    tmp_path: Path,
+) -> None:
+    """For a pipeline to which add_task added 'consumer' and then 'producer', the task that writes the file consumer reads, run(p, jobmon=True) with a project, under FakeJobmon, raises PipelineError that names 'consumer' and then 'producer', and FakeJobmon bound no plan."""
+    made, copied = tmp_path / "made.txt", tmp_path / "copied.txt"
+    consumer = Task(
+        name="consumer",
+        run=f"cp {made} {copied}",
+        inputs={"src": file_node(made)},
+        outputs={"dst": file_node(copied)},
+        resources={},
+        env=None,
+    )
+    producer = Task(
+        name="producer",
+        run=f"echo x > {made}",
+        inputs={},
+        outputs={"dst": file_node(made)},
+        resources={},
+        env=None,
+    )
+    p = pipeline_of([consumer, producer], build_root(tmp_path))
+
+    with FakeJobmon() as jobmon:
+        with pytest.raises(PipelineError, match="'consumer'.*'producer'"):
+            run(p, jobmon=True, jobmon_resources=dict(_PROJECT))
+
+    assert jobmon.plans == []

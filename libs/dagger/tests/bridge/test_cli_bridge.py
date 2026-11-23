@@ -707,3 +707,49 @@ def test_a_bridged_run_imports_jobmon_only_through_the_adapter(tmp_path: Path) -
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "jobmon modules: []" in completed.stdout.splitlines(), completed.stdout
     assert _labels(tmp_path) == ["a", "b", "c"]
+
+
+# Failed and blocked steps in definition order
+
+
+_FAILED_AND_BLOCKED = """\
+from pathlib import Path
+
+from vivarium.dagger.frontend import Pipeline
+
+HERE = Path(__file__).resolve().parent
+
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_command_step("exit 1", outputs={"out": "zulu.txt"}, name="zulu_fails")
+    for name in ("yankee_down", "alpha_down"):
+        p.add_command_step(
+            "cp {src} {out}",
+            inputs={"src": "zulu.txt"},
+            outputs={"out": f"{name}.txt"},
+            name=name,
+        )
+    p.add_command_step("exit 1", outputs={"out": "bravo.txt"}, name="bravo_fails")
+    return p
+"""
+"""A definition that adds, in this order, zulu_fails, yankee_down and alpha_down, which
+both read the output of zulu_fails, and bravo_fails. Each ``*_fails`` step runs ``exit 1``."""
+
+
+def test_a_bridged_run_lists_failed_and_blocked_steps_in_definition_order(
+    tmp_path: Path,
+) -> None:
+    """'dagger run -c <definition> -P <project>' under FakeJobmon, on a definition that adds, in this order, zulu_fails (fails on its node), yankee_down and alpha_down (which both read the output of zulu_fails) and bravo_fails (fails on its node), exits 1; stderr has "Not run because an upstream step failed: 'yankee_down', 'alpha_down'." and, once click's "Error: " prefix is removed from its lines, the line that starts "Step 'zulu_fails' failed" comes before the line that starts "Step 'bravo_fails' failed", which is the order of the definition and not name order."""
+    path = _write_definition(tmp_path, _FAILED_AND_BLOCKED)
+
+    with FakeJobmon():
+        result = _dagger("run", "-c", str(path), "-P", "proj_test")
+
+    assert result.exit_code == 1, _describe(result)
+    blocked = "Not run because an upstream step failed: 'yankee_down', 'alpha_down'."
+    assert blocked in result.stderr, result.stderr
+    # click starts the first line of the error with "Error: ".
+    lines = [line.removeprefix("Error: ") for line in result.stderr.splitlines()]
+    failed = [line.split("'")[1] for line in lines if re.match(r"Step '\w+' failed", line)]
+    assert failed == ["zulu_fails", "bravo_fails"], result.stderr

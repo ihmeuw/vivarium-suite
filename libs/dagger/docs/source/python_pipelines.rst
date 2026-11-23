@@ -94,7 +94,7 @@ Previewing a run
    $ dagger preview -c pipeline.py
 
 ``dagger preview`` runs nothing and writes no output. It prints one line per step, in
-the order pytask would run them. A step that would run is printed as ``run <step>``,
+the order the definition adds the steps. A step that would run is printed as ``run <step>``,
 followed by pytask's reasons, separated by semicolons. A step that would not run is
 printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
 ``--until`` leaves it out. A last line, such as ``2 of 3 steps would run.``, counts
@@ -307,7 +307,9 @@ When a step fails
 pytask prints a failure report for each failed step. Its traceback starts in the
 step's own code, and the report includes what the step printed. ``dagger`` then prints one
 line per failed step, with its error's type and message, and lists the steps that did
-not run because a step they depend on failed. The traceback is shown only once. Steps
+not run because a step they depend on failed. Both are in the order the definition adds
+the steps. pytask's reports above them are in the order pytask recorded the steps, which
+in a local run is the order the steps failed. The traceback is shown only once. Steps
 that do not depend on a failed step still run.
 
 For a notebook step whose notebook raised an error, the line names the notebook, the
@@ -413,9 +415,15 @@ Each of these exits with status 2 before any step runs:
 - A location's primary data fails the location inputs check (see
   :ref:`location-inputs-helper`).
   ``dagger`` prints only the check's message, which lists each problem by location.
+- A step is added before a step it depends on, for example a notebook step whose
+  notebook a later step writes. A step method refuses an input file key that is neither
+  a root input nor an output of an earlier step, when the step is added, as described
+  above. ``dagger`` checks every other dependency when it builds the pipeline, and its
+  message names the step and then the later step it depends on, and says which to add
+  first.
 - The pipeline cannot be built as defined, for example because a step declares an
-  environment that does not exist or pytask cannot order the steps. ``dagger`` prints
-  the reason.
+  environment that does not exist or steps depend on each other in a cycle. ``dagger``
+  prints the reason.
 - The pipeline's root cannot be created or written, for example because it is an
   existing file or a directory above it is not writable. ``dagger`` checks this before
   pytask starts, without creating anything, and names the root and the reason.
