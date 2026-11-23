@@ -386,7 +386,7 @@ def python_step(
         reserved name ``__output__``. The mapping must have at least one entry. Each
         output's parent directory is created when the step runs.
     registry
-        The producer/consumer registry that resolves keys to shared nodes.
+        The producer/consumer registry that resolves file keys to nodes.
     resources
         Jobmon-shaped compute resources, carried on the task for the cluster
         bridge to read later.

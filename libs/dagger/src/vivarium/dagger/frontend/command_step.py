@@ -76,7 +76,7 @@ def command_step(
         key is registered with ``registry`` as an output of the step. It must have at
         least one entry, and each key must resolve to its own path.
     registry
-        The producer/consumer registry that resolves keys to shared nodes.
+        The producer/consumer registry that resolves file keys to nodes.
     inputs
         Maps placeholder names to the file keys the registry resolves to the producing
         step's node (or a declared root input). An input that the command does not name

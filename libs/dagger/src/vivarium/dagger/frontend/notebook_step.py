@@ -33,6 +33,12 @@ Kernelspecs installed for the user or the system, and the kernel and language na
 notebook's metadata, are not used. The declared environment therefore needs ``papermill``
 and ``ipykernel`` installed; the pipeline's own environment needs neither.
 
+The command makes the temporary kernelspec's directory with ``mktemp -d``, in
+``$TMPDIR``, and removes it when the step's shell exits. The directory is left behind
+when the shell is stopped by SIGKILL. Where ``/bin/sh`` is dash, as on Ubuntu, it is
+also left behind after Ctrl-C, SIGTERM (for example at a Slurm time limit) or SIGHUP.
+The directory is small and safe to delete; a later run neither uses nor removes it.
+
 The command, including every parameter value and path, is hashed with the step, so a
 changed parameter marks the step stale. Code identity defaults to always-stale, as for
 :func:`~vivarium.dagger.frontend.python_step.python_step`, so in this cut a notebook
@@ -115,7 +121,7 @@ def notebook_step(
         The file key for the executed notebook, which must end in ``.ipynb``.
         Registered with ``registry`` as an output.
     registry
-        The producer/consumer registry that resolves keys to shared nodes.
+        The producer/consumer registry that resolves file keys to nodes.
     env
         The environment the notebook runs in: a conda env or venv name, or a path to its
         prefix. It must have ``papermill`` and ``ipykernel`` installed. Resolved when the
