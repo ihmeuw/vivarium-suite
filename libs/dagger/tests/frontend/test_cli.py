@@ -26,7 +26,7 @@ from tests.frontend.notebooks import broken_env, recorded_errors, write_source_n
 from tests.frontend.pipelines import stable_snapshot
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.backend.wiring import FileRegistry
+from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.cli import dagger
 from vivarium.dagger.frontend import cli as frontend_cli
 from vivarium.dagger.frontend import load_pipeline
@@ -3044,3 +3044,34 @@ def test_run_prints_failed_steps_and_blocked_steps_in_definition_order(
     assert (
         f"Not run because an upstream step failed: {blocked}." in result.stderr
     ), result.stderr
+
+
+# Outputs stay inside the run
+
+
+_ESCAPING = (
+    _HEADER
+    + """
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_python_step(frame, inputs={}, outputs="../escaped.csv", name="escape")
+    return p
+"""
+)
+"""A definition whose python step 'escape' writes '../escaped.csv', outside the run."""
+
+
+def test_run_exits_two_for_an_output_that_leaves_the_run(tmp_path: Path) -> None:
+    """'dagger run --local' of a definition whose python step has output '../escaped.csv' exits 2, prints the step name and the outside message, and writes no file outside the run's output directory."""
+    path = _write_definition(tmp_path, _ESCAPING)
+    registry = FileRegistry(tmp_path / "out", "run1")
+    with pytest.raises(WiringError) as outside:
+        registry.register_output("../escaped.csv")
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert f"Step 'escape': {outside.value}" in result.stderr, result.stderr
+    assert not registry.path_for("../escaped.csv").exists()
+    assert not (tmp_path / "state").exists()

@@ -592,3 +592,308 @@ def test_register_output_twice_returns_the_same_node(tmp_path: Path) -> None:
 
     assert reg.register_output("x.csv") is first
     assert reg.key_for(reg.path_for("x.csv")) == "x.csv"
+
+
+# Outputs stay inside the run and out of each other
+
+
+_LINKS_FOLLOWED = "with symbolic links followed"
+"""The words of the outside message that say a key's path is taken with links followed."""
+
+_ROOT_INPUT = "root input"
+"""The words of the outside message that point to a root input for a file outside the run."""
+
+_RUN_DIRECTORY_REPLACED = "a run directory is replaced on every run"
+"""The words of the message for an output inside a run directory."""
+
+_ONE_HOLDS_ANOTHER = "one output cannot hold another"
+"""The words of the message for an output inside a file output."""
+
+
+def _run_directory(reg: FileRegistry) -> Path:
+    """Return the run's output directory with symbolic links followed."""
+    return reg.path_for(".")
+
+
+def _assert_outside(message: str, reg: FileRegistry, key: str, path: Path) -> None:
+    """Assert that ``message`` is the outside message for ``key`` at ``path``."""
+    assert repr(key) in message, message
+    assert str(path) in message, message
+    assert str(_run_directory(reg)) in message, message
+    assert _LINKS_FOLLOWED in message, message
+    assert _ROOT_INPUT in message, message
+
+
+@pytest.mark.parametrize("key", ["../escaped.csv", "a/../../escaped.csv"])
+def test_an_output_key_that_leaves_the_run_is_refused(tmp_path: Path, key: str) -> None:
+    """register_output of a key whose path is outside the run's output directory raises WiringError naming the key, its path and the run's output directory, and saying to use a key that stays inside it or a root input; nothing is registered."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    path = reg.path_for(key)
+
+    message = _wiring_message(reg.register_output, key)
+
+    _assert_outside(message, reg, key, path)
+    assert reg.key_for(path) is None
+    with pytest.raises(WiringError):
+        reg.resolve_input(key)
+
+
+@pytest.mark.parametrize("key", [".", ""])
+def test_an_output_key_that_is_the_run_directory_itself_is_refused(
+    tmp_path: Path, key: str
+) -> None:
+    """register_output('.') and register_output('') raise WiringError naming the key and saying it resolves to the run's output directory itself, not that it is not inside it; nothing is registered."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    path = reg.path_for(key)
+
+    message = _wiring_message(reg.register_output, key)
+
+    assert repr(key) in message, message
+    assert "resolves to the run's output directory" in message, message
+    assert "itself" in message, message
+    assert "not inside" not in message, message
+    assert reg.key_for(path) is None
+    with pytest.raises(WiringError):
+        reg.resolve_input(key)
+
+
+def test_an_absolute_output_key_outside_the_run_is_refused(tmp_path: Path) -> None:
+    """register_output of an absolute key outside the run's output directory raises WiringError with the outside message, and key_for of that path is None afterwards."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    key = str(tmp_path.resolve() / "elsewhere" / "x.csv")
+
+    message = _wiring_message(reg.register_output, key)
+
+    _assert_outside(message, reg, key, Path(key))
+    assert reg.key_for(key) is None
+
+
+def test_an_absolute_output_key_inside_the_run_is_accepted(tmp_path: Path) -> None:
+    """register_output of an absolute key that points inside the run's output directory returns a node at that path."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    path = tmp_path.resolve() / "out" / "run1" / "sub" / "x.csv"
+
+    node = reg.register_output(str(path))
+
+    assert node.path == path
+
+
+def test_keys_that_stay_inside_the_run_are_accepted(tmp_path: Path) -> None:
+    """Keys 'a/../b.csv', 'sub/../sub/x.csv' and 'deep/nested/folder/x.csv' register at paths inside the run's output directory."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    run_directory = _run_directory(reg)
+
+    for key, relative in [
+        ("a/../b.csv", "b.csv"),
+        ("sub/../sub/x.csv", "sub/x.csv"),
+        ("deep/nested/folder/x.csv", "deep/nested/folder/x.csv"),
+    ]:
+        node = reg.register_output(key)
+
+        assert node.path == run_directory / relative, key
+        assert reg.key_for(run_directory / relative) == key, key
+
+
+def test_a_key_under_a_link_that_leaves_the_run_is_refused(tmp_path: Path) -> None:
+    """With <run dir>/big a symbolic link to a directory outside the run, register_output('big/x.csv') raises WiringError with the outside message, which says symbolic links are followed."""
+    run_directory = tmp_path / "out" / "run1"
+    run_directory.mkdir(parents=True)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    os.symlink(elsewhere, run_directory / "big")
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    message = _wiring_message(reg.register_output, "big/x.csv")
+
+    _assert_outside(message, reg, "big/x.csv", elsewhere.resolve() / "x.csv")
+    assert reg.key_for(elsewhere / "x.csv") is None
+
+
+def test_a_key_under_a_link_inside_the_run_is_accepted(tmp_path: Path) -> None:
+    """With <run dir>/alias a symbolic link to <run dir>/real, register_output('alias/x.csv') is accepted at the real path."""
+    run_directory = tmp_path / "out" / "run1"
+    (run_directory / "real").mkdir(parents=True)
+    os.symlink(run_directory / "real", run_directory / "alias")
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    node = reg.register_output("alias/x.csv")
+
+    assert node.path == (run_directory / "real" / "x.csv").resolve()
+
+
+def test_outputs_are_accepted_when_the_run_directory_links_inside_the_output_root(
+    tmp_path: Path,
+) -> None:
+    """With the run directory itself a symbolic link to a directory inside the output root, register_output('x.csv') is accepted at the linked directory's real path."""
+    real = tmp_path / "out" / "real"
+    real.mkdir(parents=True)
+    os.symlink(real, tmp_path / "out" / "run1")
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    node = reg.register_output("x.csv")
+
+    assert node.path == real.resolve() / "x.csv"
+
+
+def test_check_output_refuses_a_key_that_leaves_the_run_and_registers_nothing(
+    tmp_path: Path,
+) -> None:
+    """check_output('../escaped.csv') raises the same WiringError as register_output would, and nothing is registered."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    key = "../escaped.csv"
+
+    checked = _wiring_message(reg.check_output, key)
+
+    assert reg.key_for(reg.path_for(key)) is None
+    with pytest.raises(WiringError):
+        reg.resolve_input(key)
+    assert checked == _wiring_message(reg.register_output, key)
+
+
+def test_a_file_output_inside_a_run_directory_is_refused(tmp_path: Path) -> None:
+    """After register_directory_output('sim', ...), register_output('sim/extra.csv') raises WiringError naming both keys and both paths and saying a run directory is replaced on every run."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output("sim", _DONE)
+
+    message = _wiring_message(reg.register_output, "sim/extra.csv")
+
+    assert "'sim'" in message, message
+    assert "'sim/extra.csv'" in message, message
+    assert str(reg.path_for("sim")) in message, message
+    assert str(reg.path_for("sim/extra.csv")) in message, message
+    assert _RUN_DIRECTORY_REPLACED in message, message
+    assert reg.key_for(reg.path_for("sim/extra.csv")) is None
+
+
+def test_a_run_directory_over_a_file_output_is_refused(tmp_path: Path) -> None:
+    """After register_output('sim/extra.csv'), register_directory_output('sim', ...) raises WiringError naming both keys and saying a run directory is replaced on every run."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_output("sim/extra.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_directory_output("sim", _DONE)
+
+    message = _message(excinfo)
+    assert "'sim'" in message, message
+    assert "'sim/extra.csv'" in message, message
+    assert _RUN_DIRECTORY_REPLACED in message, message
+
+
+def test_a_run_directory_inside_another_run_directory_is_refused(tmp_path: Path) -> None:
+    """After register_directory_output('sim', ...), register_directory_output('sim/inner', ...) raises WiringError naming both keys and saying a run directory is replaced on every run."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output("sim", _DONE)
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_directory_output("sim/inner", _DONE)
+
+    message = _message(excinfo)
+    assert "'sim'" in message, message
+    assert "'sim/inner'" in message, message
+    assert _RUN_DIRECTORY_REPLACED in message, message
+
+
+def test_a_run_directory_inside_a_file_output_gets_the_file_outputs_reason(
+    tmp_path: Path,
+) -> None:
+    """After register_output('a.csv'), register_directory_output('a.csv/sim', ...) raises WiringError naming both keys and saying one output cannot hold another, not that a run directory is replaced on every run: the outer output chooses the reason."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_output("a.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        reg.register_directory_output("a.csv/sim", _DONE)
+
+    message = _message(excinfo)
+    assert "'a.csv'" in message, message
+    assert "'a.csv/sim'" in message, message
+    assert _ONE_HOLDS_ANOTHER in message, message
+    assert _RUN_DIRECTORY_REPLACED not in message, message
+
+
+def test_a_file_output_over_a_run_directory_gets_the_file_outputs_reason(
+    tmp_path: Path,
+) -> None:
+    """After register_directory_output('sim/inner', ...), register_output('sim') raises WiringError naming both keys and saying one output cannot hold another: the outer output, a file, chooses the reason."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output("sim/inner", _DONE)
+
+    message = _wiring_message(reg.register_output, "sim")
+
+    assert "'sim'" in message, message
+    assert "'sim/inner'" in message, message
+    assert _ONE_HOLDS_ANOTHER in message, message
+
+
+@pytest.mark.parametrize("first, second", [("a", "a/b"), ("a/b", "a")])
+def test_a_file_output_inside_another_file_output_is_refused(
+    tmp_path: Path, first: str, second: str
+) -> None:
+    """After register_output(first), register_output(second), where one key's path is inside the other's, raises WiringError naming both keys and saying one output cannot hold another."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_output(first)
+
+    message = _wiring_message(reg.register_output, second)
+
+    assert repr(first) in message, message
+    assert repr(second) in message, message
+    assert _ONE_HOLDS_ANOTHER in message, message
+
+
+def test_a_file_beside_a_run_directory_with_a_shared_prefix_is_accepted(
+    tmp_path: Path,
+) -> None:
+    """After register_directory_output('sim', ...), register_output('simx/a.csv') and register_output('sim.csv') are accepted."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+    reg.register_directory_output("sim", _DONE)
+
+    for key in ("simx/a.csv", "sim.csv"):
+        assert reg.register_output(key).path == reg.path_for(key), key
+
+
+def test_registering_the_same_output_twice_is_still_accepted(tmp_path: Path) -> None:
+    """register_output('x.csv') twice and register_directory_output('sim', ...) twice each return the same node, with no nesting error against itself."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    file = reg.register_output("x.csv")
+    directory = reg.register_directory_output("sim", _DONE)
+
+    assert reg.register_output("x.csv") is file
+    assert reg.register_directory_output("sim", _DONE) is directory
+
+
+def test_root_inputs_anywhere_are_unaffected(tmp_path: Path) -> None:
+    """A registry whose root inputs point outside the output root and inside the run's output directory resolves both as inputs, and registers unrelated outputs as before."""
+    outside = tmp_path / "sources" / "bop.csv"
+    inside = tmp_path / "out" / "run1" / "delivered" / "coverage.csv"
+    for source in (outside, inside):
+        source.parent.mkdir(parents=True)
+        source.write_text("x")
+    reg = FileRegistry(
+        tmp_path / "out", "run1", root_inputs={"bop": outside, "coverage": inside}
+    )
+
+    produced = [reg.register_output(key) for key in ("x.csv", "sub/y.csv")]
+
+    assert reg.resolve_input("bop").path == outside.resolve()
+    assert reg.resolve_input("coverage").path == inside.resolve()
+    assert [node.path for node in produced] == [
+        reg.path_for("x.csv"),
+        reg.path_for("sub/y.csv"),
+    ]
+
+
+def test_root_inputs_are_not_part_of_the_nesting_rule(tmp_path: Path) -> None:
+    """With a root input at <run dir>/delivered/coverage.csv, register_directory_output('delivered', ...) and register_output('delivered/other.csv'), each in a fresh registry, are both accepted."""
+    source = tmp_path / "out" / "run1" / "delivered" / "coverage.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("x")
+    root_inputs = {"coverage": source}
+
+    for_directory = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+    for_file = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+
+    directory = for_directory.register_directory_output("delivered", _DONE)
+    file = for_file.register_output("delivered/other.csv")
+
+    assert directory.path == for_directory.path_for("delivered")
+    assert file.path == for_file.path_for("delivered/other.csv")

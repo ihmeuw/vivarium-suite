@@ -59,7 +59,10 @@ root and a run name, adds each step to it with a method such as
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_python_step`, and returns the
 pipeline. Add a step after the steps that produce the files it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
-:doc:`root_inputs`). A step's outputs go under ``<output root>/<run name>``. The
+:doc:`root_inputs`). A step's outputs go under ``<output root>/<run name>``: an output
+key is a path relative to that directory, and a step whose output would land outside it
+(with ``..``, an absolute path, or a symbolic link to another place) or inside another
+step's output is refused when it is added. A file outside the run is a root input. The
 pipeline's root, the directory that holds its pytask state, is
 ``<output root>/.dagger/<run name>``, so two runs under one output root whose run names
 name different directories, neither inside the other, keep separate state. Pass
@@ -286,7 +289,9 @@ in the run directory, where the consumers expect it. The partial run stays besid
 simulation again; the step does not resume a partial run.
 
 The step replaces its run directory on every successful run, so no other step may write
-under it.
+under it: an output inside it, declared by another step in either order, is refused when
+the second of the two steps is added. The scratch folder ``<run directory>.psimulate`` is replaced on every run too; dagger does not
+check it, so do not put other outputs there.
 
 ``options`` holds psimulate's options for ``run``, keyed by long option name with
 ``_`` for ``-``. ``project`` is required. ``backup_freq``, ``hardware``,

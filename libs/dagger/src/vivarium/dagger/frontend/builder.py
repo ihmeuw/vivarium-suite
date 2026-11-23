@@ -524,6 +524,10 @@ class Pipeline:
         ``dagger`` command refuses a pipeline in which two steps have an output that is
         not a path node with the same node name.
 
+        A hand-built task's outputs do not go through the pipeline's registry, so they
+        are not checked to be inside the run's output directory, or not inside another
+        step's output, as the step methods' outputs are.
+
         Add a task after the steps it depends on. This is not checked when the task is
         added. It is checked when the pipeline is built:
         :func:`~vivarium.dagger.frontend.execution.run`,
