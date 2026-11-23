@@ -587,25 +587,25 @@ def test_the_step_name_prefix_defaults_to_the_outputs_key(tmp_path: Path) -> Non
     assert message.startswith("Step 'out.parquet': "), message
 
 
-def _returns_a_dict() -> Any:
-    """Return a dict where a DataFrame is expected."""
-    return {"value": [1]}
+def _returns_a_list() -> Any:
+    """Return a list where a DataFrame is expected."""
+    return [1, 2]
 
 
 def test_a_target_that_returns_another_type_gets_no_missing_return_hint(
     tmp_path: Path,
 ) -> None:
-    """A target that returns a dict fails naming dict, without the missing-return hint that only None gets."""
+    """A target that returns a list fails naming list, without the missing-return hint that only None gets."""
     reg = FileRegistry(tmp_path / "out", "run1")
     step_run = python_step(
-        _returns_a_dict, inputs={}, outputs="out.parquet", registry=reg
+        _returns_a_list, inputs={}, outputs="out.parquet", registry=reg
     ).run
     assert isinstance(step_run, PythonStepRun)
 
     with pytest.raises(TypeError) as info:
         step_run(__output__=tmp_path / "direct.parquet")
 
-    assert "returned dict" in str(info.value)
+    assert "returned list" in str(info.value)
     assert "missing return" not in str(info.value)
 
 
@@ -1209,3 +1209,37 @@ def test_python_step_called_directly_keeps_its_own_prefix(tmp_path: Path) -> Non
 
     message = str(info.value)
     assert message.startswith("python_step:"), message
+
+
+# A target that returns a list, and an unresolved input of a mapping step
+
+
+def test_a_single_output_target_that_returns_a_list_gets_no_hint(tmp_path: Path) -> None:
+    """PythonStepRun of the module-level target _returns_a_list, which returns [1, 2], with the single output suffix '.parquet', called with __output__=tmp_path / 'direct.parquet', raises TypeError whose message is exactly "Python step target _returns_a_list returned list; a python step must return a pandas DataFrame." and writes no file at that path."""
+    output = tmp_path / "direct.parquet"
+    step_run = PythonStepRun(_returns_a_list, ".parquet")
+
+    with pytest.raises(TypeError) as info:
+        step_run(__output__=output)
+
+    assert str(info.value) == (
+        "Python step target _returns_a_list returned list; a python step must return a "
+        "pandas DataFrame."
+    )
+    assert not output.exists()
+
+
+def test_an_unresolved_input_of_a_mapping_step_names_the_step_and_registers_no_key(
+    tmp_path: Path,
+) -> None:
+    """python_step(_split, inputs={'src': 'missing.csv'}, outputs=_SPLIT, registry=FileRegistry(tmp_path / 'out', 'run1'), name='split') raises WiringError whose message starts "Step 'split': input 'missing.csv' is unresolved", and neither output key of _SPLIT is registered afterwards."""
+    reg = FileRegistry(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError) as info:
+        python_step(
+            _split, inputs={"src": "missing.csv"}, outputs=_SPLIT, registry=reg, name="split"
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'split': input 'missing.csv' is unresolved"), message
+    _assert_unregistered(reg, *_SPLIT.values())

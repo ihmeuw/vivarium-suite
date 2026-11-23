@@ -927,7 +927,7 @@ def test_pytask_stopping_without_a_recorded_error_exits_one_with_a_readable_mess
 
 
 def test_preview_prints_one_line_per_step_in_file_key_terms(tmp_path: Path) -> None:
-    """'dagger preview -c def.py' of a chain added with the step methods exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming artifacts by key and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
+    """'dagger preview -c def.py' of a chain added with the step methods exits 0 and prints one 'run <step>: <reasons>' line per stale step, naming files as "file '<key>'" and code as "code of '<step>'", with no absolute path, then an '<n> of <m> steps would run.' line."""
     path = _write_definition(tmp_path, _KEYED_CHAIN)
 
     result = _invoke("preview", str(path))
@@ -1113,7 +1113,7 @@ def test_a_missing_producer_exits_two_naming_the_step_and_the_key(tmp_path: Path
     assert "During handling of the above exception" not in errors
 
 
-def test_a_double_claimed_artifact_exits_two_naming_the_key_and_both_steps(
+def test_a_double_claimed_file_exits_two_naming_the_key_and_both_steps(
     tmp_path: Path,
 ) -> None:
     """Two python steps with different names and the same outputs key exit 2 when the Pipeline refuses the second, with a message naming the second step, the file key and the first step, before any build."""

@@ -1400,7 +1400,7 @@ def test_removing_the_sentinel_runs_the_simulation_and_its_consumer_again(
     assert (model.run_dir / _SENTINEL).is_file()
 
 
-def test_a_changed_sentinel_makes_preview_report_the_artifact_changed_and_a_cascade(
+def test_a_changed_sentinel_makes_preview_report_the_run_directory_changed_and_a_cascade(
     model: _Model,
 ) -> None:
     """After other content is written to the sentinel, preview reports both steps would run, the simulation step's reasons include Reason("run directory 'sims/toy'", "changed"), the consumer's are [Reason("step 'sims/toy'", "cascade")], and no reason holds the run directory's path."""

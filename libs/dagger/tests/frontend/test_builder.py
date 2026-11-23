@@ -1698,3 +1698,27 @@ def test_a_run_name_inside_the_target_of_a_linked_state_folder_is_refused(
     assert str(tmp_path.resolve() / "out" / "statedir") in message, message
     assert _LINKS_FOLLOWED in message, message
     assert "through a symbolic link" not in message, message
+
+
+# Step order is not checked when a step is added
+
+
+def test_add_task_accepts_a_consumer_before_its_producer_when_it_is_added(
+    tmp_path: Path,
+) -> None:
+    """p.add_task of the hand-built command task 'consumer', which reads tmp_path/a.txt, and then of 'producer', which writes that file, raises nothing, and freeze(p).tasks names consumer and then producer: the order is checked when the pipeline is built, not when a step is added."""
+    a, b = tmp_path / "a.txt", tmp_path / "b.txt"
+    consumer = Task(
+        name="consumer",
+        run=f"cp {a} {b}",
+        inputs={"source": file_node(a)},
+        outputs={"out": file_node(b)},
+        resources={},
+        env=None,
+    )
+    p = Pipeline(tmp_path / "out", "run1")
+
+    p.add_task(consumer)
+    p.add_task(_command_task("producer", a))
+
+    assert [task.name for task in freeze(p).tasks] == ["consumer", "producer"]

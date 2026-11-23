@@ -517,12 +517,6 @@ def test_any_parquet_reader_error_is_reported_unreadable(
     assert _UNSUPPORTED in message
 
 
-def test_bare_string_locations_raise_value_error(tmp_path: Path) -> None:
-    """A bare string passed as the location list raises ValueError instead of being split into letters."""
-    with pytest.raises(ValueError):
-        location_inputs(tmp_path, "ethiopia", _FILES)
-
-
 def test_found_hint_ignores_case_and_quotes_names(tmp_path: Path) -> None:
     """When coverage.csv is missing, a present Coverage.CSV is named in the hint, quoted."""
     probe = tmp_path / "probe"
@@ -659,3 +653,15 @@ def test_declaration_errors_start_with_a_capital(
     # The case-insensitive prefix shows which declaration error was raised.
     assert message.lower().startswith(prefix.lower()), message
     assert message[0].isupper(), message
+
+
+# Locations given as one bare string
+
+
+def test_bare_string_locations_are_refused_before_any_file_is_touched_with_the_full_message(
+    tmp_path: Path,
+) -> None:
+    """location_inputs(tmp_path, 'ethiopia', _FILES), called through _assert_rejected_before_reading so that any file access fails the test, raises ValueError whose message is exactly "Locations must be a list of location names, not the string 'ethiopia'." and touches no file."""
+    message = _assert_rejected_before_reading(tmp_path, "ethiopia", _FILES)
+
+    assert message == "Locations must be a list of location names, not the string 'ethiopia'."
