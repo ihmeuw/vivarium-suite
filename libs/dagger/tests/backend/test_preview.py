@@ -234,3 +234,32 @@ def test_failure_message_adds_a_line_for_each_failed_step(tmp_path: Path) -> Non
     line = f"Step 'copy': {type(error).__name__}: {error}"
     assert message.startswith(session.exit_code.name), message
     assert f"\n{line}" in message, message
+
+
+# The order of the tasks given
+
+
+def _make_task(name: str, dst: Path) -> Task:
+    """A command task that writes ``dst`` and reads no file."""
+    return Task(
+        name=name,
+        run=f"echo {name} > {dst}",
+        inputs={},
+        outputs={"dst": file_node(dst)},
+        resources={},
+        env=None,
+        code_id=_VersionNode(f"code:{name}"),
+    )
+
+
+def test_preview_refuses_a_consumer_given_before_its_producer(tmp_path: Path) -> None:
+    """preview([consumer, producer], root), where 'consumer' reads the file that 'producer' writes, raises ValueError, not PlanFailed, whose message names 'consumer' and then 'producer', and root is not created."""
+    root = tmp_path / "state"
+    made = tmp_path / "made"
+    tasks = [_copy_task("consumer", made, tmp_path / "copied"), _make_task("producer", made)]
+
+    with pytest.raises(ValueError, match="'consumer'.*'producer'") as info:
+        preview(tasks, root)
+
+    assert not isinstance(info.value, PlanFailed)
+    assert not root.exists()

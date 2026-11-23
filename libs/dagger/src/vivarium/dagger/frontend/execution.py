@@ -297,12 +297,19 @@ def run(
         ``only`` or ``force`` names a step that is not in the pipeline, the run goes
         through Jobmon and some step would have no project, ``force`` is given and
         ``pytask.lock`` is not a lockfile pytask accepts, the backend rejects the tasks
-        (for example, a declared env does not resolve), or pytask stops before any step
-        fails. A missing bridge plugin, an unknown step and a step without a project are
-        reported in that order, before anything is built or written. A step has no
-        project when neither ``jobmon_resources`` as described under ``build_kwargs``
-        nor the step's own resources give a non-empty ``"project"``. Every step of the
-        pipeline is checked, not only the steps that would run, and the message names
+        (for example, a declared env does not resolve, or a step depends on a step added
+        after it), or pytask stops before any step fails. A missing bridge plugin, an
+        unknown step and a step without a project are reported in that order, before
+        anything is built or written. A step that depends on a step added after it is
+        reported before pytask starts, so no step runs, and the message names that step
+        and then the step it depends on. The order check ignores steps that depend on
+        each other in a cycle; if no other step is out of order, pytask stops for the
+        cycle. With ``force``, the forced steps' entries are removed from ``pytask.lock``
+        before the pipeline is built, so they are already removed when the pipeline is
+        refused for an env or for step order. A step has no project when neither
+        ``jobmon_resources`` as described under ``build_kwargs`` nor the step's own
+        resources give a non-empty ``"project"``. Every step of the pipeline is checked
+        for a project, not only the steps that would run, and the message names
         each step without a project and the three ways to set one: the ``dagger``
         command's ``-P/--project`` (``jobmon_resources={"project": ...}`` when calling
         this function), the definition's ``Pipeline(resources={"project": ...})``, and

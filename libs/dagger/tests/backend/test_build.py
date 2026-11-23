@@ -3,12 +3,13 @@ import signal
 import subprocess
 from collections.abc import Callable, Mapping
 from importlib.metadata import entry_points
+from itertools import permutations
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from pytask import ExitCode, PNode, PythonNode, TaskOutcome
+from pytask import ExitCode, PickleNode, PNode, PythonNode, TaskOutcome
 
 import vivarium.dagger.backend.build as build_module
 from vivarium.dagger.backend.build import (
@@ -560,3 +561,220 @@ def test_build_without_jobmon_does_not_look_for_the_bridge_plugin(
         "a": TaskOutcome.SUCCESS
     }
     assert a.read_text() == "x"
+
+
+# The order of the tasks given
+
+
+def _make(name: str, dst: Path) -> Task:
+    """Build a command task that writes ``dst`` and reads no file."""
+    return _task(name, f"echo {name} > {dst}", outputs={"dst": file_node(dst)})
+
+
+def _chain(folder: Path) -> tuple[Task, Task, Task]:
+    """Build first -> middle -> last, each of which reads the file the one before it writes."""
+    a, b, c = folder / "a", folder / "b", folder / "c"
+    return _make("first", a), _copy("middle", a, b), _copy("last", b, c)
+
+
+def _capture(captured: PythonNode) -> None:
+    """Save a value to the output node ``captured``."""
+    captured.save(1)
+
+
+def test_build_refuses_a_consumer_given_before_its_producer(tmp_path: Path) -> None:
+    """build([consumer, producer], root), where the command task 'consumer' reads the file that the command task 'producer' writes, raises ValueError whose message is exactly "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." Nothing is written: root is not created and neither task's output exists."""
+    root = tmp_path / "state"
+    made, copied = tmp_path / "made", tmp_path / "copied"
+    tasks = [_copy("consumer", made, copied), _make("producer", made)]
+
+    with pytest.raises(ValueError) as info:
+        build(tasks, root)
+
+    assert str(info.value) == (
+        "Step 'consumer' depends on step 'producer', which comes after it; add step "
+        "'producer' before step 'consumer'."
+    )
+    assert not root.exists()
+    assert not made.exists()
+    assert not copied.exists()
+
+
+def test_build_reports_the_first_task_that_is_out_of_order(tmp_path: Path) -> None:
+    """For tasks given as [reads_b, reads_a, makes_a, makes_b], where reads_b reads the file makes_b writes and reads_a reads the file makes_a writes, build raises ValueError whose message names 'reads_b' and then 'makes_b' and names neither 'reads_a' nor 'makes_a'."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    tasks = [
+        _copy("reads_b", b, tmp_path / "b_copy"),
+        _copy("reads_a", a, tmp_path / "a_copy"),
+        _make("makes_a", a),
+        _make("makes_b", b),
+    ]
+
+    with pytest.raises(ValueError, match="'reads_b'.*'makes_b'") as info:
+        build(tasks, tmp_path / "state")
+
+    message = str(info.value)
+    assert "reads_a" not in message, message
+    assert "makes_a" not in message, message
+
+
+def test_build_names_the_first_of_several_later_producers(tmp_path: Path) -> None:
+    """For tasks given as [consumer, zulu, alpha], where 'consumer' reads the file that 'zulu' writes and the file that 'alpha' writes, with the input that 'alpha' produces declared first in consumer's inputs, build raises ValueError whose message is exactly "Step 'consumer' depends on step 'zulu', which comes after it; add step 'zulu' before step 'consumer'." For [consumer, alpha, zulu] the message names 'alpha' in place of 'zulu'."""
+    a, z, joined = tmp_path / "a", tmp_path / "z", tmp_path / "joined"
+    consumer = _task(
+        "consumer",
+        f"cat {a} {z} > {joined}",
+        {"from_alpha": file_node(a), "from_zulu": file_node(z)},
+        {"joined": file_node(joined)},
+    )
+    zulu, alpha = _make("zulu", z), _make("alpha", a)
+
+    for index, (tasks, producer) in enumerate(
+        (([consumer, zulu, alpha], "zulu"), ([consumer, alpha, zulu], "alpha"))
+    ):
+        with pytest.raises(ValueError) as info:
+            build(tasks, tmp_path / f"state{index}")
+
+        assert str(info.value) == (
+            f"Step 'consumer' depends on step '{producer}', which comes after it; add step "
+            f"'{producer}' before step 'consumer'."
+        )
+
+
+def test_build_refuses_a_chain_given_out_of_order(tmp_path: Path) -> None:
+    """For the chain first -> middle -> last, in which each task reads the file the one before it writes, build([first, last, middle], root) raises ValueError that names 'last' and then 'middle', and build([middle, last, first], root) raises ValueError that names 'middle' and then 'first'."""
+    first, middle, last = _chain(tmp_path)
+
+    with pytest.raises(ValueError, match="'last'.*'middle'"):
+        build([first, last, middle], tmp_path / "state0")
+
+    with pytest.raises(ValueError, match="'middle'.*'first'"):
+        build([middle, last, first], tmp_path / "state1")
+
+
+def test_build_refuses_a_consumer_before_a_producer_linked_by_a_pickle_node(
+    tmp_path: Path,
+) -> None:
+    """build([consumer, producer], root), where 'consumer' has the input pytask.PickleNode(path=p) and 'producer', given second, has an output node at the same path p, raises ValueError that names 'consumer' and then 'producer', both when the producer's node is a PickleNode and when it is file_node(p)."""
+    p = tmp_path / "value.pkl"
+    produced: dict[str, PNode] = {"pickle": PickleNode(path=p), "file": file_node(p)}
+
+    for kind, node in produced.items():
+        consumer = _task("consumer", _noop, {"value": PickleNode(path=p)})
+        producer = _task("producer", _noop, outputs={"out": node})
+
+        with pytest.raises(ValueError, match="'consumer'.*'producer'"):
+            build([consumer, producer], tmp_path / f"state_{kind}")
+
+
+def test_build_refuses_a_consumer_whose_list_input_holds_a_later_tasks_output(
+    tmp_path: Path,
+) -> None:
+    """build([consumer, producer], root), where one input of 'consumer' is a list of two file nodes and 'producer', given second, writes the second file of that list, raises ValueError that names 'consumer' and then 'producer'."""
+    a, b = _write(tmp_path / "a", "a"), tmp_path / "b"
+    files = cast(PNode, [file_node(a), file_node(b)])
+    tasks = [_task("consumer", "true", {"files": files}), _make("producer", b)]
+
+    with pytest.raises(ValueError, match="'consumer'.*'producer'"):
+        build(tasks, tmp_path / "state")
+
+
+def test_a_two_task_cycle_is_left_to_pytask(tmp_path: Path) -> None:
+    """build([a, b], root), where a reads y.txt and writes x.txt and b reads x.txt and writes y.txt, raises nothing: the session's exit_code is DAG_FAILED and failure_message(session) contains 'contains cycles'. The same holds for build([b, a], root)."""
+    x, y = tmp_path / "x.txt", tmp_path / "y.txt"
+    a, b = _copy("a", y, x), _copy("b", x, y)
+
+    for index, tasks in enumerate(([a, b], [b, a])):
+        session = build(tasks, tmp_path / f"state{index}")
+
+        assert session.exit_code == ExitCode.DAG_FAILED
+        assert "contains cycles" in failure_message(session)
+
+
+def test_a_three_task_cycle_is_left_to_pytask(tmp_path: Path) -> None:
+    """build([c1, c2, c3], root), where c1 reads 3.txt and writes 1.txt, c2 reads 1.txt and writes 2.txt, and c3 reads 2.txt and writes 3.txt, raises nothing: the session's exit_code is DAG_FAILED and failure_message(session) contains 'contains cycles'. The same holds for build([c3, c2, c1], root) and for build([c2, c1, c3], root)."""
+    one, two, three = tmp_path / "1.txt", tmp_path / "2.txt", tmp_path / "3.txt"
+    c1, c2, c3 = _copy("c1", three, one), _copy("c2", one, two), _copy("c3", two, three)
+
+    for index, tasks in enumerate(([c1, c2, c3], [c3, c2, c1], [c2, c1, c3])):
+        session = build(tasks, tmp_path / f"state{index}")
+
+        assert session.exit_code == ExitCode.DAG_FAILED
+        assert "contains cycles" in failure_message(session)
+
+
+def test_a_task_that_reads_its_own_output_is_left_to_pytask(tmp_path: Path) -> None:
+    """build([loop], root), where the one task reads and writes the same file, raises nothing: the session's exit_code is DAG_FAILED and failure_message(session) contains 'contains cycles'."""
+    file = tmp_path / "loop.txt"
+
+    session = build([_copy("loop", file, file)], tmp_path / "state")
+
+    assert session.exit_code == ExitCode.DAG_FAILED
+    assert "contains cycles" in failure_message(session)
+
+
+def test_two_producers_of_one_node_with_a_reader_between_are_left_to_pytask(
+    tmp_path: Path,
+) -> None:
+    """build([first_writer, reader, second_writer], root), where both writers have an output node at one path p and 'reader', given between them, has an input node at p, raises nothing: the session's exit_code is DAG_FAILED and failure_message(session) contains 'produce the same output'. This holds both when every node is a pytask.PickleNode(path=p) and when every node is file_node(p)."""
+    p = tmp_path / "value.pkl"
+    kinds: dict[str, Callable[[], PNode]] = {
+        "pickle": lambda: PickleNode(path=p),
+        "file": lambda: file_node(p),
+    }
+
+    for kind, node in kinds.items():
+        tasks = [
+            _task("first_writer", _noop, outputs={"out": node()}),
+            _task("reader", _noop, {"value": node()}),
+            _task("second_writer", _noop, outputs={"out": node()}),
+        ]
+
+        session = build(tasks, tmp_path / f"state_{kind}")
+
+        assert session.exit_code == ExitCode.DAG_FAILED, kind
+        assert "produce the same output" in failure_message(session), kind
+
+
+def test_build_takes_bare_python_nodes_of_unrelated_tasks_for_one_node(
+    tmp_path: Path,
+) -> None:
+    """For the callable task 'uses_constant', whose one input is PythonNode(name='n', value=3), and the callable task 'captures', whose one output is PythonNode(name='captured') and whose function saves a value to that node, build([uses_constant, captures], root) raises ValueError that names 'uses_constant' and then 'captures', although the two nodes have different names, and build([captures, uses_constant], root) raises nothing and both outcomes are SUCCESS."""
+    uses_constant = _task("uses_constant", _noop, {"n": PythonNode(name="n", value=3)})
+    captures = _task("captures", _capture, outputs={"captured": PythonNode(name="captured")})
+
+    with pytest.raises(ValueError, match="'uses_constant'.*'captures'"):
+        build([uses_constant, captures], tmp_path / "state0")
+
+    tasks = [captures, uses_constant]
+    assert outcomes(build(tasks, tmp_path / "state1")) == _every(tasks, TaskOutcome.SUCCESS)
+
+
+def test_build_accepts_independent_tasks_in_any_order(tmp_path: Path) -> None:
+    """Three command tasks that share no file build with every outcome SUCCESS in each of their six orders, each order under its own root."""
+    for index, order in enumerate(permutations(("a", "b", "c"))):
+        folder = tmp_path / str(index)
+        folder.mkdir()
+        tasks = [_make(name, folder / name) for name in order]
+
+        result = outcomes(build(tasks, folder / "state"))
+
+        assert result == _every(tasks, TaskOutcome.SUCCESS), order
+
+
+def test_build_accepts_a_chain_in_dependency_order_with_an_independent_task_between(
+    tmp_path: Path,
+) -> None:
+    """build([first, other, middle, last], root), the chain first -> middle -> last given in dependency order with the independent task 'other' between its links, raises nothing and every outcome is SUCCESS."""
+    first, middle, last = _chain(tmp_path)
+    tasks = [first, _make("other", tmp_path / "other"), middle, last]
+
+    assert outcomes(build(tasks, tmp_path / "state")) == _every(tasks, TaskOutcome.SUCCESS)
+
+
+def test_build_accepts_a_task_that_reads_a_file_no_task_produces(tmp_path: Path) -> None:
+    """build([reader, other], root), where 'reader', given first, reads an existing file that no task writes and 'other' is independent, raises nothing and both outcomes are SUCCESS."""
+    raw = _write(tmp_path / "raw", "x")
+    tasks = [_copy("reader", raw, tmp_path / "copy"), _make("other", tmp_path / "other")]
+
+    assert outcomes(build(tasks, tmp_path / "state")) == _every(tasks, TaskOutcome.SUCCESS)

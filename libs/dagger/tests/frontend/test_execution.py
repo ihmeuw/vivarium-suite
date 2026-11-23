@@ -1453,3 +1453,82 @@ def test_preview_after_a_root_input_is_deleted_names_the_step_and_the_path(
     message = str(info.value)
     assert "Step 'reader'" in message, message
     assert raw.resolve().as_posix() in message, message
+
+
+# Step order
+
+
+_OUT_OF_ORDER = (
+    "Step 'consumer' depends on step 'producer', which comes after it; add step "
+    "'producer' before step 'consumer'."
+)
+"""The message for the step 'consumer' that is added before the step 'producer' it depends on."""
+
+
+def _consumer_then_producer(tmp_path: Path) -> Pipeline:
+    """Return a pipeline to which add_task added 'consumer', which reads a.txt, and then 'producer', which writes it."""
+    a = tmp_path / "a.txt"
+    consumer = Task(
+        name="consumer",
+        run=f"cp {a} {tmp_path / 'b.txt'}",
+        inputs={"source": file_node(a)},
+        outputs={"out": file_node(tmp_path / "b.txt")},
+        resources={},
+        env=None,
+    )
+    producer = Task(
+        name="producer",
+        run=f"touch {a}",
+        inputs={},
+        outputs={"out": file_node(a)},
+        resources={},
+        env=None,
+    )
+    return pipeline_of([consumer, producer], tmp_path / "state")
+
+
+def test_run_refuses_a_step_added_before_the_step_it_depends_on(tmp_path: Path) -> None:
+    """For a Pipeline to which add_task added the command task 'consumer' (reads tmp_path/a.txt) and then 'producer' (writes tmp_path/a.txt), run(p) raises PipelineError whose message is exactly "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." Its exit_code is None, its __cause__ is a ValueError, no step ran (a.txt does not exist) and p.state was not created."""
+    p = _consumer_then_producer(tmp_path)
+
+    with pytest.raises(PipelineError) as info:
+        run(p)
+
+    error = info.value
+    assert str(error) == _OUT_OF_ORDER
+    assert error.exit_code is None
+    assert isinstance(error.__cause__, ValueError), repr(error.__cause__)
+    assert not (tmp_path / "a.txt").exists()
+    assert not p.state.exists()
+
+
+def test_preview_refuses_a_step_added_before_the_step_it_depends_on(tmp_path: Path) -> None:
+    """For a Pipeline to which add_task added the command task 'consumer' (reads tmp_path/a.txt) and then 'producer' (writes tmp_path/a.txt), preview(p) raises PipelineError whose message is exactly "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." Its exit_code is None, its __cause__ is a ValueError, and p.state was not created."""
+    p = _consumer_then_producer(tmp_path)
+
+    with pytest.raises(PipelineError) as info:
+        preview(p)
+
+    error = info.value
+    assert str(error) == _OUT_OF_ORDER
+    assert error.exit_code is None
+    assert isinstance(error.__cause__, ValueError), repr(error.__cause__)
+    assert not p.state.exists()
+
+
+def test_a_notebook_step_whose_notebook_a_later_step_writes_is_refused(
+    tmp_path: Path,
+) -> None:
+    """For a Pipeline whose notebook step 'report', declared with env=sys.prefix, an env that resolves, reads the source notebook at <output root>/<run name>/nb.ipynb, written before the step is added, and whose later command step 'make_nb' has the output key 'nb.ipynb', adding both steps raises nothing, and run(p) and preview(p) each raise PipelineError whose message names 'report' and then 'make_nb'; the notebook file is unchanged and no executed notebook is written."""
+    p = Pipeline(tmp_path / "out", "run1", state=tmp_path / "state")
+    source = write_source_notebook(_product(p, "nb.ipynb"))
+    before = source.read_bytes()
+    p.add_notebook_step(source, executed="executed.ipynb", env=sys.prefix, name="report")
+    p.add_command_step("touch {out}", outputs={"out": "nb.ipynb"}, name="make_nb")
+
+    for verb in (preview, run):
+        with pytest.raises(PipelineError, match="'report'.*'make_nb'"):
+            verb(p)
+
+    assert source.read_bytes() == before
+    assert not _product(p, "executed.ipynb").exists()

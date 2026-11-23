@@ -34,6 +34,7 @@ from tests.bridge.helpers import (
 )
 from tests.frontend.pipelines import pipeline_of
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME, RunLocked
+from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
@@ -560,3 +561,36 @@ def test_a_bridge_refusal_names_the_step_once(tmp_path: Path) -> None:
     message = str(info.value)
     assert "cannot run on a compute node" in message, message
     assert message.count("Step 'refused'") == 1, message
+
+
+# Step order
+
+
+def test_a_bridged_run_refuses_a_step_added_before_the_step_it_depends_on(
+    tmp_path: Path,
+) -> None:
+    """For a pipeline to which add_task added 'consumer' and then 'producer', the task that writes the file consumer reads, run(p, jobmon=True) with a project, under FakeJobmon, raises PipelineError that names 'consumer' and then 'producer', and FakeJobmon bound no plan."""
+    made, copied = tmp_path / "made.txt", tmp_path / "copied.txt"
+    consumer = Task(
+        name="consumer",
+        run=f"cp {made} {copied}",
+        inputs={"src": file_node(made)},
+        outputs={"dst": file_node(copied)},
+        resources={},
+        env=None,
+    )
+    producer = Task(
+        name="producer",
+        run=f"echo x > {made}",
+        inputs={},
+        outputs={"dst": file_node(made)},
+        resources={},
+        env=None,
+    )
+    p = pipeline_of([consumer, producer], build_root(tmp_path))
+
+    with FakeJobmon() as jobmon:
+        with pytest.raises(PipelineError, match="'consumer'.*'producer'"):
+            run(p, jobmon=True, jobmon_resources=dict(_PROJECT))
+
+    assert jobmon.plans == []

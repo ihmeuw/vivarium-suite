@@ -413,9 +413,15 @@ Each of these exits with status 2 before any step runs:
 - A location's primary data fails the location inputs check (see
   :ref:`location-inputs-helper`).
   ``dagger`` prints only the check's message, which lists each problem by location.
+- A step is added before a step it depends on, for example a notebook step whose
+  notebook a later step writes. A step method refuses an input file key that is neither
+  a root input nor an output of an earlier step, when the step is added, as described
+  above. ``dagger`` checks every other dependency when it builds the pipeline, and its
+  message names the step and then the later step it depends on, and says which to add
+  first.
 - The pipeline cannot be built as defined, for example because a step declares an
-  environment that does not exist or pytask cannot order the steps. ``dagger`` prints
-  the reason.
+  environment that does not exist or steps depend on each other in a cycle. ``dagger``
+  prints the reason.
 - The pipeline's root cannot be created or written, for example because it is an
   existing file or a directory above it is not writable. ``dagger`` checks this before
   pytask starts, without creating anything, and names the root and the reason.

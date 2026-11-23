@@ -2909,3 +2909,58 @@ def test_help_shows_no_rst_double_backticks() -> None:
 
         assert result.exit_code == 0, (command, _describe(result))
         assert "``" not in result.output, (command, result.output)
+
+
+# Step order
+
+
+_OUT_OF_ORDER = (
+    "Step 'consumer' depends on step 'producer', which comes after it; add step "
+    "'producer' before step 'consumer'."
+)
+"""The message for the step 'consumer' that is added before the step 'producer' it depends on."""
+
+_CONSUMER_FIRST = (
+    _HEADER
+    + """
+
+def command(name, run, inputs, outputs):
+    return Task(name=name, run=run, inputs=inputs, outputs=outputs, resources={}, env=None)
+
+
+def pipeline():
+    a, b = HERE / "a.txt", HERE / "b.txt"
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(
+        command("consumer", f"cp {a} {b}", {"source": file_node(a)}, {"target": file_node(b)})
+    )
+    p.add_task(command("producer", f"touch {a}", {}, {"target": file_node(a)}))
+    return p
+"""
+)
+"""A definition that adds with add_task the hand-built command step 'consumer', which reads
+a.txt beside the definition, and then 'producer', which writes a.txt."""
+
+
+def test_run_exits_two_for_a_step_added_before_the_step_it_depends_on(tmp_path: Path) -> None:
+    """'dagger run --local' on a definition that adds with add_task the hand-built command step 'consumer', which reads a.txt beside the definition, and then 'producer', which writes a.txt, exits 2; stderr has "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." and no step ran, so a.txt does not exist."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+
+    result = _invoke("run", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert _OUT_OF_ORDER in result.stderr, result.stderr
+    assert not (tmp_path / "a.txt").exists()
+
+
+def test_preview_exits_two_for_a_step_added_before_the_step_it_depends_on(
+    tmp_path: Path,
+) -> None:
+    """'dagger preview' on a definition that adds with add_task the hand-built command step 'consumer', which reads a.txt beside the definition, and then 'producer', which writes a.txt, exits 2; stderr has "Step 'consumer' depends on step 'producer', which comes after it; add step 'producer' before step 'consumer'." and stdout has no plan line."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert _OUT_OF_ORDER in result.stderr, result.stderr
+    assert not any(_PLAN_LINE.fullmatch(line) for line in _plan(result)), result.stdout

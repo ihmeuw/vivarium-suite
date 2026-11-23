@@ -20,10 +20,17 @@ so a step added through the pipeline is the same task, with the same checks and
 messages, as one compiled against the registry by hand, except that a missing or empty
 name is reported under the step method's own name. The pipeline also refuses a step
 whose name, or one of whose outputs, another step in the pipeline already has, when the
-step is added; when both apply, the error names the output. A step that reads a
-file must still be added after the step that produces it. :meth:`Pipeline.add_task` is
+step is added; when both apply, the error names the output. :meth:`Pipeline.add_task` is
 the lower layer: it adds a task that was compiled with a step function directly or built
 by hand.
+
+A step must be added after the steps it depends on. A step method refuses, when the step
+is added, an input key that is neither a root input nor an output of a step already
+added. Every other dependency, such as a notebook step's source notebook or an input of
+a task added with :meth:`Pipeline.add_task`, is checked when the pipeline is built, not
+when the step is added: :func:`~vivarium.dagger.frontend.execution.run`,
+:func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command refuse a
+pipeline in which a step depends on a step added after it, before any step runs.
 
 A pipeline can still change after it is made, so
 :func:`~vivarium.dagger.frontend.execution.run`,
@@ -500,6 +507,13 @@ class Pipeline:
         path, with the outputs of the steps already added; any other output is not. The
         ``dagger`` command refuses a pipeline in which two steps have an output that is
         not a path node with the same node name.
+
+        Add a task after the steps it depends on. This is not checked when the task is
+        added. It is checked when the pipeline is built:
+        :func:`~vivarium.dagger.frontend.execution.run`,
+        :func:`~vivarium.dagger.frontend.execution.preview` and the ``dagger`` command
+        refuse a pipeline in which a step depends on a step added after it, and name
+        both steps.
 
         Parameters
         ----------

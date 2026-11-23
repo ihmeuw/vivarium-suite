@@ -124,7 +124,8 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
         ``exit_code`` is pytask's exit code. It is a ``RuntimeError``.
     ValueError
         For any of the reasons :func:`~vivarium.dagger.backend.build.build` raises it,
-        including a declared env that does not resolve.
+        including a declared env that does not resolve and tasks that are not in
+        dependency order.
     """
     session = build(tasks, root, dry_run=True, explain=True, **kwargs)
     if session.exit_code != pytask.ExitCode.OK:
