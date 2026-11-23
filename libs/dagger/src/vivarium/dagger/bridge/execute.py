@@ -29,29 +29,38 @@ Planning goes through pytask's per-task protocol, so pytask's table lists each s
 as "would be executed", and lists it again when its result is recorded. The summary counts
 each step once.
 
-After the workflow ends, the hook records each step's result from the file that the node
-runner wrote. Recording runs pytask's own per-task hooks in the build's process, so pytask
-checks and hashes each step's outputs and writes its lockfile entry exactly as a local
-build does, and a later build skips a step whose inputs and code are unchanged. A step
-that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
-recorded while the workflow runs, so pytask's table shows no step finishing until the
-whole workflow ends.
+The hook records each step's result from the file that the node runner wrote. Recording
+runs pytask's own per-task hooks in the build's process, so pytask checks and hashes each
+step's outputs and writes its lockfile entry exactly as a local build does, and a later
+build skips a step whose inputs and code are unchanged. A step that failed on its node is
+reported as FAIL with :class:`RemoteTaskFailed`.
+
+While the workflow runs, a second thread looks at the run directory every few seconds and
+records each step that is ready: its result file reports success, every submitted step
+upstream of it is recorded, and each of its outputs can be seen from the build's process.
+pytask reads the states of the step's inputs and outputs at that moment and appends the
+step's entry to its lockfile journal, so a build that is killed during the workflow keeps
+the steps that it recorded. A result that reports a failure waits for the end of the
+workflow, because Jobmon can still run the step again. After the workflow ends, the hook
+records every step that has a result and no report yet, in plan order. A step that was
+recorded is not recorded again if Jobmon runs it again.
 
 The hook then settles every submitted step that still has no report, so each step of the
 plan ends with exactly one report. A step after a failed step is reported as
 SKIP_PREVIOUS_FAILED, and any other step without a result is reported as FAIL with a
 :class:`RemoteTaskFailed` that gives the step's Jobmon status and the workflow's id and
-status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the
-Jobmon workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the
-workflow, records the results already written, settles the rest and returns, so pytask
-still writes its lockfile. The hook does not cancel the workflow, so its jobs that are
-already on compute nodes can still be running. Each run also keeps a state file (see
-:mod:`~vivarium.dagger.bridge.state`) that gives its Jobmon workflow id even when the
-build is killed. To continue a stopped run, build again: the next build plans from the
-lockfile, so it runs every step that was not recorded as successful and every step after
-one, and skips any other recorded step whose inputs and code identity are unchanged.
-With the default code identity no step counts as unchanged, so every step runs again.
-:mod:`~vivarium.dagger.bridge.plugin` says what this means for the build's time limit.
+status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the Jobmon
+workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the workflow,
+lets the second thread finish the step that it is recording, records the other results
+already written, settles the rest and returns, so pytask still writes its lockfile. The
+hook does not cancel the workflow, so its jobs that are already on compute nodes can still
+be running. Each run also keeps a state file (see :mod:`~vivarium.dagger.bridge.state`)
+that gives its Jobmon workflow id even when the build is killed. To continue a stopped
+run, build again: the next build plans from the lockfile, so it runs every step that was
+not recorded as successful and every step after one, and skips any other recorded step
+whose inputs and code identity are unchanged. With the default code identity no step
+counts as unchanged, so every step runs again. :mod:`~vivarium.dagger.bridge.plugin` says
+what this means for the build's time limit.
 
 The hook does all of this while it holds the run lock on the build's root
 (:func:`~vivarium.dagger.backend.lock.run_lock`), so two bridged builds never plan, run or
@@ -454,8 +463,12 @@ def _execute(session: Session) -> bool:
     workdir = _new_run_directory(root)
     plan = _compile(session, to_submit, payloads, workdir)
     _prepare_products(session, to_submit)
-    jobmon_run, interrupted = _bind_and_run(session, plan, to_submit, workdir, timeout)
-    leftovers = _record_available(session, to_submit, workdir)
+    recorded: set[str] = set()
+    jobmon_run, interrupted = _bind_and_run(
+        session, plan, to_submit, workdir, timeout, recorded
+    )
+    unrecorded = [task for task in to_submit if task.signature not in recorded]
+    leftovers = _record_available(session, unrecorded, workdir)
     cause = _cause(jobmon_run, interrupted=interrupted)
     _settle(session, leftovers, jobmon_run, cause, workdir=workdir)
     final = RunState(
@@ -741,10 +754,13 @@ def _bind_and_run(
     submitted: Sequence[PTask],
     workdir: Path,
     timeout: int | None,
+    recorded: set[str],
 ) -> tuple[JobmonRun | None, bool]:
     """Bind and run ``plan``; return the run and whether the build was interrupted.
 
-    The run is None if the build was interrupted before the workflow was bound.
+    The run is None if the build was interrupted before the workflow was bound. The
+    signature of each step that is recorded while the workflow runs is added to
+    ``recorded``.
     """
     config = session.config
     cluster: str = config["jobmon_cluster"]
@@ -774,7 +790,8 @@ def _bind_and_run(
                     pending=tuple(task.name for task in submitted),
                 )
                 write_run_state(running)
-                _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
+                with _recording_during_the_run(session, submitted, workdir, recorded):
+                    _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
     except (BridgeInterrupted, KeyboardInterrupt):
         interrupted = True
     # Raised outside the SIGTERM block, so that a SIGTERM cannot turn it into an interrupt.
@@ -785,6 +802,40 @@ def _bind_and_run(
             f"step's resources. Jobmon reported: {bind_error}"
         ) from bind_error
     return jobmon_run, interrupted
+
+
+_RECORD_INTERVAL_SECONDS = 5.0
+"""How many seconds the recording thread waits between two looks at the run directory."""
+
+
+@contextmanager
+def _recording_during_the_run(
+    session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
+) -> Iterator[None]:
+    """Record the ready steps in a second thread while the block runs.
+
+    The thread calls :func:`_record_ready` when the block starts and then every
+    ``_RECORD_INTERVAL_SECONDS`` seconds. The block exits only after the thread has
+    ended, also when an interrupt reaches the main thread while it waits for the thread.
+    An exception in the thread ends its passes and is printed as a warning when the block
+    exits. It is not raised, because the caller records every remaining step afterwards.
+    """
+    raise NotImplementedError
+    yield
+
+
+def _record_ready(
+    session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
+) -> None:
+    """Record each submitted task that is ready, in plan order, and add it to ``recorded``.
+
+    A task is ready when its result file in ``workdir`` can be read and reports success,
+    every submitted task upstream of it is in ``recorded``, pytask has not marked it
+    ``skip_ancestor_failed``, and each of its products has a state. Any other task is
+    left as it is, for a later call or for the end of the run. A task whose signature is
+    in ``recorded`` is not looked at again.
+    """
+    raise NotImplementedError
 
 
 def _cause(jobmon_run: JobmonRun | None, *, interrupted: bool) -> str:

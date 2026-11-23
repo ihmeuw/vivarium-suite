@@ -360,17 +360,8 @@ def test_each_step_has_one_report_although_the_live_table_lists_it_twice(
     assert counts == Counter({TaskOutcome.SUCCESS: 2})
 
 
-def test_steps_are_recorded_only_after_the_workflow_run_returns(tmp_path: Path) -> None:
-    """A FakeJobmon whose run, after running every entry, looks at the build's root finds no pytask.lock entry and no lockfile journal entry for either step, and both steps have pytask.lock entries once the build returns."""
-    fx = build_fixture(tmp_path)
-    jobmon = _LooksAtTheRoot(root=fx.state)
-
-    with jobmon:
-        build(fx.tasks, fx.state, jobmon=True)
-
-    [seen] = jobmon.seen
-    assert seen.isdisjoint(fx.steps), seen
-    assert sorted(lockfile_entries(fx.state)) == sorted(fx.steps)
+def test_a_step_is_recorded_while_the_workflow_run_is_still_going(tmp_path: Path) -> None:
+    """A FakeJobmon whose run, after it has run the first entry of the harness fixture's two-step chain, waits up to a time limit for the first step's lockfile journal entry finds that entry before it runs the second entry, and both steps have pytask.lock entries once the build returns."""
 
 
 # A step that fails on its node

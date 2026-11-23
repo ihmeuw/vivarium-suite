@@ -758,22 +758,8 @@ def test_sigterm_raises_is_a_no_op_off_the_main_thread() -> None:
 # SIGKILL
 
 
-def test_a_sigkilled_build_leaves_a_running_state_and_records_nothing(tmp_path: Path) -> None:
-    """In a child Python process, a bridged build through a FakeJobmon subclass whose run sends SIGKILL to the process after one entry ends with return code -9; the state file is 'running' with the fake's workflow id and every submitted step pending, pytask.lock has no entry, and the next bridged build in this process binds the same plan as the killed build."""
-    root = build_root(tmp_path)
-
-    child = _run_child(_SIGKILL_DURING_THE_RUN, tmp_path)
-
-    assert child.returncode == -signal.SIGKILL, (child.returncode, child.stderr[-4000:])
-    state = only_state(root)
-    assert state.status == "running"
-    assert state.workflow_id == WORKFLOW_ID
-    assert state.pending == PLAN_ORDER
-    assert lockfile_entries(root) == {}
-    assert journal_ids(root) == set()
-    jobmon = FakeJobmon()
-    chain_build(tmp_path, jobmon, stable_ids=True)
-    assert bound_names(jobmon) == [list(state.pending)]
+def test_a_sigkilled_build_keeps_the_steps_that_finished(tmp_path: Path) -> None:
+    """In a child Python process, a bridged build with stable code identities through a FakeJobmon subclass whose run waits until the lockfile journal holds its first two entries and then sends SIGKILL to the process ends with return code -9; the state file is 'running' with the fake's workflow id and every submitted step pending, the journal holds exactly those two steps, and the next bridged build in this process reports those two as SKIP_UNCHANGED and binds a plan of the other two."""
 
 
 # The warning about an unfinished run

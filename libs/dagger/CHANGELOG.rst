@@ -2,6 +2,8 @@
 
 - Add the backend, the python_step frontend, and the test harness.
 - Pin the ``cluster`` extra to ``jobmon_installer_ihme`` 10.12.2
+- Record each step of a build through Jobmon when the step finishes, so a build that is
+  killed keeps its finished steps
 
 **0.1.0 - 11/04/26**
 

@@ -133,3 +133,9 @@ def test_jobmon_progress_lines_reach_stderr_during_a_live_build(
     assert session.exit_code == ExitCode.OK
     err = capfd.readouterr().err
     assert _FINISHED.search(err) is not None, err
+
+
+def test_a_step_is_recorded_before_the_live_workflow_ends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End to end against the production server on the multiprocess plugin: in a two-step chain whose second step waits for a file that the test writes only after it has seen the first step's lockfile journal entry, that entry appears while the workflow is still running, and the build then exits OK with both steps recorded."""

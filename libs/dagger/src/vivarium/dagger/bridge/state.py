@@ -65,7 +65,9 @@ class RunState:
     ``"RuntimeError: <message>"``, or ``None`` when no error stopped it."""
     pending: tuple[str, ...]
     """The names of the run's submitted steps that were not recorded as successful, in
-    plan order. While the run is running, this is every submitted step."""
+    plan order. While the run is running, this is every submitted step, including the
+    steps that the build has already recorded, because the file is not written again
+    until the run ends."""
 
 
 def write_run_state(state: RunState) -> None:
