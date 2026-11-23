@@ -163,10 +163,13 @@ def notebook_step(
     ------
     vivarium.dagger.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or ``executed`` or an
-        ``outputs`` key is a declared root input or resolves to the path of a different
-        key that is already registered (another step's output) or of a root input. The
+        ``outputs`` key is a declared root input, resolves to a path that is not
+        strictly inside the run's output directory, resolves to the path of a different
+        key that is already registered (another step's output) or of a root input, or
+        resolves to a path inside another step's output or one that contains it. The
         message starts with ``Step '<name>':``, followed by the registry's message, which
-        names the file key. The same key claimed by two steps is left for the build
+        names the file key. Every key is checked before any is registered, so a refused
+        step registers nothing. The same key claimed by two steps is left for the build
         to reject.
     ValueError
         If ``name`` or ``env`` is empty; a parameter name in ``inputs``, ``outputs`` or
@@ -178,7 +181,9 @@ def notebook_step(
         does not end in ``.ipynb`` or does not exist; ``executed`` does not end in
         ``.ipynb``; or two of ``notebook``, ``executed`` and the ``outputs`` keys resolve
         to one path, as when an ``outputs`` key equals ``executed`` or is given twice (the
-        message names both).
+        message names both); or the path of ``executed`` or an ``outputs`` key is inside
+        the path of another of them (the message names both and says one output cannot
+        hold another).
         Except for an empty ``name``, each of these messages starts with
         ``Step '<name>':``. An empty ``name`` gives ``notebook_step: name must be a
         non-empty string, got ''.``
@@ -218,6 +223,9 @@ def notebook_step(
         dependencies = {
             param: registry.resolve_input(key) for param, key in input_keys.items()
         }
+        for key in (executed, *output_keys.values()):
+            registry.check_output(key)
+        _check_nested_outputs(task_name, _output_labels(executed, output_keys, registry))
         executed_node = registry.register_output(executed)
         nodes = {param: registry.register_output(key) for param, key in output_keys.items()}
     except WiringError as error:
@@ -424,18 +432,41 @@ def _check_collisions(
 ) -> None:
     """Reject two of the source, the executed notebook and the outputs at one path."""
     claimed = {source: f"source notebook {str(source)!r}"}
-    outputs = {f"executed key {executed!r}": executed}
-    outputs.update(
-        (f"output {param!r} (key {key!r})", key) for param, key in output_keys.items()
-    )
-    for label, key in outputs.items():
-        path = registry.path_for(key)
+    for label, path in _output_labels(executed, output_keys, registry).items():
         if path in claimed:
             raise ValueError(
                 f"Step {task_name!r}: {claimed[path]} and {label} resolve to one path "
                 f"{str(path)!r}; each output must be written to its own path."
             )
         claimed[path] = label
+
+
+def _output_labels(
+    executed: FileKey, output_keys: Mapping[str, FileKey], registry: FileRegistry
+) -> dict[str, Path]:
+    """Return the path of the executed notebook and of each output, keyed by its label."""
+    labels = {f"executed key {executed!r}": registry.path_for(executed)}
+    labels.update(
+        (_output_label(param, key), registry.path_for(key))
+        for param, key in output_keys.items()
+    )
+    return labels
+
+
+def _output_label(name: str, key: FileKey) -> str:
+    """Return how a message names a step's output ``name`` and its ``key``."""
+    return f"output {name!r} (key {key!r})"
+
+
+def _check_nested_outputs(task_name: str, outputs: Mapping[str, Path]) -> None:
+    """Reject one of a step's outputs, keyed by label, whose path is inside another's."""
+    for inner_label, inner in outputs.items():
+        for outer_label, outer in outputs.items():
+            if outer in inner.parents:
+                raise ValueError(
+                    f"Step {task_name!r}: {inner_label} at {str(inner)!r} is inside "
+                    f"{outer_label} at {str(outer)!r}; one output cannot hold another."
+                )
 
 
 def _check_parameters_cell(

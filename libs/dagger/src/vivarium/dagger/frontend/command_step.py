@@ -32,7 +32,11 @@ from pytask import PathNode
 
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
-from vivarium.dagger.frontend.notebook_step import _RESERVED_NAMES
+from vivarium.dagger.frontend.notebook_step import (
+    _RESERVED_NAMES,
+    _check_nested_outputs,
+    _output_label,
+)
 
 
 def command_step(
@@ -114,21 +118,25 @@ def command_step(
     ------
     vivarium.dagger.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or an ``outputs`` key
-        is a declared root input or resolves to the path of a different key that is
-        already registered (another step's output or a root input). The message starts
-        with ``Step '<name>':``, followed by the registry's message, which names the
-        file key. The same key claimed by two steps is left for the build to reject.
+        is a declared root input, resolves to a path that is not strictly inside the
+        run's output directory, resolves to the path of a different key that is already
+        registered (another step's output or a root input), or resolves to a path inside
+        another step's output or one that contains it. The message starts with
+        ``Step '<name>':``, followed by the registry's message, which names the file
+        key. The same key claimed by two steps is left for the build to reject.
     ValueError
         If ``command`` is empty or only whitespace; ``name`` or ``env`` is given and
         empty; ``outputs`` is empty; ``name`` is ``None`` and ``outputs`` has more than
         one entry; a name in ``inputs`` or ``outputs`` is not a valid Python identifier,
         is a Python keyword, is reserved (``__code_id__``, ``__command__``,
         ``__executed__``, ``__notebook__``, ``__output__``) or appears in both; two
-        ``outputs`` keys resolve to one path (the message names both); an input and an
-        output are one file, by key or by resolved path (the message names both, with
-        their keys); a placeholder in ``command`` is not exactly an input or output name,
-        as for an unknown name, ``{}``, ``{0}``, a conversion, a format spec, an attribute
-        or an index; or ``command`` has a single ``{`` or ``}`` that is not part of a
+        ``outputs`` keys resolve to one path (the message names both); one ``outputs``
+        key resolves to a path inside another's (the message names both and says one
+        output cannot hold another); an input and an output are one file, by key or by
+        resolved path (the message names both, with their keys); a placeholder in
+        ``command`` is not exactly an input or output name, as for an unknown name,
+        ``{}``, ``{0}``, a conversion, a format spec, an attribute or an index; or
+        ``command`` has a single ``{`` or ``}`` that is not part of a
         placeholder. A placeholder message quotes the placeholder as written, lists the
         input and output names in sorted order, suggests the closest name when one is
         close, and says how to write a literal brace. The message for a single brace
@@ -171,6 +179,7 @@ def command_step(
     try:
         for key in output_keys.values():
             registry.check_output(key)
+        _check_nested(task_name, output_keys, output_paths)
         nodes = {param: registry.register_output(key) for param, key in output_keys.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
@@ -350,7 +359,7 @@ def _check_paths(
     """Reject two outputs at one path, or an input at an output's path."""
     claimed: dict[Path, str] = {}
     for output, path in output_paths.items():
-        label = f"output {output!r} (key {outputs[output]!r})"
+        label = _output_label(output, outputs[output])
         if path in claimed:
             raise ValueError(
                 f"Step {task_name!r}: {claimed[path]} and {label} resolve to one path "
@@ -367,6 +376,16 @@ def _check_paths(
             )
     if pairs:
         raise ValueError(_same_file_message(task_name, pairs))
+
+
+def _check_nested(
+    task_name: str, outputs: Mapping[str, FileKey], output_paths: Mapping[str, Path]
+) -> None:
+    """Reject one of a step's outputs whose path is inside another's."""
+    labels = {
+        _output_label(output, outputs[output]): path for output, path in output_paths.items()
+    }
+    _check_nested_outputs(task_name, labels)
 
 
 def _same_file_message(task_name: str, pairs: Iterable[str]) -> str:
