@@ -494,9 +494,7 @@ class ConfigTree:
             ConfigTree is returned.
         absolute
             Whether to resolve ``keys`` from the root of the tree that contains
-            this ``ConfigTree`` instead of from this ``ConfigTree``. A
-            ``ConfigTree`` removed from its parent still resolves absolute key
-            paths from its former root.
+            this ``ConfigTree`` instead of from this ``ConfigTree``.
 
         Returns
         -------
@@ -541,9 +539,7 @@ class ConfigTree:
             The key or key path to look up from the outermost layer.
         absolute
             Whether to resolve ``keys`` from the root of the tree that contains
-            this ``ConfigTree`` instead of from this ``ConfigTree``. A
-            ``ConfigTree`` removed from its parent still resolves absolute key
-            paths from its former root.
+            this ``ConfigTree`` instead of from this ``ConfigTree``.
 
         Returns
         -------
