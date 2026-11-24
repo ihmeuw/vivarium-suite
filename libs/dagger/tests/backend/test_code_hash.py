@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import sys
-import uuid
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -178,6 +177,24 @@ def _cell_hash(directory: Path, name: str, source: str) -> CodeHash:
     return _notebook_hash(directory, name, _notebook([_code_cell(source)]))
 
 
+def _v3_code_cell(source: str) -> dict[str, Any]:
+    """Return an unexecuted nbformat 3 code cell."""
+    return {
+        "cell_type": "code",
+        "collapsed": False,
+        "input": source.splitlines(keepends=True),
+        "language": "python",
+        "metadata": {},
+        "outputs": [],
+    }
+
+
+@pytest.fixture(autouse=True)
+def _empty_result_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give each test an empty cache of code hash results."""
+    monkeypatch.setattr(code_hash_module, "_results", {})
+
+
 # Python files: edits that do not change the code
 
 
@@ -226,9 +243,7 @@ def test_an_int_of_any_size_is_hashed_by_its_parsed_code(tmp_path: Path) -> None
     try:
         for index, limit in enumerate([640, 0, default_limit]):
             sys.set_int_max_str_digits(limit)
-            results.append(
-                _python_hash(tmp_path, f"limit_{index}.py", f"# limit {limit}\n{source}")
-            )
+            results.append(_python_hash(tmp_path, f"limit_{index}.py", source))
     finally:
         sys.set_int_max_str_digits(default_limit)
     assert all(result.parsed for result in results), results
@@ -316,6 +331,7 @@ def test_a_python_file_nested_deeper_than_the_recursion_limit_is_parsed(
 def test_a_syntax_warning_does_not_change_a_python_files_hash(tmp_path: Path) -> None:
     """A Python file with an invalid escape such as "\\d", which gives a SyntaxWarning, gets the same parsed result with warnings turned into errors as a file with the same code does without."""
     source = 'pattern = "\\d"\n'
+    # Different comments, so the second call is parsed and not served from the cache.
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         strict = _python_hash(tmp_path, "strict.py", f"# warnings as errors\n{source}")
@@ -329,8 +345,7 @@ def test_hashing_a_file_with_a_syntax_warning_leaves_the_warning_filters_unchang
     tmp_path: Path, filters: str
 ) -> None:
     """Hashing a Python file that gives a SyntaxWarning leaves warnings.filters exactly as it was, under the default filters and with warnings turned into errors."""
-    # A unique comment, so the per-content cache cannot skip the parse.
-    source = f'# {uuid.uuid4().hex}\nx = "\\d"\n'
+    source = 'x = "\\d"\n'
     with warnings.catch_warnings():
         if filters == "error":
             warnings.simplefilter("error")
@@ -351,8 +366,7 @@ def test_a_decimal_int_over_the_int_string_limit_is_hashed_by_its_bytes(
     tmp_path: Path,
 ) -> None:
     """A Python file with a decimal int literal longer than the process's int-to-string limit is not parsed and gets a hash of its bytes."""
-    # A unique comment, so the per-content cache cannot return an earlier result.
-    source = f"# {uuid.uuid4().hex}\nX = 1{'0' * 700}\n"
+    source = f"X = 1{'0' * 700}\n"
     default_limit = sys.get_int_max_str_digits()
     try:
         sys.set_int_max_str_digits(640)
@@ -418,6 +432,67 @@ def test_a_notebook_and_its_executed_copy_have_the_same_hash(tmp_path: Path) -> 
     assert original_hash.parsed
     assert executed_hash.parsed
     assert executed_hash.digest == original_hash.digest
+
+
+def test_a_json_integer_over_the_int_string_limit_outside_the_code_keeps_the_hash(
+    tmp_path: Path,
+) -> None:
+    """A notebook with a JSON integer longer than the int-to-string limit in a code cell's outputs and in its metadata is parsed under the default limit and has the hash of the same notebook without those integers."""
+    plain = _notebook(_base_cells())
+    with_integers = copy.deepcopy(plain)
+    with_integers["cells"][_FRAME_CELL]["outputs"] = [
+        {
+            "data": {"application/json": "LONG_INTEGER"},
+            "execution_count": None,
+            "metadata": {},
+            "output_type": "execute_result",
+        }
+    ]
+    with_integers["metadata"]["row_count"] = "LONG_INTEGER"
+    text = json.dumps(with_integers, indent=1)
+    assert text.count('"LONG_INTEGER"') == 2
+    text = text.replace('"LONG_INTEGER"', "9" * 5000)
+    path = tmp_path / "with_integers.ipynb"
+    path.write_text(text + "\n", encoding="utf-8")
+
+    limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(sys.int_info.default_max_str_digits)
+        with pytest.raises(ValueError):
+            json.loads(text)
+        result = notebook_hash(path)
+        expected = _notebook_hash(tmp_path, "plain.ipynb", plain)
+    finally:
+        sys.set_int_max_str_digits(limit)
+    assert result.parsed
+    assert expected.parsed
+    assert result.digest == expected.digest
+
+
+def test_an_nbformat_3_notebook_has_the_hash_of_the_same_nbformat_4_notebook(
+    tmp_path: Path,
+) -> None:
+    """An nbformat 3 notebook whose code cells are spread over two worksheets is parsed and has the hash of the nbformat 4 notebook with the same code cells in the same order."""
+    sources = [
+        "".join(cell["source"]) for cell in _base_cells() if cell["cell_type"] == "code"
+    ]
+    heading = _markdown_cell("# Coverage by year")
+    version_3: dict[str, Any] = {
+        "metadata": {"name": ""},
+        "nbformat": 3,
+        "nbformat_minor": 0,
+        "worksheets": [
+            {"cells": [heading, *[_v3_code_cell(s) for s in sources[:2]]], "metadata": {}},
+            {"cells": [_v3_code_cell(s) for s in sources[2:]], "metadata": {}},
+        ],
+    }
+    version_4 = _notebook([heading, *[_code_cell(source) for source in sources]])
+
+    version_3_hash = _notebook_hash(tmp_path, "version_3.ipynb", version_3)
+    version_4_hash = _notebook_hash(tmp_path, "version_4.ipynb", version_4)
+    assert version_3_hash.parsed
+    assert version_4_hash.parsed
+    assert version_3_hash.digest == version_4_hash.digest
 
 
 @pytest.mark.parametrize(
@@ -760,6 +835,48 @@ def test_a_file_that_is_not_a_notebook_is_hashed_by_its_bytes(tmp_path: Path) ->
         assert edited.digest != original.digest, name
 
 
+@pytest.mark.parametrize(
+    "source, parsed",
+    [
+        pytest.param("x = '\ud800'", False, id="python_code"),
+        pytest.param("%%bash\necho '\ud800'", None, id="bash_cell_body"),
+    ],
+)
+def test_a_cell_with_a_lone_surrogate_gets_a_hash(
+    tmp_path: Path, source: str, parsed: bool | None
+) -> None:
+    """A code cell whose source holds a lone surrogate, written in the JSON as the escape \\ud800, gets a hash without raising, and the result says it was not parsed when the surrogate is in Python code rather than in the body of a %%bash cell."""
+    text = json.dumps(_notebook([_code_cell(source)]), indent=1)
+    assert "\\ud800" in text
+    path = tmp_path / "surrogate.ipynb"
+    path.write_text(text + "\n", encoding="utf-8")
+    result = notebook_hash(path)
+    assert isinstance(result, CodeHash)
+    if parsed is not None:
+        assert result.parsed == parsed
+
+
+@pytest.mark.parametrize(
+    "notebook",
+    [
+        pytest.param(
+            {**_notebook([]), "cells": {"0": _code_cell("value = 1")}}, id="cells_not_a_list"
+        ),
+        pytest.param({**_notebook([]), "cells": ["value = 1"]}, id="cell_not_an_object"),
+        pytest.param(
+            _notebook([{**_code_cell(""), "source": ["value = 1\n", 2]}]),
+            id="non_string_source_item",
+        ),
+        pytest.param(_notebook([{**_code_cell(""), "source": None}]), id="null_source"),
+    ],
+)
+def test_a_notebook_of_a_malformed_shape_is_not_parsed(
+    tmp_path: Path, notebook: dict[str, Any]
+) -> None:
+    """A notebook whose "cells" is not a list, whose cell is not an object, or whose code cell has a source list holding a non-string item or a null source gets a hash without raising, and the result says it was not parsed."""
+    assert not _notebook_hash(tmp_path, "malformed.ipynb", notebook).parsed
+
+
 def test_a_missing_notebook_raises_oserror(tmp_path: Path) -> None:
     """notebook_hash raises OSError for a path that does not exist."""
     with pytest.raises(OSError):
@@ -820,7 +937,6 @@ def test_the_cache_keeps_results_under_different_int_string_limits_apart(
 ) -> None:
     """One Python file's bytes hashed under two int-to-string limits are not served from one cached result."""
     path = tmp_path / "long_int.py"
-    # Not made unique: the second call must see bytes that the first call put in the cache.
     path.write_text(f"X = 1{'0' * 5000}\n", encoding="utf-8")
     default_limit = sys.get_int_max_str_digits()
     try:
@@ -835,6 +951,25 @@ def test_the_cache_keeps_results_under_different_int_string_limits_apart(
     assert limited.digest.startswith("bytes:"), limited
 
 
+@pytest.mark.parametrize(
+    "python_first", [True, False], ids=["python_first", "notebook_first"]
+)
+def test_the_same_bytes_hashed_as_a_python_file_and_as_a_notebook_are_kept_apart(
+    tmp_path: Path, python_first: bool
+) -> None:
+    """A file holding "[1, 2, 3]" and a newline is parsed by python_file_hash and not parsed by notebook_hash, whichever of the two is called first on its path."""
+    path = tmp_path / "values"
+    path.write_text("[1, 2, 3]\n", encoding="utf-8")
+    if python_first:
+        python_result = python_file_hash(path)
+        notebook_result = notebook_hash(path)
+    else:
+        notebook_result = notebook_hash(path)
+        python_result = python_file_hash(path)
+    assert python_result.parsed
+    assert not notebook_result.parsed
+
+
 def test_each_content_is_parsed_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Hashing two paths with the same Python bytes twice each, and two paths with the same notebook bytes twice each, calls compile once per distinct content."""
     calls: list[object] = []
@@ -844,10 +979,8 @@ def test_each_content_is_parsed_once(tmp_path: Path, monkeypatch: pytest.MonkeyP
         return builtins.compile(*args, **kwargs)
 
     monkeypatch.setattr(code_hash_module, "compile", counting_compile, raising=False)
-    # A marker no other test writes, so no earlier call has cached these contents.
-    marker = uuid.uuid4().hex
-    python_bytes = f"# {marker}\n{_BASE_SOURCE}".encode("utf-8")
-    notebook = _notebook([_code_cell(f"# {marker}\nvalue = 1")])
+    python_bytes = _BASE_SOURCE.encode("utf-8")
+    notebook = _notebook([_code_cell("value = 1")])
     notebook_bytes = json.dumps(notebook, indent=1).encode("utf-8")
     python_paths = [tmp_path / "one.py", tmp_path / "two.py"]
     notebook_paths = [tmp_path / "one.ipynb", tmp_path / "two.ipynb"]

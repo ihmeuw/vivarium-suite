@@ -79,8 +79,9 @@ class CodeHash:
     """The hash of the code of one file."""
 
     digest: str
-    """The hash. On one Python version, two files with the same code have the same
-    digest, and files with different code have different digests. It starts with
+    """The hash. When ``parsed`` is ``True``, two files with the same code have the same
+    digest on one Python version, and files with different code have different digests;
+    a bytes digest changes with any edit. It starts with
     ``ast:`` for a Python file hashed by its parsed code, ``nb:`` for a notebook hashed
     by its cells, and ``bytes:`` for a file hashed by its bytes."""
     parsed: bool
@@ -267,6 +268,15 @@ def _canonical_text(tree: ast.AST) -> str:
     return "".join(parts)
 
 
+class _JsonInt:
+    """A JSON integer of a notebook, kept as its text."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
 class _CodeCell(NamedTuple):
     """The source of a code cell and its parameter tags."""
 
@@ -310,8 +320,11 @@ def _notebook_code_hash(data: bytes) -> CodeHash:
 
 def _code_cells(data: bytes) -> list[_CodeCell] | None:
     """Return a notebook's code cells in order, or None if the data is not a notebook."""
+    # int() of a JSON integer raises past sys.get_int_max_str_digits(), for example on an
+    # output that the hash does not read. An integer is kept as neither int nor str, so
+    # that one where a source or a tag belongs is still rejected or ignored.
     try:
-        notebook = json.loads(data)
+        notebook = json.loads(data, parse_int=_JsonInt)
     except (ValueError, RecursionError):
         return None
     raw_cells = _raw_cells(notebook)
