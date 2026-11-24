@@ -32,6 +32,7 @@ from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend.command_step import (
     _check_names,
+    _check_nested,
     _check_paths,
     _check_shared_keys,
     _no_output,
@@ -408,20 +409,23 @@ def python_step(
     ------
     vivarium.dagger.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or an ``outputs``
-        key is a declared root input or resolves to the path of a different key that
-        is already registered. The message starts with ``Step '<name>':``, followed by
-        the registry's message, which names the file key. Raised before any key is
+        key is a declared root input, resolves to a path that is not strictly inside
+        the run's output directory, resolves to the path of a different key that is
+        already registered, or resolves to a path inside another step's output or one
+        that contains it. The message starts with ``Step '<name>':``, followed by the
+        registry's message, which names the file key. Raised before any key is
         registered.
     ValueError
         If an ``outputs`` key has an unsupported suffix (the message names the key, and
         with a mapping its output name); ``name`` is empty; the mapping is empty; the
         mapping has more than one entry and ``name`` is ``None``; an input name is
         reserved; an output name is not a valid Python identifier, is a Python keyword,
-        is reserved, or is also an input name; two outputs resolve to one path; or an
-        input and an output are one file. The messages for an empty name, an empty
-        mapping with no name, and several outputs with no name start with
-        ``python_step:``; every other message starts with ``Step '<name>':``. Every one
-        of these is raised before anything is registered.
+        is reserved, or is also an input name; two outputs resolve to one path; one
+        output's path is inside another's (the message names both and says one output
+        cannot hold another); or an input and an output are one file. The messages for
+        an empty name, an empty mapping with no name, and several outputs with no name
+        start with ``python_step:``; every other message starts with ``Step '<name>':``.
+        Every one of these is raised before anything is registered.
     """
     if isinstance(outputs, Mapping):
         return _compile_outputs(target, inputs, dict(outputs), registry, resources, name)
@@ -483,6 +487,7 @@ def _compile_outputs(
     try:
         for key in outputs.values():
             registry.check_output(key)
+        _check_nested(task_name, outputs, output_paths)
         nodes = {output: registry.register_output(key) for output, key in outputs.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None

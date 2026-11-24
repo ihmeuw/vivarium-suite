@@ -15,17 +15,22 @@ paths, so two runs write to distinct directories.
 This is a plain registry, not a container class: a pipeline builds its tasks into
 a list and hands them to :func:`~vivarium.dagger.backend.build.build`.
 Register every output before resolving inputs. The guards here are the ones pytask
-cannot make for us -- a hard error when two keys resolve to one path (which pytask
+cannot make for us -- a hard error when an output's path, with symbolic links followed,
+is not strictly inside the run's output directory (a step would otherwise write files
+that other runs share or that nobody declared), a hard error when one output's path is
+inside another's (a run directory is replaced on every run, and a file cannot hold
+another file), a hard error when two keys resolve to one path (which pytask
 would otherwise silently merge), a hard error when a step declares a root input's key
 as its output (which would otherwise shadow the root input for every consumer), a
 hard error when one key is registered as both a file output and a run directory
-output, and a did-you-mean on a mistyped key. An unresolved input (no producer and no root-input
-file) is caught here with a did-you-mean; everything heavier (a cycle, two tasks
-claiming one output) is left to pytask, which fails safe.
+output, and a did-you-mean on a mistyped key. Root inputs may point anywhere. An
+unresolved input (no producer and no root-input file) is caught here with a
+did-you-mean; everything heavier (a cycle, two tasks claiming one output) is left to
+pytask, which fails safe.
 """
 
 import difflib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
 from pytask import PathNode
@@ -80,6 +85,9 @@ class FileRegistry:
         self._key_by_path: dict[Path, FileKey] = {
             path: key for key, path in self._root_inputs.items()
         }
+        # Each folder that holds a registered output, up to the run directory, mapped to
+        # one output under it, so a new output that contains one is found in one lookup.
+        self._key_under: dict[Path, FileKey] = {}
 
     def path_for(self, key: FileKey) -> Path:
         """Return the resolved path a produced ``key`` resolves to for this run."""
@@ -151,17 +159,27 @@ class FileRegistry:
         ------
         WiringError
             If ``key`` is itself a declared root input, which a step cannot also
-            produce, if a different key -- an output or a declared root input --
-            already resolves to this key's path, or if ``key`` is already registered as
-            a directory output by :meth:`register_directory_output`. The last message
-            names the key.
+            produce; if ``key``'s path, with symbolic links followed, is not strictly
+            inside the run's output directory: when it is that directory itself, as for
+            ``.`` or an empty key, the message names the key and the directory and says
+            that an output must be a file or folder inside it, and when it is outside,
+            as for a key with a ``..`` that leaves it or an absolute key outside it, the
+            message names the key, its path and the run's output directory, and says to
+            use a key that stays inside it, or a root input for a file outside the run;
+            if a different key -- an output or a declared root input -- already resolves
+            to this key's path; if ``key``'s path is inside the path of another
+            registered output, or contains one (the message names both keys and both
+            paths, and says that a run directory is replaced on every run when the outer
+            output is a run directory, or that one output cannot hold another
+            otherwise); or if ``key`` is already registered as a directory output by
+            :meth:`register_directory_output`. The last message names the key.
+            Registering the same key again is not an error.
         """
         resolved = self.check_output(key)
         node = self._producers.get(key)
         if node is None:
             node = file_node(resolved)
-            self._producers[key] = node
-            self._key_by_path[resolved] = key
+            self._record(key, resolved, node)
         return node
 
     def register_directory_output(self, key: FileKey, sentinel: str) -> RunDirectoryNode:
@@ -190,17 +208,18 @@ class FileRegistry:
         Raises
         ------
         WiringError
-            If ``key`` is a declared root input or a different key already resolves to
-            the directory's path, with the same messages as :meth:`register_output`, or
-            if ``key`` is already registered as a file output by :meth:`register_output`,
-            with a message that names the key.
+            If ``key`` is a declared root input, if the directory's path is not strictly
+            inside the run's output directory, if a different key already resolves to
+            the directory's path, or if the directory is inside another registered
+            output or contains one, with the same messages as :meth:`register_output`;
+            or if ``key`` is already registered as a file output by
+            :meth:`register_output`, with a message that names the key.
         """
-        resolved = self._claim_output_path(key)
+        resolved = self._claim_output_path(key, directory=True)
         node = self._producers.get(key)
         if node is None:
             directory = run_directory_node(resolved, sentinel)
-            self._producers[key] = directory
-            self._key_by_path[resolved] = key
+            self._record(key, resolved, directory)
             return directory
         if not isinstance(node, RunDirectoryNode):
             raise WiringError(
@@ -209,8 +228,8 @@ class FileRegistry:
             )
         return node
 
-    def _claim_output_path(self, key: FileKey) -> Path:
-        """Return ``key``'s path, refusing a root input's key or a path another key holds."""
+    def _claim_output_path(self, key: FileKey, directory: bool = False) -> Path:
+        """Return ``key``'s path, refusing it if no output may have that key or path."""
         source = self._root_inputs.get(key)
         if source is not None:
             raise WiringError(
@@ -218,12 +237,45 @@ class FileRegistry:
                 "also produce it."
             )
         resolved = self.path_for(key)
+        run_dir = self.path_for(".")
+        if resolved == run_dir:
+            raise WiringError(
+                f"output {key!r} resolves to the run's output directory {run_dir} itself; "
+                "an output must be a file or folder inside it."
+            )
+        if run_dir not in resolved.parents:
+            raise WiringError(
+                f"output {key!r} resolves to {resolved} (with symbolic links followed), "
+                f"which is not inside the run's output directory {run_dir}; use a key that "
+                "stays inside it, or declare a file outside the run as a root input."
+            )
         claimant = self._key_by_path.get(resolved)
         if claimant is not None and claimant != key:
             raise WiringError(
                 f"keys {claimant!r} and {key!r} resolve to one path {resolved}."
             )
+        self._check_nesting(key, resolved, run_dir, directory)
         return resolved
+
+    def _check_nesting(
+        self, key: FileKey, path: Path, run_dir: Path, directory: bool
+    ) -> None:
+        """Refuse ``path`` if it is inside another registered output's path or holds one."""
+        for parent in _folders_between(path, run_dir):
+            outer = self._key_by_path.get(parent)
+            if outer is not None and outer in self._producers:
+                is_run_dir = isinstance(self._producers[outer], RunDirectoryNode)
+                raise _nesting_error((key, path), (outer, parent), is_run_dir)
+        inner = self._key_under.get(path)
+        if inner is not None and inner != key:
+            raise _nesting_error((inner, self.path_for(inner)), (key, path), directory)
+
+    def _record(self, key: FileKey, path: Path, node: PathNode) -> None:
+        """Register ``node`` as ``key``'s output at ``path``."""
+        self._producers[key] = node
+        self._key_by_path[path] = key
+        for parent in _folders_between(path, self.path_for(".")):
+            self._key_under.setdefault(parent, key)
 
     def resolve_input(self, key: FileKey) -> PathNode:
         """Resolve an input ``key`` to the node that produces it, or a root-input file.
@@ -277,6 +329,30 @@ class FileRegistry:
             f"input {key!r} is unresolved: no registered producer and no root input. "
             f"{ending}"
         )
+
+
+def _folders_between(path: Path, run_dir: Path) -> Iterator[Path]:
+    """Yield each folder that holds ``path``, up to but not including ``run_dir``."""
+    for parent in path.parents:
+        if parent == run_dir:
+            return
+        yield parent
+
+
+def _nesting_error(
+    inner: tuple[FileKey, Path], outer: tuple[FileKey, Path], outer_is_run_dir: bool
+) -> WiringError:
+    """Return the error for an output whose path is inside another output's path."""
+    if outer_is_run_dir:
+        reason = (
+            "a run directory is replaced on every run, so no other output may be inside it"
+        )
+    else:
+        reason = "one output cannot hold another"
+    return WiringError(
+        f"output {inner[0]!r} at {inner[1]} is inside output {outer[0]!r} at {outer[1]}; "
+        f"{reason}."
+    )
 
 
 def _closest_key(key: FileKey, known: list[FileKey]) -> FileKey | None:

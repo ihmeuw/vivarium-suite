@@ -1722,3 +1722,192 @@ def test_add_task_accepts_a_consumer_before_its_producer_when_it_is_added(
     p.add_task(_command_task("producer", a))
 
     assert [task.name for task in freeze(p).tasks] == ["consumer", "producer"]
+
+
+# Outputs stay inside the run and out of each other
+
+
+_ESCAPED = "../escaped.csv"
+"""An output key whose path is outside the run's output directory."""
+
+
+def _outside_message(tmp_path: Path, key: str) -> str:
+    """Return the registry's message for the output ``key`` of a run under ``tmp_path / "out"``."""
+    with pytest.raises(WiringError) as info:
+        FileRegistry(tmp_path / "out", "run1").register_output(key)
+    return str(info.value)
+
+
+def _escaping(kind: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``arguments`` of a step of ``kind`` with its one data output at ``_ESCAPED``."""
+    escaping = dict(arguments)
+    if kind == "python":
+        escaping["outputs"] = _ESCAPED
+    else:
+        [name] = arguments["outputs"]
+        escaping["outputs"] = {name: _ESCAPED}
+    return escaping
+
+
+@pytest.mark.parametrize("kind", ["python", "command", "notebook"])
+def test_a_step_whose_output_leaves_the_run_is_refused_when_added(
+    tmp_path: Path, kind: str
+) -> None:
+    """add_python_step, add_command_step and add_notebook_step with an output key '../escaped.csv' raise WiringError starting "Step '<name>':" with the registry's outside message, and the step is not added."""
+    p = _pipeline(tmp_path)
+    arguments = _escaping(kind, _arguments(kind, tmp_path, "escape", name="escape"))
+
+    with pytest.raises(WiringError) as info:
+        _add(p, kind, arguments)
+
+    message = str(info.value)
+    assert message.startswith("Step 'escape':"), message
+    assert _outside_message(tmp_path, _ESCAPED) in message, message
+    assert freeze(p).tasks == ()
+    for key in _output_keys(kind, arguments):
+        assert not _registered(p, key), key
+
+
+def test_a_notebook_step_whose_executed_notebook_leaves_the_run_is_refused(
+    tmp_path: Path,
+) -> None:
+    """add_notebook_step with executed='../run.ipynb' raises WiringError starting "Step '<name>':" with the outside message, and nothing is registered."""
+    notebook = write_source_notebook(tmp_path / "report.ipynb")
+    p = Pipeline(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError) as info:
+        p.add_notebook_step(
+            notebook, executed="../run.ipynb", env="notebook_env", name="report"
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'report':"), message
+    assert _outside_message(tmp_path, "../run.ipynb") in message, message
+    assert freeze(p).tasks == ()
+    assert not _registered(p, "../run.ipynb")
+
+
+def test_a_step_whose_second_output_leaves_the_run_registers_no_output(
+    tmp_path: Path,
+) -> None:
+    """add_command_step with outputs {'a': 'ok.csv', 'b': '../escaped.csv'} raises WiringError and 'ok.csv' is not registered, so a later step may claim it."""
+    p = Pipeline(tmp_path / "out", "run1")
+
+    with pytest.raises(WiringError):
+        p.add_command_step(
+            "touch {a} {b}", outputs={"a": "ok.csv", "b": _ESCAPED}, name="pair"
+        )
+
+    assert not _registered(p, "ok.csv")
+    p.add_python_step(_constant, inputs={}, outputs="ok.csv", name="later")
+    assert [task.name for task in freeze(p).tasks] == ["later"]
+
+
+def test_a_step_whose_output_is_inside_a_simulation_run_directory_is_refused(
+    tmp_path: Path,
+) -> None:
+    """After add_simulation_step with outputs 'sims/toy', add_python_step with output 'sims/toy/extra.csv' raises WiringError starting "Step '<name>':" naming both keys and saying a run directory is replaced on every run."""
+    model = tmp_path / "model"
+    p = Pipeline(tmp_path / "out", "run1")
+    p.add_simulation_step(
+        spec=write_spec(model / "spec.yaml"),
+        branches=write_branches(model / "branches.yaml"),
+        outputs="sims/toy",
+        env="simulation_env",
+        options={"project": "proj_test", "no_slack": True},
+        name="toy",
+    )
+
+    with pytest.raises(WiringError) as info:
+        p.add_python_step(_constant, inputs={}, outputs="sims/toy/extra.csv", name="extra")
+
+    message = str(info.value)
+    assert message.startswith("Step 'extra':"), message
+    assert "'sims/toy'" in message, message
+    assert "'sims/toy/extra.csv'" in message, message
+    assert "a run directory is replaced on every run" in message, message
+    assert [task.name for task in freeze(p).tasks] == ["toy"]
+
+
+_NESTED_OUTPUTS = {"command": ("x", "x/y.csv"), "python": ("x.parquet", "x.parquet/y.csv")}
+"""For each kind, an output key and a second key inside it; a python output needs a suffix."""
+
+
+def _add_nesting_step(p: Pipeline, kind: str) -> None:
+    """Add to ``p`` a step 'pair' of ``kind`` whose two outputs are ``_NESTED_OUTPUTS[kind]``."""
+    outer, inner = _NESTED_OUTPUTS[kind]
+    if kind == "command":
+        p.add_command_step("touch {a} {b}", outputs={"a": outer, "b": inner}, name="pair")
+    else:
+        p.add_python_step(
+            _split, inputs={}, outputs={"population": outer, "deaths": inner}, name="pair"
+        )
+
+
+@pytest.mark.parametrize("kind", ["command", "python"])
+def test_a_step_whose_two_outputs_nest_is_refused_and_registers_neither(
+    tmp_path: Path, kind: str
+) -> None:
+    """add_command_step with outputs {'a': 'x', 'b': 'x/y.csv'}, and add_python_step with a two-entry mapping the same way, raises ValueError, as for two outputs of one step on one path, starting "Step '<name>':", naming both outputs with their keys and paths and saying one output cannot hold another; afterwards neither key is registered, so a later step can claim each."""
+    outer, inner = _NESTED_OUTPUTS[kind]
+
+    for key in (outer, inner):
+        p = Pipeline(tmp_path / "out", "run1")
+        registry = _registry_of(p)
+
+        with pytest.raises(ValueError) as info:
+            _add_nesting_step(p, kind)
+
+        message = str(info.value)
+        assert message.startswith("Step 'pair':"), message
+        for nested in (outer, inner):
+            assert repr(nested) in message, message
+            assert str(registry.path_for(nested)) in message, message
+        assert "one output cannot hold another" in message, message
+        assert not _registered(p, outer)
+        assert not _registered(p, inner)
+        p.add_command_step("touch {out}", outputs={"out": key}, name="later")
+        assert [task.name for task in freeze(p).tasks] == ["later"], key
+
+
+def test_a_notebook_step_whose_output_is_inside_its_executed_notebook_is_refused(
+    tmp_path: Path,
+) -> None:
+    """add_notebook_step with executed 'x.ipynb' and outputs {'o': 'x.ipynb/y.csv'} raises ValueError starting "Step '<name>':", naming the executed key and the output and saying one output cannot hold another; nothing is registered, so a later step can claim the executed key."""
+    notebook = write_source_notebook(tmp_path / "report.ipynb", "o = 'unset'")
+    p = Pipeline(tmp_path / "out", "run1")
+
+    with pytest.raises(ValueError) as info:
+        p.add_notebook_step(
+            notebook,
+            executed="x.ipynb",
+            env="notebook_env",
+            outputs={"o": "x.ipynb/y.csv"},
+            name="report",
+        )
+
+    message = str(info.value)
+    assert message.startswith("Step 'report':"), message
+    assert "'x.ipynb'" in message, message
+    assert "'x.ipynb/y.csv'" in message, message
+    assert "one output cannot hold another" in message, message
+    assert not _registered(p, "x.ipynb")
+    assert not _registered(p, "x.ipynb/y.csv")
+    p.add_command_step("touch {out}", outputs={"out": "x.ipynb"}, name="later")
+    assert [task.name for task in freeze(p).tasks] == ["later"]
+
+
+def test_a_refused_notebook_step_registers_no_output(tmp_path: Path) -> None:
+    """add_notebook_step whose executed notebook key is valid but whose second output key is '../escaped.csv' raises WiringError, and afterwards the executed notebook's key is not registered, so a later step can claim it."""
+    p = _pipeline(tmp_path)
+    arguments = _escaping(
+        "notebook", _arguments("notebook", tmp_path, "escape", name="escape")
+    )
+    executed = arguments["executed"]
+
+    with pytest.raises(WiringError):
+        _add(p, "notebook", arguments)
+
+    assert not _registered(p, executed)
+    p.add_command_step("touch {out}", outputs={"out": executed}, name="later")
+    assert [task.name for task in freeze(p).tasks] == ["later"]

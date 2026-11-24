@@ -194,21 +194,18 @@ def simulation_step(
     ------
     vivarium.dagger.backend.wiring.WiringError
         If ``artifact`` resolves to no producer and no root input, or ``outputs`` is a
-        declared root input, resolves to the path of a different registered key, or is
-        already registered as a file output. The message starts with
-        ``Step '<name>':``, followed by the registry's message, which names the artifact
-        key.
+        declared root input, resolves to the path of a different registered key, is
+        already registered as a file output, resolves to a path that is not strictly
+        inside the registry's run output directory (such as ``.``, ``..`` or an absolute
+        path outside it), or is inside another registered output or contains one, since
+        the step replaces that directory on every run. The message starts with
+        ``Step '<name>':``, followed by the registry's message, which names the key.
     ValueError
         If ``name`` is empty, with the message ``simulation_step: name must be a
         non-empty string, got ''.`` Also raised before anything is registered, with a
         message that starts with ``Step '<name>':``, if:
 
         - ``env`` is empty, or ``outputs`` is empty or ends in ``/``;
-        - ``outputs`` resolves to a path that is not strictly inside the registry's
-          output directory, such as ``.``, ``..`` or an absolute path outside it, since
-          the step replaces that directory on every run; the message names ``outputs``
-          and the output directory, and says that ``outputs`` must name a directory
-          under the output directory;
         - ``spec`` or ``branches`` does not exist or is not a file (the message names
           the path);
         - ``options`` has no ``project`` key;
@@ -235,13 +232,6 @@ def simulation_step(
             f"in '/', got {outputs!r}."
         )
     run_dir = registry.path_for(outputs)
-    output_dir = registry.path_for(".")
-    if output_dir not in run_dir.parents:
-        raise ValueError(
-            f"Step '{step}': the outputs key {outputs!r} is not inside the registry's "
-            f"output directory {output_dir}; outputs must name a directory under the output "
-            "directory, since the step replaces that directory on every run."
-        )
     if not env:
         raise ValueError(f"Step '{step}': env must be a non-empty string, got {env!r}.")
     spec_path = _existing_file(step, "spec", spec)

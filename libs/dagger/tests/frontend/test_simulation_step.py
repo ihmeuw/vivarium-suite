@@ -667,8 +667,6 @@ def _definition_errors(model: _Model) -> dict[str, dict[str, Any]]:
         "empty-env": {"env": ""},
         "empty-outputs": {"outputs": "", "name": "toy"},
         "outputs-ends-in-a-slash": {"outputs": "sims/toy/", "name": "toy"},
-        "outputs-is-the-output-directory": {"outputs": ".", "name": "toy"},
-        "outputs-is-absolute": {"outputs": str(model.base / "elsewhere"), "name": "toy"},
         "missing-spec": {"spec": missing},
         "spec-is-a-directory": {"spec": directory},
         "missing-branches": {"branches": missing},
@@ -687,8 +685,6 @@ _DEFINITION_ERRORS = [
     "empty-env",
     "empty-outputs",
     "outputs-ends-in-a-slash",
-    "outputs-is-the-output-directory",
-    "outputs-is-absolute",
     "missing-spec",
     "spec-is-a-directory",
     "missing-branches",
@@ -736,27 +732,6 @@ def test_empty_outputs_or_one_ending_in_a_slash_is_rejected(
     message = _value_error(model, outputs=outputs, name="toy")
 
     assert message.startswith("Step 'toy':"), message
-
-
-@pytest.mark.parametrize("outputs", [".", "..", "sims/../..", "/tmp/sims/toy"])
-def test_outputs_outside_the_output_directory_is_rejected(
-    model: _Model, outputs: str
-) -> None:
-    """outputs '.', '..' or an absolute path outside the output directory raises ValueError starting "Step '<name>':", naming outputs and the output directory and saying outputs must name a directory under it."""
-    registry = model.registry()
-    output = model.base / "out" / "run1"
-
-    with pytest.raises(ValueError) as excinfo:
-        _step(model, registry, outputs=outputs, name="toy")
-
-    message = str(excinfo.value)
-    assert message.startswith("Step 'toy':"), message
-    assert outputs in message, message
-    assert str(output) in message, message
-    assert "under" in message, message
-    with pytest.raises(WiringError):
-        registry.resolve_input(outputs)
-    assert registry.key_for(registry.path_for(outputs)) is None
 
 
 @pytest.mark.parametrize("argument", ["spec", "branches"])
@@ -1725,3 +1700,41 @@ def test_describe_simulation_failure_keeps_the_scratch_wording_without_one_worke
     _write_message(model, _COUNTS_MESSAGE)
     for error in _command_failures():
         assert describe_simulation_failure(task, error) == _COUNTS_MESSAGE
+
+
+# Outputs stay inside the run
+
+
+@pytest.mark.parametrize("outputs", [".", "..", "sims/../..", "/tmp/sims/toy"])
+def test_a_simulation_run_directory_outside_the_run_is_a_wiring_error(
+    model: _Model, outputs: str
+) -> None:
+    """simulation_step with an outputs key whose path is not strictly inside the registry's run output directory raises WiringError (not ValueError) starting "Step '<name>':" with the registry's outside message, and nothing is registered."""
+    with pytest.raises(WiringError) as expected:
+        model.registry().register_directory_output(outputs, _SENTINEL)
+    registry = model.registry()
+
+    with pytest.raises((WiringError, ValueError)) as excinfo:
+        _step(model, registry, outputs=outputs, name="toy")
+
+    assert excinfo.type is WiringError, excinfo.value
+    assert str(excinfo.value) == f"Step 'toy': {expected.value}"
+    with pytest.raises(WiringError):
+        registry.resolve_input(outputs)
+    assert registry.key_for(registry.path_for(outputs)) is None
+
+
+def test_a_simulation_run_directory_over_an_existing_file_output_is_refused(
+    model: _Model,
+) -> None:
+    """With 'sims/toy/extra.csv' already registered as a file output, simulation_step with outputs 'sims/toy' raises WiringError naming both keys and saying a run directory is replaced on every run."""
+    registry = model.registry()
+    registry.register_output(f"{_KEY}/extra.csv")
+
+    with pytest.raises(WiringError) as excinfo:
+        _step(model, registry, outputs=_KEY, name="toy")
+
+    message = str(excinfo.value)
+    assert f"'{_KEY}'" in message, message
+    assert f"'{_KEY}/extra.csv'" in message, message
+    assert "a run directory is replaced on every run" in message, message
