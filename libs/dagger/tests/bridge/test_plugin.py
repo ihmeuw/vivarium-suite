@@ -17,6 +17,7 @@ from vivarium.dagger.bridge.execute import RUNS_DIR
 from vivarium.dagger.bridge.plugin import (
     DEFAULT_CLUSTER,
     DEFAULT_MAX_ATTEMPTS,
+    DEFAULT_SETTLE_MARGIN,
     pytask_parse_config,
     pytask_post_parse,
 )
@@ -49,6 +50,7 @@ _BRIDGE_KEYS = (
     "jobmon_max_attempts",
     "jobmon_resource_scales",
     "jobmon_timeout",
+    "jobmon_settle_margin",
 )
 """The configuration keys that the bridge sets and reads."""
 
@@ -62,6 +64,7 @@ def _set_by_build() -> dict[str, Any]:
         "jobmon_max_attempts": 5,
         "jobmon_resource_scales": {"memory": 0.25, "runtime": 0.75},
         "jobmon_timeout": 7200,
+        "jobmon_settle_margin": 120,
     }
 
 
@@ -75,6 +78,7 @@ def _parsed_config(pm: PluginManager, **flags: bool) -> dict[str, Any]:
         "jobmon_max_attempts": DEFAULT_MAX_ATTEMPTS,
         "jobmon_resource_scales": None,
         "jobmon_timeout": None,
+        "jobmon_settle_margin": DEFAULT_SETTLE_MARGIN,
         "dry_run": False,
         "explain": False,
         "pdb": False,
@@ -127,7 +131,7 @@ def test_importing_the_plugin_imports_neither_execute_nor_jobmon() -> None:
 
 
 def test_parse_config_sets_every_default() -> None:
-    """pytask_parse_config on a config without the bridge's keys sets jobmon False, jobmon_cluster DEFAULT_CLUSTER, jobmon_resources {}, jobmon_max_attempts DEFAULT_MAX_ATTEMPTS, jobmon_resource_scales None and jobmon_timeout None."""
+    """pytask_parse_config on a config without the bridge's keys sets jobmon False, jobmon_cluster DEFAULT_CLUSTER, jobmon_resources {}, jobmon_max_attempts DEFAULT_MAX_ATTEMPTS, jobmon_resource_scales None, jobmon_timeout None and jobmon_settle_margin DEFAULT_SETTLE_MARGIN."""
     config: dict[str, Any] = {"dry_run": False}
 
     pytask_parse_config(config)
@@ -140,6 +144,7 @@ def test_parse_config_sets_every_default() -> None:
         "jobmon_max_attempts": DEFAULT_MAX_ATTEMPTS,
         "jobmon_resource_scales": None,
         "jobmon_timeout": None,
+        "jobmon_settle_margin": DEFAULT_SETTLE_MARGIN,
     }
     assert config["dry_run"] is False
 

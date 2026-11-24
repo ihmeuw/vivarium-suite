@@ -168,6 +168,11 @@ def squashed(text: str) -> str:
     return "".join(_ANSI.sub("", text).split())
 
 
+def plain(text: str) -> str:
+    """Return ``text`` without ANSI escapes, with each run of whitespace as one space."""
+    return " ".join(_ANSI.sub("", text).split())
+
+
 def build_root(tmp_path: Path) -> Path:
     """Return the root of the builds under ``tmp_path``."""
     return tmp_path / "state"
