@@ -1,3 +1,8 @@
+**5.3.0 - 11/24/26**
+
+- Add an ``absolute`` argument to ``get()`` and ``get_tree()`` to resolve a key
+  path from the root tree
+
 **5.2.2 - 11/17/26**
 
 - Cap ``vivarium-dependencies`` below 3.0.0

@@ -1,3 +1,4 @@
+import copy
 import pickle
 import re
 import textwrap
@@ -733,6 +734,320 @@ class TestGetTree:
             match=re.escape("No value at key mapping '['outer_layer_3', 'whoops']'."),
         ):
             tree.get_tree(["outer_layer_3", "whoops"])
+
+
+class TestAbsolutePaths:
+    """Tests for the ``absolute`` argument of ``ConfigTree.get`` and ``ConfigTree.get_tree``."""
+
+    @staticmethod
+    def _make_tree(layers: list[str] | None = None) -> ConfigTree:
+        """Build a tree whose key names recur at different depths with different values."""
+        data: dict[str, Any] = {
+            "x": "root_x",
+            "c": "root_c",
+            "a": {
+                "x": "a_x",
+                "b": {"x": "a_b_x", "c": {"z": "a_b_c_z"}},
+            },
+            "b": {"x": "b_x"},
+        }
+        return ConfigTree(data, layers=layers if layers else ["base"])
+
+    def test_default_is_relative(self) -> None:
+        """``get`` and ``get_tree`` resolve from the called tree when ``absolute`` is omitted."""
+        tree = self._make_tree()
+        sub = tree.a
+
+        assert sub.get("x") == sub.get("x", absolute=False) == "a_x"
+        assert sub.get(["b", "x"]) == sub.get(["b", "x"], absolute=False) == "a_b_x"
+        assert sub.get("b") is sub.get("b", absolute=False) is tree.a.b
+        assert sub.get_tree("b") is sub.get_tree("b", absolute=False) is tree.a.b
+
+    def test_get_value_from_subtree(self) -> None:
+        """``get`` with ``absolute=True`` on a nested subtree returns the leaf value at the path from the root."""
+        tree = self._make_tree()
+        deep = tree.a.b
+
+        assert deep.get("x", absolute=True) == "root_x"
+        assert deep.get(["b", "x"], absolute=True) == "b_x"
+        assert deep.get(["a", "x"], absolute=True) == "a_x"
+        assert deep.get(["a", "b", "c", "z"], absolute=True) == "a_b_c_z"
+        assert tree.a.get(["a", "b", "x"], absolute=True) == "a_b_x"
+
+    def test_get_subtree_from_subtree(self) -> None:
+        """``get`` with ``absolute=True`` on a nested subtree returns the subtree when the path ends at a tree."""
+        tree = self._make_tree()
+        deep = tree.a.b.c
+
+        result = deep.get("b", absolute=True)
+        assert isinstance(result, ConfigTree)
+        assert result is tree.b
+        assert deep.get("a", absolute=True) is tree.a
+        assert deep.get(["a", "b"], absolute=True) is tree.a.b
+        assert deep.get(["a", "b", "c"], absolute=True) is deep
+
+    def test_get_tree_from_subtree(self) -> None:
+        """``get_tree`` with ``absolute=True`` on a nested subtree returns the subtree at the path from the root."""
+        tree = self._make_tree()
+        deep = tree.a.b.c
+
+        result = deep.get_tree("b", absolute=True)
+        assert isinstance(result, ConfigTree)
+        assert result is tree.b
+        assert result.to_dict() == {"x": "b_x"}
+        assert deep.get_tree("a", absolute=True) is tree.a
+        assert deep.get_tree(["a", "b"], absolute=True) is tree.a.b
+        assert deep.get_tree(["a", "b", "c"], absolute=True) is deep
+
+    def test_root_absolute_matches_relative(self) -> None:
+        """On the root tree, ``absolute=True`` and ``absolute=False`` return the same result."""
+        tree = self._make_tree()
+
+        value_paths: list[str | list[str]] = ["x", "c", ["a", "x"], ["a", "b", "c", "z"]]
+        for keys in value_paths:
+            assert tree.get(keys, absolute=True) == tree.get(keys, absolute=False)
+
+        tree_paths: list[str | list[str]] = ["a", "b", ["a", "b"], ["a", "b", "c"]]
+        for keys in tree_paths:
+            assert tree.get(keys, absolute=True) is tree.get(keys, absolute=False)
+            assert tree.get_tree(keys, absolute=True) is tree.get_tree(keys, absolute=False)
+
+        missing_paths: list[str | list[str]] = ["missing", ["a", "missing"], ["x", "deeper"]]
+        for keys in missing_paths:
+            assert (
+                tree.get(keys, "some_default", absolute=True)
+                == tree.get(keys, "some_default", absolute=False)
+                == "some_default"
+            )
+
+    def test_same_path_differs_relative_and_absolute(self) -> None:
+        """A key path that resolves both relatively and absolutely from a subtree gives each result."""
+        tree = self._make_tree()
+        sub = tree.a
+        deep = tree.a.b
+
+        assert sub.get("x") == "a_x"
+        assert sub.get("x", absolute=True) == "root_x"
+
+        assert sub.get(["b", "x"]) == "a_b_x"
+        assert sub.get(["b", "x"], absolute=True) == "b_x"
+
+        assert sub.get("b") is tree.a.b
+        assert sub.get("b", absolute=True) is tree.b
+        assert sub.get_tree("b") is tree.a.b
+        assert sub.get_tree("b", absolute=True) is tree.b
+
+        assert deep.get("x") == "a_b_x"
+        assert deep.get("x", absolute=True) == "root_x"
+
+    def test_get_with_layer(self) -> None:
+        """``get`` with ``absolute=True`` and ``layer`` returns the value at that layer."""
+        tree = self._make_tree(layers=["base", "override"])
+        tree.update({"x": "root_x_override"}, layer="override")
+        deep = tree.a.b
+
+        assert deep.get("x", layer="base", absolute=True) == "root_x"
+        assert deep.get("x", layer="override", absolute=True) == "root_x_override"
+        assert deep.get("x", absolute=True) == "root_x_override"
+        # The relative leaf of the same name is unaffected by the root override
+        assert deep.get("x", layer="base") == "a_b_x"
+
+        # ["b", "x"] has no value at the override layer
+        with pytest.raises(MissingLayerError):
+            deep.get(["b", "x"], layer="override", absolute=True)
+
+    def test_get_marks_leaf_accessed(self) -> None:
+        """``get`` with ``absolute=True`` marks the leaf accessed, so the root's ``unused_keys`` omits it."""
+        tree = self._make_tree()
+        all_leaves = {"x", "c", "a.x", "a.b.x", "a.b.c.z", "b.x"}
+        assert set(tree.unused_keys()) == all_leaves
+
+        deep = tree.a.b
+        assert deep.get(["b", "x"], absolute=True) == "b_x"
+
+        # Only the absolutely-addressed leaf is marked, not the relative "b.x" under deep
+        assert set(tree.unused_keys()) == all_leaves - {"b.x"}
+
+        assert deep.get("x", absolute=True) == "root_x"
+        assert set(tree.unused_keys()) == all_leaves - {"b.x", "x"}
+
+    def test_subtrees_from_update_at_any_depth(self) -> None:
+        """Subtrees that ``update`` creates at any depth resolve absolute key paths from the root."""
+        tree = ConfigTree(layers=["base", "override"])
+        tree.update({"x": "root_x"}, layer="base")
+        tree.update({"a": {"b": {"c": {"x": "a_b_c_x"}}}}, layer="base")
+        tree.a.b.update({"d": {"e": {"x": "a_b_d_e_x"}}}, layer="override")
+        tree.update({"f": {"x": "f_x"}}, layer="override")
+
+        subtrees = [tree.a, tree.a.b, tree.a.b.c, tree.a.b.d, tree.a.b.d.e, tree.f]
+        for sub in subtrees:
+            assert sub.get("x", absolute=True) == "root_x"
+            assert sub.get(["a", "b", "d", "e", "x"], absolute=True) == "a_b_d_e_x"
+            assert sub.get_tree("f", absolute=True) is tree.f
+
+    def test_get_unresolved_returns_default(self) -> None:
+        """``get`` with ``absolute=True`` returns ``default_value`` when only the relative path resolves."""
+        tree = self._make_tree()
+        sub = tree.a
+        deep = tree.a.b
+
+        # Relative paths resolve
+        assert deep.get(["c", "z"]) == "a_b_c_z"
+        assert sub.get(["b", "c", "z"]) == "a_b_c_z"
+        assert sub.get(["b", "c"]) is tree.a.b.c
+
+        # Absolute paths do not
+        assert deep.get(["c", "z"], absolute=True) is None
+        assert deep.get(["c", "z"], "some_default", absolute=True) == "some_default"
+        assert sub.get(["b", "c", "z"], default_value=7, absolute=True) == 7
+        assert sub.get(["b", "c"], "some_default", absolute=True) == "some_default"
+        with_layer = sub.get(["b", "c"], "some_default", layer="base", absolute=True)
+        assert with_layer == "some_default"
+
+    def test_get_tree_unresolved_raises(self) -> None:
+        """``get_tree`` with ``absolute=True`` raises ``ConfigurationKeyError`` when the absolute path does not resolve."""
+        tree = self._make_tree()
+        sub = tree.a
+        deep = tree.a.b
+
+        # Relative paths resolve
+        assert sub.get_tree(["b", "c"]) is tree.a.b.c
+        assert deep.get_tree("c") is tree.a.b.c
+
+        with pytest.raises(ConfigurationKeyError):
+            sub.get_tree(["b", "c"], absolute=True)
+        with pytest.raises(ConfigurationKeyError):
+            deep.get_tree("missing", absolute=True)
+        # A key in the path resolves to a value rather than a sub-tree
+        with pytest.raises(ConfigurationKeyError):
+            deep.get_tree(["x", "deeper"], absolute=True)
+
+    def test_get_tree_ends_at_value_raises(self) -> None:
+        """``get_tree`` with ``absolute=True`` raises ``ConfigurationError`` when the absolute path ends at a value."""
+        tree = self._make_tree()
+        deep = tree.a.b
+
+        # Relatively "c" is a tree; absolutely it is a value
+        assert deep.get_tree("c") is tree.a.b.c
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            deep.get_tree("c", absolute=True)
+        assert not isinstance(exc_info.value, ConfigurationKeyError)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            deep.get_tree(["b", "x"], absolute=True)
+        assert not isinstance(exc_info.value, ConfigurationKeyError)
+
+    def test_empty_keys_raises(self) -> None:
+        """``get`` and ``get_tree`` with ``absolute=True`` raise ``ValueError`` for an empty key path."""
+        tree = self._make_tree()
+        for t in [tree, tree.a, tree.a.b]:
+            with pytest.raises(ValueError):
+                t.get([], absolute=True)
+            with pytest.raises(ValueError):
+                t.get([], "some_default", absolute=True)
+            with pytest.raises(ValueError):
+                t.get_tree([], absolute=True)
+
+    def test_pickle_round_trip(self) -> None:
+        """A subtree of an unpickled tree resolves absolute key paths from the unpickled root."""
+        tree = self._make_tree(layers=["base", "override"])
+        unpickled = pickle.loads(pickle.dumps(tree))
+        # Changes to the original after pickling must not be visible from the copy
+        tree.update({"x": "changed"}, layer="override")
+        tree.update({"new_key": "new_value"}, layer="base")
+
+        deep = unpickled.a.b
+        assert deep.get("x", absolute=True) == "root_x"
+        assert deep.get("new_key", absolute=True) is None
+        assert deep.get("b", absolute=True) is unpickled.b
+        assert deep.get_tree("b", absolute=True) is unpickled.b
+        assert deep.get_tree(["a", "b"], absolute=True) is deep
+        assert deep.get_tree("b", absolute=True) is not tree.b
+
+    def test_deepcopy(self) -> None:
+        """A subtree of a deep-copied tree resolves absolute key paths from the copy's root, not the original."""
+        tree = self._make_tree(layers=["base", "override"])
+        copied = copy.deepcopy(tree)
+        tree.update({"x": "changed"}, layer="override")
+        tree.update({"new_key": "new_value"}, layer="base")
+
+        deep = copied.a.b
+        assert deep.get("x", absolute=True) == "root_x"
+        assert deep.get("new_key", absolute=True) is None
+        assert deep.get("b", absolute=True) is copied.b
+        assert deep.get_tree("b", absolute=True) is copied.b
+        assert deep.get_tree(["a", "b"], absolute=True) is deep
+        assert deep.get_tree("b", absolute=True) is not tree.b
+
+        # The original's subtrees still resolve from the original root
+        assert tree.a.b.get("x", absolute=True) == "changed"
+        assert tree.a.b.get_tree("b", absolute=True) is tree.b
+
+    def test_deleted_subtree_uses_former_root(self) -> None:
+        """A subtree removed from its parent with ``del`` still resolves absolute key paths from its former root."""
+        tree = self._make_tree()
+
+        deep = tree.a.b
+        del tree.a["b"]
+        assert "b" not in tree.a
+        assert deep.get("x", absolute=True) == "root_x"
+        assert deep.get_tree("b", absolute=True) is tree.b
+        # The former root no longer contains the deleted subtree
+        assert deep.get(["a", "b"], "some_default", absolute=True) == "some_default"
+
+        sub = tree.a
+        del tree.a
+        assert "a" not in tree
+        assert sub.get("x", absolute=True) == "root_x"
+        assert sub.get(["b", "x"], absolute=True) == "b_x"
+        assert sub.get_tree("b", absolute=True) is tree.b
+        assert sub.get("a", "some_default", absolute=True) == "some_default"
+        with pytest.raises(ConfigurationKeyError):
+            sub.get_tree("a", absolute=True)
+
+    def test_dotted_string_is_one_key(self) -> None:
+        """With ``absolute=True``, a string that contains dots is one key, not a key path."""
+        tree = ConfigTree(
+            {"p.q": "literal", "p": {"q": "nested"}, "s": {"t": {"v": "s_t_v"}}}
+        )
+        deep = tree.s.t
+
+        assert deep.get("p.q", absolute=True) == "literal"
+        assert deep.get(["p.q"], absolute=True) == "literal"
+        assert deep.get(["p", "q"], absolute=True) == "nested"
+
+        # Without the literal key, the dotted string does not fall back to the nested path
+        nested_only = ConfigTree({"p": {"q": "nested"}, "s": {"t": {"v": "s_t_v"}}})
+        deep = nested_only.s.t
+        assert deep.get("p.q", "some_default", absolute=True) == "some_default"
+        assert deep.get(["p", "q"], absolute=True) == "nested"
+
+    def test_tree_built_from_subtree_is_own_root(self) -> None:
+        """A tree built from a subtree with ``ConfigTree(subtree)`` or ``update`` resolves absolute key paths from itself."""
+        original = self._make_tree()
+        sub = original.a
+
+        constructed = ConfigTree(sub)
+        assert constructed.get("x", absolute=True) == "a_x"
+        assert constructed.b.get("x", absolute=True) == "a_x"
+        assert constructed.b.c.get("x", absolute=True) == "a_x"
+        assert constructed.b.get_tree("b", absolute=True) is constructed.b
+        assert constructed.b.get_tree("b", absolute=True) is not original.b
+        # "c" is a root key of the original only
+        assert constructed.b.get("c", "some_default", absolute=True) == "some_default"
+
+        other = ConfigTree({"y": "other_y"})
+        other.update(sub)
+        assert other.b.get("x", absolute=True) == "a_x"
+        assert other.b.c.get("y", absolute=True) == "other_y"
+        assert other.b.get_tree("b", absolute=True) is other.b
+        assert other.b.get_tree("b", absolute=True) is not original.b
+        assert other.b.get("c", "some_default", absolute=True) == "some_default"
+
+        # The source subtree still resolves from its own root
+        assert sub.get("x", absolute=True) == "root_x"
+        assert sub.get_tree("b", absolute=True) is original.b
 
 
 def test_equals() -> None:

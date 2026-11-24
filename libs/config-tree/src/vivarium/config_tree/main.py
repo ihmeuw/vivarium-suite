@@ -277,6 +277,7 @@ class ConfigTree:
     _children: dict[str, ConfigTree | ConfigNode]
     _frozen: bool
     _name: str
+    _root: ConfigTree
 
     def __init__(
         self,
@@ -321,6 +322,8 @@ class ConfigTree:
         self.__dict__["_children"] = {}
         self.__dict__["_frozen"] = False
         self.__dict__["_name"] = name
+        # Subtrees overwrite this with their parent's root in _set_with_metadata.
+        self.__dict__["_root"] = self
         self.update(data, layer=self._layers[0], source="initial data")
 
     def freeze(self) -> None:
@@ -371,7 +374,11 @@ class ConfigTree:
         return result
 
     def get(
-        self, keys: str | list[str], default_value: Any = None, layer: str | None = None
+        self,
+        keys: str | list[str],
+        default_value: Any = None,
+        layer: str | None = None,
+        absolute: bool = False,
     ) -> Any:
         """Return the value at the key or key path in the outermost layer.
 
@@ -385,6 +392,11 @@ class ConfigTree:
         layer
             The name of the layer to retrieve the value from. Is ignored if a
             ConfigTree is returned.
+        absolute
+            Whether to resolve ``keys`` from the root of the tree that contains
+            this ``ConfigTree`` instead of from this ``ConfigTree``. A
+            ``ConfigTree`` removed from its parent still resolves absolute key
+            paths from its former root.
 
         Returns
         -------
@@ -412,20 +424,26 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        node = self._get_node(keys)
+        start = self._root if absolute else self
+        node = start._get_node(keys)
         if node is None:
             return default_value
         if isinstance(node, ConfigTree):
             return node
         return node.get_value(layer=layer)
 
-    def get_tree(self, keys: str | list[str]) -> ConfigTree:
+    def get_tree(self, keys: str | list[str], absolute: bool = False) -> ConfigTree:
         """Return the ``ConfigTree`` at the key or key path from the outermost layer.
 
         Parameters
         ----------
         keys
             The key or key path to look up from the outermost layer.
+        absolute
+            Whether to resolve ``keys`` from the root of the tree that contains
+            this ``ConfigTree`` instead of from this ``ConfigTree``. A
+            ``ConfigTree`` removed from its parent still resolves absolute key
+            paths from its former root.
 
         Returns
         -------
@@ -449,11 +467,12 @@ class ConfigTree:
         if isinstance(keys, str):
             keys = [keys]
 
-        tree = self._get_node(keys)
+        start = self._root if absolute else self
+        tree = start._get_node(keys)
         if tree is None:
             # Name the shortest prefix that fails rather than the whole path.
             depth = next(
-                d for d in range(1, len(keys) + 1) if self._get_node(keys[:d]) is None
+                d for d in range(1, len(keys) + 1) if start._get_node(keys[:d]) is None
             )
             raise ConfigurationKeyError(f"No value at key mapping '{keys[:depth]}'.")
         if not isinstance(tree, ConfigTree):
@@ -632,7 +651,9 @@ class ConfigTree:
 
         if isinstance(value, dict):
             if name not in self:
-                self._children[name] = ConfigTree(layers=list(self._layers), name=name)
+                subtree = ConfigTree(layers=list(self._layers), name=name)
+                subtree.__dict__["_root"] = self._root
+                self._children[name] = subtree
             if isinstance(self._children[name], ConfigNode):
                 name = f"{self._name}.{name}" if self._name else name
                 raise ConfigurationError(
