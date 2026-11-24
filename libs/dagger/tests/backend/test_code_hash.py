@@ -1,5 +1,6 @@
 """Tests of the code hash of Python files and notebooks."""
 
+import ast
 import builtins
 import copy
 import json
@@ -395,6 +396,102 @@ def test_a_missing_python_file_raises_oserror(tmp_path: Path) -> None:
     """python_file_hash raises OSError for a path that does not exist."""
     with pytest.raises(OSError):
         python_file_hash(tmp_path / "missing.py")
+
+
+# Python content given as bytes or text
+
+
+@pytest.mark.parametrize(
+    "data",
+    [_BASE_SOURCE.encode("utf-8"), b"def broken(:\n    return 1\n", b"\xef\xbb\xbfx = 1\n"],
+    ids=["parsed", "syntax_error", "byte_order_mark"],
+)
+def test_the_hash_of_python_bytes_equals_the_hash_of_a_file_that_holds_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, data: bytes
+) -> None:
+    """python_code_hash of a Python file's bytes equals python_file_hash of a file that holds the same bytes, for code that parses, code with a syntax error and code after a byte-order mark."""
+    path = tmp_path / "module.py"
+    path.write_bytes(data)
+
+    from_bytes = code_hash_module.python_code_hash(data)
+    # An empty cache, so the file's result is computed and not taken from the one above.
+    monkeypatch.setattr(code_hash_module, "_results", {})
+    from_file = python_file_hash(path)
+
+    assert from_bytes.digest == from_file.digest
+    assert from_bytes == from_file
+
+
+def test_the_hash_of_python_bytes_uses_the_per_content_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """python_code_hash of bytes that python_file_hash has hashed, and of the same bytes a second time, does not parse them again."""
+    calls: list[object] = []
+
+    def counting_compile(*args: Any, **kwargs: Any) -> Any:
+        calls.append(args[0] if args else kwargs.get("source"))
+        return builtins.compile(*args, **kwargs)
+
+    monkeypatch.setattr(code_hash_module, "compile", counting_compile, raising=False)
+    data = _BASE_SOURCE.encode("utf-8")
+    path = tmp_path / "module.py"
+    path.write_bytes(data)
+
+    from_file = python_file_hash(path)
+    from_bytes = [code_hash_module.python_code_hash(data) for _ in range(2)]
+
+    assert len(calls) == 1, f"compile was called {len(calls)} times for one Python content"
+    assert from_bytes == [from_file, from_file]
+
+
+@pytest.mark.parametrize("kind", ["text", "bytes"])
+def test_parse_source_returns_a_tree_or_none_for_a_syntax_error(kind: str) -> None:
+    """parse_source returns a module's syntax tree for code that parses and None for code with a syntax error, given as text or as bytes."""
+    sources = ["import alpha\nVALUE = 1\n", "def broken(:\n    return 1\n"]
+    good, broken = (
+        [source.encode("utf-8") for source in sources] if kind == "bytes" else sources
+    )
+
+    tree = code_hash_module.parse_source(good)
+
+    assert isinstance(tree, ast.Module)
+    assert [type(statement) for statement in tree.body] == [ast.Import, ast.Assign]
+    assert code_hash_module.parse_source(broken) is None
+
+
+def test_parse_source_returns_a_tree_for_a_top_level_await() -> None:
+    """parse_source returns a module's syntax tree for source whose top level awaits, as a notebook cell may."""
+    tree = code_hash_module.parse_source("await x\n")
+
+    assert isinstance(tree, ast.Module)
+    [statement] = tree.body
+    assert isinstance(statement, ast.Expr)
+    assert isinstance(statement.value, ast.Await)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("def broken(:\n    return 1\n", id="syntax_error"),
+        pytest.param("(" * 1000 + ")" * 1000, id="nested_parentheses"),
+        pytest.param("x = " + "-" * 100_000 + "1\n", id="nested_unary_operators"),
+    ],
+)
+def test_parse_source_returns_none_for_source_it_cannot_parse(source: str) -> None:
+    """parse_source returns None, without raising, for a syntax error and for source nested deeper than the parser accepts, such as 1000 nested parentheses or 100000 nested unary minus signs."""
+    assert code_hash_module.parse_source(source) is None
+
+
+def test_parse_source_is_not_changed_by_the_warning_filters() -> None:
+    """parse_source returns a tree for code that gives a SyntaxWarning with warnings turned into errors, and leaves warnings.filters as it was."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        before = list(warnings.filters)
+        tree = code_hash_module.parse_source('pattern = "\\d"\n')
+        after = list(warnings.filters)
+
+    assert isinstance(tree, ast.Module)
+    assert after == before
 
 
 # Notebooks: what is not part of the hash

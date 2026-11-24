@@ -28,6 +28,7 @@ from tests.bridge import step_targets
 from tests.bridge.helpers import (
     LONG_RECORD_INTERVAL,
     SHORT_RECORD_INTERVAL,
+    always_stale,
     bound_names,
     constant_steps,
     failure_of,
@@ -666,12 +667,15 @@ def test_a_result_with_empty_output_adds_no_report_sections(tmp_path: Path) -> N
 def test_a_step_with_the_default_code_identity_is_submitted_on_every_bridged_build(
     tmp_path: Path, fake_jobmon: FakeJobmon
 ) -> None:
-    """With the default always-stale code identity, a second bridged build of the unchanged harness fixture binds a plan with both steps again and reports both SUCCESS."""
+    """With an always-stale code identity, the default of a task that declares none, a second bridged build of the unchanged harness fixture binds a plan with both steps again and reports both SUCCESS."""
     fx = build_fixture(tmp_path)
+    # A python step now gets a code identity from its imports, which can let the
+    # harness's steps skip, so the always-stale default is set here explicitly.
+    tasks = always_stale(fx.tasks)
     ran = dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
-    assert outcomes(build(fx.tasks, fx.state, jobmon=True)) == ran
+    assert outcomes(build(tasks, fx.state, jobmon=True)) == ran
 
-    session = build(fx.tasks, fx.state, jobmon=True)
+    session = build(tasks, fx.state, jobmon=True)
 
     assert outcomes(session) == ran
     assert bound_names(fake_jobmon) == [list(fx.steps), list(fx.steps)]

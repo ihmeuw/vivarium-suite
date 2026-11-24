@@ -5,16 +5,19 @@ context manager, and plan/run helpers that the per-feature staleness scenarios
 assert against. It is importable and runs without the cluster extra -- it drives
 the backend ``build``/``preview`` directly.
 
-Every step defaults to an always-stale code identity, so it re-runs on every build.
-:func:`stable_code_id` gives a step a fixed code identity instead, so scenarios can
-exercise skipping, forcing, and resuming before steps can declare a code fingerprint.
+A ``python_step`` task gets a code identity from the files its function imports, which
+is established for the fixture's steps only when ``vivarium-dagger`` is an editable
+install, since their functions are in this module; in a wheel install they re-run on
+every build. :func:`stable_code_id` gives a step a fixed code identity instead, so
+scenarios that exercise skipping, forcing and resuming do not depend on how ``dagger``
+is installed.
 
 :class:`FakeJobmon` stands in for Jobmon, so a build with ``jobmon=True`` runs its steps
 through the bridge's node runner with no Jobmon server. It can also stop the run as Jobmon
 does when it raises, or interrupt it with SIGTERM or a ``KeyboardInterrupt``.
 
 The selective-staleness assertions (perturb one input, exactly its cone re-runs) are not
-here yet; they arrive with the code fingerprint.
+here yet.
 """
 
 from __future__ import annotations
@@ -40,8 +43,7 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.frontend.python_step import python_step
 
-# TODO(MIC-7760): add selective-staleness scenario helpers once a step can declare a
-# code fingerprint.
+# TODO(MIC-7759): add selective-staleness scenario helpers on top of stable_code_id.
 
 _ADAPTER_FUNCTIONS = ("check_environment", "bind", "run")
 """The functions of the Jobmon adapter that :class:`FakeJobmon` replaces."""
@@ -76,9 +78,9 @@ class _StableCodeNode:
 def stable_code_id(name: str, version: str = "1") -> PNode:
     """Return a code identity whose state is fixed by ``version``.
 
-    A task given this ``code_id`` is skipped on a rebuild when nothing else changed, which
-    the always-stale default hides. Scenarios use it to exercise skip, force, and resume;
-    changing ``version`` stands in for a code edit.
+    A task given this ``code_id`` is skipped on a rebuild when nothing else changed,
+    whether or not its code can be placed. Scenarios use it to exercise skip, force, and
+    resume; changing ``version`` stands in for a code edit.
 
     Parameters
     ----------

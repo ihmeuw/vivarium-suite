@@ -14,19 +14,32 @@ The task's ``run`` is a :class:`PythonStepRun`, a data-only object rather than a
 closure, so the same step can be rebuilt in another process from the target's
 import reference (:func:`target_reference`) and the output suffix or suffixes.
 
-Code identity defaults to always-stale: a per-target code fingerprint is deferred,
-so in this cut a step re-runs on every build.
+The step's code identity is a
+:class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at the file
+of the target's module and names the target, so the step runs again when a first-party
+file that it imports changes or when it calls another function, and a build in which
+neither happened can skip it. A target that is not a plain function at a module's top
+level, such as a lambda, a closure, a bound method, a callable object or a function that
+a decorator wraps outside the function's own module, gets an always-stale identity, so its
+step runs on every build, as does a target whose module has no source file, such as a
+function defined in an interactive session.
 """
 
 import importlib
 import inspect
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from importlib.machinery import SOURCE_SUFFIXES
 from pathlib import Path
+from types import FunctionType
 from typing import Any, cast
 
 import pandas as pd
+from pytask import PNode
 
+from vivarium.dagger.backend.code_identity import CodeIdentityNode
+from vivarium.dagger.backend.nodes import AlwaysStaleNode
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend.command_step import (
@@ -348,6 +361,7 @@ def python_step(
     registry: FileRegistry,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
+    repository_root: Path | str | None = None,
 ) -> Task:
     """Compile ``target`` into one backend task wired through ``registry``.
 
@@ -383,6 +397,10 @@ def python_step(
         The step's name, which becomes the task name. Defaults to ``outputs`` when it
         is a key, or to its one key when it is a mapping with one entry. Required when
         it has more than one.
+    repository_root
+        The pipeline's repository root, whose files are first-party code for the step's
+        code identity, or ``None``; see
+        :class:`~vivarium.dagger.frontend.builder.Pipeline`.
 
     Returns
     -------
@@ -391,7 +409,11 @@ def python_step(
         name's suffix), whose outputs are the registry's node for ``outputs`` under
         ``"__output__"``, or for each mapped key under its name, and whose inputs are the
         resolved nodes, ready to collect into a list and hand to ``build`` or
-        ``preview``.
+        ``preview``. Its ``code_id`` is a
+        :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at
+        the file of ``target``'s module, or an always-stale node when ``target`` is not
+        a plain function at a module's top level, is wrapped by a decorator outside
+        its own module, or comes from a module with no source file.
 
     Raises
     ------
@@ -413,7 +435,9 @@ def python_step(
         of these is raised before anything is registered.
     """
     if isinstance(outputs, Mapping):
-        return _compile_outputs(target, inputs, dict(outputs), registry, resources, name)
+        return _compile_outputs(
+            target, inputs, dict(outputs), registry, resources, name, repository_root
+        )
     task_name = outputs if name is None else name
     if not task_name:
         raise ValueError(f"python_step: name must be a non-empty string, got {task_name!r}.")
@@ -428,8 +452,6 @@ def python_step(
         node = registry.register_output(outputs)
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=run,
@@ -437,6 +459,7 @@ def python_step(
         outputs={_PYTHON_OUTPUT: node},
         resources={} if resources is None else resources,
         env=None,
+        code_id=_code_identity(task_name, target, repository_root),
     )
 
 
@@ -447,6 +470,7 @@ def _compile_outputs(
     registry: FileRegistry,
     resources: dict[str, Any] | None,
     name: str | None,
+    repository_root: Path | str | None,
 ) -> Task:
     """Compile a python step whose ``outputs`` maps output names to file keys."""
     task_name = _step_name(outputs, name, "python_step")
@@ -475,8 +499,6 @@ def _compile_outputs(
         nodes = {output: registry.register_output(key) for output, key in outputs.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=PythonStepRun(target, suffixes),
@@ -484,4 +506,57 @@ def _compile_outputs(
         outputs=nodes,
         resources={} if resources is None else resources,
         env=None,
+        code_id=_code_identity(task_name, target, repository_root),
     )
+
+
+def _code_identity(
+    task_name: str, target: Callable[..., Any], repository_root: Path | str | None
+) -> PNode:
+    """Return the step's code identity, starting at the file of ``target``'s module.
+
+    The identity is named ``"<step>::code"`` and records the reference of ``target``
+    after ``inspect.unwrap``, and its module name, from which the code part finds the
+    packages that importing the module runs. A wrapped target counts only when its module
+    exposes it under the unwrapped function's qualified name, as a decorator applied at
+    definition does. A target that is not then a plain module-level function, such as one
+    wrapped where the pipeline is defined, or whose module has no source file, such as a
+    function defined in an interactive session, gets an always-stale identity.
+    """
+    name = f"{task_name}::code"
+    function = _plain_function(target)
+    if function is None:
+        return AlwaysStaleNode(name=name)
+    module = sys.modules.get(function.__module__)
+    file = getattr(module, "__file__", None)
+    if not isinstance(file, str) or not file.endswith(tuple(SOURCE_SUFFIXES)):
+        return AlwaysStaleNode(name=name)
+    root = None if repository_root is None else Path(repository_root).resolve()
+    return CodeIdentityNode(
+        name=name,
+        start=Path(file).resolve(),
+        repository_root=root,
+        target=f"{function.__module__}:{function.__qualname__}",
+        module=function.__module__,
+    )
+
+
+def _plain_function(target: Callable[..., Any]) -> FunctionType | None:
+    """Return ``target`` unwrapped if it is a plain module-level function, else None."""
+    try:
+        function: object = inspect.unwrap(target)
+    except ValueError:
+        return None
+    if not inspect.isfunction(function) or function.__closure__:
+        return None
+    if "<locals>" in function.__qualname__ or function.__name__ == "<lambda>":
+        return None
+    if function is not target:
+        # Only a decorator applied at definition leaves the wrapper under the function's
+        # own name; a wrapper made elsewhere runs code that the module does not hold.
+        exposed: object = sys.modules.get(function.__module__)
+        for part in function.__qualname__.split("."):
+            exposed = getattr(exposed, part, None)
+        if exposed is not target:
+            return None
+    return function

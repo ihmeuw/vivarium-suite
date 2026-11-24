@@ -133,9 +133,10 @@ example it runs ``population`` and ``adults``, and ``summary.csv`` is not writte
    $ dagger run -c pipeline.py --local
 
 Without ``--until``, ``dagger run`` runs every stale step. A step whose inputs and code
-are unchanged since it last succeeded is skipped. Every Python step re-runs on
-every build for now, because a step cannot yet declare a fingerprint of its code; until
-it can, this run executes all three steps again.
+are unchanged since it last succeeded is skipped. A Python step's code is the set of
+first-party files that its function imports (see `What a Python step's code is`_). This
+example declares no repository root, so its steps' code cannot be placed and this run
+executes all three steps again.
 
 ``dagger run`` prints pytask's progress table while the steps run.
 
@@ -148,9 +149,54 @@ Forcing a step
 
 ``dagger force`` runs each named step even when it is current, together with every other
 stale step. A step that has never run is run as usual. A step downstream of a forced
-step runs again only if the forced step's output changed. Until a step can declare a
-fingerprint of its code, every Python step is stale on every build, so in this
-example ``adults`` and ``summary`` run as well.
+step runs again only if the forced step's output changed. This example declares no
+repository root, so every Python step in it is stale on every build, and ``adults`` and
+``summary`` run as well.
+
+What a Python step's code is
+----------------------------
+
+A Python step's code identity is the set of first-party files that its function's module
+imports, directly or through other files, each with a hash of its code, together with
+any data file whose path one of those modules passes to a function while it is imported,
+such as ``open`` or ``pandas.read_csv``, when the path is built from the module's own
+location. ``dagger`` computes such a path only from ``__file__`` and string literals with
+``/``, ``.parent``, ``.parents[n]``, ``.joinpath()``, ``.resolve()``, ``.absolute()``,
+``Path()``, ``PurePath()``, ``os.path.join()``, ``os.path.dirname()``, ``str()`` and
+``os.fspath()``, through module-level names assigned once. Any other form, such as an
+f-string, and a data file read only inside a function, even one that runs at import, is
+not part of it. A call that writes a file, such as ``open(path, "w")``, is not a read. The
+files are read, not imported. A comment or a formatting edit does not change the hash, and
+a code edit to any listed file makes the step stale.
+The identity also names the function, so pointing a step at another function makes it
+stale.
+
+First-party code is code under the pipeline's repository root and the source of any
+editable install in the environment ``dagger`` runs in. Name the top directory of the
+repository that holds the pipeline's code when you make the pipeline, for a definition in
+the repository's top directory:
+
+.. code-block:: python
+
+   pipeline = Pipeline(output_root, "baseline", repository_root=Path(__file__).parent)
+
+Without a repository root, only editable installs are first-party. A step's code cannot be
+placed, and the step runs on every build, when its function is not in first-party code,
+when its code imports a file that is neither first-party nor installed, when its code
+builds a data path from its own location that leads outside the first-party code, when a
+first-party package that it imports with ``*`` has an ``__all__`` that is not a literal
+list or tuple of strings, when two different files would get the same name, or when a
+first-party file cannot be read. So does a step whose function is not a plain function at
+a module's top level, such as a lambda, a closure or a callable object, or a function that
+is wrapped after it was defined, such as ``step = cached(lib.make)``. A decorator applied
+where the function is defined, ``@cached`` with ``functools.wraps``, keeps the identity.
+
+Installed packages are not part of the code identity, so upgrading a package such as
+``pandas`` does not make a step stale; force the steps that depend on it.
+
+Until ``dagger`` can recognise code it cannot follow, a step whose code starts another
+process or imports a module by a computed name can be skipped although that code
+changed. Force such a step when you change that code.
 
 Running through Jobmon
 ----------------------
@@ -241,9 +287,9 @@ confirm, the run stops in the same way.
 
 If the ``dagger`` process is killed outright, the steps that it had already recorded stay
 recorded. A step that finished in the last few seconds before the kill was not recorded
-and runs again. The next run skips a recorded step only when it is current, and until a
-step can declare a fingerprint of its code, a Python step is stale on every build, so it
-runs again as well.
+and runs again. The next run skips a recorded step only when it is current. A Python
+step whose code cannot be placed (see `What a Python step's code is`_), and every
+command, notebook and simulation step, is stale on every build, so it runs again as well.
 
 Simulation steps
 ----------------
@@ -448,7 +494,8 @@ naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each 
 is a separate file, so a ``dagger preview`` reason about one output names it by its
 key, such as ``file 'children.csv' is missing``. In this example the line for ``split``
 shows only ``step 'population' would run first``, because ``population`` is a Python
-step and re-runs on every build for now.
+step whose code this example does not place in a repository root, so it re-runs on every
+build.
 
 A step with one output is named after its key by default. A step with more than one
 output has no default name, so pass ``name=``. An output name must be a valid Python
@@ -526,9 +573,9 @@ from a particular one, so that both kinds of run find the same tool.
 The command, with its paths, is part of the step's state, so a changed command makes
 the step stale. A change to a script that the command runs does not, unless the script
 is an input. Declare the script as a root input and pass it through a placeholder, as
-the example does with ``{script}``. Like a Python step, a command step re-runs on
-every build for now, because a step cannot yet declare a fingerprint of its code; these
-rules apply once it can.
+the example does with ``{script}``. A command step re-runs on every build for now,
+because its code identity does not yet start at its script; these rules apply once it
+does.
 
 Before the command runs, ``dagger`` creates the directory of each output. Outputs from
 an earlier run are not removed first, so the command must write every output on every

@@ -31,8 +31,9 @@ class Task:
     executes in the pipeline's own process, so it cannot declare one."""
     code_id: PNode | None = None
     """Node whose ``state()`` fingerprints the step's code. Omit it to default to an
-    :class:`~vivarium.dagger.backend.nodes.AlwaysStaleNode`, which re-runs
-    the step on every build until a code fingerprint is declared."""
+    :class:`~vivarium.dagger.backend.nodes.AlwaysStaleNode`, which re-runs the step on
+    every build. A python step built by the frontend gets a
+    :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode`."""
 
     def __post_init__(self) -> None:
         """Reject an empty name or a callable ``run`` with an env, and default an omitted

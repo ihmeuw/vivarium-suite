@@ -35,6 +35,7 @@ from vivarium.cluster_tools.core.cluster import interface as cluster_interface
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
+    always_stale,
     bound_names,
     failure_of,
     make_dir,
@@ -976,9 +977,12 @@ def test_two_builds_use_different_run_directories(
 ) -> None:
     """Two jobmon builds of the same pipeline, one right after the other, leave two run directories, and each build's recipes are only in its own."""
     fx = build_fixture(tmp_path)
+    # Both builds must submit the steps, which a code identity from the harness's
+    # imports could prevent.
+    tasks = always_stale(fx.tasks)
 
-    build(fx.tasks, fx.state, jobmon=True)
-    build(fx.tasks, fx.state, jobmon=True)
+    build(tasks, fx.state, jobmon=True)
+    build(tasks, fx.state, jobmon=True)
 
     used: list[Path] = []
     for plan in fake_jobmon.plans:

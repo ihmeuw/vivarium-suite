@@ -346,11 +346,12 @@ def test_each_step_method_adds_the_task_its_step_function_compiles(
 def test_each_step_methods_parameters_are_its_step_functions_without_registry(
     kind: str,
 ) -> None:
-    """Each step method's parameters after self are its step function's parameters without registry, in order, with the same names, kinds, defaults and annotations."""
+    """Each step method's parameters after self are its step function's parameters without those the pipeline supplies (registry, and repository_root for a python step), in order, with the same names, kinds, defaults and annotations."""
     function = inspect.signature(_STEP_FUNCTIONS[kind], eval_str=True)
     method = inspect.signature(getattr(Pipeline, f"add_{kind}_step"), eval_str=True)
 
-    expected = [param for param in function.parameters.values() if param.name != "registry"]
+    supplied = {"registry", "repository_root"}
+    expected = [param for param in function.parameters.values() if param.name not in supplied]
     actual = [param for param in method.parameters.values() if param.name != "self"]
     assert actual == expected
 

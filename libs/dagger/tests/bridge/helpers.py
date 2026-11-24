@@ -19,6 +19,7 @@ from pytask import ExecutionReport, Session, TaskOutcome
 from tests.bridge import step_targets
 from vivarium.dagger.backend.build import build
 from vivarium.dagger.backend.lock import RUN_LOCK_NAME
+from vivarium.dagger.backend.nodes import AlwaysStaleNode
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
@@ -85,6 +86,13 @@ def make_dir(path: Path) -> Path:
 def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
     """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
     return [with_stable_code_id(task, "2" if task.name in changed else "1") for task in tasks]
+
+
+def always_stale(tasks: Sequence[Task]) -> list[Task]:
+    """Return ``tasks`` with always-stale code identities, so every build runs them again."""
+    return [
+        replace(task, code_id=AlwaysStaleNode(name=f"{task.name}::code")) for task in tasks
+    ]
 
 
 def stable_fixture(directory: Path) -> Fixture:

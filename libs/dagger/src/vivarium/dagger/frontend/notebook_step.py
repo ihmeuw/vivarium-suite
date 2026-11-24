@@ -34,9 +34,8 @@ notebook's metadata, are not used. The declared environment therefore needs ``pa
 and ``ipykernel`` installed; the pipeline's own environment needs neither.
 
 The command, including every parameter value and path, is hashed with the step, so a
-changed parameter marks the step stale. Code identity defaults to always-stale, as for
-:func:`~vivarium.dagger.frontend.python_step.python_step`, so in this cut a notebook
-step re-runs on every build.
+changed parameter marks the step stale. Code identity defaults to always-stale, so a
+notebook step re-runs on every build until its code identity starts at its code cells.
 """
 
 import ast
@@ -221,8 +220,8 @@ def notebook_step(
         [registry.path_for(key) for key in output_keys.values()],
         values,
     )
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
+    # TODO(MIC-7759): a notebook step's code identity starts at its code cells, which no
+    # task covers yet; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=command,

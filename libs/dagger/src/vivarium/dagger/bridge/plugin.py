@@ -70,8 +70,9 @@ not killed, and it fails unless every step was recorded as successful. The bridg
 cancel the workflow, so its jobs that are already on compute nodes can still be running
 and writing outputs, and the next build prints a warning that names the run. The next
 build runs every step that was not recorded as successful and every step after one, and
-skips any other recorded step whose inputs and code identity are unchanged. With the
-default code identity no step counts as unchanged, so every step runs again. If the
+skips any other recorded step whose inputs and code identity are unchanged. A python
+step whose code cannot be placed, and every other kind of step, has an always-stale code
+identity and runs again. If the
 process is killed outright, for example once Slurm's grace period after SIGTERM is over,
 the steps that it had recorded stay in the journal and the next build skips them as it
 skips any other recorded step. A step that was not yet recorded runs again, among them a

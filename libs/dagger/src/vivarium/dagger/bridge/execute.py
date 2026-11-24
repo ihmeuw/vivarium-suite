@@ -58,8 +58,9 @@ be running. Each run also keeps a state file (see :mod:`~vivarium.dagger.bridge.
 that gives its Jobmon workflow id even when the build is killed. To continue a stopped
 run, build again: the next build plans from the lockfile, so it runs every step that was
 not recorded as successful and every step after one, and skips any other recorded step
-whose inputs and code identity are unchanged. With the default code identity no step
-counts as unchanged, so every step runs again. :mod:`~vivarium.dagger.bridge.plugin` says
+whose inputs and code identity are unchanged. A python step whose code cannot be placed,
+and every other kind of step, has an always-stale code identity and runs again.
+:mod:`~vivarium.dagger.bridge.plugin` says
 what this means for the build's time limit.
 
 The hook does all of this while it holds the run lock on the build's root

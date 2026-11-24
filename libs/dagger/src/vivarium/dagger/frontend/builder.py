@@ -96,6 +96,14 @@ class Pipeline:
         :data:`~vivarium.dagger.constants.DEFAULT_RESOURCES` key by key, and the
         ``dagger`` command's options and each step's own ``resources=`` override them in
         turn. A run in this process ignores them. Defaults to none.
+    repository_root
+        The directory of the repository that holds the pipeline's own code. A python
+        step's code identity treats the files under it as first-party code, so an edit
+        to a file that a step imports from it re-runs the step, and a build in which no
+        such file changed can skip the step. A relative path is resolved against the
+        current directory when the pipeline is made. Defaults to none: then only the
+        directories of editable installs are first-party, and a python step whose code
+        is in an undeclared repository runs on every build.
 
     Raises
     ------
@@ -107,8 +115,9 @@ class Pipeline:
         empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a directory inside
         it (as for the run name ``.dagger``), since the run's outputs would then share
         a directory with the state of every run; or if ``state`` is a relative path,
-        which would move the run's state with the current directory. The message names
-        the run name or the state path.
+        which would move the run's state with the current directory; or if
+        ``repository_root`` is given and is not an existing directory. The message names
+        the run name, the state path or the repository root.
     TypeError
         If ``resources`` is not a mapping.
     """
@@ -120,6 +129,7 @@ class Pipeline:
         root_inputs: RootInputs | None = None,
         state: Path | str | None = None,
         resources: Mapping[str, Any] | None = None,
+        repository_root: Path | str | None = None,
     ) -> None:
         root = Path(output_root).resolve()
         _check_run_name(root, run_name)
@@ -137,11 +147,18 @@ class Pipeline:
                 "Pipeline resources must be a mapping, got "
                 f"{type(resources).__name__} {resources!r}."
             )
+        repository = None if repository_root is None else Path(repository_root).resolve()
+        if repository is not None and not repository.is_dir():
+            raise ValueError(
+                f"Pipeline repository_root {str(repository)!r} is not an existing "
+                "directory."
+            )
         self._output_root = root
         self._run_name = run_name
         self._state = state_dir
         self._registry = FileRegistry(root, run_name, root_inputs)
         self._resources: dict[str, Any] = {} if resources is None else dict(resources)
+        self._repository_root = repository
         self._tasks: list[Task] = []
         self._producers: dict[FileKey, str] = {}
         # Outputs of steps added with add_task, by resolved path: the registry does not
@@ -162,6 +179,11 @@ class Pipeline:
     def state(self) -> Path:
         """The absolute directory that holds the run's pytask state and its run lock."""
         return self._state
+
+    @property
+    def repository_root(self) -> Path | None:
+        """The resolved repository root of the pipeline's own code, or ``None``."""
+        return self._repository_root
 
     @property
     def resources(self) -> Mapping[str, Any]:
@@ -238,6 +260,7 @@ class Pipeline:
             registry=self._registry,
             resources=resources,
             name=name,
+            repository_root=self._repository_root,
         )
         self._add(task, keys)
 
