@@ -10,6 +10,7 @@ from their own modules; a task compiled with one is added with
 
 from vivarium.dagger.frontend.builder import Pipeline
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
+from vivarium.dagger.frontend.drawing import GraphError, graph
 from vivarium.dagger.frontend.execution import (
     PipelineError,
     RunInterrupted,
@@ -28,6 +29,7 @@ from vivarium.dagger.frontend.root_inputs import (
 
 __all__ = [
     "DefinitionError",
+    "GraphError",
     "LocationInputError",
     "Pipeline",
     "PipelineError",
@@ -38,6 +40,7 @@ __all__ = [
     "StepFailed",
     "load_pipeline",
     "location_inputs",
+    "graph",
     "location_key",
     "preview",
     "run",

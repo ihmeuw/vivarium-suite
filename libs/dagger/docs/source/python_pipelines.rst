@@ -6,17 +6,19 @@ Running a Python pipeline
 
 The ``dagger`` command runs a Python pipeline definition from the command line, as it
 runs a workflow YAML file (see :doc:`dagger`). It can preview which steps a run would
-execute and why, run every stale step or only the steps that a named step needs, and
-force a step to run even when it is current. It is installed with ``vivarium-dagger``.
+execute and why, run every stale step or only the steps that a named step needs, force a
+step to run even when it is current, print what each step reads, writes and runs, and
+draw the steps and the files between them as a graph. It is installed with
+``vivarium-dagger``.
 
 ``-c/--config`` tells the two apart: a value ending in ``.yaml`` or ``.yml`` is a
-workflow YAML file, and anything else is a pipeline definition. ``dagger preview`` and
-``dagger force`` take only pipeline definitions, and ``dagger restart`` takes only the
-output directory of a YAML workflow. The options of ``dagger run`` that override a YAML
-file's settings are refused for a pipeline definition, except ``-P/--project``,
-``-q/--queue`` and ``-m/--max-attempts``, which a pipeline definition uses when it runs
-through Jobmon. ``--until`` and ``--local`` are refused for a YAML file. Each refusal
-exits with status 2.
+workflow YAML file, and anything else is a pipeline definition. ``dagger preview``,
+``dagger force``, ``dagger show`` and ``dagger graph`` take only pipeline definitions,
+and ``dagger restart`` takes only the output directory of a YAML workflow. The options
+of ``dagger run`` that override a YAML file's settings are refused for a pipeline
+definition, except ``-P/--project``, ``-q/--queue`` and ``-m/--max-attempts``, which a
+pipeline definition uses when it runs through Jobmon. ``--until`` and ``--local`` are
+refused for a YAML file. Each refusal exits with status 2.
 
 By default, ``dagger run`` and ``dagger force`` run a pipeline definition's stale steps
 through Jobmon, as one Jobmon workflow, with each step on a compute node (see
@@ -162,6 +164,43 @@ directory, ``dagger show -c pipeline.py adults`` prints::
      output adults: 'adults.csv' at /home/user/model/output/example/adults.csv
      runs   mkdir -p /home/user/model/output/example || exit $?
             python /home/user/model/select_adults.py /home/user/model/output/example/population.csv /home/user/model/output/example/adults.csv
+
+
+Drawing a pipeline's graph
+--------------------------
+
+.. code-block:: console
+
+   $ dagger graph -c pipeline.py graph.mmd
+
+``dagger graph`` draws the definition's steps and the files between them to the file it
+is given, without running anything. The file is the only thing it writes, and, as for
+``dagger show``, it exits with status 2 if the pipeline's root cannot be written. The
+graph has a node for each step, labeled with its name and kind, and a node for each root
+input that a step reads and for each output that no step reads, labeled with its file
+key. There is one edge from a step to each step that reads files it writes, labeled with
+the keys of those files. The edges from root inputs and to final outputs have no label,
+because their nodes carry the keys. A file that a step reads but that is neither written
+by a step nor a root input, such as a notebook's source, is left out.
+
+The file's extension picks the format. ``.mmd`` writes Mermaid text, which GitHub, VS
+Code's Markdown preview and JupyterLab draw as a picture, and ``.md`` writes the same text
+in a Markdown code block. ``.dot`` or ``.gv`` writes Graphviz DOT text. ``.svg``, ``.png``
+and ``.pdf`` write an image and need Graphviz's ``dot`` program on ``PATH``, for example
+from ``conda install graphviz``; without it, ``dagger`` refuses these extensions and
+names the formats that work. If ``dot`` fails, no file is written. From Python,
+:func:`~vivarium.dagger.frontend.drawing.graph` does the same for a ``Pipeline``.
+
+For the example above, ``graph.mmd`` holds::
+
+   flowchart LR
+     s0["population<br/>python step"]
+     s1["adults<br/>python step"]
+     s2["summary<br/>python step"]
+     o0[/"summary.csv"/]
+     s0 -->|"population.parquet"| s1
+     s1 -->|"adults.parquet"| s2
+     s2 --> o0
 
 
 Running steps
