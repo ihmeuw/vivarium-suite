@@ -6,10 +6,11 @@ Running a Python pipeline
 
 The ``dagger`` command runs a Python pipeline definition from the command line, as it
 runs a workflow YAML file (see :doc:`dagger`). It can preview which steps a run would
-execute and why, run every stale step or only the steps that a named step needs, force a
-step to run even when it is current, print what each step reads, writes and runs, and
-draw the steps and the files between them as a graph. It is installed with
-``vivarium-dagger``.
+execute and why, run every step or only the steps that a named step needs, force named
+steps to run, print what each step reads, writes and runs, and draw the steps and the
+files between them as a graph. It is installed with ``vivarium-dagger``. This version
+is an alpha that runs every step on every run; `What the alpha does`_ says what that
+means.
 
 ``-c/--config`` tells the two apart: a value ending in ``.yaml`` or ``.yml`` is a
 workflow YAML file, and anything else is a pipeline definition. ``dagger preview``,
@@ -20,7 +21,7 @@ definition, except ``-P/--project``, ``-q/--queue`` and ``-m/--max-attempts``, w
 pipeline definition uses when it runs through Jobmon. ``--until`` and ``--local`` are
 refused for a YAML file. Each refusal exits with status 2.
 
-By default, ``dagger run`` and ``dagger force`` run a pipeline definition's stale steps
+By default, ``dagger run`` and ``dagger force`` run a pipeline definition's steps
 through Jobmon, as one Jobmon workflow, with each step on a compute node (see
 `Running through Jobmon`_). With ``--local``, they run the steps in this process
 instead. ``dagger preview`` never runs anything and never uses Jobmon.
@@ -28,6 +29,36 @@ instead. ``dagger preview`` never runs anything and never uses Jobmon.
 .. contents::
    :local:
    :depth: 1
+
+.. _what_the_alpha_does:
+
+What the alpha does
+-------------------
+
+This version of ``dagger`` is an alpha. Every step that a step method adds (python,
+notebook, command and simulation steps) runs on every ``dagger run`` and ``dagger
+force``, both with ``--local`` and through Jobmon. A step cannot yet declare a
+fingerprint of its code, so ``dagger`` gives each such step a new code identity on every
+build, and pytask counts every step as stale. A task added with
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task` keeps the code identity it
+was built with, so it can be skipped. In detail:
+
+- ``--until`` is the only way to leave steps out of a run.
+- ``dagger preview`` shows the steps in the order they would run, with pytask's reasons,
+  and every step as ``run``, except the steps that ``--until`` leaves out, which it shows
+  as ``skip <step>: not selected``. ``dagger show`` and ``dagger graph`` show which file
+  each step reads from which step.
+- ``dagger force`` runs the named steps, which would run anyway, so it runs the same
+  steps as ``dagger run``.
+- After a step fails or a run is interrupted, the next run runs every step again,
+  including the steps that had finished. ``dagger restart``, which continues a YAML
+  workflow from where it stopped, does not take a pipeline definition.
+- There is no pin of a run's inputs, no record of where an output came from, no check of
+  the GBD release a step used, and no early cutoff, which would let the steps after a
+  step whose output came out unchanged skip.
+
+The sections below say where a rule about skipping a step applies only once a step can
+declare a fingerprint of its code.
 
 Pipeline definitions
 --------------------
@@ -114,10 +145,12 @@ that never ran, it creates the state root, its ``pytask.toml`` and pytask's ``.p
 folder, and no output. It prints one line per step, in
 the order the definition adds the steps. A step that would run is printed as ``run <step>``,
 followed by pytask's reasons, separated by semicolons. A step that would not run is
-printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
-``--until`` leaves it out. A last line, such as ``2 of 3 steps would run.``, counts
-the steps that would run. Each reason names a file by its key, a step's code as
-``code of '<step>'``, and a step as ``step '<step>'``, never by a file path. For this
+printed as ``skip <step>: not selected``, because ``--until`` leaves it out. In the alpha
+every other step would run; once a step can declare a fingerprint of its code, a step
+whose inputs and code are unchanged will print as ``skip <step>: unchanged``. A last
+line, such as ``2 of 3 steps would run.``, counts the steps that would run. Each reason
+names a file by its key, a step's code as ``code of '<step>'``, and a step as
+``step '<step>'``, never by a file path. For this
 example, before its first run, the output starts like this::
 
     run  population: code of 'population' has no recorded state; step 'population' has no recorded state; file 'population.parquet' is missing
@@ -222,10 +255,10 @@ example it runs ``population`` and ``adults``, and ``summary.csv`` is not writte
 
    $ dagger run -c pipeline.py --local
 
-Without ``--until``, ``dagger run`` runs every stale step. A step whose inputs and code
-are unchanged since it last succeeded is skipped. Every Python step re-runs on
-every build for now, because a step cannot yet declare a fingerprint of its code; until
-it can, this run executes all three steps again.
+Without ``--until``, ``dagger run`` runs every step, so this run executes all three
+steps again. In the alpha every step is stale on every build (see
+`What the alpha does`_). Once a step can declare a fingerprint of its code, a step whose
+inputs and code are unchanged since it last succeeded will be skipped.
 
 ``dagger run`` prints pytask's progress table while the steps run.
 
@@ -236,20 +269,19 @@ Forcing a step
 
    $ dagger force -c pipeline.py --local population
 
-``dagger force`` runs each named step even when it is current, together with every other
-stale step. A step that has never run is run as usual. A step downstream of a forced
-step runs again only if the forced step's output changed. Until a step can declare a
-fingerprint of its code, every Python step is stale on every build, so in this
-example ``adults`` and ``summary`` run as well.
+``dagger force`` runs each named step, together with every other stale step. In the
+alpha every step is stale, so it runs the same steps as ``dagger run``: in this example,
+all three. It is for later, when a step can be current: it will then run a named step
+that a run would skip.
 
 Running through Jobmon
 ----------------------
 
 Without ``--local``, ``dagger run`` and ``dagger force`` plan the run in this process and
-then run every stale step as a task of one Jobmon workflow on the Slurm cluster. Each task
+then run every step as a task of one Jobmon workflow on the Slurm cluster. Each task
 runs one step on a compute node and waits for the steps it depends on. When the workflow
 ends, ``dagger`` records each step's result in the pipeline's state, exactly as a local
-run does, so a later run, with or without ``--local``, skips a step that is current.
+run does. In the alpha a later run still runs every step again.
 
 .. code-block:: console
 
@@ -321,23 +353,23 @@ or from another user, stops before it plans anything, prints the lock file and w
 it, and exits with status 1. A run with ``--local`` and a preview take no lock.
 
 In a Slurm allocation, ``dagger`` stops waiting for the workflow five minutes before the
-allocation ends, records the steps that finished, and reports the others; running the
-same command again continues the run. A run started from Python can change the five
-minutes with :func:`~vivarium.dagger.frontend.execution.run`'s ``jobmon_settle_margin=``,
-in seconds. Jobmon counts this time from when it starts to schedule the workflow's jobs,
-so a workflow that takes long to submit stops correspondingly later, and the margin must
+allocation ends, records the steps that finished, and reports the others. Running the
+same command again runs every step again, including the steps that finished. A run
+started from Python can change the five minutes with
+:func:`~vivarium.dagger.frontend.execution.run`'s ``jobmon_settle_margin=``, in seconds.
+Jobmon counts this time from when it starts to schedule the workflow's jobs, so a
+workflow that takes long to submit stops correspondingly later, and the margin must
 leave room for that. If the ``dagger`` process gets SIGTERM or SIGHUP while the workflow
 runs, it stops waiting in the same way, prints ``Interrupted.`` with the Jobmon workflow
-id, and says that running the same command again continues the run. It exits with status
-130. A signal that the process already ignores, as SIGHUP is under ``nohup``, stays
-ignored. In a Jupyter or IPython kernel, a signal does not stop the wait, and only the
-margin before the allocation ends does. If
-the connection of an interactive ``srun --pty`` session drops, Slurm kills ``dagger`` at
-once and nothing is recorded, so run a long build in a batch job, or start ``srun`` inside
-``tmux`` or ``screen`` on the login node. The workflow is not
-cancelled, so its jobs that already started can still be running; the next run warns
-about them. If you press Ctrl-C while the workflow runs, Jobmon asks whether to stop;
-if you confirm, the run stops in the same way.
+id, and says to run the same command again to run the pipeline again. It exits with
+status 130. A signal that the process already ignores, as SIGHUP is under ``nohup``,
+stays ignored. In a Jupyter or IPython kernel, a signal does not stop the wait, and only
+the margin before the allocation ends does. If the connection of an interactive
+``srun --pty`` session drops, Slurm kills ``dagger`` at once and nothing is recorded, so
+run a long build in a batch job, or start ``srun`` inside ``tmux`` or ``screen`` on the
+login node. The workflow is not cancelled, so its jobs that already started can still be
+running; the next run warns about them. If you press Ctrl-C while the workflow runs,
+Jobmon asks whether to stop; if you confirm, the run stops in the same way.
 
 Simulation steps
 ----------------
@@ -471,8 +503,8 @@ process, for example by calling ``sys.exit``, the build stops there and ``dagger
 the step that exited and its exit code.
 
 If you interrupt a run (Ctrl-C), ``dagger`` says that it was interrupted. The steps that
-finished before the interrupt are recorded, so running the same command again
-continues the run. `When a run through Jobmon stops`_ describes an interrupted run
+finished before the interrupt are recorded, but in the alpha running the same command
+again runs every step again. `When a run through Jobmon stops`_ describes an interrupted run
 through Jobmon.
 
 Exit status
@@ -562,8 +594,8 @@ Every key in the mapping is an output of the step. A later step reads one of the
 naming its key in ``inputs``, as ``summary`` does with ``adults.parquet``. Each output
 is a separate file, so a ``dagger preview`` reason about one output names it by its
 key, such as ``file 'children.csv' is missing``. In this example the line for ``split``
-shows only ``step 'population' would run first``, because ``population`` is a Python
-step and re-runs on every build for now.
+shows only ``step 'population' would run first``, because in the alpha ``population``
+runs on every build.
 
 A step with one output is named after its key by default. A step with more than one
 output has no default name, so pass ``name=``. An output name must be a valid Python
@@ -618,7 +650,7 @@ variable ``${VAR}`` as ``${{VAR}}``, and the ``awk`` program ``'{print $1}'`` as
 ``'{{print $1}}'``. A placeholder that is not an input or output name is refused when
 the definition is loaded, with the valid names and, when one is close, the closest one.
 The command does not have to use every name. An input that it does not name still runs
-the step after the input's producer and makes the step stale when the input changes.
+the step after the input's producer.
 
 The command runs under ``/bin/sh``, not bash, both with ``--local`` and on a compute
 node. On Ubuntu that is dash. Use POSIX sh syntax only: bash forms such as ``[[ ]]``,
@@ -638,12 +670,11 @@ environment ``dagger`` runs in put first, so that the command finds that environ
 ``python`` before the node's. Name the environment whenever the command needs a tool
 from a particular one, so that both kinds of run find the same tool.
 
-The command, with its paths, is part of the step's state, so a changed command makes
-the step stale. A change to a script that the command runs does not, unless the script
-is an input. Declare the script as a root input and pass it through a placeholder, as
-the example does with ``{script}``. Like a Python step, a command step re-runs on
-every build for now, because a step cannot yet declare a fingerprint of its code; these
-rules apply once it can.
+Like every step in the alpha, a command step runs on every build. Once a step can
+declare a fingerprint of its code, a changed command, or a change to any input, will make
+the step stale, but a change to a script that the command runs will not unless the
+script is an input. Declaring the script as a root input and passing it through a
+placeholder, as the example does with ``{script}``, prepares for that.
 
 Before the command runs, ``dagger`` creates the directory of each output. Outputs from
 an earlier run are not removed first, so the command must write every output on every

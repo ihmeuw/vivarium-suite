@@ -25,8 +25,9 @@ path. If nothing does, the definition fails to load with an error that names the
 and says ``input '<key>' is unresolved: declared as a root input but no file at
 <path>.`` A root input that no step reads is not checked. ``dagger`` does not read the
 file when the definition loads, so any check of its format or columns is the job of
-the function that returns the mapping. After a build, a change to a root input's
-contents makes the steps that read it stale. A step cannot produce a key that is a
+the function that returns the mapping. In the alpha every step runs on every build
+(see :ref:`what_the_alpha_does`); once a step can be current, a change to a root input's
+contents will make the steps that read it stale. A step cannot produce a key that is a
 root input; the ``Pipeline`` refuses such an output.
 
 Call any function that returns the mapping inside the definition's ``pipeline()``

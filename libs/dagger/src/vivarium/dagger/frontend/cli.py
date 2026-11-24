@@ -117,7 +117,7 @@ def run_definition(
     queue: str | None = None,
     max_attempts: int | None = None,
 ) -> None:
-    """Run every stale step of ``definition``, or only ``until`` and the steps they need.
+    """Run every step of ``definition``, or only ``until`` and the steps they need.
 
     Errors end the command with a message on standard error and an exit status. It is 2
     if the definition or the command is wrong, or, for a run through Jobmon, if Jobmon
@@ -126,8 +126,8 @@ def run_definition(
     Jobmon or to pass ``--local``. It is 1 if a step failed or exited, another run holds
     the pipeline's run lock (the message names the lock file and its holder), or the
     build stopped for another reason. It is 130 if the run was interrupted; the message
-    then names the Jobmon workflow id when the workflow was bound and says that running
-    the same command again continues the run.
+    then names the Jobmon workflow id when the workflow was bound and says to run the
+    same command again to run the pipeline again.
 
     Parameters
     ----------
@@ -135,7 +135,7 @@ def run_definition(
         The pipeline definition, as ``dagger``'s ``-c`` gives it.
     until
         Names of the steps to run with the steps they depend on; empty runs every
-        stale step.
+        step.
     local
         Run the steps in this process. Otherwise they run through the Jobmon bridge on
         the bridge's default cluster.
@@ -267,11 +267,12 @@ def force_definition(
     queue: str | None = None,
     max_attempts: int | None = None,
 ) -> None:
-    """Run each of ``steps`` even if it is current, with every other stale step.
+    """Run each of ``steps``, even if it is current, with every other stale step.
 
     ``definition``, ``local``, ``project``, ``queue`` and ``max_attempts`` and the
     errors are as for :func:`run_definition`. ``steps`` names the steps to run even if
-    they are current.
+    they are current. In this alpha every step is stale, so this runs every step, as
+    :func:`run_definition` does.
     """
     try:
         pipeline = _load(definition)
@@ -504,10 +505,7 @@ def _interrupted(resumable: bool, workflow_id: int | None = None) -> NoReturn:
             "started may still be running."
         )
     if resumable:
-        message += (
-            " Steps that finished before the interrupt are recorded; run the same command "
-            "again to continue."
-        )
+        message += " Run the same command again to run the pipeline again."
     click.echo(message, err=True)
     raise click.exceptions.Exit(_EXIT_INTERRUPTED)
 

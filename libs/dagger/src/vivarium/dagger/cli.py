@@ -9,8 +9,9 @@ Command line interface for ``dagger``.
 pipeline definition (``path/to/file.py`` or ``package.module``, either optionally
 followed by ``:function``), and the command uses the matching frontend. A YAML workflow
 runs through Jobmon as :doc:`/dagger` describes. A pipeline definition is run, previewed,
-forced, shown or drawn as :doc:`/python_pipelines` describes; ``run`` and ``force`` run its stale steps
-through Jobmon, or in this process with ``--local``.
+forced, shown or drawn as :doc:`/python_pipelines` describes; ``run`` and ``force`` run its
+steps through Jobmon, or in this process with ``--local``. In this alpha every step of a
+definition runs on every run.
 
 .. click:: vivarium.dagger.cli:dagger
    :prog: dagger
@@ -179,10 +180,11 @@ def dagger() -> None:
     or a venv, given by name or prefix path), and runs as one Jobmon workflow; use
     'run' to launch it and 'restart' to resume it from its output directory. A
     pipeline definition is a Python file or module with a function (by default
-    'pipeline') that returns a Pipeline; 'run' runs its stale steps, 'preview'
-    shows which would run and why, 'force' runs named steps even if current, 'show'
-    prints what each step reads, writes and runs, and 'graph' draws the steps and the
-    files between them to a file.
+    'pipeline') that returns a Pipeline; 'run' runs its steps, 'preview' shows which
+    would run and why, 'force' runs named steps with the rest, 'show' prints what each
+    step reads, writes and runs, and 'graph' draws the steps and the files between them
+    to a file. In this alpha every step runs on every run, and only --until leaves steps
+    out.
 
     A pipeline definition's 'run' and 'force' go through Jobmon unless given
     --local. -P/--project and -q/--queue then set the project and queue of every
@@ -255,12 +257,13 @@ def run(
     verbose: int,
     with_debugger: bool,
 ) -> None:
-    """Run a workflow YAML file through Jobmon, or the stale steps of a pipeline definition.
+    """Run a workflow YAML file through Jobmon, or the steps of a pipeline definition.
 
     For a workflow YAML file, every top-level configuration value other than
     'steps' can be overridden from the command line via the corresponding flag.
-    For a pipeline definition, the stale steps run through Jobmon, or in this process
-    with --local, and --until runs only the named steps and the steps they depend on.
+    For a pipeline definition, every step runs through Jobmon, or in this process with
+    --local, and --until runs only the named steps and the steps they depend on. In this
+    alpha a step runs even if it ran before and nothing changed.
     -P/--project, -q/--queue and -m/--max-attempts apply to a definition only when it
     runs through Jobmon. A step's own resources override -P and -q.
     """
@@ -390,7 +393,8 @@ def preview(config: Path | str, until: tuple[str, ...]) -> None:
     """Show which steps of a pipeline definition would run, and why.
 
     Nothing runs and no output is written. --until plans only the named steps and
-    the steps they depend on.
+    the steps they depend on. In this alpha every step that --until does not leave out
+    would run.
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.preview_definition(definition, until)
@@ -444,9 +448,10 @@ def force(
     queue: str | None,
     max_attempts: int | None,
 ) -> None:
-    """Run each STEP of a pipeline definition even if it is current.
+    """Run each STEP of a pipeline definition, with every other stale step.
 
-    Every other stale step of the definition runs too. The steps run through Jobmon, or
+    In this alpha every step is stale, so this runs the same steps as 'run'; once a step
+    can be current, a named STEP will run even then. The steps run through Jobmon, or
     in this process with --local. -P/--project, -q/--queue and -m/--max-attempts are as
     for 'run' and apply only to a run through Jobmon.
     """

@@ -84,9 +84,10 @@ def command_step(
     inputs
         Maps placeholder names to the file keys the registry resolves to the producing
         step's node (or a declared root input). An input that the command does not name
-        still orders the step after its producer and marks the step stale when its file
-        changes. To make an edit to a script that the command runs mark the step stale,
-        declare the script as a root input and pass it here.
+        still orders the step after its producer. In this alpha a command step runs on
+        every build. Once a step can be current, a change to any input's file will mark
+        it stale, so declare a script that the command runs as a root input and pass it
+        here to have an edit to the script do the same.
     env
         The environment whose ``bin`` directories go first on ``PATH`` while the command
         runs: a conda env or venv name, or a path to its prefix. Resolved when the
