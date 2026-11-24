@@ -1,0 +1,17 @@
+{
+    "description": "After Claude pushes to a branch with an open PR, ask it to refresh the PR's test summary comments. Set SIMSCI_TEST_SUMMARY=off to turn this off.",
+    "hooks": {
+        "PostToolUse": [
+            {
+                "matcher": "Bash|mcp__.*__(push_files|create_or_update_file|delete_file)",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/test-summary-refresh.sh\"",
+                        "timeout": 30
+                    }
+                ]
+            }
+        ]
+    }
+}
