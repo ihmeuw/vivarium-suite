@@ -69,6 +69,7 @@ import shlex
 import signal
 import sys
 import threading
+import time
 from collections.abc import Iterator, Mapping, MutableMapping, Sequence, Set
 from contextlib import contextmanager
 from datetime import datetime
@@ -202,7 +203,10 @@ class RemoteTaskFailed(Exception):
 
 
 class BridgeInterrupted(SystemExit):
-    """Raised on SIGTERM while the bridge binds or runs the Jobmon workflow.
+    """Raised on SIGTERM or SIGHUP while the bridge binds or runs the Jobmon workflow.
+
+    It is also raised when Jobmon's run has not returned by half of
+    ``jobmon_settle_margin`` before the Slurm allocation ends.
 
     The bridge raises it in the build's main thread. It subclasses :class:`SystemExit`,
     not :class:`Exception`, so that it passes through Jobmon's handlers, which catch
@@ -283,7 +287,10 @@ def pytask_execute_build(session: Session) -> bool:
     Otherwise it checks the Jobmon environment and works out how long Jobmon may run the
     workflow. That is ``jobmon_timeout`` when the build sets it, which must then be a
     positive whole number of seconds. Without it, inside a Slurm allocation (with
-    ``SLURM_JOB_ID`` set), it is the allocation's remaining time less a safety buffer, from
+    ``SLURM_JOB_ID`` set) whose end time ``SLURM_JOB_END_TIME`` is a whole number, it is
+    the time left until that end less ``jobmon_settle_margin``, in whole seconds. In an
+    allocation without that end time, it is the allocation's remaining time less a safety
+    buffer, from
     :func:`vivarium.cluster_tools.core.cluster.interface.get_workflow_timeout_seconds`, as
     for the ``dagger`` runner; outside one, it is Jobmon's own default. Next, if the
     latest earlier run under the root whose Jobmon workflow was bound
@@ -316,16 +323,23 @@ def pytask_execute_build(session: Session) -> bool:
     ``"running"``, the workflow id, and every submitted step as pending, so a build
     killed from then on leaves the workflow id behind.
 
-    While the hook binds and runs the workflow in the main thread, the first SIGTERM that
-    the process receives raises :class:`BridgeInterrupted`, and any later SIGTERM is
-    ignored until the run has stopped. Afterwards SIGTERM's earlier handler is in effect
-    again. If Jobmon put its own handler in front of the bridge's meanwhile, which it does
-    when it sets up its logging and which calls the bridge's handler in turn, the bridge's
-    handler is switched off instead, so that a later SIGTERM gets the earlier handling. Off
-    the main thread, the hook changes no signal handling. A :class:`BridgeInterrupted`, or
-    a ``KeyboardInterrupt`` from Jobmon (which Jobmon raises when a user confirms the stop
-    at its prompt), stops the run; the hook catches it and goes on to record and settle the
-    run, so pytask still writes its lockfile.
+    While the hook binds and runs the workflow in the main thread, the first SIGTERM or
+    SIGHUP that the process receives raises :class:`BridgeInterrupted`, and any later
+    one is ignored until the run has stopped. A signal that the process already ignores,
+    as SIGHUP is under ``nohup``, stays ignored and its handling is not changed. In a
+    Slurm allocation whose end time (``SLURM_JOB_END_TIME``) is known, an alarm set for
+    half of ``jobmon_settle_margin`` before the end raises :class:`BridgeInterrupted` in
+    the same way if Jobmon's run has not returned by then, after the hook prints a line
+    saying that Jobmon had not returned and when the allocation ends. The alarm is
+    cleared when the run stops. Afterwards the earlier handlers of SIGTERM, SIGHUP and
+    SIGALRM are in effect again. If Jobmon put its own handler in front of the bridge's
+    meanwhile, which it does for SIGTERM when it sets up its logging and which calls the
+    bridge's handler in turn, the bridge's handler is switched off instead, so that a
+    later signal gets the earlier handling. Off the main thread, the hook changes no
+    signal handling. A :class:`BridgeInterrupted`, or a ``KeyboardInterrupt`` from
+    Jobmon (which Jobmon raises when a user confirms the stop at its prompt), stops the
+    run; the hook catches it and goes on to record and settle the run, so pytask still
+    writes its lockfile.
 
     When the run has stopped, the hook records the result of each submitted step whose
     result file is in the run directory, in plan order, and appends its report to
@@ -391,10 +405,15 @@ def pytask_execute_build(session: Session) -> bool:
         :class:`~vivarium.dagger.backend.lock.RunLocked`. This is checked before anything
         else, so nothing has then been planned, created or written, and pytask's lockfile
         and journal are left as they are. Also if the Jobmon environment check fails; if
-        ``jobmon_timeout`` is set to anything but a positive whole number of seconds, with
-        a message that names the key and the value; or if ``jobmon_timeout`` is not set and
-        the Slurm allocation's remaining time cannot be read or is shorter than the safety
-        buffer, with a message that gives that error and says to set ``jobmon_timeout``. In
+        ``jobmon_timeout`` or ``jobmon_settle_margin`` is set to anything but a positive
+        whole number of seconds, with a message that names the key and the value; if
+        ``jobmon_timeout`` is not set and the Slurm allocation, by its end time
+        ``SLURM_JOB_END_TIME``, has no more time left than ``jobmon_settle_margin``, with a
+        message that gives the seconds left and the margin and says to start in a longer
+        allocation or set a smaller ``jobmon_settle_margin``; or if ``jobmon_timeout`` is not
+        set, the allocation's end time is not in the environment, and its remaining time
+        cannot be read or is shorter than the safety buffer, with a message that gives that
+        error and says to set ``jobmon_timeout``. In
         these cases no run directory has been created. Also if Jobmon refuses to bind the
         workflow, which the adapter reports as
         :class:`~vivarium.dagger.bridge._jobmon_adapter.JobmonBindError`, for example
@@ -448,13 +467,17 @@ def _execute(session: Session) -> bool:
         _jobmon_adapter.check_environment(cluster)
     except _jobmon_adapter.JobmonEnvironmentError as error:
         raise _failure(str(error)) from error
-    timeout = _workflow_timeout(config)
+    margin = _seconds("jobmon_settle_margin", config["jobmon_settle_margin"])
+    end = _allocation_end()
+    timeout = _workflow_timeout(config, end, margin)
     root = Path(config["root"])
     _warn_if_last_run_unfinished(root)
     workdir = _new_run_directory(root)
     plan = _compile(session, to_submit, payloads, workdir)
     _prepare_products(session, to_submit)
-    jobmon_run, interrupted = _bind_and_run(session, plan, to_submit, workdir, timeout)
+    jobmon_run, interrupted = _bind_and_run(
+        session, plan, to_submit, workdir, timeout, end=end, margin=margin
+    )
     leftovers = _record_available(session, to_submit, workdir)
     cause = _cause(jobmon_run, interrupted=interrupted)
     _settle(session, leftovers, jobmon_run, cause, workdir=workdir)
@@ -672,30 +695,63 @@ def _failure(message: str) -> ExecutionError:
     return ExecutionError(message)
 
 
-def _workflow_timeout(config: Mapping[str, Any]) -> int | None:
-    """Return Jobmon's timeout from ``jobmon_timeout`` or the Slurm allocation, or None."""
-    value: object = config.get("jobmon_timeout")
-    if value is None:
-        # Imported here, so that loading the bridge does not import cluster-tools.
-        from vivarium.cluster_tools.core.cluster.interface import get_workflow_timeout_seconds
+def _workflow_timeout(config: Mapping[str, Any], end: int | None, margin: int) -> int | None:
+    """Return Jobmon's timeout from ``jobmon_timeout`` or the Slurm allocation, or None.
 
-        try:
-            return get_workflow_timeout_seconds()
-        # ValueError: squeue gave a remaining time that cluster-tools cannot parse, such as
-        # UNLIMITED or NOT_SET.
-        except (RuntimeError, ValueError) as error:
+    ``end`` is the allocation's end time from :func:`_allocation_end`, and ``margin`` is
+    the checked ``jobmon_settle_margin``.
+    """
+    value: object = config.get("jobmon_timeout")
+    if value is not None:
+        return _seconds("jobmon_timeout", value)
+    if end is not None:
+        left = end - time.time()
+        timeout = int(left - margin)
+        if timeout <= 0:
             raise _failure(
-                "The bridge could not work out how long Jobmon may run the workflow from "
-                f"the remaining time of this Slurm allocation ({error}). Set "
-                "jobmon_timeout to the number of seconds that Jobmon may run the workflow."
-            ) from error
+                f"This Slurm allocation ends in {max(int(left), 0)} seconds "
+                "(SLURM_JOB_END_TIME), which is not more than jobmon_settle_margin, "
+                f"{margin} seconds, so Jobmon would have no time to run the workflow. "
+                "Start the build in a longer allocation or set a smaller "
+                "jobmon_settle_margin."
+            )
+        return timeout
+    # Imported here, so that loading the bridge does not import cluster-tools.
+    from vivarium.cluster_tools.core.cluster.interface import get_workflow_timeout_seconds
+
+    try:
+        return get_workflow_timeout_seconds()
+    # ValueError: squeue gave a remaining time that cluster-tools cannot parse, such as
+    # UNLIMITED or NOT_SET.
+    except (RuntimeError, ValueError) as error:
+        raise _failure(
+            "The bridge could not work out how long Jobmon may run the workflow from "
+            f"the remaining time of this Slurm allocation ({error}). Set "
+            "jobmon_timeout to the number of seconds that Jobmon may run the workflow."
+        ) from error
+
+
+def _seconds(key: str, value: object) -> int:
+    """Return ``value`` if it is a positive whole number, else fail naming ``key``."""
     # bool is a subclass of int, but True is not a number of seconds.
     if isinstance(value, int) and not isinstance(value, bool) and value > 0:
         return value
     raise _failure(
-        "jobmon_timeout must be a positive whole number of seconds, but the build set it "
+        f"{key} must be a positive whole number of seconds, but the build set it "
         f"to {value!r}."
     )
+
+
+def _allocation_end() -> int | None:
+    """Return the Slurm allocation's end time in seconds since the epoch, or None.
+
+    None outside an allocation and when ``SLURM_JOB_END_TIME`` is not a whole number.
+    """
+    if os.environ.get("SLURM_JOB_ID") is None:
+        return None
+    text = os.environ.get("SLURM_JOB_END_TIME", "").strip()
+    # isdecimal, unlike int(), refuses signs, underscores and an empty string.
+    return int(text) if text.isdecimal() else None
 
 
 def _warn_if_last_run_unfinished(root: Path) -> None:
@@ -741,10 +797,14 @@ def _bind_and_run(
     submitted: Sequence[PTask],
     workdir: Path,
     timeout: int | None,
+    *,
+    end: int | None,
+    margin: int,
 ) -> tuple[JobmonRun | None, bool]:
     """Bind and run ``plan``; return the run and whether the build was interrupted.
 
-    The run is None if the build was interrupted before the workflow was bound.
+    The run is None if the build was interrupted before the workflow was bound. ``end``
+    and ``margin`` set the alarm of :func:`_sigterm_raises`.
     """
     config = session.config
     cluster: str = config["jobmon_cluster"]
@@ -752,7 +812,7 @@ def _bind_and_run(
     bind_error: _jobmon_adapter.JobmonBindError | None = None
     interrupted = False
     try:
-        with _sigterm_raises():
+        with _sigterm_raises(end, margin):
             try:
                 jobmon_run = _jobmon_adapter.bind(
                     plan,
@@ -777,7 +837,7 @@ def _bind_and_run(
                 _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
     except (BridgeInterrupted, KeyboardInterrupt):
         interrupted = True
-    # Raised outside the SIGTERM block, so that a SIGTERM cannot turn it into an interrupt.
+    # Raised outside the signal block, so that a signal cannot turn it into an interrupt.
     if bind_error is not None:
         raise _failure(
             f"Jobmon could not bind the workflow on the {cluster!r} cluster. Check "
@@ -987,46 +1047,88 @@ def _finish(session: Session, task: PTask, report: ExecutionReport) -> None:
     session.execution_reports.append(report)
 
 
+_INTERRUPTS = (signal.SIGTERM, signal.SIGHUP)
+"""The signals that the bridge turns into ``BridgeInterrupted`` while it binds and runs."""
+
+
 @contextmanager
-def _sigterm_raises() -> Iterator[None]:
-    """Turn the first SIGTERM into ``BridgeInterrupted`` in the main thread while the block runs."""
+def _sigterm_raises(end: int | None = None, margin: int = 0) -> Iterator[None]:
+    """Turn the first SIGTERM, SIGHUP or alarm into ``BridgeInterrupted`` in the main thread.
+
+    With the allocation's end time ``end``, the alarm goes off ``margin / 2`` seconds
+    before it, unless that time has passed.
+    """
     # signal.signal raises ValueError off the main thread.
     if threading.current_thread() is not threading.main_thread():
         yield
         return
-    previous = signal.getsignal(signal.SIGTERM)
+    current: dict[int, Any] = {signum: signal.getsignal(signum) for signum in _INTERRUPTS}
+    # A signal that the process ignores, as SIGHUP under nohup, is meant to stay ignored.
+    previous = {
+        signum: handling for signum, handling in current.items() if handling != signal.SIG_IGN
+    }
+    previous_alarm = signal.getsignal(signal.SIGALRM)
+    delay = None if end is None else end - margin / 2 - time.time()
+    alarm_set = False
     active = True
     raised = False
 
     def handler(signum: int, frame: FrameType | None) -> None:
-        """Raise BridgeInterrupted once, then ignore SIGTERM; when off, pass it on."""
+        """Raise BridgeInterrupted once, then ignore these signals; when off, pass one on."""
         nonlocal raised
         if not active:
-            _forward_sigterm(previous, signum, frame)
+            _forward_signal(previous[signum], signum, frame)
             return
         if raised:
             return
         raised = True
         raise BridgeInterrupted(INTERRUPTED_EXIT_CODE)
 
+    def alarm(signum: int, frame: FrameType | None) -> None:
+        """Say why the bridge stops waiting and raise BridgeInterrupted, unless one was."""
+        nonlocal raised
+        if not active or raised or end is None:
+            return
+        raised = True
+        _warn(
+            "Jobmon's run had not returned, and this Slurm allocation ends at "
+            f"{datetime.fromtimestamp(end).astimezone():%Y-%m-%d %H:%M:%S %Z}, so the "
+            "bridge stopped waiting for the workflow and settles the run."
+        )
+        raise BridgeInterrupted(INTERRUPTED_EXIT_CODE)
+
     try:
-        signal.signal(signal.SIGTERM, handler)
+        for signum in previous:
+            signal.signal(signum, handler)
+        if delay is not None and delay > 0:
+            signal.signal(signal.SIGALRM, alarm)
+            alarm_set = True
+            signal.setitimer(signal.ITIMER_REAL, delay)
         yield
     finally:
         active = False
+        if alarm_set:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            _restore_handler(signal.SIGALRM, alarm, previous_alarm)
         # Jobmon's logging setup can put a handler in front of this one that calls it and
-        # stays installed. Switched off, this one then passes SIGTERM to ``previous``.
-        if signal.getsignal(signal.SIGTERM) is handler:
-            signal.signal(signal.SIGTERM, signal.SIG_DFL if previous is None else previous)
+        # stays installed. Switched off, this one then passes the signal to ``previous``.
+        for signum, handling in previous.items():
+            _restore_handler(signum, handler, handling)
 
 
-def _forward_sigterm(previous: object, signum: int, frame: FrameType | None) -> None:
-    """Handle SIGTERM as ``previous``, the handler from before the bridge's, would."""
+def _restore_handler(signum: int, ours: object, previous: Any) -> None:
+    """Put ``previous`` back as the handler of ``signum`` if ``ours`` is still installed."""
+    if signal.getsignal(signum) is ours:
+        signal.signal(signum, signal.SIG_DFL if previous is None else previous)
+
+
+def _forward_signal(previous: object, signum: int, frame: FrameType | None) -> None:
+    """Handle ``signum`` as ``previous``, the handler from before the bridge's, would."""
     if callable(previous):
         previous(signum, frame)
     elif previous != signal.SIG_IGN:
-        signal.signal(signal.SIGTERM, signal.SIG_DFL)
-        os.kill(os.getpid(), signal.SIGTERM)
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
 
 
 def _settle(

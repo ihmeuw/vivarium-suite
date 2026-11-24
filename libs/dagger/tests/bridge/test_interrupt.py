@@ -1,7 +1,8 @@
 """Tests for interrupting a bridged build (``bridge.execute``).
 
-The builds here run through ``FakeJobmon``, which interrupts them with a real SIGTERM to
-the test process or with a ``KeyboardInterrupt``. A test that would end its own process
+The builds here run through ``FakeJobmon``, which interrupts them with a real SIGTERM or
+SIGHUP to the test process or with a ``KeyboardInterrupt``, or blocks until the bridge's
+alarm before a Slurm allocation ends interrupts them. A test that would end its own process
 runs the build in a child Python process instead. Helpers are in ``tests.bridge.helpers``.
 """
 
@@ -11,6 +12,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -20,6 +22,7 @@ from typing import Any, Literal
 
 import pytest
 from pytask import ExitCode, Session, TaskOutcome
+from vivarium.cluster_tools.core.cluster import interface as cluster_interface
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
@@ -36,6 +39,7 @@ from tests.bridge.helpers import (
     chain_build,
     journal_ids,
     lockfile_entries,
+    make_dir,
     only_state,
     recorded_pids,
     registry,
@@ -54,6 +58,7 @@ from vivarium.dagger.bridge.execute import (
     BridgeInterrupted,
     _sigterm_raises,
 )
+from vivarium.dagger.bridge.plugin import DEFAULT_SETTLE_MARGIN
 from vivarium.dagger.bridge.state import (
     RUN_STATE_KEY,
     RUNS_DIR,
@@ -84,6 +89,27 @@ _LATER_ID = 8642097
 
 _CHILD_TIMEOUT = 300
 """The most seconds that a child process or a thread of these tests may take."""
+
+_INTERRUPTED_OUTCOME_NAMES = {
+    name: outcome.name for name, outcome in _INTERRUPTED_OUTCOMES.items()
+}
+"""The names of :data:`_INTERRUPTED_OUTCOMES`, as a child process prints them."""
+
+_SECONDS_LEFT = 20
+"""How many seconds are left in the allocation when the backstop test's child starts its
+build. Its fake Jobmon runs two entries in the time before the alarm."""
+
+_SMALL_MARGIN = 8
+"""The ``jobmon_settle_margin`` of the backstop test's child, so its alarm is
+``_SECONDS_LEFT - _SMALL_MARGIN / 2`` seconds after the build starts."""
+
+_FAR_END = 1000
+"""How many seconds from now the allocation ends in the in-process alarm tests, so that no
+alarm fires during them."""
+
+_ALARM_SLACK = 3
+"""How many seconds an armed alarm may differ from half the margin before the allocation
+ends, for rounding and the time between arming it and reading it."""
 
 _Handler = Callable[[int, FrameType | None], Any]
 """A signal handler that Python calls."""
@@ -260,6 +286,142 @@ print("survived", flush=True)
 """A child build of a -> b -> c plus d with stable code identities whose run sends
 itself SIGKILL after it runs the first entry."""
 
+_SIGNAL_DURING_THE_RUN = """
+import json
+import os
+import signal
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from tests.bridge.helpers import B, WORKFLOW_ID, chain_and_independent, registry, report_for
+from vivarium.dagger.backend.build import build, outcomes
+from vivarium.dagger.harness import FakeJobmon
+
+SIGNAL = signal.Signals[sys.argv[2]]
+
+
+@dataclass
+class SignalAfterTwo(FakeJobmon):
+    def run(self, jobmon_run, *, seconds_until_timeout=None):
+        for entry in jobmon_run.plan[:2]:
+            subprocess.run(["/bin/sh", "-c", entry.command], check=False)
+        os.kill(os.getpid(), SIGNAL)
+        raise RuntimeError(f"{SIGNAL.name}'s handler returned without raising.")
+
+
+tmp_path = Path(sys.argv[1])
+with SignalAfterTwo(workflow_id=WORKFLOW_ID):
+    session = build(
+        chain_and_independent(registry(tmp_path)), tmp_path / "state", jobmon=True
+    )
+named = {name: outcome.name for name, outcome in outcomes(session).items()}
+report = report_for(session, B)
+message = None if report.exc_info is None else str(report.exc_info[1])
+print("outcomes", json.dumps(named), flush=True)
+print("exit", int(session.exit_code), flush=True)
+print("message", json.dumps(message), flush=True)
+print("survived", flush=True)
+"""
+"""A child build of a -> b -> c plus d whose run handles a and d and then sends its own
+process the signal that its second argument names, such as ``SIGHUP``."""
+
+_RUN_THAT_DOES_NOT_RETURN = """
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from tests.bridge.helpers import WORKFLOW_ID, chain_and_independent, registry
+from vivarium.dagger.backend.build import build, outcomes
+from vivarium.dagger.harness import FakeJobmon
+
+tmp_path = Path(sys.argv[1])
+end = int(time.time()) + int(sys.argv[2])
+margin = int(sys.argv[3])
+
+
+def earlier(signum, frame):
+    pass
+
+
+@dataclass
+class DoesNotReturn(FakeJobmon):
+    def run(self, jobmon_run, *, seconds_until_timeout=None):
+        for entry in jobmon_run.plan[:2]:
+            subprocess.run(["/bin/sh", "-c", entry.command], check=False)
+        # Bounded, so that a build without the backstop still ends.
+        while time.time() < end + 5:
+            time.sleep(0.1)
+
+
+os.environ["SLURM_JOB_ID"] = "4321"
+os.environ["SLURM_JOB_END_TIME"] = str(end)
+signal.signal(signal.SIGALRM, earlier)
+print("end", end, flush=True)
+with DoesNotReturn(workflow_id=WORKFLOW_ID):
+    session = build(
+        chain_and_independent(registry(tmp_path)),
+        tmp_path / "state",
+        jobmon=True,
+        jobmon_settle_margin=margin,
+    )
+print("settled", time.time(), flush=True)
+named = {name: outcome.name for name, outcome in outcomes(session).items()}
+print("outcomes", json.dumps(named), flush=True)
+print("alarm_after", json.dumps(signal.getitimer(signal.ITIMER_REAL)), flush=True)
+print("sigalrm_kept", signal.getsignal(signal.SIGALRM) is earlier, flush=True)
+"""
+"""A child build of a -> b -> c plus d in a Slurm allocation that ends as many seconds
+from its start as its second argument says, with its third argument as
+``jobmon_settle_margin``, under an earlier Python handler for SIGALRM. Its run handles a
+and d and then does not return until five seconds after the allocation ends."""
+
+_SIGNAL_WHILE_IGNORED = """
+import json
+import os
+import signal
+import sys
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from tests.bridge.helpers import WORKFLOW_ID, chain_and_independent, registry
+from vivarium.dagger.backend.build import build, outcomes
+from vivarium.dagger.harness import FakeJobmon
+
+SIGNAL = signal.Signals[sys.argv[2]]
+
+
+@dataclass
+class SignalThenRun(FakeJobmon):
+    def run(self, jobmon_run, *, seconds_until_timeout=None):
+        os.kill(os.getpid(), SIGNAL)
+        time.sleep(0.5)
+        super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
+
+
+tmp_path = Path(sys.argv[1])
+signal.signal(SIGNAL, signal.SIG_IGN)
+with SignalThenRun(workflow_id=WORKFLOW_ID):
+    session = build(
+        chain_and_independent(registry(tmp_path)), tmp_path / "state", jobmon=True
+    )
+named = {name: outcome.name for name, outcome in outcomes(session).items()}
+print("outcomes", json.dumps(named), flush=True)
+print("exit", int(session.exit_code), flush=True)
+print("ignored_after", signal.getsignal(SIGNAL) == signal.SIG_IGN, flush=True)
+print("survived", flush=True)
+"""
+"""A child build of a -> b -> c plus d with SIG_IGN for the signal that its second argument
+names, as under ``nohup`` for SIGHUP, whose run sends that signal to its own process before
+it runs the whole plan."""
+
 
 @pytest.fixture(autouse=True)
 def _node_imports(node_pythonpath: None) -> None:
@@ -274,12 +436,22 @@ def _sigterm_kept() -> Iterator[None]:
     signal.signal(signal.SIGTERM, previous)
 
 
+@pytest.fixture(autouse=True)
+def _signals_kept(sighup_and_alarm_kept: None) -> None:
+    """Cancel any alarm and restore SIGHUP's and SIGALRM's handlers after each test."""
+
+
 def _send_sigterm() -> None:
     """Send SIGTERM to this thread, but only while Python handles or ignores it."""
-    handler = signal.getsignal(signal.SIGTERM)
+    _send_signal(signal.SIGTERM)
+
+
+def _send_signal(signum: signal.Signals) -> None:
+    """Send ``signum`` to this thread, but only while Python handles or ignores it."""
+    handler = signal.getsignal(signum)
     # Under the default disposition the signal would end the test run itself.
-    assert handler is signal.SIG_IGN or callable(handler), handler
-    signal.raise_signal(signal.SIGTERM)
+    assert handler is signal.SIG_IGN or callable(handler), (signum, handler)
+    signal.raise_signal(signum)
 
 
 def _recording_handler(calls: list[int]) -> _Handler:
@@ -295,11 +467,37 @@ def _recording_handler(calls: list[int]) -> _Handler:
 @contextmanager
 def _sigterm_handler(handler: _Handler) -> Iterator[None]:
     """Install ``handler`` for SIGTERM in the block, and restore the earlier one after."""
-    previous = signal.signal(signal.SIGTERM, handler)
+    with _signal_handler(signal.SIGTERM, handler):
+        yield
+
+
+@contextmanager
+def _signal_handler(signum: signal.Signals, handler: _Handler) -> Iterator[None]:
+    """Install ``handler`` for ``signum`` in the block, and restore the earlier one after."""
+    previous = signal.signal(signum, handler)
     try:
         yield
     finally:
-        signal.signal(signal.SIGTERM, previous)
+        signal.signal(signum, previous)
+
+
+def _printed(child: subprocess.CompletedProcess[str], key: str) -> str:
+    """Return the rest of the one line that ``child`` printed starting with ``key``."""
+    values = [
+        line.removeprefix(f"{key} ")
+        for line in child.stdout.splitlines()
+        if line.startswith(f"{key} ")
+    ]
+    assert len(values) == 1, (key, child.stdout, child.stderr[-4000:])
+    return values[0]
+
+
+def _assert_alarm_for(
+    alarm: tuple[float, float], read_at: float, end: int, margin: int
+) -> None:
+    """Assert that ``alarm``, read at ``read_at``, fires half of ``margin`` before ``end``."""
+    expected = end - margin / 2 - read_at
+    assert abs(alarm[0] - expected) <= _ALARM_SLACK, (alarm, expected)
 
 
 def _interrupted_build(
@@ -455,6 +653,61 @@ class _OutputAtBind(FakeJobmon):
             resource_scales=resource_scales,
             workflow_name=workflow_name,
         )
+
+
+@dataclass
+class _SignalsAtRun(FakeJobmon):
+    """Stand in for Jobmon, and keep SIGHUP's and SIGALRM's handlers and the alarm per run.
+
+    With :attr:`hang_up_after` set, the run handles that many entries and then sends SIGHUP.
+    """
+
+    hang_up_after: int | None = None
+    """How many entries, in plan order, the run handles before it sends SIGHUP. ``None``
+    runs the whole plan as FakeJobmon does."""
+    sighup_handlers: list[object] = field(default_factory=list, init=False)
+    """SIGHUP's handler when each run started, in the order called."""
+    sigalrm_handlers: list[object] = field(default_factory=list, init=False)
+    """SIGALRM's handler when each run started, in the order called."""
+    alarms: list[tuple[float, float]] = field(default_factory=list, init=False)
+    """The real-time interval timer, as :func:`signal.getitimer` gives it, when each run
+    started, in the order called."""
+    started: list[float] = field(default_factory=list, init=False)
+    """The time since the epoch at which each entry of :attr:`alarms` was read."""
+
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
+        """Keep the signal state, then run, or run some entries and send SIGHUP."""
+        self.sighup_handlers.append(signal.getsignal(signal.SIGHUP))
+        self.sigalrm_handlers.append(signal.getsignal(signal.SIGALRM))
+        self.started.append(time.time())
+        self.alarms.append(signal.getitimer(signal.ITIMER_REAL))
+        if self.hang_up_after is None:
+            super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
+            return
+        for entry in jobmon_run.plan[: self.hang_up_after]:
+            subprocess.run(["/bin/sh", "-c", entry.command], check=False)
+        _send_signal(signal.SIGHUP)
+        raise RuntimeError("SIGHUP's handler returned without raising.")
+
+
+@dataclass
+class _HangUpThenAgain(FakeJobmon):
+    """Stand in for Jobmon, and send SIGHUP, then :attr:`second` while the first one's
+    error propagates."""
+
+    second: signal.Signals = signal.SIGHUP
+    """The signal that the run sends while the first SIGHUP's error propagates."""
+    second_ignored: bool = field(default=False, init=False)
+    """Whether the second signal raised nothing."""
+
+    def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
+        """Send SIGHUP, and send the second signal while the first one's error propagates."""
+        try:
+            _send_signal(signal.SIGHUP)
+        except BridgeInterrupted:
+            _send_signal(self.second)
+            self.second_ignored = True
+            raise
 
 
 # BridgeInterrupted
@@ -936,3 +1189,235 @@ def test_an_unreadable_latest_state_gives_a_warning_naming_the_file_and_the_buil
     assert squashed(str(spoiled)) in squashed(before_bind), before_bind
     assert bound_names(jobmon) == [list(PLAN_ORDER)]
     assert outcomes(session) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
+
+
+# SIGHUP and the backstop before a Slurm allocation ends (MIC-7800)
+
+
+def test_sighup_during_the_run_records_settles_and_writes_the_lockfile(
+    tmp_path: Path,
+) -> None:
+    """A controller in a child process under the fake Jobmon that receives SIGHUP while the workflow runs records the steps whose results exist, reports the others as failed saying the build was interrupted, writes pytask's lockfile and an interrupted run state, and exits as on SIGTERM."""
+    children: dict[str, subprocess.CompletedProcess[str]] = {}
+    for name in ("SIGHUP", "SIGTERM"):
+        children[name] = _run_child(_SIGNAL_DURING_THE_RUN, make_dir(tmp_path / name), name)
+
+    for name, child in children.items():
+        assert child.returncode == 0, (name, child.returncode, child.stderr[-4000:])
+        assert "survived" in child.stdout.splitlines(), (name, child.stdout)
+    hung_up = children["SIGHUP"]
+    terminated = children["SIGTERM"]
+    assert json.loads(_printed(hung_up, "outcomes")) == _INTERRUPTED_OUTCOME_NAMES
+    message = json.loads(_printed(hung_up, "message"))
+    assert isinstance(message, str), message
+    assert "the build was interrupted" in message.lower(), message
+    root = build_root(tmp_path / "SIGHUP")
+    assert set(lockfile_entries(root)) == {A, D}
+    assert not (root / JOURNAL).exists()
+    state = only_state(root)
+    assert state.status == "interrupted"
+    assert state.pending == (B, C)
+    assert _printed(hung_up, "outcomes") == _printed(terminated, "outcomes")
+    assert _printed(hung_up, "exit") == _printed(terminated, "exit")
+
+
+def test_the_sighup_handler_is_the_bridges_during_the_run_and_restored_after(
+    tmp_path: Path,
+) -> None:
+    """During the run SIGHUP's handler is the bridge's; after the build, SIGHUP's earlier handler is back."""
+    calls: list[int] = []
+    sentinel = _recording_handler(calls)
+    interrupted = _SignalsAtRun(hang_up_after=1)
+    finished = _SignalsAtRun()
+
+    with _signal_handler(signal.SIGHUP, sentinel):
+        chain_build(tmp_path / "interrupted", interrupted)
+        after_interrupt = signal.getsignal(signal.SIGHUP)
+        chain_build(tmp_path / "finished", finished)
+        after_finish = signal.getsignal(signal.SIGHUP)
+
+    for jobmon in (interrupted, finished):
+        [during] = jobmon.sighup_handlers
+        assert during is not sentinel
+        assert callable(during), during
+    assert after_interrupt is sentinel
+    assert after_finish is sentinel
+    assert calls == []
+    assert only_state(tmp_path / "interrupted" / "state").status == "interrupted"
+
+
+def test_a_second_sighup_or_a_sigterm_after_a_sighup_is_ignored_while_settling(
+    tmp_path: Path,
+) -> None:
+    """After a first SIGHUP during the run, a second SIGHUP, or a SIGTERM, before the run has stopped does not interrupt the settling, and the build settles once."""
+    for second in (signal.SIGHUP, signal.SIGTERM):
+        directory = tmp_path / second.name
+        jobmon = _HangUpThenAgain(second=second, workflow_id=WORKFLOW_ID)
+
+        session = chain_build(directory, jobmon)
+
+        assert jobmon.second_ignored, second.name
+        assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1), second.name
+        assert only_state(build_root(directory)).status == "interrupted", second.name
+
+
+def test_a_jobmon_run_that_has_not_returned_before_the_allocation_ends_is_interrupted(
+    tmp_path: Path,
+) -> None:
+    """A controller in a child process under a fake Jobmon whose run does not return, with SLURM_JOB_ID set, SLURM_JOB_END_TIME set a few seconds ahead and jobmon_settle_margin small, settles before the end time and not before half the margin before it: the steps whose results exist are recorded, the others are reported, an interrupted state is written, and its output has a line saying Jobmon had not returned and when the allocation ends. Afterwards no alarm is pending and SIGALRM's earlier handler is back."""
+    root = build_root(tmp_path)
+
+    child = _run_child(
+        _RUN_THAT_DOES_NOT_RETURN, tmp_path, str(_SECONDS_LEFT), str(_SMALL_MARGIN)
+    )
+
+    assert child.returncode == 0, (child.returncode, child.stderr[-4000:])
+    end = int(_printed(child, "end"))
+    settled = float(_printed(child, "settled"))
+    # One second of slack below the alarm, for rounding of its time.
+    assert end - _SMALL_MARGIN / 2 - 1 <= settled < end, (settled, end)
+    assert json.loads(_printed(child, "outcomes")) == _INTERRUPTED_OUTCOME_NAMES
+    assert set(lockfile_entries(root)) == {A, D}
+    state = only_state(root)
+    assert state.status == "interrupted"
+    assert state.pending == (B, C)
+    output = child.stdout + child.stderr
+    assert squashed("had not returned") in squashed(output), output
+    assert "allocation" in output.lower(), output
+    assert json.loads(_printed(child, "alarm_after")) == [0.0, 0.0]
+    assert _printed(child, "sigalrm_kept") == "True"
+
+
+def test_no_alarm_is_left_after_the_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a bridged build in an allocation with a known end time returns normally, no alarm is pending (signal.getitimer of ITIMER_REAL is zero) and SIGALRM's handler is as before the build."""
+    monkeypatch.setenv("SLURM_JOB_ID", "4321")
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(int(time.time()) + _FAR_END))
+    calls: list[int] = []
+    sentinel = _recording_handler(calls)
+    jobmon = _SignalsAtRun()
+
+    with _signal_handler(signal.SIGALRM, sentinel):
+        session = chain_build(tmp_path, jobmon)
+        after = signal.getsignal(signal.SIGALRM)
+        alarm_after = signal.getitimer(signal.ITIMER_REAL)
+
+    assert outcomes(session) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
+    # Without an alarm during the run, there would be nothing to have cleared.
+    [alarm_during] = jobmon.alarms
+    assert alarm_during[0] > 0, alarm_during
+    assert alarm_after == (0.0, 0.0)
+    assert after is sentinel
+    assert calls == []
+
+
+def test_no_alarm_is_set_outside_an_allocation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without SLURM_JOB_ID, or with SLURM_JOB_ID but no SLURM_JOB_END_TIME, no alarm is set while the workflow runs."""
+
+    def get_workflow_timeout_seconds() -> int:
+        """Stand in for the Slurm timeout lookup."""
+        return 1234
+
+    monkeypatch.setattr(
+        cluster_interface, "get_workflow_timeout_seconds", get_workflow_timeout_seconds
+    )
+    without_job_id = _SignalsAtRun()
+    without_end_time = _SignalsAtRun()
+
+    monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(int(time.time()) + _FAR_END))
+    chain_build(tmp_path / "without_job_id", without_job_id)
+    monkeypatch.setenv("SLURM_JOB_ID", "4321")
+    monkeypatch.delenv("SLURM_JOB_END_TIME")
+    chain_build(tmp_path / "without_end_time", without_end_time)
+
+    for jobmon in (without_job_id, without_end_time):
+        [alarm] = jobmon.alarms
+        assert alarm == (0.0, 0.0)
+
+
+def test_the_alarm_is_set_for_half_the_margin_before_the_allocation_ends(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In an allocation with a known end time, the alarm pending while the workflow runs fires half of jobmon_settle_margin before the end, with the default margin and with jobmon_settle_margin=100."""
+    end = int(time.time()) + _FAR_END
+    monkeypatch.setenv("SLURM_JOB_ID", "4321")
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(end))
+    margins = {"default": DEFAULT_SETTLE_MARGIN, "set": 100}
+
+    for case, margin in margins.items():
+        jobmon = _SignalsAtRun()
+        options: dict[str, Any] = {}
+        if case != "default":
+            options["jobmon_settle_margin"] = margin
+
+        chain_build(tmp_path / case, jobmon, **options)
+
+        [alarm] = jobmon.alarms
+        [read_at] = jobmon.started
+        _assert_alarm_for(alarm, read_at, end, margin)
+
+
+def test_the_alarm_is_set_also_with_an_explicit_jobmon_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """In an allocation with a known end time, a build that sets jobmon_timeout still has an alarm pending while the workflow runs, for half of the default margin before the end."""
+    end = int(time.time()) + _FAR_END
+    monkeypatch.setenv("SLURM_JOB_ID", "4321")
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(end))
+    jobmon = _SignalsAtRun()
+
+    chain_build(tmp_path, jobmon, jobmon_timeout=77)
+
+    assert jobmon.timeouts == [77]
+    [alarm] = jobmon.alarms
+    [read_at] = jobmon.started
+    _assert_alarm_for(alarm, read_at, end, DEFAULT_SETTLE_MARGIN)
+
+
+def test_after_an_interrupted_build_no_alarm_is_left_and_sigalrm_is_restored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a bridged build in an allocation with a known end time that SIGTERM or SIGHUP interrupts during the run, no alarm is pending and SIGALRM's handler is as before the build."""
+    monkeypatch.setenv("SLURM_JOB_ID", "4321")
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(int(time.time()) + _FAR_END))
+    calls: list[int] = []
+    sentinel = _recording_handler(calls)
+    fakes = {
+        "SIGTERM": _SignalsAtRun(interrupt_after=2, workflow_id=WORKFLOW_ID),
+        "SIGHUP": _SignalsAtRun(hang_up_after=2, workflow_id=WORKFLOW_ID),
+    }
+
+    for name, jobmon in fakes.items():
+        with _signal_handler(signal.SIGALRM, sentinel):
+            chain_build(tmp_path / name, jobmon)
+            after = signal.getsignal(signal.SIGALRM)
+            alarm_after = signal.getitimer(signal.ITIMER_REAL)
+
+        assert only_state(build_root(tmp_path / name)).status == "interrupted", name
+        [alarm_during] = jobmon.alarms
+        assert alarm_during[0] > 0, (name, alarm_during)
+        assert alarm_after == (0.0, 0.0), name
+        assert after is sentinel, name
+    assert calls == []
+
+
+def test_a_signal_ignored_before_the_build_stays_ignored_and_does_not_interrupt_it(
+    tmp_path: Path,
+) -> None:
+    """In a child process that sets SIG_IGN for SIGHUP before the build, as nohup does, or for SIGTERM, that signal sent while Jobmon's run is waiting does not interrupt the build: every step succeeds, the state is finished, and the signal is still ignored after the build."""
+    for name in ("SIGHUP", "SIGTERM"):
+        directory = make_dir(tmp_path / name)
+
+        child = _run_child(_SIGNAL_WHILE_IGNORED, directory, name)
+
+        assert child.returncode == 0, (name, child.returncode, child.stderr[-4000:])
+        assert "survived" in child.stdout.splitlines(), (name, child.stdout)
+        succeeded = dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS.name)
+        assert json.loads(_printed(child, "outcomes")) == succeeded, name
+        assert _printed(child, "exit") == str(int(ExitCode.OK)), name
+        assert _printed(child, "ignored_after") == "True", name
+        assert only_state(build_root(directory)).status == "finished", name

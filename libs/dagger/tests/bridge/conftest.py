@@ -2,6 +2,7 @@
 
 import json
 import os
+import signal
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -21,8 +22,10 @@ _PROBE_TOOL = "vivarium_dagger_bridge_probe"
 
 @pytest.fixture(autouse=True)
 def _outside_slurm(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Unset SLURM_JOB_ID, so that no bridged build asks Slurm for its remaining time."""
+    """Unset SLURM_JOB_ID and SLURM_JOB_END_TIME, so no bridged build is in an allocation."""
     monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+    # Set in every step of a Slurm job, so also when the tests themselves run in one.
+    monkeypatch.delenv("SLURM_JOB_END_TIME", raising=False)
 
 
 @pytest.fixture
@@ -30,6 +33,17 @@ def fake_jobmon() -> Iterator[FakeJobmon]:
     """Stand in for Jobmon for the test, so a build with jobmon=True runs with no server."""
     with FakeJobmon() as jobmon:
         yield jobmon
+
+
+@pytest.fixture
+def sighup_and_alarm_kept() -> Iterator[None]:
+    """Cancel any alarm and restore SIGHUP's and SIGALRM's handlers after the test."""
+    kept = {signum: signal.getsignal(signum) for signum in (signal.SIGHUP, signal.SIGALRM)}
+    yield
+    signal.setitimer(signal.ITIMER_REAL, 0)
+    for signum, handler in kept.items():
+        if handler is not None:
+            signal.signal(signum, handler)
 
 
 @pytest.fixture

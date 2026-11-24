@@ -281,10 +281,21 @@ Only one run through Jobmon works on a pipeline's root at a time. A second one, 
 or from another user, stops before it plans anything, prints the lock file and who holds
 it, and exits with status 1. A run with ``--local`` and a preview take no lock.
 
-If the ``dagger`` process gets SIGTERM while the workflow runs, as Slurm sends at the end
-of the allocation's time, it stops waiting for the workflow, records the steps that
-finished, prints ``Interrupted.`` with the Jobmon workflow id, and says that running the
-same command again continues the run. It exits with status 130. The workflow is not
+In a Slurm allocation, ``dagger`` stops waiting for the workflow five minutes before the
+allocation ends, records the steps that finished, and reports the others; running the
+same command again continues the run. A run started from Python can change the five
+minutes with :func:`~vivarium.dagger.frontend.execution.run`'s ``jobmon_settle_margin=``,
+in seconds. Jobmon counts this time from when it starts to schedule the workflow's jobs,
+so a workflow that takes long to submit stops correspondingly later, and the margin must
+leave room for that. If the ``dagger`` process gets SIGTERM or SIGHUP while the workflow
+runs, it stops waiting in the same way, prints ``Interrupted.`` with the Jobmon workflow
+id, and says that running the same command again continues the run. It exits with status
+130. A signal that the process already ignores, as SIGHUP is under ``nohup``, stays
+ignored. In a Jupyter or IPython kernel, a signal does not stop the wait, and only the
+margin before the allocation ends does. If
+the connection of an interactive ``srun --pty`` session drops, Slurm kills ``dagger`` at
+once and nothing is recorded, so run a long build in a batch job, or start ``srun`` inside
+``tmux`` or ``screen`` on the login node. The workflow is not
 cancelled, so its jobs that already started can still be running; the next run warns
 about them. If you press Ctrl-C while the workflow runs, Jobmon asks whether to stop;
 if you confirm, the run stops in the same way.

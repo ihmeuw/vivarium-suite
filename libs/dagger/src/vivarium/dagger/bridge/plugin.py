@@ -30,9 +30,17 @@ pytask's configuration, so a build sets the bridge's keys there:
     which raises memory and runtime by half.
 ``jobmon_timeout``
     How many seconds Jobmon may run the workflow before it stops waiting, as a positive
-    whole number. The default, ``None``, takes the remaining time of the Slurm allocation
-    that the build runs in, less a safety buffer, as the ``dagger`` runner does, and
-    outside an allocation keeps Jobmon's own default of 36000 seconds (10 hours).
+    whole number. The default, ``None``, takes the time left in the Slurm allocation that
+    the build runs in, from its end time ``SLURM_JOB_END_TIME``, less
+    ``jobmon_settle_margin``, and outside an allocation keeps Jobmon's own default of 36000
+    seconds (10 hours). If the allocation's end time is not in the environment, it takes
+    the remaining time that ``squeue`` gives, less a 120 second buffer, as the ``dagger``
+    runner does.
+``jobmon_settle_margin``
+    How many seconds before the Slurm allocation ends the build stops waiting for the
+    workflow and settles, as a positive whole number. The default is
+    :data:`DEFAULT_SETTLE_MARGIN`. When ``jobmon_timeout`` is not set, a build whose
+    allocation has less time left than this is refused before anything is submitted.
 
 For example::
 
@@ -63,10 +71,22 @@ bridge build on the same root, and their writes to ``pytask.lock`` can then inte
 with its writes.
 
 The build records the steps' results in pytask's lockfile only after the workflow stops.
-When the build's process gets SIGTERM, as Slurm sends at the end of a job's time limit
-before it kills the job, the build stops waiting for the workflow, records the steps
-whose results are already written, reports every other step as failed or skipped, and
-writes pytask's lockfile. The build then ends with pytask's summary and is not killed,
+In a Slurm allocation, the build stops waiting for the workflow ``jobmon_settle_margin``
+seconds before the allocation ends, through Jobmon's timeout, and settles: it records the
+steps whose results are already written, reports every other step as failed or skipped,
+and writes pytask's lockfile. The bridge works out this timeout before it binds the
+workflow, but Jobmon counts it from when it starts to schedule the workflow's jobs, so a
+workflow that takes long to bind stops correspondingly later, and the margin must leave
+room for that. Jobmon's timeout needs no signal, so it works however the build was
+started. If Jobmon has not returned by half the margin before the end, the build stops
+waiting anyway and settles in the same way, and prints a line saying so. When the
+build's process gets SIGTERM or SIGHUP, it also stops waiting for the workflow and
+settles in the same way. A signal that the process already ignores, as SIGHUP is under
+``nohup``, stays ignored. The stop at half the margin uses an alarm signal, so it and
+the stop on SIGTERM or SIGHUP work only when the build runs in its process's main
+thread. In a Jupyter or IPython kernel, Jobmon waits for the workflow in a thread of its
+own, so none of them ends the wait there, and only Jobmon's timeout does. After it
+settles, the build ends with pytask's summary and is not killed,
 and it fails unless every step was recorded as successful. The bridge does not cancel
 the workflow, so its jobs that are already on compute nodes can still be running and
 writing outputs, and the next build prints a warning that names the run. The next
@@ -77,9 +97,13 @@ If the process is killed outright, for example once Slurm's grace period after S
 is over, no step is recorded and the next build runs every step again, including the
 steps that had finished. Give that process more time than the whole workflow needs. The
 build gets Slurm's SIGTERM only if it is the job's own process: in a batch script, start
-it with ``exec`` (for example ``exec python build.py``). Without ``exec``, the script's
-shell gets the SIGTERM and exits, Slurm then kills the build at once, and the build
-records nothing, as if it had been killed outright.
+it with ``exec`` (for example ``exec python build.py``). Without ``exec``, and for a build
+typed into an interactive ``srun --pty`` shell, the build gets no signal at the time limit
+and is killed 30 seconds after it, so it relies on the margin above. A build whose
+interactive session drops, because its connection closes, is killed at once with no
+signal and records nothing. Run a long build in a batch job, or start ``srun`` inside
+``tmux`` or ``screen`` on the login node so that the session survives a dropped
+connection.
 Each run's state file, ``<root>/.pytask/jobmon/<run>/state.json``, gives the run's
 Jobmon workflow id even then (see :mod:`~vivarium.dagger.bridge.state`), and the build
 leaves the run's final state in its configuration under ``bridge_run``. While the
@@ -103,6 +127,10 @@ DEFAULT_MAX_ATTEMPTS = 2
 """How many times Jobmon tries each step when a build does not set
 ``jobmon_max_attempts``."""
 
+DEFAULT_SETTLE_MARGIN = 300
+"""How many seconds before a Slurm allocation ends a build stops waiting for the workflow
+and settles, when it does not set ``jobmon_settle_margin``."""
+
 
 @hookimpl
 def pytask_parse_config(config: dict[str, Any]) -> None:
@@ -122,6 +150,7 @@ def pytask_parse_config(config: dict[str, Any]) -> None:
     config.setdefault("jobmon_max_attempts", DEFAULT_MAX_ATTEMPTS)
     config.setdefault("jobmon_resource_scales", None)
     config.setdefault("jobmon_timeout", None)
+    config.setdefault("jobmon_settle_margin", DEFAULT_SETTLE_MARGIN)
 
 
 @hookimpl(trylast=True)

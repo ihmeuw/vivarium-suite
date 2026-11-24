@@ -11,6 +11,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -30,6 +31,7 @@ from pytask import (
     Session,
     TaskOutcome,
     TaskWithoutPath,
+    console,
 )
 from vivarium.cluster_tools.core.cluster import interface as cluster_interface
 
@@ -38,6 +40,7 @@ from tests.bridge.helpers import (
     bound_names,
     failure_of,
     make_dir,
+    plain,
     registry,
     report_for,
     squashed,
@@ -123,10 +126,19 @@ _SLURM_MESSAGE = "Only 2 minutes are left in the allocation, on purpose."
 _UNREADABLE_SQUEUE_MESSAGE = "invalid literal for int() with base 10: 'UNLIMITED'"
 """Message of the ValueError that the Slurm timeout lookup raises for an unreadable time."""
 
+_TIMEOUT_SLACK = 10
+"""How many seconds a timeout worked out from the allocation's end time may fall short of
+the one worked out when the test set that end time, for the time the build took."""
+
 
 @pytest.fixture(autouse=True)
 def _node_imports(node_pythonpath: None) -> None:
     """Let every node runner in this module import ``tests.bridge.step_targets``."""
+
+
+@pytest.fixture(autouse=True)
+def _signals_kept(sighup_and_alarm_kept: None) -> None:
+    """Cancel any alarm and restore SIGHUP's and SIGALRM's handlers after each test."""
 
 
 def _steps(artifacts: FileRegistry, graph: Mapping[str, Sequence[str]]) -> list[Task]:
@@ -215,6 +227,18 @@ def _answer_timeout(
         cluster_interface, "get_workflow_timeout_seconds", get_workflow_timeout_seconds
     )
     return asked
+
+
+def _in_an_allocation_ending_in(monkeypatch: pytest.MonkeyPatch, seconds: int) -> None:
+    """Set SLURM_JOB_ID, and SLURM_JOB_END_TIME to ``seconds`` from now in whole seconds."""
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+    monkeypatch.setenv("SLURM_JOB_END_TIME", str(int(time.time()) + seconds))
+
+
+def _sentences_naming(text: str, key: str) -> list[str]:
+    """Return the sentences of ``text``, as :func:`plain` gives it, that contain ``key``."""
+    sentences = re.split(r"(?<=[.!?])\s", plain(text))
+    return [sentence for sentence in sentences if key in sentence]
 
 
 def _fake_squeue(bin_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -1448,3 +1472,130 @@ def test_a_build_with_nothing_stale_does_not_work_out_the_timeout(
     assert outcomes(session) == dict.fromkeys(fx.steps, TaskOutcome.SKIP_UNCHANGED)
     assert asked == []
     assert bound_names(fake_jobmon) == [list(fx.steps)]
+
+
+# The settle margin before a Slurm allocation ends (MIC-7800)
+
+
+def test_the_allocation_end_time_less_the_default_margin_sets_the_timeout(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_ID set, SLURM_JOB_END_TIME set to now + 1000 and no jobmon_timeout, the timeout passed to Jobmon's run is 1000 - 300 seconds, within a few seconds, and squeue is not called."""
+    fx = build_fixture(tmp_path)
+    calls = _fake_squeue(tmp_path / "bin", monkeypatch)
+    _in_an_allocation_ending_in(monkeypatch, 1000)
+
+    session = build(fx.tasks, fx.state, jobmon=True)
+
+    assert session.exit_code == ExitCode.OK
+    [timeout] = fake_jobmon.timeouts
+    assert timeout is not None
+    assert 1000 - 300 - _TIMEOUT_SLACK <= timeout <= 1000 - 300, timeout
+    assert not calls.exists(), calls.read_text()
+
+
+def test_jobmon_settle_margin_changes_the_timeout(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_END_TIME set to now + 1000 and jobmon_settle_margin=100, the timeout passed to Jobmon's run is about 900 seconds."""
+    fx = build_fixture(tmp_path)
+    _fake_squeue(tmp_path / "bin", monkeypatch)
+    _in_an_allocation_ending_in(monkeypatch, 1000)
+
+    session = build(fx.tasks, fx.state, jobmon=True, jobmon_settle_margin=100)
+
+    assert session.exit_code == ExitCode.OK
+    [timeout] = fake_jobmon.timeouts
+    assert timeout is not None
+    assert 1000 - 100 - _TIMEOUT_SLACK <= timeout <= 1000 - 100, timeout
+
+
+def test_an_explicit_jobmon_timeout_wins_over_the_allocation_end_time(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inside an allocation with SLURM_JOB_END_TIME set to now + 1000 and jobmon_timeout=77, the timeout passed to Jobmon's run is 77 and squeue is not called."""
+    fx = build_fixture(tmp_path)
+    calls = _fake_squeue(tmp_path / "bin", monkeypatch)
+    _in_an_allocation_ending_in(monkeypatch, 1000)
+
+    session = build(fx.tasks, fx.state, jobmon=True, jobmon_timeout=77)
+
+    assert session.exit_code == ExitCode.OK
+    assert fake_jobmon.timeouts == [77]
+    assert not calls.exists(), calls.read_text()
+
+
+def test_an_allocation_with_less_time_left_than_the_margin_is_refused(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_END_TIME set to now + 200 and the default margin, the build fails before binding with a message that gives the seconds left in the allocation, the margin, and says to use a longer allocation or a smaller jobmon_settle_margin; nothing is submitted and no run directory is created."""
+    fx = build_fixture(tmp_path)
+    _fake_squeue(tmp_path / "bin", monkeypatch)
+    _in_an_allocation_ending_in(monkeypatch, 200)
+
+    with console.capture() as capture:
+        session = build(fx.tasks, fx.state, jobmon=True)
+
+    output = plain(capture.get())
+    assert session.exit_code == ExitCode.FAILED
+    numbers = {int(number) for number in re.findall(r"\d+", output)}
+    assert numbers & set(range(200 - _TIMEOUT_SLACK, 201)), output
+    assert 300 in numbers, output
+    assert "longer" in output.lower(), output
+    assert "smaller" in output.lower(), output
+    assert "jobmon_settle_margin" in output, output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
+    assert _run_directories(fx.state) == []
+    assert not any(fx.registry.path_for(step).exists() for step in fx.steps)
+
+
+def test_without_an_end_time_the_allocation_timeout_comes_from_squeue_as_before(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With SLURM_JOB_ID set and SLURM_JOB_END_TIME unset, or set to a value that is not a whole number, the timeout comes from cluster-tools' remaining-time function, as before this change."""
+    end_times = {
+        "unset": None,
+        "not_a_number": "never",
+        "fractional": f"{int(time.time()) + 1000}.5",
+    }
+    monkeypatch.setenv("SLURM_JOB_ID", _SLURM_JOB_ID)
+
+    for index, (case, end_time) in enumerate(end_times.items()):
+        fx = build_fixture(make_dir(tmp_path / case))
+        if end_time is None:
+            monkeypatch.delenv("SLURM_JOB_END_TIME", raising=False)
+        else:
+            monkeypatch.setenv("SLURM_JOB_END_TIME", end_time)
+        asked = _answer_timeout(monkeypatch, 1234)
+
+        session = build(fx.tasks, fx.state, jobmon=True)
+
+        assert session.exit_code == ExitCode.OK, case
+        assert asked == [_SLURM_JOB_ID], case
+        assert fake_jobmon.timeouts == [1234] * (index + 1), case
+
+
+@pytest.mark.parametrize("margin", [0, -5, 1.5, True, "300"])
+def test_an_invalid_jobmon_settle_margin_fails_the_build(
+    tmp_path: Path, fake_jobmon: FakeJobmon, monkeypatch: pytest.MonkeyPatch, margin: object
+) -> None:
+    """A jobmon_settle_margin that is not a positive whole number fails the build before anything is written, with a message naming jobmon_settle_margin and the value."""
+    fx = build_fixture(tmp_path)
+    _fake_squeue(tmp_path / "bin", monkeypatch)
+    _in_an_allocation_ending_in(monkeypatch, 1000)
+
+    with console.capture() as capture:
+        session = build(fx.tasks, fx.state, jobmon=True, jobmon_settle_margin=margin)
+
+    output = capture.get()
+    assert session.exit_code == ExitCode.FAILED
+    naming_the_key = _sentences_naming(output, "jobmon_settle_margin")
+    assert naming_the_key, output
+    # The value as a whole token, so that 0 is not found inside 300 or 0.1 seconds.
+    value = re.compile(rf"(?<![\w.]){re.escape(str(margin))}(?!\w|\.\d)")
+    assert any(value.search(sentence) for sentence in naming_the_key), output
+    assert "Traceback" not in output, output
+    assert fake_jobmon.plans == []
+    assert _run_directories(fx.state) == []
+    assert not any(fx.registry.path_for(step).exists() for step in fx.steps)
