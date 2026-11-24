@@ -235,11 +235,15 @@ If the ``dagger`` process gets SIGTERM while the workflow runs, as Slurm sends a
 of the allocation's time, it stops waiting for the workflow, records the steps that
 finished, prints ``Interrupted.`` with the Jobmon workflow id, and says that running the
 same command again continues the run. It exits with status 130. The workflow is not
-cancelled, so its jobs that already started can still be running; the next run warns
-about them. If the ``dagger`` process is killed outright, the steps that it had already
-recorded stay recorded, and the next run skips them when they are current. A step that
-finished in the last few seconds before the kill was not recorded and runs again. If you press Ctrl-C while the workflow runs, Jobmon asks whether to stop;
-if you confirm, the run stops in the same way.
+cancelled, so its jobs that already started can still be running; the next run warns about
+them. If you press Ctrl-C while the workflow runs, Jobmon asks whether to stop; if you
+confirm, the run stops in the same way.
+
+If the ``dagger`` process is killed outright, the steps that it had already recorded stay
+recorded. A step that finished in the last few seconds before the kill was not recorded
+and runs again. The next run skips a recorded step only when it is current, and until a
+step can declare a fingerprint of its code, a Python step is stale on every build, so it
+runs again as well.
 
 Simulation steps
 ----------------

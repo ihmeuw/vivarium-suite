@@ -530,7 +530,7 @@ def test_a_step_whose_unchanged_upstream_was_not_submitted_is_recorded_during_th
     }
 
 
-def test_a_result_that_appears_after_the_last_pass_is_recorded_once_at_the_end(
+def test_a_build_whose_thread_makes_no_pass_records_every_step_once_at_the_end(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With a recording interval longer than the whole run, so the thread makes no pass, every step still ends with exactly one SUCCESS report and one pytask.lock entry."""

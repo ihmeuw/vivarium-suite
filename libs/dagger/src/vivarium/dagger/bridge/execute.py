@@ -340,21 +340,21 @@ def pytask_execute_build(session: Session) -> bool:
     the module description says, in the order the steps finish. When the run has stopped,
     the hook records the result of each submitted step that the second thread has not
     recorded and whose result file is in the run directory, in plan order. Each recorded
-    step's report is appended to ``session.execution_reports``. Recording runs, in this process, the per-task hooks
-    that a local build runs around a step's body, except setup and the call itself: it
-    logs the step's start, checks that each of its outputs exists, hashes its
-    inputs and outputs into the lockfile, and logs its outcome. The output that
-    the step wrote on its node is added to the report's sections as captured output of
-    the call. A step whose node reports success but which did not write every output is
-    a FAIL with pytask's own message naming the missing outputs, as in a local build. A
-    step that failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`,
-    with no lockfile entry, and pytask marks every step after it as skipped because an
-    ancestor failed. A step whose result file cannot be read is a FAIL in the same way,
-    and its :class:`RemoteTaskFailed` names the file. A step that has a result but that
-    pytask has marked in this way, because a step before it in plan order failed, also
-    when that step failed only at recording, is reported as SKIP_PREVIOUS_FAILED with no
-    lockfile entry, as a local build reports it, although its body ran on its node. Every
-    result is recorded, also after ``max_failures`` steps have failed.
+    step's report is appended to ``session.execution_reports``. Recording runs, in this
+    process, the per-task hooks that a local build runs around a step's body, except setup
+    and the call itself: it logs the step's start, checks that each of its outputs exists,
+    hashes its inputs and outputs into the lockfile, and logs its outcome. The output that
+    the step wrote on its node is added to the report's sections as captured output of the
+    call. A step whose node reports success but which did not write every output is a FAIL
+    with pytask's own message naming the missing outputs, as in a local build. A step that
+    failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`, with no
+    lockfile entry, and pytask marks every step after it as skipped because an ancestor
+    failed. A step whose result file cannot be read is a FAIL in the same way, and its
+    :class:`RemoteTaskFailed` names the file. A step that has a result but that pytask has
+    marked in this way, because a step before it in plan order failed, also when that step
+    failed only at recording, is reported as SKIP_PREVIOUS_FAILED with no lockfile entry,
+    as a local build reports it, although its body ran on its node. Every result is
+    recorded, also after ``max_failures`` steps have failed.
 
     Then the hook settles each submitted step that has no result file, in plan order,
     without calling pytask's execute protocol or running any step's body. A step that
@@ -820,12 +820,12 @@ def _recording_during_the_run(
     first one interval after the block starts, and makes no pass after the block ends.
     The block exits only after the thread has ended, also when an interrupt reaches the
     main thread while it waits for the thread; that interrupt is then raised. An
-    exception in the thread ends its passes and is printed as a warning when the block
-    exits. It is not raised, because the caller records every remaining step afterwards.
+    exception in the thread ends its passes and is printed as a warning at once; a thread
+    that cannot be started is printed as a warning when the block exits. Neither is raised,
+    because the caller records every remaining step afterwards.
     """
     stop = threading.Event()
     ended = threading.Event()
-    errors: list[Exception] = []
 
     def record_until_stopped() -> None:
         """Call ``_record_ready`` after each interval until ``stop`` is set."""
@@ -833,17 +833,18 @@ def _recording_during_the_run(
             while not stop.wait(_RECORD_INTERVAL_SECONDS):
                 _record_ready(session, submitted, workdir, recorded)
         except Exception as error:
-            errors.append(error)
+            _warn_recording_stopped(error)
         finally:
             ended.set()
 
     thread = threading.Thread(target=record_until_stopped, name="dagger-bridge-recording")
+    start_error: RuntimeError | None = None
     interrupt: BaseException | None = None
     try:
         try:
             thread.start()
-        except RuntimeError as start_error:
-            errors.append(start_error)
+        except RuntimeError as error:
+            start_error = error
             ended.set()
         except BaseException:
             # The thread may or may not exist. With ``stop`` set it makes no pass, so the
@@ -866,14 +867,18 @@ def _recording_during_the_run(
             except (BridgeInterrupted, KeyboardInterrupt) as caught:
                 if interrupt is None:
                     interrupt = caught
-        if errors:
-            _warn(
-                "Recording during the run stopped because of an error "
-                f"({_describe(errors[0])}). Every remaining step is recorded when the "
-                "workflow ends."
-            )
+        if start_error is not None:
+            _warn_recording_stopped(start_error)
         if interrupt is not None:
             raise interrupt
+
+
+def _warn_recording_stopped(error: Exception) -> None:
+    """Warn that recording during the run stopped because of ``error``."""
+    _warn(
+        f"Recording during the run stopped because of an error ({_describe(error)}). "
+        "Every remaining step is recorded when the workflow ends."
+    )
 
 
 def _record_ready(
