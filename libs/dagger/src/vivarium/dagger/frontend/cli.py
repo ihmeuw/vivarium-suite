@@ -3,15 +3,15 @@
 Pipeline definitions
 ====================
 
-Run, preview, force or show the steps of a Python pipeline definition for the ``dagger``
-command, which calls these functions when ``-c`` names a definition.
+Run, preview, force, show or graph the steps of a Python pipeline definition for the
+``dagger`` command, which calls these functions when ``-c`` names a definition.
 
 Each function loads a definition with
 :func:`~vivarium.dagger.frontend.definition.load_pipeline`, freezes the pipeline it
 returns once into a snapshot of its steps, checks on that snapshot that no output has
 more than one producing step and that the pipeline's state directory can be used, and
 runs or previews that snapshot as the verbs of :mod:`~vivarium.dagger.frontend.execution`
-do, or prints its steps, so it uses exactly the steps it checked.
+do, prints its steps, or writes their graph, so it uses exactly the steps it checked.
 A run or a force goes through the Jobmon bridge unless ``local`` is set; Jobmon is then
 checked before anything is written and imported only when the bridge runs the workflow,
 so a preview and a local run never import it. :doc:`/python_pipelines` shows an example
@@ -43,6 +43,7 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
 from vivarium.dagger.frontend.builder import _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
+from vivarium.dagger.frontend.drawing import GraphError, _graph
 from vivarium.dagger.frontend.execution import (
     PipelineError,
     RunInterrupted,
@@ -217,6 +218,42 @@ def show_definition(definition: str, steps: tuple[str, ...]) -> None:
         ]
         if blocks:
             click.echo("\n\n".join(blocks))
+    except KeyboardInterrupt:
+        _interrupted(resumable=False)
+
+
+def graph_definition(definition: str, output: Path) -> None:
+    """Write the graph of ``definition``'s steps and the files between them to ``output``.
+
+    The definition is loaded, frozen and checked as for :func:`show_definition`, with the
+    same errors, so a pipeline root that cannot be written exits with status 2, although
+    nothing is written there. The graph is then written as
+    :func:`~vivarium.dagger.frontend.drawing.graph` writes it, and ``output`` is the only
+    file written. Nothing is printed on success.
+
+    An extension that :func:`~vivarium.dagger.frontend.drawing.graph` refuses, including an
+    image extension without Graphviz's ``dot`` on ``PATH``, exits with status 2 and
+    that function's message, as a bad ``FILE`` argument. A failure of ``dot`` exits with
+    status 1 and its message. An ``output`` that cannot be written exits with status 1
+    and the message ``Could not write <output>: <error>``.
+
+    Parameters
+    ----------
+    definition
+        The pipeline definition, as for :func:`preview_definition`.
+    output
+        The file to write; its extension picks the format.
+    """
+    try:
+        pipeline = _load(definition)
+        try:
+            _graph(pipeline, output)
+        except ValueError as error:
+            raise click.BadParameter(str(error), param_hint="'FILE'") from None
+        except GraphError as error:
+            raise click.ClickException(str(error)) from None
+        except OSError as error:
+            raise click.ClickException(f"Could not write {output}: {error}") from None
     except KeyboardInterrupt:
         _interrupted(resumable=False)
 

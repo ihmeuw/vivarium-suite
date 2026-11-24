@@ -9,7 +9,7 @@ Command line interface for ``dagger``.
 pipeline definition (``path/to/file.py`` or ``package.module``, either optionally
 followed by ``:function``), and the command uses the matching frontend. A YAML workflow
 runs through Jobmon as :doc:`/dagger` describes. A pipeline definition is run, previewed,
-or forced as :doc:`/python_pipelines` describes; ``run`` and ``force`` run its stale steps
+forced, shown or drawn as :doc:`/python_pipelines` describes; ``run`` and ``force`` run its stale steps
 through Jobmon, or in this process with ``--local``.
 
 .. click:: vivarium.dagger.cli:dagger
@@ -180,8 +180,9 @@ def dagger() -> None:
     'run' to launch it and 'restart' to resume it from its output directory. A
     pipeline definition is a Python file or module with a function (by default
     'pipeline') that returns a Pipeline; 'run' runs its stale steps, 'preview'
-    shows which would run and why, 'force' runs named steps even if current, and
-    'show' prints what each step reads, writes and runs.
+    shows which would run and why, 'force' runs named steps even if current, 'show'
+    prints what each step reads, writes and runs, and 'graph' draws the steps and the
+    files between them to a file.
 
     A pipeline definition's 'run' and 'force' go through Jobmon unless given
     --local. -P/--project and -q/--queue then set the project and queue of every
@@ -410,6 +411,24 @@ def show(config: Path | str, steps: tuple[str, ...]) -> None:
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.show_definition(definition, steps)
+
+
+@dagger.command()
+@_with_config
+@click.argument("output", metavar="FILE", type=click.Path(dir_okay=False, path_type=Path))
+def graph(config: Path | str, output: Path) -> None:
+    """Draw the steps of a pipeline definition and the files between them to FILE.
+
+    FILE's extension picks the format: .mmd for Mermaid text, .md for the same text in a
+    Markdown code block, .dot or .gv for Graphviz DOT text, or .svg, .png or .pdf for an
+    image, which needs Graphviz's dot program on PATH. The graph has a node for each step,
+    each root input a step reads and each output no step reads. There is one edge from a
+    step to each step that reads files it writes, labeled with the keys of those files;
+    the edges from root inputs and to final outputs have no label. Nothing runs, and FILE
+    is the only file written.
+    """
+    definition = _require_definition(click.get_current_context(), config)
+    definitions.graph_definition(definition, output)
 
 
 @dagger.command()

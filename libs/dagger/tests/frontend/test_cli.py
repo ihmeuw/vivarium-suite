@@ -22,8 +22,9 @@ import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
 
-from tests.backend.file_snapshot import age_files, changed_files, snapshot_files
+from tests.backend.file_snapshot import Snapshot, age_files, changed_files, snapshot_files
 from tests.backend.order_names import EIGHT
+from tests.frontend.fake_dot import install_fake_dot
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from tests.frontend.pipelines import stable_snapshot
 from tests.frontend.simulations import (
@@ -749,14 +750,14 @@ def _forget_loaded_definitions(tmp_path: Path) -> Iterator[None]:
 # The command and its entry point
 
 
-def test_dagger_help_lists_run_preview_force_restart_and_show() -> None:
-    """'dagger --help' exits 0 and lists the subcommands run, preview, force, restart and show, and no others."""
+def test_dagger_help_lists_run_preview_force_restart_show_and_graph() -> None:
+    """'dagger --help' exits 0 and lists the subcommands run, preview, force, restart, show and graph, and no others."""
     result = _dagger("--help")
 
     assert result.exit_code == 0, _describe(result)
     _, _, commands = result.output.partition("Commands:")
     listed = set(re.findall(r"^  (\S+)", commands, flags=re.MULTILINE))
-    assert listed == {"run", "preview", "force", "restart", "show"}
+    assert listed == {"run", "preview", "force", "restart", "show", "graph"}
 
 
 def test_the_dagger_console_script_resolves_to_the_click_group() -> None:
@@ -2911,8 +2912,16 @@ def test_preview_with_a_closed_stdout_exits_one_without_blaming_the_build(
 
 
 def test_help_shows_no_rst_double_backticks() -> None:
-    """'dagger --help' and '--help' for each of run, preview, force, restart and show print no double backtick (``)."""
-    commands: list[list[str]] = [[], ["run"], ["preview"], ["force"], ["restart"], ["show"]]
+    """'dagger --help' and '--help' for each of run, preview, force, restart, show and graph print no double backtick (``)."""
+    commands: list[list[str]] = [
+        [],
+        ["run"],
+        ["preview"],
+        ["force"],
+        ["restart"],
+        ["show"],
+        ["graph"],
+    ]
     for command in commands:
         result = _dagger(*command, "--help")
 
@@ -3536,3 +3545,191 @@ def test_show_names_a_simulations_artifact_input(tmp_path: Path) -> None:
     assert result.exit_code == 0, _describe(result)
     block = _block(result, "sims/toy")
     assert any(line.startswith("  input  artifact: ") for line in block), result.stdout
+
+
+# dagger graph (MIC-7765)
+
+_PIPELINE_EXAMPLE = Path(__file__).parent / "pipeline_example"
+"""The three-step pipeline example, whose definition the docs page includes."""
+
+_GRAPH_TEXT_EXTENSIONS = (".mmd", ".md", ".dot", ".gv")
+"""The extensions 'dagger graph' writes as text."""
+
+_GRAPH_EXTENSIONS = (*_GRAPH_TEXT_EXTENSIONS, ".svg", ".png", ".pdf")
+"""Every extension 'dagger graph' accepts."""
+
+
+def _copy_pipeline_example(directory: Path) -> Path:
+    """Copy the pipeline example's definition to ``directory``; return the copy."""
+    return Path(shutil.copy(_PIPELINE_EXAMPLE / "pipeline.py", directory))
+
+
+def _literal_block(text: str, intro: str) -> str:
+    """Return the literal block after the one line of ``text`` ending ``intro``, dedented.
+
+    The block ends at the first line that is not blank and not indented, and the text
+    returned ends with one newline.
+    """
+    lines = text.splitlines()
+    starts = [index for index, line in enumerate(lines) if line.rstrip().endswith(intro)]
+    assert len(starts) == 1, f"no single line ending {intro!r}"
+    block: list[str] = []
+    for line in lines[starts[0] + 1 :]:
+        if line.strip() and not line.startswith(" "):
+            break
+        block.append(line)
+    return textwrap.dedent("\n".join(block)).strip("\n") + "\n"
+
+
+def _graph_docs_sample() -> str:
+    """Return the Mermaid sample on the docs page, after "``graph.mmd`` holds::"."""
+    sample = _literal_block(_DOCS_PAGE.read_text(), "``graph.mmd`` holds::")
+    assert sample.startswith("flowchart LR\n"), sample
+    return sample
+
+
+def _graph_dot_sample() -> str:
+    """Return the DOT text that the frontend.drawing module docstring gives for the example."""
+    module = importlib.import_module("vivarium.dagger.frontend.drawing")
+    sample = _literal_block(module.__doc__ or "", "the DOT text is::")
+    assert sample.startswith("digraph pipeline {\n"), sample
+    return sample
+
+
+def _without_bytecode(snapshot: Snapshot) -> Snapshot:
+    """Return ``snapshot`` without the bytecode cache that importing a definition writes."""
+    return {path: entry for path, entry in snapshot.items() if "__pycache__" not in path}
+
+
+def _names_extension(text: str, extension: str) -> bool:
+    """Return whether ``text`` holds ``extension`` not followed by a word character."""
+    return re.search(rf"{re.escape(extension)}(?!\w)", text) is not None
+
+
+def test_graph_writes_the_mermaid_file_of_the_docs_sample_for_the_pipeline_example(
+    tmp_path: Path,
+) -> None:
+    """'dagger graph -c pipeline.py graph.mmd' on a copy of tests/frontend/pipeline_example exits 0, prints nothing, and writes graph.mmd whose text is exactly the sample under "Drawing a pipeline's graph" on docs/source/python_pipelines.rst, dedented, with a final newline."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "graph.mmd"
+
+    result = _invoke("graph", str(definition), str(target))
+
+    assert result.exit_code == 0, _describe(result)
+    assert result.stdout == "", result.stdout
+    assert result.stderr == "", result.stderr
+    assert target.read_text() == _graph_docs_sample()
+
+
+def test_graph_writes_dot_text_for_a_dot_file(tmp_path: Path) -> None:
+    """'dagger graph -c pipeline.py graph.dot' on a copy of the pipeline example writes the DOT text that the frontend.graph module docstring gives for that example."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "graph.dot"
+
+    result = _invoke("graph", str(definition), str(target))
+
+    assert result.exit_code == 0, _describe(result)
+    assert target.read_text() == _graph_dot_sample()
+
+
+def test_graph_writes_nothing_but_its_file(tmp_path: Path) -> None:
+    """'dagger graph' on a copy of the pipeline example, before and after a local run, changes no file under the example's folder (outputs and state) except the graph file it was asked for, and runs no step."""
+    definition = _copy_pipeline_example(tmp_path)
+    before = _without_bytecode(snapshot_files(tmp_path))
+
+    fresh = _invoke("graph", str(definition), str(tmp_path / "before.mmd"))
+
+    assert fresh.exit_code == 0, _describe(fresh)
+    after = _without_bytecode(snapshot_files(tmp_path))
+    assert changed_files(before, after) == ["before.mmd"]
+    assert not (tmp_path / "output").exists()
+
+    ran = _invoke("run", str(definition))
+    assert ran.exit_code == 0, _describe(ran)
+    assert _example_product(tmp_path, "summary.csv").exists()
+    age_files(tmp_path)
+    before = _without_bytecode(snapshot_files(tmp_path))
+
+    result = _invoke("graph", str(definition), str(tmp_path / "output" / "after.mmd"))
+
+    assert result.exit_code == 0, _describe(result)
+    after = _without_bytecode(snapshot_files(tmp_path))
+    assert changed_files(before, after) == ["output/after.mmd"]
+
+
+def test_graph_refuses_an_unknown_extension_with_status_two(tmp_path: Path) -> None:
+    """'dagger graph -c pipeline.py graph.txt' exits 2, its standard error names '.txt' and each of the formats that work (.mmd, .md, .dot, .gv, .svg, .png, .pdf), and graph.txt is not written."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "graph.txt"
+
+    result = _invoke("graph", str(definition), str(target))
+
+    assert result.exit_code == 2, _describe(result)
+    assert _names_extension(result.stderr, ".txt"), result.stderr
+    for extension in _GRAPH_EXTENSIONS:
+        assert _names_extension(result.stderr, extension), (extension, result.stderr)
+    assert not target.exists()
+
+
+def test_graph_refuses_an_image_without_dot_with_status_two(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With PATH holding no 'dot' program, 'dagger graph -c pipeline.py graph.svg' exits 2, its standard error names '.svg', says it needs Graphviz's dot program, and names the text formats, and graph.svg is not written."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "graph.svg"
+    empty = tmp_path / "empty_bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+    result = _invoke("graph", str(definition), str(target))
+
+    assert result.exit_code == 2, _describe(result)
+    errors = result.stderr
+    assert _names_extension(errors, ".svg"), errors
+    assert "Graphviz" in errors, errors
+    assert re.search(r"\bdot\b", errors.replace(".dot", "")), errors
+    for extension in _GRAPH_TEXT_EXTENSIONS:
+        assert _names_extension(errors, extension), (extension, errors)
+    assert not target.exists()
+
+
+def test_graph_reports_a_failing_dot_with_status_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With a 'dot' program first on PATH that writes 'boom' to standard error and exits 3, 'dagger graph -c pipeline.py graph.png' exits 1 and its standard error has 'boom' and the exit status 3."""
+    install_fake_dot(tmp_path / "fake", monkeypatch, status=3, stderr="boom\n")
+    definition = _copy_pipeline_example(tmp_path)
+
+    result = _invoke("graph", str(definition), str(tmp_path / "graph.png"))
+
+    assert result.exit_code == 1, _describe(result)
+    assert "boom" in result.stderr, result.stderr
+    # A pytest folder such as 'pytest-3' must not stand in for the status.
+    errors = result.stderr.replace(str(tmp_path.resolve()), "").replace(str(tmp_path), "")
+    assert re.search(r"\b3\b", errors), result.stderr
+
+
+def test_graph_into_a_missing_folder_exits_one_naming_the_file(tmp_path: Path) -> None:
+    """'dagger graph -c pipeline.py missing/graph.mmd', where the folder 'missing' does not exist, exits 1 with 'Could not write' and the file's path on standard error, and creates no folder."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "missing" / "graph.mmd"
+
+    result = _invoke("graph", str(definition), str(target))
+
+    assert result.exit_code == 1, _describe(result)
+    assert f"Could not write {target}: " in result.stderr, result.stderr
+    assert not (tmp_path / "missing").exists()
+
+
+def test_graph_of_a_definition_that_raises_exits_two_as_show_does(tmp_path: Path) -> None:
+    """'dagger graph' on a definition whose pipeline() raises exits 2 with the same message as 'dagger show' on it, and writes no graph file."""
+    path = _write_definition(tmp_path, _RAISES["function"])
+    shown = _invoke("show", str(path))
+    assert shown.exit_code == 2, _describe(shown)
+    target = tmp_path / "graph.mmd"
+
+    result = _invoke("graph", str(path), str(target))
+
+    assert result.exit_code == 2, _describe(result)
+    assert result.stderr == shown.stderr
+    assert not target.exists()
