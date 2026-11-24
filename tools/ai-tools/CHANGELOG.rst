@@ -1,3 +1,8 @@
+**0.33.0 - 11/24/26**
+
+- ``team-conventions``: add a short section on refreshing a PR's test summaries
+  after a push, and a push hook that asks Claude to follow it
+
 **0.32.1 - 11/19/26**
 
 - ``model-development``: fetch from the remote in Setup, base the feature branch
