@@ -22,14 +22,18 @@ changes, and a build in which none changed can skip it.
 
 import importlib
 import inspect
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from importlib.machinery import SOURCE_SUFFIXES
 from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
 from pytask import PNode
 
+from vivarium.dagger.backend.code_identity import CodeIdentityNode
+from vivarium.dagger.backend.nodes import AlwaysStaleNode
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
 from vivarium.dagger.frontend.command_step import (
@@ -506,4 +510,11 @@ def _code_identity(
     A target whose module has no source file, such as a function defined in an
     interactive session, gets an always-stale identity named ``"<step>::code"``.
     """
-    raise NotImplementedError
+    name = f"{task_name}::code"
+    module_name = getattr(target, "__module__", None)
+    module = sys.modules.get(module_name) if isinstance(module_name, str) else None
+    file = getattr(module, "__file__", None)
+    if not isinstance(file, str) or not file.endswith(tuple(SOURCE_SUFFIXES)):
+        return AlwaysStaleNode(name=name)
+    root = None if repository_root is None else Path(repository_root).resolve()
+    return CodeIdentityNode(name=name, start=Path(file).resolve(), repository_root=root)
