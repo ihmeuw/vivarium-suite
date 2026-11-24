@@ -11,16 +11,13 @@ license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Natural Language :: English",
-    "Operating System :: MacOS :: MacOS X",
-    "Operating System :: POSIX",
-    "Operating System :: POSIX :: BSD",
     "Operating System :: POSIX :: Linux",
-    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Education",
@@ -43,6 +40,9 @@ cluster = ["jobmon_installer_ihme==10.12.2"]
 simulation = ["vivarium-psimulate>=1.0.0"]
 test = [
     "vivarium-dependencies[pytest]",
+    # The coverage floor follows the tests' child processes with coverage's
+    # `patch = ["subprocess"]`, which coverage 7.10 added.
+    "coverage>=7.10",
     "pytest-vivarium",
     # The notebook_step tests run real notebooks with the test env as the declared env.
     "ipykernel",
@@ -128,6 +128,13 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["vivarium.dagger"]
+# Measure the processes the tests start, such as the bridge's runner and a controller
+# under the fake Jobmon, so that their lines count toward the floor.
+patch = ["subprocess"]
+# The YAML runner imports Jobmon, which the GitHub CI env does not install, so its tests
+# skip there and cannot count toward the floor.
+omit = ["*/vivarium/dagger/config/*", "*/vivarium/dagger/runner.py"]
 
 [tool.coverage.report]
 show_missing = true
+fail_under = 90

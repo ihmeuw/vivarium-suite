@@ -16,6 +16,10 @@ else
 	endif
 endif
 
+# Measure coverage in test-all, so that CI and `make check` enforce the floor that
+# pyproject.toml sets; a plain pytest run does not measure it.
+COV ?= 1
+
 # Set the package name as the last part of this file's parent directory path
 PACKAGE_NAME = $(notdir $(CURDIR))
 
