@@ -6,6 +6,7 @@ so from the fake's ``run``, in the build's main thread, while the bridge's recor
 thread works beside it.
 """
 
+import logging
 import os
 import shlex
 import signal
@@ -24,7 +25,7 @@ from typing import Any
 
 import pandas as pd
 import pytest
-from pytask import Mark, PathNode, PTask, Session, TaskOutcome
+from pytask import Mark, PathNode, PTask, Session, TaskOutcome, hookimpl
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
@@ -60,6 +61,7 @@ from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge import execute
+from vivarium.dagger.bridge import plugin as bridge_plugin
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, read_result
 from vivarium.dagger.frontend.python_step import python_step
@@ -85,6 +87,12 @@ _THREAD_ERROR = "the recording thread failed on purpose"
 
 _STOPPED_WARNING = "Recording during the run stopped"
 """The start of the warning that the bridge prints when its recording thread fails."""
+
+_TEARDOWN_PRINT = "printed in a plugin's task teardown"
+"""The line that :class:`_TalksInTeardown` prints to standard output."""
+
+_TEARDOWN_LOG = "logged in a plugin's task teardown"
+"""The message of the record that :class:`_TalksInTeardown` logs at WARNING."""
 
 _ANCESTOR_FAILED = "Previous task 'gone.parquet' failed."
 """The reason of a skip_ancestor_failed mark, in the words that pytask gives it."""
@@ -441,6 +449,38 @@ def _build_recording_by_hand(
         return _bridged(tasks, root, _Scripted(after=call_the_scenario))
 
 
+class _TalksInTeardown:
+    """A pytask plugin whose task teardown prints a line and logs a record at WARNING."""
+
+    def __init__(self) -> None:
+        self.in_main_thread: list[bool] = []
+
+    @hookimpl
+    def pytask_execute_task_teardown(self, session: Session, task: PTask) -> None:
+        """Print and log the markers, and note whether this is the main thread."""
+        if session.config["dry_run"]:
+            return
+        self.in_main_thread.append(threading.current_thread() is threading.main_thread())
+        print(_TEARDOWN_PRINT)
+        logging.getLogger(__name__).warning(_TEARDOWN_LOG)
+
+
+@contextmanager
+def _registered_with_each_build(extra: object) -> Iterator[None]:
+    """Register ``extra`` with each build's plugin manager while the block runs."""
+    post_parse = bridge_plugin.pytask_post_parse
+
+    @hookimpl(trylast=True)
+    def pytask_post_parse(config: dict[str, Any]) -> None:
+        """Register the bridge as usual, then ``extra``."""
+        post_parse(config)
+        config["pm"].register(extra)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(bridge_plugin, "pytask_post_parse", pytask_post_parse)
+        yield
+
+
 # Recording during the run
 
 
@@ -518,6 +558,41 @@ def test_a_step_recorded_during_the_run_keeps_its_node_output_in_its_report(
     assert step_targets.FD1_OUTPUT in call.get("stdout", "")
     assert step_targets.STDERR_PRINT in call.get("stderr", "")
     assert step_targets.FD2_OUTPUT in call.get("stderr", "")
+
+
+def test_only_a_step_recorded_at_the_end_has_its_teardown_output_and_log_captured(
+    tmp_path: Path,
+) -> None:
+    """With a pytask plugin registered for the build whose pytask_execute_task_teardown prints a marker line to standard output and logs a marker record at WARNING, a step recorded by the recording thread during the run has no teardown section in its report, and a step recorded by the end-of-run pass has a teardown stdout section and a teardown log section that hold the markers."""
+    name = "only.parquet"
+    during = make_dir(tmp_path / "during_the_run")
+    at_the_end = make_dir(tmp_path / "at_the_end")
+    talks = _TalksInTeardown()
+
+    def wait_for_the_step(jobmon_run: JobmonRun) -> None:
+        """Wait until the journal holds the step, so the thread is what recorded it."""
+        _wait_for_the_journal(build_root(during), [name])
+
+    with _registered_with_each_build(talks):
+        tasks = constant_steps(registry(during), [name])
+        jobmon = _Scripted(after=wait_for_the_step)
+        by_the_thread = _bridged(tasks, build_root(during), jobmon)
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            # With the long interval the thread makes no pass, so the end pass records.
+            monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", LONG_RECORD_INTERVAL)
+            tasks = constant_steps(registry(at_the_end), [name])
+            by_the_end_pass = _bridged(tasks, build_root(at_the_end), FakeJobmon())
+
+    assert talks.in_main_thread == [False, True]
+    thread_report = report_for(by_the_thread, name)
+    assert thread_report.outcome == TaskOutcome.SUCCESS
+    recorded_whens = {when for when, _, _ in thread_report.sections}
+    assert "teardown" not in recorded_whens, thread_report.sections
+    end_report = report_for(by_the_end_pass, name)
+    assert end_report.outcome == TaskOutcome.SUCCESS
+    teardown = {key: text for when, key, text in end_report.sections if when == "teardown"}
+    assert _TEARDOWN_PRINT in teardown.get("stdout", "")
+    assert _TEARDOWN_LOG in teardown.get("log", "")
 
 
 def test_a_step_whose_unchanged_upstream_was_not_submitted_is_recorded_during_the_run(
