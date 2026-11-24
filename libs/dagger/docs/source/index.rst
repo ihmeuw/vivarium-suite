@@ -27,4 +27,5 @@ by the Institute for Health Metrics and Evaluation's Simulation Science team.
    dagger
    root_inputs
    python_pipelines
+   troubleshooting
    api_reference/index

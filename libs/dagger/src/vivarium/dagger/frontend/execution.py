@@ -177,9 +177,10 @@ class RunRefused(PipelineError):
 class RunInterrupted(PipelineError):
     """A run through Jobmon was interrupted while Jobmon ran it.
 
-    The bridge turns SIGTERM, or a ``KeyboardInterrupt`` from Jobmon, into an orderly
-    stop: it records the steps whose results were already written and reports every
-    other submitted step as failed or skipped. In this alpha, running the pipeline again
+    The bridge turns SIGTERM, SIGHUP, the alarm at half the settle margin before a Slurm
+    allocation ends, or a ``KeyboardInterrupt`` from Jobmon, into an orderly stop: it
+    records the steps whose results were already written and reports every other
+    submitted step as failed or skipped. In this alpha, running the pipeline again
     runs every step that a step method added again, including the recorded ones. The
     bridge does not cancel the Jobmon workflow, so its jobs that had started on compute
     nodes can still be running.

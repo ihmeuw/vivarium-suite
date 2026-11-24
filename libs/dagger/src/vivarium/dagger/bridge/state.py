@@ -10,8 +10,9 @@ workflow id.
 
 The file is for people and tools that explain a run. Nothing reads it to decide which
 steps to run: the next build plans from pytask's lockfile, so a step that the stopped run
-recorded as successful is skipped when its inputs and code are unchanged, and every other
-step runs again. The bridge reads the latest state only to warn, before it submits
+recorded as successful is skipped when its inputs and code identity are unchanged, and
+every other step runs again. With the default code identity no step counts as unchanged,
+so every step runs again. The bridge reads the latest state only to warn, before it submits
 anything, that the previous run did not finish, or that Jobmon stopped it with an error,
 and that its compute-node jobs may still be running.
 
@@ -52,7 +53,8 @@ class RunState:
     status: RunStatus
     """``"running"`` from the moment the workflow is bound until every step of the run
     has a report; then ``"finished"`` if the Jobmon run returned, also with an error, or
-    ``"interrupted"`` if SIGTERM or a ``KeyboardInterrupt`` stopped it."""
+    ``"interrupted"`` if SIGTERM, SIGHUP, the alarm before the allocation ends, or a
+    ``KeyboardInterrupt`` stopped it."""
     workflow_id: int | None
     """The Jobmon workflow id, or ``None`` if the run stopped before the workflow was
     bound or Jobmon gave no id."""
