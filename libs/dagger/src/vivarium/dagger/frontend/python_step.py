@@ -16,8 +16,11 @@ import reference (:func:`target_reference`) and the output suffix or suffixes.
 
 The step's code identity is a
 :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at the file
-of the target's module, so the step runs again when a first-party file that it imports
-changes, and a build in which none changed can skip it.
+of the target's module and names the target, so the step runs again when a first-party
+file that it imports changes or when it calls another function, and a build in which
+neither happened can skip it. A target that is not a plain function at a module's top
+level, such as a lambda, a closure, a bound method or a callable object, gets an
+always-stale identity, so its step runs on every build.
 """
 
 import importlib
@@ -27,6 +30,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from importlib.machinery import SOURCE_SUFFIXES
 from pathlib import Path
+from types import FunctionType
 from typing import Any, cast
 
 import pandas as pd
@@ -405,7 +409,8 @@ def python_step(
         resolved nodes, ready to collect into a list and hand to ``build`` or
         ``preview``. Its ``code_id`` is a
         :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at
-        the file of ``target``'s module.
+        the file of ``target``'s module, or an always-stale node when ``target`` is not
+        a plain function at a module's top level.
 
     Raises
     ------
@@ -507,14 +512,36 @@ def _code_identity(
 ) -> PNode:
     """Return the step's code identity, starting at the file of ``target``'s module.
 
-    A target whose module has no source file, such as a function defined in an
-    interactive session, gets an always-stale identity named ``"<step>::code"``.
+    The identity is named ``"<step>::code"`` and records the reference of ``target``
+    after ``inspect.unwrap``. A target that is not then a plain module-level function, or
+    whose module has no source file, such as a function defined in an interactive
+    session, gets an always-stale identity.
     """
     name = f"{task_name}::code"
-    module_name = getattr(target, "__module__", None)
-    module = sys.modules.get(module_name) if isinstance(module_name, str) else None
+    function = _plain_function(target)
+    if function is None:
+        return AlwaysStaleNode(name=name)
+    module = sys.modules.get(function.__module__)
     file = getattr(module, "__file__", None)
     if not isinstance(file, str) or not file.endswith(tuple(SOURCE_SUFFIXES)):
         return AlwaysStaleNode(name=name)
     root = None if repository_root is None else Path(repository_root).resolve()
-    return CodeIdentityNode(name=name, start=Path(file).resolve(), repository_root=root)
+    return CodeIdentityNode(
+        name=name,
+        start=Path(file).resolve(),
+        repository_root=root,
+        target=f"{function.__module__}:{function.__qualname__}",
+    )
+
+
+def _plain_function(target: Callable[..., Any]) -> FunctionType | None:
+    """Return ``target`` unwrapped if it is a plain module-level function, else None."""
+    try:
+        function: object = inspect.unwrap(target)
+    except ValueError:
+        return None
+    if not inspect.isfunction(function) or function.__closure__:
+        return None
+    if "<locals>" in function.__qualname__ or function.__name__ == "<lambda>":
+        return None
+    return function

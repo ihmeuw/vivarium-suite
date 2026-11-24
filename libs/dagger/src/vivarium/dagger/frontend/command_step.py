@@ -15,9 +15,8 @@ named ``{placeholder}``. With an ``env``,
 directories first on ``PATH`` for the whole command.
 
 The command, with every path in it, is hashed with the step, so a changed command marks
-the step stale. Code identity defaults to always-stale, as for
-:func:`~vivarium.dagger.frontend.python_step.python_step`, so in this cut a command step
-re-runs on every build.
+the step stale. Code identity defaults to always-stale, so a command step re-runs on
+every build until its code identity starts at its script (MIC-7858).
 """
 
 import difflib

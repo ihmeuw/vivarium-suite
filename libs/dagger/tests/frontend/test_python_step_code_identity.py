@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import re
 import sys
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
@@ -9,7 +10,7 @@ from types import FunctionType, ModuleType
 
 import pandas as pd
 import pytest
-from pytask import TaskOutcome
+from pytask import PNode, TaskOutcome
 
 from tests.bridge.helpers import LONG_RECORD_INTERVAL, bound_names
 from tests.frontend.notebooks import write_source_notebook
@@ -113,6 +114,19 @@ def test_a_pipeline_resolves_and_exposes_its_repository_root(
     assert undeclared.repository_root is None
 
 
+@pytest.mark.parametrize("kind", ["missing", "file"])
+def test_a_repository_root_that_is_not_a_directory_is_refused(
+    tmp_path: Path, kind: str
+) -> None:
+    """Pipeline(repository_root=...) raises ValueError naming the resolved path when it does not exist or is a file."""
+    root = tmp_path / "repo"
+    if kind == "file":
+        root.write_text("not a directory\n")
+
+    with pytest.raises(ValueError, match=re.escape(str(root.resolve()))):
+        Pipeline(tmp_path / "out", "run1", repository_root=root)
+
+
 def test_a_python_step_gets_a_code_identity_node_that_starts_at_its_targets_module(
     tmp_path: Path, import_from: ImportFrom
 ) -> None:
@@ -152,6 +166,156 @@ def test_a_target_without_a_source_file_gets_an_always_stale_identity(
     [task] = freeze(pipeline).tasks
     assert isinstance(task.code_id, AlwaysStaleNode), repr(task.code_id)
     assert task.code_id.name == "a.parquet::code"
+
+
+def _code_node(target: Callable[..., pd.DataFrame], tmp_path: Path, repo: Path) -> PNode:
+    """Return the code identity of a one-step pipeline that calls ``target``."""
+    pipeline = Pipeline(tmp_path / "out", "run1", repository_root=repo)
+    pipeline.add_python_step(target, inputs={}, outputs="a.parquet")
+    [task] = freeze(pipeline).tasks
+    assert task.code_id is not None
+    return task.code_id
+
+
+_MAKE_V2 = """
+
+def make_v2() -> pd.DataFrame:
+    return pd.DataFrame({"n": [4, 5, 6]})
+"""
+"""A second version of ``make`` in the same module."""
+
+
+def test_switching_a_step_to_another_function_in_the_same_module_changes_its_state(
+    tmp_path: Path, import_from: ImportFrom
+) -> None:
+    """A step of one name that calls make and then make_v2 of one unchanged module gets unequal code identity nodes with different states, while two builds that both call make get equal nodes with equal states."""
+    repo = _write(tmp_path / "repo", {"ci_switch_steps.py": _STEPS + _MAKE_V2})
+    module = import_from(repo, "ci_switch_steps")
+
+    make, make_again, make_v2 = [
+        _code_node(target, tmp_path, repo)
+        for target in (module.make, module.make, module.make_v2)
+    ]
+
+    for node in (make, make_again, make_v2):
+        assert isinstance(node, CodeIdentityNode), repr(node)
+    assert make == make_again
+    assert make.state() == make_again.state()
+    assert make_v2 != make
+    assert make_v2.state() != make.state()
+
+
+_DECORATOR_MODULE = """\
+import functools
+
+
+def logged(function):
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        return function(*args, **kwargs)
+
+    return wrapper
+"""
+"""A module of a decorator that uses functools.wraps."""
+
+_TARGET_KINDS_MODULE = """\
+import functools
+
+import pandas as pd
+
+import ci_kinds_decorator
+
+
+def make() -> pd.DataFrame:
+    return pd.DataFrame({"n": [1]})
+
+
+def _factory(n):
+    def made():
+        return pd.DataFrame({"n": [n]})
+
+    return made
+
+
+def _decorator_without_wraps(function):
+    def wrapper():
+        return function()
+
+    return wrapper
+
+
+class Maker:
+    def __call__(self):
+        return make()
+
+    def method(self):
+        return make()
+
+
+factory_closure = _factory(2)
+callable_instance = Maker()
+bound_method = callable_instance.method
+lambda_function = lambda: make()
+partial_function = functools.partial(make)
+
+
+@_decorator_without_wraps
+def decorated_without_wraps():
+    return make()
+
+
+@ci_kinds_decorator.logged
+def decorated_with_wraps():
+    return make()
+"""
+"""A module of step targets of each kind that is not a plain module-level function, and
+one decorated with a decorator from another module that uses functools.wraps."""
+
+_TARGET_KINDS_FILES = {
+    "ci_kinds_decorator.py": _DECORATOR_MODULE,
+    "ci_kinds_steps.py": _TARGET_KINDS_MODULE,
+}
+"""The files of the repository of the step targets of each kind."""
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "factory_closure",
+        "callable_instance",
+        "bound_method",
+        "lambda_function",
+        "partial_function",
+        "decorated_without_wraps",
+    ],
+)
+def test_a_target_that_is_not_a_plain_module_level_function_gets_an_always_stale_identity(
+    tmp_path: Path, import_from: ImportFrom, attribute: str
+) -> None:
+    """A factory closure, a callable instance, a bound method, a lambda, a functools.partial and a function wrapped by a decorator without functools.wraps, each defined in a first-party module, get an always-stale code identity named "<step>::code"."""
+    repo = _write(tmp_path / "repo", _TARGET_KINDS_FILES)
+    module = import_from(repo, "ci_kinds_steps")
+
+    node = _code_node(getattr(module, attribute), tmp_path, repo)
+
+    assert isinstance(node, AlwaysStaleNode), repr(node)
+    assert node.name == "a.parquet::code"
+
+
+def test_a_target_decorated_with_functools_wraps_starts_at_the_wrapped_functions_module(
+    tmp_path: Path, import_from: ImportFrom
+) -> None:
+    """A step whose target is decorated by a decorator from another module that uses functools.wraps gets a CodeIdentityNode that starts at the wrapped function's module and gives the same state on two calls."""
+    repo = _write(tmp_path / "repo", _TARGET_KINDS_FILES)
+    module = import_from(repo, "ci_kinds_steps")
+    assert module.__file__ is not None
+
+    node = _code_node(module.decorated_with_wraps, tmp_path, repo)
+
+    assert isinstance(node, CodeIdentityNode), repr(node)
+    assert node.start == Path(module.__file__).resolve()
+    assert node.repository_root == repo.resolve()
+    assert node.state() == node.state()
 
 
 @pytest.mark.parametrize("kind", ["command", "notebook", "simulation"])

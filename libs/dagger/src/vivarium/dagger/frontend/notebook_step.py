@@ -34,9 +34,8 @@ notebook's metadata, are not used. The declared environment therefore needs ``pa
 and ``ipykernel`` installed; the pipeline's own environment needs neither.
 
 The command, including every parameter value and path, is hashed with the step, so a
-changed parameter marks the step stale. Code identity defaults to always-stale, as for
-:func:`~vivarium.dagger.frontend.python_step.python_step`, so in this cut a notebook
-step re-runs on every build.
+changed parameter marks the step stale. Code identity defaults to always-stale, so a
+notebook step re-runs on every build until its code identity starts at its code cells.
 """
 
 import ast

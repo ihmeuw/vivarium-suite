@@ -20,9 +20,9 @@ stays in the scratch directory until the step runs again.
 
 The command, including every option and path, is hashed with the step, so a changed
 option marks the step stale. The spec and branches files are declared inputs, so an edit
-to either marks it stale too. Code identity defaults to always-stale, as for
-:func:`~vivarium.dagger.frontend.python_step.python_step`, so in this cut a simulation
-step re-runs on every build.
+to either marks it stale too. Code identity defaults to always-stale, so a simulation
+step re-runs on every build until its code identity starts at the components that its
+model specification names.
 """
 
 import difflib

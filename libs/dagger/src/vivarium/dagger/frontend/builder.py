@@ -115,8 +115,9 @@ class Pipeline:
         empty run name, ``.`` or ``..``), or is :data:`STATE_DIR` or a directory inside
         it (as for the run name ``.dagger``), since the run's outputs would then share
         a directory with the state of every run; or if ``state`` is a relative path,
-        which would move the run's state with the current directory. The message names
-        the run name or the state path.
+        which would move the run's state with the current directory; or if
+        ``repository_root`` is given and is not an existing directory. The message names
+        the run name, the state path or the repository root.
     TypeError
         If ``resources`` is not a mapping.
     """
@@ -146,14 +147,18 @@ class Pipeline:
                 "Pipeline resources must be a mapping, got "
                 f"{type(resources).__name__} {resources!r}."
             )
+        repository = None if repository_root is None else Path(repository_root).resolve()
+        if repository is not None and not repository.is_dir():
+            raise ValueError(
+                f"Pipeline repository_root {str(repository)!r} is not an existing "
+                "directory."
+            )
         self._output_root = root
         self._run_name = run_name
         self._state = state_dir
         self._registry = FileRegistry(root, run_name, root_inputs)
         self._resources: dict[str, Any] = {} if resources is None else dict(resources)
-        self._repository_root = (
-            None if repository_root is None else Path(repository_root).resolve()
-        )
+        self._repository_root = repository
         self._tasks: list[Task] = []
         self._producers: dict[FileKey, str] = {}
         # Outputs of steps added with add_task, by resolved path: the registry does not

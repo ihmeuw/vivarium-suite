@@ -124,7 +124,50 @@ def python_file_hash(path: Path | str) -> CodeHash:
     OSError
         If the file cannot be read.
     """
-    return _cached_hash(path, "python", _python_code_hash)
+    return python_code_hash(Path(path).read_bytes())
+
+
+def python_code_hash(data: bytes) -> CodeHash:
+    """Return the hash of the code in a Python file whose bytes are ``data``.
+
+    The result is the one :func:`python_file_hash` gives for a file with these bytes, and
+    it shares that function's cache, so the result for one content is computed once per
+    process. The syntax tree is not kept; a caller that also needs the tree gets it from
+    :func:`parse_source`, which parses the content again.
+
+    Parameters
+    ----------
+    data
+        The bytes of the Python file.
+
+    Returns
+    -------
+        The content's code hash.
+    """
+    return _cached_hash(data, "python", _python_code_hash)
+
+
+def parse_source(source: str | bytes) -> ast.AST | None:
+    """Return the syntax tree of Python source, or ``None`` if it cannot be parsed.
+
+    The source is parsed as the code hash parses it: a top-level ``await`` is accepted,
+    and the process's warning filters are ignored, so that a ``SyntaxWarning`` never
+    becomes an error. Source with a syntax error, source nested deeper than the parser
+    accepts, and source with a decimal int literal that has more digits than the
+    process's int-string limit give ``None``. Each call parses the source; nothing is
+    cached.
+
+    Parameters
+    ----------
+    source
+        The Python source, as text or as the bytes of a file, with its encoding
+        declaration or byte-order mark if it has one.
+
+    Returns
+    -------
+        The source's syntax tree, an :class:`ast.Module`, or ``None``.
+    """
+    return _parsed(source)
 
 
 def notebook_hash(path: Path | str) -> CodeHash:
@@ -152,7 +195,7 @@ def notebook_hash(path: Path | str) -> CodeHash:
     OSError
         If the file cannot be read.
     """
-    return _cached_hash(path, "notebook", _notebook_code_hash)
+    return _cached_hash(Path(path).read_bytes(), "notebook", _notebook_code_hash)
 
 
 def cell_source(source: object) -> str | None:
@@ -178,11 +221,8 @@ def cell_source(source: object) -> str | None:
     return None
 
 
-def _cached_hash(
-    path: Path | str, kind: str, compute: Callable[[bytes], CodeHash]
-) -> CodeHash:
-    """Return the code hash of the file, computed once per content, kind and int limit."""
-    data = Path(path).read_bytes()
+def _cached_hash(data: bytes, kind: str, compute: Callable[[bytes], CodeHash]) -> CodeHash:
+    """Return the code hash of bytes, computed once per content, kind and int limit."""
     key = (kind, hashlib.sha256(data).hexdigest(), sys.get_int_max_str_digits())
     if key not in _results:
         _results[key] = compute(data)
@@ -204,11 +244,22 @@ def _python_code_hash(data: bytes) -> CodeHash:
 
 def _syntax_tree_digest(source: str | bytes) -> str | None:
     """Return the digest of the canonical text of the source's syntax tree, or None."""
+    tree = _parsed(source)
+    if tree is None:
+        return None
     try:
-        text = _canonical_text(_parse(source))
+        text = _canonical_text(tree)
     except _PARSE_ERRORS:
         return None
     return _AST_PREFIX + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _parsed(source: str | bytes) -> ast.AST | None:
+    """Return the source's syntax tree, or None if it cannot be parsed."""
+    try:
+        return _parse(source)
+    except _PARSE_ERRORS:
+        return None
 
 
 def _parse(source: str | bytes) -> ast.AST:

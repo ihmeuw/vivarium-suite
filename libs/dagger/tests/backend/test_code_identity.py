@@ -1,19 +1,25 @@
 """Tests of the code part of a step's identity and of its identity node."""
 
+import ast
 import builtins
 import hashlib
+import importlib.machinery
+import io
+import os
+import re
 import subprocess
 import sys
 import sysconfig
 import textwrap
 import uuid
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from vivarium.dagger.backend import code_identity as code_identity_module
 from vivarium.dagger.backend.code_hash import python_file_hash
 from vivarium.dagger.backend.code_identity import CodeIdentityNode, CodePart, code_part
 
@@ -24,34 +30,60 @@ _EDITABLE = "<editable>/"
 """The prefix of the name of a file in an editable install's source."""
 
 _EDITABLE_PACKAGE = {
-    "edpkg/__init__.py": "",
-    "edpkg/core.py": "from edpkg import util\n",
-    "edpkg/util.py": "VALUE = 1\n",
+    "__init__.py": "",
+    "core.py": "from {package} import util\n",
+    "util.py": "VALUE = 1\n",
 }
-"""The files of the editable package ``edpkg``, relative to its source directory."""
+"""The files of the editable package, relative to its package directory, where
+``{package}`` stands for the package's import name."""
 
-_EDITABLE_NAMES = {f"{_EDITABLE}{name}" for name in _EDITABLE_PACKAGE}
-"""The names of the files of ``edpkg``, relative to the directory that holds the package."""
-
-_EDITABLE_NAMES_IN_PACKAGE = {
-    f"{_EDITABLE}{name.removeprefix('edpkg/')}" for name in _EDITABLE_PACKAGE
-}
-"""The names of the files of ``edpkg``, relative to the package directory itself."""
+_EDITABLE_FORMS = [
+    "pth_path_entry",
+    "finder_mapping",
+    "annotated_finder_mapping",
+    "dotted_finder_mapping",
+    "annotated_dotted_finder_mapping",
+    "mismatched_finder_mapping",
+    "mismatched_dotted_finder_mapping",
+]
+"""The forms of an editable install: a .pth entry of the source directory, or a setuptools
+finder whose ``MAPPING`` is a plain or an annotated assignment and maps a top-level or a
+dotted package name, either to a directory whose last components are the name's
+components or, for a mismatched form, to one whose last components differ from them."""
 
 _FINDER = "__editable___edpkg_0_1_finder"
-"""The module name of the setuptools editable finder of ``edpkg``."""
+"""The module name of the setuptools editable finder that the tests write."""
+
+_HOOK = "__editable__.edpkg-0.1.finder.__path_hook__"
+"""The search path entry of that finder's path hook, which is not a directory."""
 
 
 @dataclass(frozen=True)
 class _EditableInstall:
-    """An editable install of ``edpkg`` under a test's directory."""
+    """An editable install of a package under a test's directory."""
 
     source: Path
-    """The directory that holds the package directory ``edpkg``."""
+    """The source directory that the names of the package's files are relative to."""
+    package: str
+    """The package's import name."""
+    package_dir: Path
+    """The package's directory, which the install maps the package's name to."""
     search_path: list[str]
     """The install's entries of the search path, in order."""
     marker: Path
     """A file that exists only if a file of the install was run."""
+    repository_files: dict[str, str] = field(default_factory=dict)
+    """Files that the repository must hold for the package's name to import."""
+
+    @property
+    def files(self) -> list[Path]:
+        """Return the package's files."""
+        return [self.package_dir / name for name in _EDITABLE_PACKAGE]
+
+    @property
+    def names(self) -> set[str]:
+        """Return the names that a code part gives the package's files."""
+        return {_EDITABLE + path.relative_to(self.source).as_posix() for path in self.files}
 
 
 def _write(root: Path, files: Mapping[str, str]) -> Path:
@@ -89,29 +121,107 @@ def _assert_not_established(part: CodePart, file_name: str) -> None:
     assert file_name in part.reason, part.reason
 
 
-def _editable_install(base: Path, form: str) -> _EditableInstall:
-    """Install ``edpkg`` under ``base`` in the editable ``form`` that setuptools writes."""
-    source = _write(base / "editable" / "src", _EDITABLE_PACKAGE)
+def _site(base: Path) -> Path:
+    """Make and return a site-packages directory under ``base``."""
     site = base / "env" / "lib" / "python3" / "site-packages"
-    site.mkdir(parents=True)
-    marker = base / "ran.txt"
-    run_marker = f"open({str(marker)!r}, 'w').close()"
-    pth = site / "__editable__.edpkg-0.1.pth"
-    if form == "pth_path_entry":
-        pth.write_text(f"{source}\nimport os; {run_marker}\n")
-        return _EditableInstall(source, [str(site), str(source)], marker)
+    site.mkdir(parents=True, exist_ok=True)
+    return site
+
+
+def _run_marker(marker: Path) -> str:
+    """Return a statement that creates ``marker`` when it runs."""
+    return f"open({str(marker)!r}, 'w').close()"
+
+
+def _write_finder(
+    site: Path, mapping: Mapping[str, Path], marker: Path, annotated: bool = False
+) -> str:
+    """Write a setuptools editable finder of ``mapping`` and its .pth; return its hook."""
+    mapping_type, namespaces_type = (
+        (": dict[str, str]", ": dict[str, list[str]]") if annotated else ("", "")
+    )
+    entries = {name: str(path) for name, path in mapping.items()}
     (site / f"{_FINDER}.py").write_text(
         "import sys\n"
-        f"{run_marker}\n"
-        f"MAPPING = {{'edpkg': {str(source / 'edpkg')!r}}}\n"
-        "NAMESPACES = {}\n"
+        f"{_run_marker(marker)}\n"
+        f"MAPPING{mapping_type} = {entries!r}\n"
+        f"NAMESPACES{namespaces_type} = {{}}\n"
         "\n\n"
         "def install():\n"
         "    sys.meta_path.append(None)\n"
     )
+    pth = site / "__editable__.edpkg-0.1.pth"
     pth.write_text(f"import {_FINDER}; {_FINDER}.install()\n")
-    hook = "__editable__.edpkg-0.1.finder.__path_hook__"
-    return _EditableInstall(source, [str(site), hook], marker)
+    return _HOOK
+
+
+def _watch_opens(
+    monkeypatch: pytest.MonkeyPatch, files: Iterable[Path], on_open: Callable[[Path], None]
+) -> None:
+    """Call ``on_open`` with each of ``files`` just before any open function opens it."""
+    watched = {path.resolve() for path in files}
+    real_open = io.open
+    real_open_code = io.open_code
+    real_os_open = os.open
+
+    def check(file: object) -> None:
+        """Call ``on_open`` if ``file`` names a watched file."""
+        if isinstance(file, (str, bytes, os.PathLike)):
+            path = Path(os.fsdecode(file)).resolve()
+            if path in watched:
+                on_open(path)
+
+    def watching_open(file: Any, *args: Any, **kwargs: Any) -> Any:
+        """Check ``file``, then open it with io.open."""
+        check(file)
+        return real_open(file, *args, **kwargs)
+
+    def watching_open_code(path: str) -> Any:
+        """Check ``path``, then open it with io.open_code."""
+        check(path)
+        return real_open_code(path)
+
+    def watching_os_open(path: Any, *args: Any, **kwargs: Any) -> int:
+        """Check ``path``, then open it with os.open."""
+        check(path)
+        return real_os_open(path, *args, **kwargs)
+
+    # pathlib opens through io.open, which is the same function as builtins.open but is
+    # looked up on the io module.
+    monkeypatch.setattr(builtins, "open", watching_open)
+    monkeypatch.setattr(io, "open", watching_open)
+    monkeypatch.setattr(io, "open_code", watching_open_code)
+    monkeypatch.setattr(os, "open", watching_os_open)
+
+
+def _editable_install(base: Path, form: str) -> _EditableInstall:
+    """Install a package under ``base`` in the editable ``form`` that setuptools writes."""
+    dotted = "dotted" in form
+    package = "outer.edpkg" if dotted else "edpkg"
+    source = base / "editable" / "src"
+    package_dir = source.joinpath(*package.split("."))
+    if form.startswith("mismatched"):
+        # For the dotted name only the first component differs, so a root found by
+        # stripping the key's components without comparing each of them is wrong.
+        package_dir = source / "lib" / "edpkg" if dotted else source / "edpkg_source"
+        source = package_dir.parent
+    _write(
+        package_dir,
+        {name: text.format(package=package) for name, text in _EDITABLE_PACKAGE.items()},
+    )
+    site = _site(base)
+    marker = base / "ran.txt"
+    if form == "pth_path_entry":
+        pth = site / "__editable__.edpkg-0.1.pth"
+        pth.write_text(f"{source}\nimport os; {_run_marker(marker)}\n")
+        return _EditableInstall(
+            source, package, package_dir, [str(site), str(source)], marker
+        )
+    hook = _write_finder(site, {package: package_dir}, marker, annotated="annotated" in form)
+    # The parent of a dotted name is an ordinary package of the repository, which the
+    # search path finds; its submodule is then found only through the finder's MAPPING.
+    parent = {"outer/__init__.py": ""} if dotted else {}
+    return _EditableInstall(source, package, package_dir, [str(site), hook], marker, parent)
 
 
 # code_part: which files are listed
@@ -364,6 +474,275 @@ def test_a_data_file_opened_inside_a_function_is_not_listed(tmp_path: Path) -> N
     assert set(part.files) == {"main.py", "alpha.py"}
 
 
+def test_a_data_file_opened_in_a_class_body_is_listed(tmp_path: Path) -> None:
+    """A data file opened in the body of a module-level class, or of a class nested in it, is listed, because a class body runs at import, while one opened in a method is not."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": """\
+                from pathlib import Path
+
+
+                class Settings:
+                    TEXT = open(Path(__file__).parent / "class_body.txt").read()
+
+                    class Inner:
+                        TEXT = open(Path(__file__).parent / "nested_class_body.txt").read()
+
+                    def reload(self) -> str:
+                        return open(Path(__file__).parent / "method.txt").read()
+                """,
+            "class_body.txt": "one\n",
+            "nested_class_body.txt": "two\n",
+            "method.txt": "three\n",
+        },
+    )
+
+    part = _part(repo, extra=[_STDLIB])
+
+    assert part.established, part.reason
+    assert set(part.files) == {
+        "main.py",
+        "alpha.py",
+        "class_body.txt",
+        "nested_class_body.txt",
+    }
+    assert part.files["class_body.txt"] == _bytes_digest(repo / "class_body.txt")
+
+
+_DATA_CALLS: dict[str, str] = {
+    "positional_argument": 'TABLE = read_csv(Path(__file__).parent / "t.csv")\n',
+    "method_call": 'TABLE = pd.read_csv(Path(__file__).parent / "t.csv")\n',
+    "keyword_argument": 'ARRAY = np.load(file=Path(__file__).parent / "t.csv")\n',
+    "expression_statement": 'yaml.safe_load(Path(__file__).parent / "t.csv")\n',
+    "nested_call": 'CONFIG = json.loads(read_text(Path(__file__).parent / "t.csv"))\n',
+    "module_level_name": (
+        'HERE = Path(__file__).parent\nTABLE = pd.read_csv(HERE / "t.csv")\n'
+    ),
+    "annotated_module_level_name": (
+        'HERE: Path = Path(__file__).parent\nTABLE = pd.read_csv(HERE / "t.csv")\n'
+    ),
+    "chained_module_level_name": (
+        'HERE = THERE = Path(__file__).parent\nTABLE = pd.read_csv(HERE / "t.csv")\n'
+    ),
+    "class_body": (
+        'class Tables:\n    TABLE = pd.read_csv(Path(__file__).parent / "t.csv")\n'
+    ),
+}
+"""Top-level calls of any function with a path built from ``__file__`` to ``t.csv``."""
+
+
+@pytest.mark.parametrize("call", list(_DATA_CALLS))
+def test_a_data_file_passed_to_any_call_at_import_is_listed(
+    tmp_path: Path, call: str
+) -> None:
+    """A call of any function at a module's or a class body's top level, with the path of an existing file built from __file__ as a positional or keyword argument (pd.read_csv, np.load, yaml.safe_load, a call nested in another, a path through a module-level name bound once by a top-level plain, annotated or chained assignment), lists that file by its bytes, and the module itself keeps its code hash."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": f"from pathlib import Path\n\n{_DATA_CALLS[call]}",
+            "t.csv": "a,b\n1,2\n",
+        },
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py", "t.csv"}
+    assert part.files["t.csv"] == _bytes_digest(repo / "t.csv")
+    _assert_python_digests(part, repo)
+
+
+_NO_DATA_CALLS: dict[str, str] = {
+    "missing_file": 'TABLE = pd.read_csv(Path(__file__).parent / "missing.csv")\n',
+    "directory": 'TABLE = pd.read_csv(Path(__file__).parent / "data")\n',
+    "function_body": (
+        'def load():\n    return pd.read_csv(Path(__file__).parent / "t.csv")\n'
+    ),
+    "async_function_body": (
+        'async def load():\n    return pd.read_csv(Path(__file__).parent / "t.csv")\n'
+    ),
+    "lambda_body": 'LOAD = lambda: pd.read_csv(Path(__file__).parent / "t.csv")\n',
+    "method_body": (
+        "class Tables:\n"
+        "    def load(self):\n"
+        '        return pd.read_csv(Path(__file__).parent / "t.csv")\n'
+    ),
+    "name_bound_only_in_if": (
+        'if True:\n    HERE = Path(__file__).parent\nTABLE = pd.read_csv(HERE / "t.csv")\n'
+    ),
+}
+"""Calls with a path built from ``__file__`` that name no existing file or do not run at
+import."""
+
+
+@pytest.mark.parametrize("call", list(_NO_DATA_CALLS))
+def test_a_call_that_does_not_read_an_existing_file_at_import_lists_no_data_file(
+    tmp_path: Path, call: str
+) -> None:
+    """A call whose path names a missing file or a directory, a call in the body of a function, an async function, a lambda or a method, and a call whose path goes through a name bound only inside an if block rather than at the module's top level, add no data file."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": f"from pathlib import Path\n\n{_NO_DATA_CALLS[call]}",
+            "t.csv": "a,b\n1,2\n",
+            "data/inner.csv": "a,b\n3,4\n",
+        },
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py"}
+
+
+_REBINDINGS: dict[str, tuple[str, bool]] = {
+    "bound_once": ("", True),
+    "function_parameter": ("def load(HERE):\n    return HERE\n", True),
+    "function_local": (
+        'def load():\n    HERE = Path("/elsewhere")\n    return HERE\n',
+        True,
+    ),
+    "async_function_local": ('async def load():\n    HERE = Path("/elsewhere")\n', True),
+    "method_local": (
+        'class Loader:\n    def load(self):\n        HERE = Path("/elsewhere")\n',
+        True,
+    ),
+    "lambda_parameter": ("LOAD = lambda HERE: HERE\n", True),
+    "comprehension_target": ("NAMES = [HERE for HERE in range(3)]\n", True),
+    "augmented_assignment": ('HERE /= "sub"\n', False),
+    "second_assignment": ('HERE = Path("/elsewhere")\n', False),
+    "annotated_assignment": ('HERE: Path = Path("/elsewhere")\n', False),
+    "for_target": ('for HERE in [Path("/elsewhere")]:\n    pass\n', False),
+    "with_target": ('with nullcontext(Path("/elsewhere")) as HERE:\n    pass\n', False),
+    "walrus": ('(HERE := Path("/elsewhere"))\n', False),
+    "tuple_unpacking": ('HERE, OTHER = Path("/elsewhere"), 1\n', False),
+    "starred_target": ("*HERE, OTHER = [1, 2]\n", False),
+    "import_alias": ("import os as HERE\n", False),
+    "def_name": ("def HERE():\n    pass\n", False),
+    "class_name": ("class HERE:\n    pass\n", False),
+    "del": ("del HERE\n", False),
+    "assignment_in_if": ('if OTHER:\n    HERE = Path("/elsewhere")\n', False),
+    "assignment_in_else": (
+        'if OTHER:\n    pass\nelse:\n    HERE = Path("/elsewhere")\n',
+        False,
+    ),
+    "assignment_in_for": ('for _ in range(1):\n    HERE = Path("/elsewhere")\n', False),
+    "assignment_in_while": (
+        'while OTHER:\n    HERE = Path("/elsewhere")\n    break\n',
+        False,
+    ),
+    "assignment_in_with": ('with nullcontext():\n    HERE = Path("/elsewhere")\n', False),
+    "assignment_in_try": (
+        'try:\n    HERE = Path("/elsewhere")\nexcept OSError:\n    pass\n',
+        False,
+    ),
+    "assignment_in_finally": (
+        'try:\n    pass\nfinally:\n    HERE = Path("/elsewhere")\n',
+        False,
+    ),
+    "assignment_in_match": (
+        'match OTHER:\n    case True:\n        HERE = Path("/elsewhere")\n',
+        False,
+    ),
+    "global_in_function": (
+        'def reset():\n    global HERE\n    HERE = Path("/elsewhere")\n',
+        False,
+    ),
+    "global_in_class": (
+        'class Reset:\n    global HERE\n    HERE = Path("/elsewhere")\n',
+        False,
+    ),
+}
+"""Ways to bind the name ``HERE`` after ``HERE = Path(__file__).parent``, each with whether
+the data file is still listed: it is when ``HERE`` is bound only once in module scope,
+also when the other binding is local to a function, a lambda or a comprehension, and it is
+not when the other binding runs in module scope or a function or class declares ``HERE``
+global."""
+
+
+@pytest.mark.parametrize("rebinding", list(_REBINDINGS))
+def test_a_name_bound_more_than_once_adds_no_data_file(
+    tmp_path: Path, rebinding: str
+) -> None:
+    """A data path through a module-level name lists its file when the name is bound once in module scope, also when a function, an async function, a method, a lambda or a comprehension binds the same name as a parameter or a local, and adds nothing when the name is also bound in module scope (a second plain or annotated assignment, an augmented assignment, a for target, a with target, a walrus, tuple or starred unpacking, an import alias, a def or class name, del, or an assignment nested in if, else, for, while, with, try, finally or match) or a function or class declares it global."""
+    binding, listed = _REBINDINGS[rebinding]
+    module = (
+        "from contextlib import nullcontext\n"
+        "from pathlib import Path\n"
+        "\n"
+        "OTHER = True\n"
+        "HERE = Path(__file__).parent\n"
+        f"{binding}"
+        'TABLE = pd.read_csv(HERE / "t.csv")\n'
+    )
+    repo = _write(
+        tmp_path / "repo",
+        {"main.py": "import alpha\n", "alpha.py": module, "t.csv": "a,b\n1,2\n"},
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py", *(["t.csv"] if listed else [])}
+
+
+def test_a_name_bound_again_after_its_use_adds_no_data_file(tmp_path: Path) -> None:
+    """A module-level name that is bound again anywhere in the module, also after the call that uses it in a data path, adds no data file."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": """\
+                from pathlib import Path
+
+                HERE = Path(__file__).parent
+                TABLE = pd.read_csv(HERE / "t.csv")
+                HERE /= "sub"
+                """,
+            "t.csv": "a,b\n1,2\n",
+        },
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py"}
+
+
+_COMPILED_MODULES = {
+    "tagged_extension": "fastmod" + importlib.machinery.EXTENSION_SUFFIXES[0],
+    "plain_extension": "fastmod" + importlib.machinery.EXTENSION_SUFFIXES[-1],
+    "sourceless_bytecode": "fastmod" + importlib.machinery.BYTECODE_SUFFIXES[0],
+}
+"""The file names of a compiled module ``fastmod``: an extension module with the
+interpreter's tagged suffix and with its plain suffix (``.so`` or ``.pyd``), and a
+``.pyc`` without a source file."""
+
+
+@pytest.mark.parametrize("kind", list(_COMPILED_MODULES))
+def test_a_compiled_first_party_module_is_listed_by_its_bytes(
+    tmp_path: Path, kind: str
+) -> None:
+    """A first-party module that resolves to an extension module or to a sourceless .pyc is listed with the bytes digest of the file, and rebuilding the file changes its digest."""
+    name = _COMPILED_MODULES[kind]
+    repo = _write(tmp_path / "repo", {"main.py": "import fastmod\n"})
+    compiled = repo / name
+    compiled.write_bytes(b"\x7fELF\x02\x01\x01 the first build")
+
+    before = _part(repo)
+    compiled.write_bytes(b"\x7fELF\x02\x01\x01 the second build")
+    after = _part(repo)
+
+    assert before.established, before.reason
+    assert set(before.files) == {"main.py", name}
+    assert after.files[name] == _bytes_digest(compiled)
+    assert after.files[name] != before.files[name]
+
+
 def test_installed_code_is_not_listed(tmp_path: Path) -> None:
     """A module imported from a site-packages directory on the search path, a standard library module and a built-in module add no file, and the code part stays established."""
     repo = _write(
@@ -418,26 +797,22 @@ def test_a_virtual_environment_inside_the_repository_is_installed_code(
     assert set(part.files) == {"main.py", "alpha.py"}
 
 
-@pytest.mark.parametrize("form", ["pth_path_entry", "setuptools_finder_mapping"])
+@pytest.mark.parametrize("form", _EDITABLE_FORMS)
 def test_the_source_of_an_editable_install_is_first_party(tmp_path: Path, form: str) -> None:
-    """A module of an editable install outside the repository, recognised from a .pth file that adds its source directory to the search path or from a setuptools editable finder module whose MAPPING maps its package to its source directory, is listed by a name relative to that source directory, and modules it imports from the same source are listed too."""
-    repo = _write(tmp_path / "repo", {"main.py": "import edpkg.core\n"})
+    """A module of an editable install outside the repository, recognised from a .pth file that adds its source directory to the search path or from a setuptools editable finder module whose plain or annotated MAPPING maps its top-level or dotted package name to the package's directory, is listed by a name relative to a root, and modules it imports from the same source are listed too; for a .pth entry the root is the source directory, and for a MAPPING key it is the mapped directory with the key's components removed from its end when its last components equal them, and the mapped directory's parent when they do not."""
     install = _editable_install(tmp_path, form)
+    repo = _write(
+        tmp_path / "repo",
+        {"main.py": f"import {install.package}.core\n", **install.repository_files},
+    )
 
     part = _part(repo, extra=install.search_path)
 
     assert part.established, part.reason
-    editable = {name for name in part.files if name != "main.py"}
-    assert set(part.files) == {"main.py", *editable}
-    if form == "pth_path_entry":
-        assert editable == _EDITABLE_NAMES
-    else:
-        # The design lets a finder's mapped directory, or its parent, be the root.
-        assert editable in (_EDITABLE_NAMES, _EDITABLE_NAMES_IN_PACKAGE), editable
-    hashes = [python_file_hash(install.source / name) for name in _EDITABLE_PACKAGE]
-    assert sorted(part.files[name] for name in editable) == sorted(
-        code_hash.digest for code_hash in hashes
-    )
+    assert set(part.files) == {"main.py", *install.repository_files, *install.names}
+    for path in install.files:
+        name = _EDITABLE + path.relative_to(install.source).as_posix()
+        assert part.files[name] == python_file_hash(path).digest, name
     assert not install.marker.exists()
 
 
@@ -448,12 +823,156 @@ def test_without_a_repository_root_only_editable_sources_are_first_party(
     install = _editable_install(tmp_path, "pth_path_entry")
     plain = _write(tmp_path / "plain", {"script.py": "import edpkg.core\n"})
 
-    editable = code_part(install.source / "edpkg" / "core.py", None, install.search_path)
+    editable = code_part(install.package_dir / "core.py", None, install.search_path)
     ordinary = code_part(plain / "script.py", None, [str(plain), *install.search_path])
 
     assert editable.established, editable.reason
-    assert set(editable.files) == _EDITABLE_NAMES
+    assert set(editable.files) == install.names
     _assert_not_established(ordinary, "script.py")
+
+
+@pytest.mark.parametrize("position", ["before_the_finder", "after_the_finder"])
+def test_a_package_on_the_search_path_wins_over_an_editable_finders_mapping(
+    tmp_path: Path, position: str
+) -> None:
+    """A first-party package found anywhere on the search path, before or after the entries of an editable finder, is listed from there and not from the directory that the finder's MAPPING maps the same name to, because the interpreter consults the finder only when the search path finds nothing."""
+    install = _editable_install(tmp_path, "finder_mapping")
+    prefix = "" if position == "before_the_finder" else "lib/"
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import edpkg.core\n",
+            f"{prefix}edpkg/__init__.py": "",
+            f"{prefix}edpkg/core.py": "VALUE = 2\n",
+        },
+    )
+
+    part = _part(repo, extra=[*install.search_path, repo / "lib"])
+
+    assert part.established, part.reason
+    assert set(part.files) == {
+        "main.py",
+        f"{prefix}edpkg/__init__.py",
+        f"{prefix}edpkg/core.py",
+    }
+
+
+def test_a_mapping_to_a_directory_without_an_init_is_a_namespace_package(
+    tmp_path: Path,
+) -> None:
+    """An editable finder's MAPPING entry whose directory has no __init__.py resolves as a namespace package at that directory, so import ns.mod lists ns/mod.py there and no other file of it."""
+    source = _write(
+        tmp_path / "editable" / "src",
+        {"ns/mod.py": "VALUE = 1\n", "ns/other.py": "VALUE = 2\n"},
+    )
+    marker = tmp_path / "ran.txt"
+    site = _site(tmp_path)
+    hook = _write_finder(site, {"ns": source / "ns"}, marker)
+    repo = _write(tmp_path / "repo", {"main.py": "import ns.mod\n"})
+
+    part = _part(repo, extra=[site, hook])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", f"{_EDITABLE}ns/mod.py"}
+    assert not marker.exists()
+
+
+_EXTEND_PATH = {
+    "import_pkgutil": (
+        "import pkgutil\n\n__path__ = pkgutil.extend_path(__path__, __name__)\n"
+    ),
+    "from_pkgutil_import": (
+        "from pkgutil import extend_path\n\n__path__ = extend_path(__path__, __name__)\n"
+    ),
+    "dunder_import": '__path__ = __import__("pkgutil").extend_path(__path__, __name__)\n',
+}
+"""The spellings of a package ``__init__.py`` that extends its ``__path__`` with
+:func:`pkgutil.extend_path`."""
+
+
+@pytest.mark.parametrize("spelling", list(_EXTEND_PATH))
+def test_a_package_that_extends_its_path_resolves_a_submodule_in_a_later_portion(
+    tmp_path: Path, spelling: str
+) -> None:
+    """A package whose __init__ assigns __path__ from pkgutil.extend_path, through import pkgutil, from pkgutil import extend_path or __import__("pkgutil"), resolves a submodule that only a portion of it in a later search directory holds, from the first such portion in search-path order."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import nsp.portion\n",
+            "nsp/__init__.py": _EXTEND_PATH[spelling],
+            "second/nsp/portion.py": "VALUE = 1\n",
+            "third/nsp/portion.py": "VALUE = 2\n",
+        },
+    )
+
+    part = _part(repo, extra=[repo / "second", repo / "third", _STDLIB])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "nsp/__init__.py", "second/nsp/portion.py"}
+
+
+def test_a_package_that_does_not_extend_its_path_resolves_only_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    """A package whose __init__ does not call pkgutil.extend_path does not resolve a submodule that only another search directory's directory of the same name holds."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import nsp.portion\n",
+            "nsp/__init__.py": "",
+            "second/nsp/portion.py": "VALUE = 1\n",
+        },
+    )
+
+    part = _part(repo, extra=[repo / "second", _STDLIB])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "nsp/__init__.py"}
+
+
+_LIBRARY = {
+    "vns/lib/__init__.py": "",
+    "vns/lib/core.py": "from vns.lib import helper\n",
+    "vns/lib/helper.py": "VALUE = 1\n",
+}
+"""The files of the library ``vns.lib``, relative to its source directory, which, like
+a vivarium library's, holds no ``vns/__init__.py``."""
+
+
+def _library_install(base: Path, form: str) -> list[str]:
+    """Install ``vns.lib`` editable in ``form`` under ``base``; return its search path."""
+    source = _write(base / "editable" / "src", _LIBRARY)
+    site = _site(base)
+    if form == "pth_path_entry":
+        (site / "__editable__.vns_lib-0.1.pth").write_text(f"{source}\n")
+        return [str(site), str(source)]
+    hook = _write_finder(site, {"vns.lib": source / "vns" / "lib"}, base / "ran.txt")
+    return [str(site), hook]
+
+
+def test_the_two_editable_forms_name_a_library_under_an_extended_package_alike(
+    tmp_path: Path,
+) -> None:
+    """With a package vns whose __init__ calls pkgutil.extend_path, as vivarium's does, an editable library vns.lib installed by a .pth entry of its source directory and by a finder MAPPING of the dotted name vns.lib to its directory each resolve to the library's source and give the same names."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import vns.lib.core\n",
+            "vns/__init__.py": _EXTEND_PATH["import_pkgutil"],
+        },
+    )
+    forms = ["pth_path_entry", "dotted_finder_mapping"]
+
+    parts = {
+        form: _part(repo, extra=[_STDLIB, *_library_install(tmp_path / form, form)])
+        for form in forms
+    }
+
+    expected = {"main.py", "vns/__init__.py", *(_EDITABLE + name for name in _LIBRARY)}
+    for form in forms:
+        assert parts[form].established, (form, parts[form].reason)
+        assert set(parts[form].files) == expected, form
+    assert parts["pth_path_entry"] == parts["dotted_finder_mapping"]
 
 
 # code_part: when it is not established
@@ -469,6 +988,39 @@ def test_a_starting_file_outside_every_first_party_root_is_not_established(
     part = code_part(outside / "script.py", repo, [str(outside), str(repo)])
 
     _assert_not_established(part, "script.py")
+
+
+def test_an_installed_starting_file_is_not_established_as_installed_code(
+    tmp_path: Path,
+) -> None:
+    """A starting file in a site-packages directory gives a code part that is not established, with a reason that names the file and says it is installed code, not that it is outside the repository root."""
+    repo = _write(tmp_path / "repo", {"main.py": "VALUE = 1\n"})
+    site = _write(_site(tmp_path), {"instmod.py": "VALUE = 2\n"})
+
+    part = code_part(site / "instmod.py", repo, [str(repo), str(site)])
+
+    _assert_not_established(part, "instmod.py")
+    assert part.reason is not None
+    assert "is installed code" in part.reason, part.reason
+    assert "outside the repository root" not in part.reason, part.reason
+
+
+def test_an_imported_file_that_cannot_be_read_is_not_established(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An imported first-party file whose read raises PermissionError gives a code part that is not established, with a reason that names the file and says it cannot be read."""
+    repo = _write(tmp_path / "repo", {"main.py": "import alpha\n", "alpha.py": "VALUE = 1\n"})
+
+    def refuse(path: Path) -> None:
+        """Raise the error that reading a file without permission raises."""
+        raise PermissionError(13, "Permission denied", str(path))
+
+    _watch_opens(monkeypatch, [repo / "alpha.py"], refuse)
+    part = _part(repo)
+
+    _assert_not_established(part, "alpha.py")
+    assert part.reason is not None
+    assert re.search(r"(cannot|could not|can't) be read", part.reason), part.reason
 
 
 def test_an_import_of_a_file_outside_the_roots_that_is_not_installed_is_not_established(
@@ -647,6 +1199,66 @@ def test_a_cycle_of_imports_is_followed_once(tmp_path: Path) -> None:
     assert sorted(part.files) == ["alpha.py", "beta.py", "main.py"]
 
 
+# code_part: reading and parsing
+
+
+def test_each_python_file_is_read_once_for_its_hash_and_its_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Computing a code part of contents not seen before opens each listed Python file exactly once, for its code hash and its import scan together."""
+    # A tag unique to this run, so no cache filled by another test holds these contents.
+    tag = uuid.uuid4().hex
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": f'import alpha\nMARKER = "{tag}"\n',
+            "alpha.py": f'import beta\nMARKER = "{tag}"\n',
+            "beta.py": f'MARKER = "{tag}"\n',
+        },
+    ).resolve()
+    files = [repo / name for name in ("main.py", "alpha.py", "beta.py")]
+    opened: list[Path] = []
+    _watch_opens(monkeypatch, files, opened.append)
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert sorted(opened) == sorted(files), "each file must be opened once"
+
+
+def test_code_identity_uses_no_private_name_of_code_hash() -> None:
+    """The code_identity module imports no private name from code_hash and reads no private attribute of the code_hash module."""
+    assert code_identity_module.__file__ is not None
+    tree = ast.parse(Path(code_identity_module.__file__).read_text(encoding="utf-8"))
+    module_names: set[str] = set()
+    private: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").endswith("code_hash"):
+            private += [alias.name for alias in node.names if alias.name.startswith("_")]
+        elif isinstance(node, ast.ImportFrom):
+            module_names.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name == "code_hash"
+            )
+        elif isinstance(node, ast.Import):
+            module_names.update(
+                alias.asname or alias.name
+                for alias in node.names
+                if alias.name.endswith(".code_hash")
+            )
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr.startswith("_")
+            and not node.attr.startswith("__")
+            and ast.unparse(node.value) in module_names
+        ):
+            private.append(node.attr)
+
+    assert private == []
+
+
 # CodeIdentityNode
 
 
@@ -729,22 +1341,27 @@ def test_a_not_established_node_gives_a_new_non_empty_state_on_every_call(
     assert first != second
 
 
-def test_the_node_state_never_raises(tmp_path: Path) -> None:
-    """A node whose starting file has been deleted, and one whose starting file cannot be read, return a non-empty state without raising."""
-    repo = _write(tmp_path / "repo", {"deleted.py": "VALUE = 1\n"}).resolve()
+def test_the_node_state_never_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A node whose starting file has been deleted, and a node whose code_part raises RuntimeError, return a non-empty state without raising."""
+    repo = _write(
+        tmp_path / "repo", {"deleted.py": "VALUE = 1\n", "main.py": "VALUE = 2\n"}
+    ).resolve()
     deleted = repo / "deleted.py"
-    # A directory with a Python file's name cannot be read as a file, even by root.
-    unreadable = repo / "unreadable.py"
-    unreadable.mkdir()
-    nodes = [
-        CodeIdentityNode(name="deleted::code", start=deleted, repository_root=repo),
-        CodeIdentityNode(name="unreadable::code", start=unreadable, repository_root=repo),
-    ]
+    deleted_node = CodeIdentityNode(name="deleted::code", start=deleted, repository_root=repo)
+    failing_node = CodeIdentityNode(
+        name="failing::code", start=repo / "main.py", repository_root=repo
+    )
     deleted.unlink()
 
-    states = [node.state() for node in nodes]
+    def failing_code_part(*args: Any, **kwargs: Any) -> CodePart:
+        """Raise as an unexpected failure of the analysis would."""
+        raise RuntimeError("the analysis failed")
 
-    for state in states:
+    deleted_state = deleted_node.state()
+    monkeypatch.setattr(code_identity_module, "code_part", failing_code_part)
+    failing_state = failing_node.state()
+
+    for state in (deleted_state, failing_state):
         assert isinstance(state, str) and state, state
 
 
@@ -776,7 +1393,7 @@ def test_the_node_protocol(tmp_path: Path) -> None:
 def test_the_analysis_runs_once_per_content_within_a_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Calling a node's state three times with no edit reads and parses each listed Python file once, and after an edit to one listed file the next call parses only the edited file again."""
+    """Calling a node's state three times with no edit parses each listed Python file at least once and at most twice (once for its code hash and once for its import scan), all in the first call, and after an edit to one listed file the next call parses only the edited file again, at most twice."""
     # A tag unique to this run, so no cache filled by another test holds these contents.
     tag = uuid.uuid4().hex
     labels = ("main", "alpha", "beta")
@@ -820,6 +1437,52 @@ def test_the_analysis_runs_once_per_content_within_a_process(
         f"parsed {parsed_first}; none means the analysis does not parse with compile or "
         "ast.parse"
     )
+    assert all(parsed_first.count(label) <= 2 for label in labels), parsed_first
     assert parsed_again == []
     assert edited != first
-    assert parsed_after_edit and set(parsed_after_edit) == {"beta"}, parsed_after_edit
+    assert set(parsed_after_edit) == {"beta"}, parsed_after_edit
+    assert len(parsed_after_edit) <= 2, parsed_after_edit
+
+
+def test_an_old_unchanged_file_is_not_read_again_and_a_change_of_size_is_seen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With every listed file counted as old enough that its stat can be trusted, a second call of a node's state opens no listed file and gives the same state, and an edit that changes a file's size but keeps its modification time changes the next state."""
+    tag = uuid.uuid4().hex
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "ci_stat_main.py": f'import ci_stat_alpha\nMARKER = "main-{tag}"\n',
+            "ci_stat_alpha.py": f'import ci_stat_beta\nMARKER = "alpha-{tag}"\n',
+            "ci_stat_beta.py": f'MARKER = "beta-{tag}"\nVALUE = 1\n',
+        },
+    ).resolve()
+    files = sorted(repo.glob("*.py"))
+    # The cache trusts a stat only when its modification and change times are older than
+    # the window; os.utime cannot set the change time, so the window is moved instead.
+    monkeypatch.setattr(code_identity_module, "_RACY_NS", -10_000_000_000)
+    monkeypatch.syspath_prepend(str(repo))
+    node = CodeIdentityNode(
+        name="step::code", start=repo / "ci_stat_main.py", repository_root=repo
+    )
+    opened: list[Path] = []
+    _watch_opens(monkeypatch, files, opened.append)
+
+    first = node.state()
+    opened_first = set(opened)
+    opened.clear()
+    second = node.state()
+    opened_again = list(opened)
+    beta = repo / "ci_stat_beta.py"
+    status = beta.stat()
+    beta.write_text(f'MARKER = "beta-{tag}"\nVALUE = 1000\n')
+    os.utime(beta, ns=(status.st_atime_ns, status.st_mtime_ns))
+    edited = node.state()
+
+    assert opened_first == set(files), (
+        f"opened {opened_first}; none means the analysis does not open files with open, "
+        "io.open or os.open"
+    )
+    assert opened_again == []
+    assert second == first
+    assert edited != first
