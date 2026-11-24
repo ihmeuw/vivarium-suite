@@ -1,9 +1,4 @@
-"""
-=========
-code_hash
-=========
-
-Hash the code of a Python file or a Jupyter notebook so that an edit that does not change
+"""Hash the code of a Python file or a Jupyter notebook so that an edit that does not change
 the code, such as a comment or a re-wrapped line, does not change the hash.
 
 A Python file is hashed by a canonical text of its syntax tree. The text holds each node's
@@ -14,10 +9,16 @@ annotations, decorators, the order of imports and string literals are part of th
 and change the hash.
 
 A notebook is hashed by its non-empty code cells, in order. Outputs, execution counts,
-markdown cells and the notebook's metadata are not read, so they do not change the hash;
-a cell that papermill injects into an executed copy does. IPython syntax in a cell, such
-as a ``%magic`` or a ``!shell`` line, is replaced so that the cell parses as Python, and
-the text and the position of each such line are part of the hash. The positions of the
+markdown cells and the notebook's metadata are not read, so they do not change the hash; a
+cell that papermill injects into an executed copy does. IPython syntax in a cell is
+replaced so that the cell parses as Python, and the text and the position of each replaced
+line are part of the hash. Replaced are lines that start a statement with ``!``, ``%`` or
+``?``, help lines such as ``len?``, and assignments such as ``x = !ls``, each with any
+lines that it continues onto with a backslash. The body of a ``%%time``, ``%%timeit``,
+``%%capture`` or ``%%prun`` cell is parsed as Python; the body of any other cell magic,
+such as ``%%bash``, is hashed as text, so a comment in it changes the hash, and the result
+is still parsed. Other IPython syntax, such as an autocall line or a cell with a common
+indent, does not parse; that cell is hashed by its bytes. The positions of the
 cells tagged ``parameters`` and ``injected-parameters`` are part of the hash, because they
 decide where the pipeline's values are injected. A semicolon at the end of a cell's last
 line is not, also on an IPython line, because it only hides a displayed value.
@@ -42,8 +43,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 PARAMETERS_TAG = "parameters"
-"""The tag of the notebook cell that papermill injects parameters after. Only the first
-cell that carries it is used."""
+"""The tag of the notebook cell that papermill injects parameters after. Papermill and
+:mod:`~vivarium.dagger.frontend.notebook_step` use only the first cell that carries it;
+the notebook hash records the position of every cell that carries it."""
 
 _AST_PREFIX = "ast:"
 _BYTES_PREFIX = "bytes:"
@@ -74,8 +76,10 @@ class CodeHash:
     """The hash of the code of one file."""
 
     digest: str
-    """The hash. Two files with the same code have the same digest, and files with
-    different code have different digests."""
+    """The hash. On one Python version, two files with the same code have the same
+    digest, and files with different code have different digests. It starts with
+    ``ast:`` for a Python file hashed by its parsed code, ``nb:`` for a notebook hashed
+    by its cells, and ``bytes:`` for a file hashed by its bytes."""
     parsed: bool
     """Whether the digest was taken from parsed code. ``False`` means that the file, or
     at least one code cell of a notebook, could not be parsed and its bytes were hashed
@@ -261,7 +265,7 @@ class _CodeCell(NamedTuple):
 
 
 class _LineState(NamedTuple):
-    """The open triple quote, bracket depth and backslash continuation at a line's end."""
+    """The open string quote, bracket depth and backslash continuation at a line's end."""
 
     quote: str | None = None
     depth: int = 0
@@ -468,32 +472,33 @@ def _string_end(line: str, start: int) -> int | None:
 def _scan_line(line: str, state: _LineState) -> _LineState:
     """Return the state at the end of a line of Python, given the state at its start."""
     quote, depth = state.quote, state.depth
+    text = line.rstrip("\r")
     index = 0
-    while index < len(line):
-        char = line[index]
+    while index < len(text):
+        char = text[index]
         if quote is not None:
             if char == "\\":
                 index += 2
-            elif line.startswith(quote, index):
+            elif text.startswith(quote, index):
+                index += len(quote)
                 quote = None
-                index += 3
             else:
                 index += 1
             continue
         if char == "#":
             return _LineState(None, depth, continued=False)
-        if char in "\"'" and line.startswith(char * 3, index):
-            quote = char * 3
-            index += 3
-            continue
         if char in "\"'":
-            index += 1
-            while index < len(line) and line[index] != char:
-                index += 2 if line[index] == "\\" else 1
-        elif char in "([{":
+            quote = char * 3 if text.startswith(char * 3, index) else char
+            index += len(quote)
+            continue
+        if char in "([{":
             depth += 1
         elif char in ")]}":
             depth = max(depth - 1, 0)
         index += 1
-    continued = quote is None and line.rstrip("\r").endswith("\\")
+    # An escape that consumes the line end leaves the index one past the text; only then
+    # does a short string go on to the next line, as in Python.
+    if quote is not None and len(quote) == 1 and index == len(text):
+        return _LineState(None, depth, continued=False)
+    continued = quote is None and text.endswith("\\")
     return _LineState(quote, depth, continued)

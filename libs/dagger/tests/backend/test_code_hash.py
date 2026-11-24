@@ -343,6 +343,36 @@ def test_a_python_file_with_a_null_byte_is_hashed_by_its_bytes(tmp_path: Path) -
     assert not result.parsed
 
 
+def test_a_decimal_int_over_the_int_string_limit_is_hashed_by_its_bytes(
+    tmp_path: Path,
+) -> None:
+    """A Python file with a decimal int literal longer than the process's int-to-string limit is not parsed and gets a hash of its bytes."""
+    # A unique comment, so the per-content cache cannot return an earlier result.
+    source = f"# {uuid.uuid4().hex}\nX = 1{'0' * 700}\n"
+    default_limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(640)
+        result = _python_hash(tmp_path, "long_int.py", source)
+    finally:
+        sys.set_int_max_str_digits(default_limit)
+    assert not result.parsed
+    assert result.digest.startswith("bytes:"), result
+
+
+def test_an_empty_python_file_is_parsed_and_an_undecodable_one_is_not(
+    tmp_path: Path,
+) -> None:
+    """An empty Python file and one holding only a comment are parsed and have equal hashes, while one with invalid UTF-8 and no encoding declaration is not parsed."""
+    empty = _python_hash(tmp_path, "empty.py", "")
+    comment = _python_hash(tmp_path, "comment.py", "# Only a comment.\n")
+    assert empty.parsed
+    assert comment.parsed
+    assert comment.digest == empty.digest
+
+    undecodable = _python_hash(tmp_path, "undecodable.py", b"x = '\xff'\n")
+    assert not undecodable.parsed
+
+
 def test_a_missing_python_file_raises_oserror(tmp_path: Path) -> None:
     """python_file_hash raises OSError for a path that does not exist."""
     with pytest.raises(OSError):
@@ -519,6 +549,18 @@ def test_an_ipython_line_ending_in_a_backslash_continues_on_the_next_line(
     assert edited.digest != original.digest
 
 
+def test_a_string_continued_by_a_backslash_stays_open_on_the_next_line(
+    tmp_path: Path,
+) -> None:
+    """A short string continued by a backslash stays open on the next line, so a %magic line after the string is still found, the cell is parsed, and a change to that line changes the hash."""
+    source = 'x = ["abc\\\ndef"]\n%matplotlib inline'
+    original = _cell_hash(tmp_path, "original.ipynb", source)
+    edited = _cell_hash(tmp_path, "edited.ipynb", _edited(source, "inline", "widget"))
+    assert original.parsed
+    assert edited.parsed
+    assert edited.digest != original.digest
+
+
 @pytest.mark.parametrize(
     "line, inner",
     [
@@ -547,6 +589,32 @@ def test_a_semicolon_ending_a_cells_last_ipython_line_is_not_part_of_the_hash(
 @pytest.mark.parametrize(
     "first, second, same",
     [
+        pytest.param("!ls;\nx = 1", "!ls\nx = 1", False, id="not_the_last_line"),
+        pytest.param("!ls;\n# note", "!ls\n# note", True, id="comment_after"),
+        pytest.param("!ls;\n# note", "!ls", True, id="comment_after_and_none"),
+        pytest.param("files = !ls;", "files = !ls", True, id="shell_assignment"),
+        pytest.param(
+            "!pip install -q \\\nnumpy;",
+            "!pip install -q \\\nnumpy",
+            True,
+            id="backslash_continuation",
+        ),
+    ],
+)
+def test_a_semicolon_is_left_out_only_on_a_cells_last_ipython_line(
+    tmp_path: Path, first: str, second: str, same: bool
+) -> None:
+    """A semicolon ending an IPython line is left out of the hash only when that line is the cell's last code line, where a comment line after it does not count, also for a shell assignment and a line continued by a backslash."""
+    first_hash = _cell_hash(tmp_path, "first.ipynb", first)
+    second_hash = _cell_hash(tmp_path, "second.ipynb", second)
+    assert first_hash.parsed
+    assert second_hash.parsed
+    assert (first_hash.digest == second_hash.digest) == same
+
+
+@pytest.mark.parametrize(
+    "first, second, same",
+    [
         pytest.param("a, b = !ls", "a, b = !ls -a", False, id="tuple_target"),
         pytest.param("naïve = !ls", "naïve = !ls -a", False, id="non_ascii_target"),
         pytest.param("x = 1\nx %= 3", "x = 1\nx%=3", True, id="augmented_assignment"),
@@ -568,6 +636,25 @@ def test_a_shell_or_magic_assignment_is_recognised_only_at_a_statement_start(
 
 
 @pytest.mark.parametrize(
+    "split, joined",
+    [
+        pytest.param("x = (a\n% b)", "x = (a % b)", id="modulo_in_parentheses"),
+        pytest.param("x = a \\\n% b", "x = a % b", id="modulo_after_a_backslash"),
+        pytest.param("ok = (a\n!= b)", "ok = (a != b)", id="not_equal_in_parentheses"),
+    ],
+)
+def test_a_percent_or_bang_that_continues_a_statement_stays_python(
+    tmp_path: Path, split: str, joined: str
+) -> None:
+    """A line that starts with % or ! but continues a statement, inside parentheses or after a backslash, stays Python and has the hash of the same code on one line."""
+    split_hash = _cell_hash(tmp_path, "split.ipynb", split)
+    joined_hash = _cell_hash(tmp_path, "joined.ipynb", joined)
+    assert split_hash.parsed
+    assert joined_hash.parsed
+    assert split_hash.digest == joined_hash.digest
+
+
+@pytest.mark.parametrize(
     "source, old, new",
     [
         pytest.param("import asyncio\nawait asyncio.sleep(0)", "0", "1", id="statement"),
@@ -583,6 +670,17 @@ def test_a_cell_with_a_top_level_await_is_parsed(
     assert original.parsed
     assert edited.parsed
     assert edited.digest != original.digest
+
+
+def test_a_notebook_without_code_has_the_hash_of_one_without_cells(
+    tmp_path: Path,
+) -> None:
+    """A notebook with no cells and one holding only a markdown cell and an empty code cell have equal hashes."""
+    no_cells = _notebook_hash(tmp_path, "no_cells.ipynb", _notebook([]))
+    no_code = _notebook_hash(
+        tmp_path, "no_code.ipynb", _notebook([_markdown_cell("# Notes"), _code_cell("")])
+    )
+    assert no_code.digest == no_cells.digest
 
 
 # Notebooks that cannot be parsed
