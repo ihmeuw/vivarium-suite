@@ -3,25 +3,26 @@ the code, such as a comment or a re-wrapped line, does not change the hash.
 
 A Python file is hashed by a canonical text of its syntax tree. The text holds each node's
 name and its fields, and leaves out what only describes how the code was written. For a
-file that every Python version that dagger supports can parse, the text is the same on
-all of them, so a hash taken on one version equals the hash taken on another. Docstrings,
-annotations, decorators, the order of imports and string literals are part of the code
-and change the hash.
+file that Python 3.11, 3.12 and 3.13 can all parse, the text is the same on all three, so
+a hash taken on one of them equals the hash taken on another. Docstrings, annotations,
+decorators, the order of imports and string literals are part of the code and change the
+hash.
 
 A notebook is hashed by its non-empty code cells, in order. Outputs, execution counts,
 markdown cells and the notebook's metadata are not read, so they do not change the hash; a
 cell that papermill injects into an executed copy does. IPython syntax in a cell is
 replaced so that the cell parses as Python, and the text and the position of each replaced
 line are part of the hash. Replaced are lines that start a statement with ``!``, ``%`` or
-``?``, help lines such as ``len?``, and assignments such as ``x = !ls``, each with any
-lines that it continues onto with a backslash. The body of a ``%%time``, ``%%timeit``,
-``%%capture`` or ``%%prun`` cell is parsed as Python; the body of any other cell magic,
-such as ``%%bash``, is hashed as text, so a comment in it changes the hash, and the result
-is still parsed. Other IPython syntax, such as an autocall line or a cell with a common
-indent, does not parse; that cell is hashed by its bytes. The positions of the
-cells tagged ``parameters`` and ``injected-parameters`` are part of the hash, because they
-decide where the pipeline's values are injected. A semicolon at the end of a cell's last
-line is not, also on an IPython line, because it only hides a displayed value.
+``?``, help lines such as ``len?``, and assignments such as ``x = !ls`` or ``x: int =
+!ls``, each with any lines that it continues onto with a backslash. The body of a
+``%%time``, ``%%timeit``, ``%%capture`` or ``%%prun`` cell is parsed as Python; the body
+of any other cell magic, such as ``%%bash``, is hashed exactly as written, so a comment or
+a semicolon in it changes the hash, and the result is still parsed. Other IPython syntax,
+such as an autocall line or a cell with a common indent, does not parse; that cell is
+hashed by its bytes. The positions of the code cells tagged ``parameters`` and
+``injected-parameters`` are part of the hash, because they decide where the pipeline's
+values are injected. A semicolon at the end of a cell's last line of code is not, also on
+an IPython line, because it only hides a displayed value.
 
 A file or a cell that cannot be parsed is hashed by its bytes, and the result says so.
 This includes code that uses syntax newer than the running Python, code nested deeper than
@@ -36,6 +37,8 @@ import ast
 import hashlib
 import json
 import re
+import sys
+import threading
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -86,9 +89,16 @@ class CodeHash:
     instead."""
 
 
-_results: dict[tuple[str, str], CodeHash] = {}
-"""Results by kind and SHA-256 of the file's bytes, so that an edited file is never given
-a stale result, whatever its size and modification time."""
+_results: dict[tuple[str, str, int], CodeHash] = {}
+"""Results by kind, SHA-256 of the file's bytes and the process's int-string digit limit,
+so that an edited file is never given a stale result, whatever its size and modification
+time. The limit is in the key because it decides whether a long decimal int literal
+parses."""
+
+_warnings_lock = threading.Lock()
+"""Held around the parse's temporary warning filter, because ``warnings.catch_warnings``
+saves and restores the process-wide filters and two threads that overlap would restore
+each other's."""
 
 
 def python_file_hash(path: Path | str) -> CodeHash:
@@ -119,12 +129,12 @@ def python_file_hash(path: Path | str) -> CodeHash:
 def notebook_hash(path: Path | str) -> CodeHash:
     """Return the hash of the code in the Jupyter notebook at ``path``.
 
-    The hash covers the notebook's non-empty code cells in order, the text and position
-    of the IPython lines in them, and the positions of the cells tagged ``parameters`` and
-    ``injected-parameters``. A cell that cannot
-    be parsed after its IPython syntax is replaced is hashed by its bytes, and so is a
-    file that is not a notebook. In both cases the result's ``parsed`` is ``False``. The
-    result for one content is computed once per process; a file whose bytes changed is
+    The hash covers the notebook's non-empty code cells in order, the text and position of
+    the IPython lines in them, and the positions of the cells tagged ``parameters`` and
+    ``injected-parameters``; a tag on a markdown or raw cell is not read. A cell that
+    cannot be parsed after its IPython syntax is replaced is hashed by its bytes, and so
+    is a file that is not a notebook. In both cases the result's ``parsed`` is ``False``.
+    The result for one content is computed once per process; a file whose bytes changed is
     read again.
 
     Parameters
@@ -170,9 +180,9 @@ def cell_source(source: object) -> str | None:
 def _cached_hash(
     path: Path | str, kind: str, compute: Callable[[bytes], CodeHash]
 ) -> CodeHash:
-    """Return the hash of the file's bytes, computing it once per content and kind."""
+    """Return the code hash of the file, computed once per content, kind and int limit."""
     data = Path(path).read_bytes()
-    key = (kind, hashlib.sha256(data).hexdigest())
+    key = (kind, hashlib.sha256(data).hexdigest(), sys.get_int_max_str_digits())
     if key not in _results:
         _results[key] = compute(data)
     return _results[key]
@@ -203,7 +213,7 @@ def _syntax_tree_digest(source: str | bytes) -> str | None:
 def _parse(source: str | bytes) -> ast.AST:
     """Return the source's syntax tree, whatever the warning filters."""
     # Only a syntax tree is built, so a top-level await is accepted.
-    with warnings.catch_warnings():
+    with _warnings_lock, warnings.catch_warnings():
         # A SyntaxWarning, such as for an invalid escape sequence, becomes a SyntaxError
         # under an "error" filter, which would make the hash depend on the caller's
         # warning settings.
@@ -219,7 +229,7 @@ class _Text(str):
 
 
 def _canonical_text(tree: ast.AST) -> str:
-    """Return the text of a syntax tree that is the same on every supported Python."""
+    """Return the text of a syntax tree that is the same on Python 3.11 to 3.13."""
     # A stack, not recursion, so that a deeply nested expression that the parser accepts
     # does not exceed the recursion limit here.
     parts: list[str] = []

@@ -181,9 +181,7 @@ def _cell_hash(directory: Path, name: str, source: str) -> CodeHash:
 # Python files: edits that do not change the code
 
 
-@pytest.mark.parametrize(
-    "edit", ["comment", "blank_lines", "rewrap", "quote_style", "redundant_parentheses"]
-)
+@pytest.mark.parametrize("edit", list(_SAME_CODE_EDITS))
 def test_an_edit_that_does_not_change_the_code_keeps_a_python_files_hash(
     tmp_path: Path, edit: str
 ) -> None:
@@ -199,18 +197,7 @@ def test_an_edit_that_does_not_change_the_code_keeps_a_python_files_hash(
 # Python files: edits that change the code
 
 
-@pytest.mark.parametrize(
-    "edit",
-    [
-        "code",
-        "docstring",
-        "docstring_reformat",
-        "annotation",
-        "decorator",
-        "import_order",
-        "string_literal",
-    ],
-)
+@pytest.mark.parametrize("edit", list(_CODE_EDITS))
 def test_an_edit_of_the_code_changes_a_python_files_hash(tmp_path: Path, edit: str) -> None:
     """A change to a statement, to a docstring (also only re-indenting its text), to an annotation, to a decorator, to the order of two imports, or to a string literal changes the hash of a Python file."""
     old, new = _CODE_EDITS[edit]
@@ -335,6 +322,23 @@ def test_a_syntax_warning_does_not_change_a_python_files_hash(tmp_path: Path) ->
     default = _python_hash(tmp_path, "default.py", f"# default warnings\n{source}")
     assert strict.parsed
     assert strict == default
+
+
+@pytest.mark.parametrize("filters", ["default", "error"])
+def test_hashing_a_file_with_a_syntax_warning_leaves_the_warning_filters_unchanged(
+    tmp_path: Path, filters: str
+) -> None:
+    """Hashing a Python file that gives a SyntaxWarning leaves warnings.filters exactly as it was, under the default filters and with warnings turned into errors."""
+    # A unique comment, so the per-content cache cannot skip the parse.
+    source = f'# {uuid.uuid4().hex}\nx = "\\d"\n'
+    with warnings.catch_warnings():
+        if filters == "error":
+            warnings.simplefilter("error")
+        before = list(warnings.filters)
+        result = _python_hash(tmp_path, "escape.py", source)
+        after = list(warnings.filters)
+    assert result.parsed
+    assert after == before
 
 
 def test_a_python_file_with_a_null_byte_is_hashed_by_its_bytes(tmp_path: Path) -> None:
@@ -491,9 +495,7 @@ def test_an_edit_of_a_notebooks_code_changes_its_hash(tmp_path: Path, edit: str)
     assert edited.digest != original.digest
 
 
-@pytest.mark.parametrize(
-    "syntax", ["line_magic", "shell_escape", "shell_assignment", "help", "cell_magic"]
-)
+@pytest.mark.parametrize("syntax", list(_IPYTHON_CELLS))
 def test_a_cell_with_ipython_syntax_is_hashed_as_parsed_code(
     tmp_path: Path, syntax: str
 ) -> None:
@@ -508,6 +510,25 @@ def test_a_cell_with_ipython_syntax_is_hashed_as_parsed_code(
     assert original.parsed
     assert commented.parsed
     assert commented.digest == original.digest
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        pytest.param("x: int = !ls", "x: int = !ls -a", id="annotated_shell_assignment"),
+        pytest.param("%%bash\necho a", "%%bash\necho a\n# c", id="cell_magic_body_comment"),
+        pytest.param("len?", "sorted?", id="help_target"),
+    ],
+)
+def test_ipython_text_that_python_does_not_see_is_part_of_the_hash(
+    tmp_path: Path, first: str, second: str
+) -> None:
+    """The command of an annotated shell assignment such as x: int = !ls, the body of a %%bash cell down to a comment line in it, and the name before a ? help mark are parsed and part of the hash, so a change to them changes it."""
+    first_hash = _cell_hash(tmp_path, "first.ipynb", first)
+    second_hash = _cell_hash(tmp_path, "second.ipynb", second)
+    assert first_hash.parsed
+    assert second_hash.parsed
+    assert first_hash.digest != second_hash.digest
 
 
 @pytest.mark.parametrize(
@@ -702,6 +723,20 @@ def test_a_notebook_cell_that_cannot_be_parsed_still_gives_a_hash(tmp_path: Path
         assert edited.digest != original.digest, (old, new)
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("/f 1", id="autocall"),
+        pytest.param("  x = 1", id="common_indent"),
+    ],
+)
+def test_an_autocall_line_or_a_cell_with_a_common_indent_is_not_parsed(
+    tmp_path: Path, source: str
+) -> None:
+    """A cell with an autocall line such as /f 1, or a cell whose lines all have a common indent such as "  x = 1", gets a hash with a result that says it was not parsed."""
+    assert not _cell_hash(tmp_path, "cell.ipynb", source).parsed
+
+
 def test_a_file_that_is_not_a_notebook_is_hashed_by_its_bytes(tmp_path: Path) -> None:
     """notebook_hash, given a file that is not valid notebook JSON, returns a hash without raising, the result says it was not parsed, and a change to any byte changes the hash."""
     contents = {
@@ -778,6 +813,26 @@ def test_two_paths_with_the_same_content_have_the_same_hash(tmp_path: Path) -> N
     (first / "one.ipynb").write_bytes(notebook_bytes)
     (second / "two.ipynb").write_bytes(notebook_bytes)
     assert notebook_hash(first / "one.ipynb") == notebook_hash(str(second / "two.ipynb"))
+
+
+def test_the_cache_keeps_results_under_different_int_string_limits_apart(
+    tmp_path: Path,
+) -> None:
+    """One Python file's bytes hashed under two int-to-string limits are not served from one cached result."""
+    path = tmp_path / "long_int.py"
+    # Not made unique: the second call must see bytes that the first call put in the cache.
+    path.write_text(f"X = 1{'0' * 5000}\n", encoding="utf-8")
+    default_limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(0)
+        unlimited = python_file_hash(path)
+        sys.set_int_max_str_digits(640)
+        limited = python_file_hash(path)
+    finally:
+        sys.set_int_max_str_digits(default_limit)
+    assert unlimited.parsed
+    assert not limited.parsed
+    assert limited.digest.startswith("bytes:"), limited
 
 
 def test_each_content_is_parsed_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
