@@ -60,8 +60,9 @@ and a build in one of the :data:`LOCAL_ONLY_MODES` take no lock, so they can run
 bridge build on the same root, and their writes to ``pytask.lock`` can then interleave
 with its writes.
 
-The build records each step in pytask's lockfile journal when the step finishes, while the
-workflow is still running, and writes ``pytask.lock`` after the workflow stops.
+The build records each step in pytask's lockfile journal a few seconds after the step
+finishes, while the workflow is still running, and writes ``pytask.lock`` after the
+workflow stops.
 When the build's process gets SIGTERM, as Slurm sends at the end of a job's time limit
 before it kills the job, the build stops waiting for the workflow, records the steps
 whose results are already written, reports every other step as failed or skipped, and
@@ -74,8 +75,8 @@ and skips any other recorded step whose inputs and code identity are unchanged. 
 the default code identity no step counts as unchanged, so every step runs again.
 If the process is killed outright, for example once Slurm's grace period after SIGTERM
 is over, the steps that it had recorded stay in the journal and the next build skips them
-as it skips any other recorded step. A step that finished after the process was killed is
-not recorded and runs again. Give that process more time than the whole workflow needs. The
+as it skips any other recorded step. A step that was not yet recorded runs again, among
+them a step that finished in the last few seconds before the process was killed. Give that process more time than the whole workflow needs. The
 build gets Slurm's SIGTERM only if it is the job's own process: in a batch script, start
 it with ``exec`` (for example ``exec python build.py``). Without ``exec``, the script's
 shell gets the SIGTERM and exits, and Slurm then kills the build at once, as if it had

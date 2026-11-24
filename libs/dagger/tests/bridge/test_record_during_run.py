@@ -22,7 +22,7 @@ from typing import Any
 
 import pandas as pd
 import pytest
-from pytask import Mark, PTask, Session, TaskOutcome
+from pytask import Mark, PathNode, PTask, Session, TaskOutcome
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
@@ -80,6 +80,18 @@ _THREAD_ERROR = "the recording thread failed on purpose"
 
 _ANCESTOR_FAILED = "Previous task 'gone.parquet' failed."
 """The reason of a skip_ancestor_failed mark, in the words that pytask gives it."""
+
+_RECORDING_THREAD = "dagger-bridge-recording"
+"""The name that the bridge gives its recording thread."""
+
+_CANNOT_START = "can't start new thread"
+"""Message of the RuntimeError that Python raises when it cannot start a thread."""
+
+_STATE_ERROR = "the state of the product could not be read, on purpose"
+"""Message of the OSError that a test raises from a product node's ``state``."""
+
+_BUILD_SECONDS = 120.0
+"""The most seconds that a test gives a bridged build that it runs in a second thread."""
 
 _NO_PASS = f"The recording thread made no further pass within {WAIT_SECONDS} seconds."
 """What a test says when it waited in vain for a pass of the recording thread."""
@@ -310,7 +322,9 @@ class _Passes:
     """Stand in for ``_record_ready`` in the recording thread, and count the thread's passes.
 
     With ``by_hand``, a pass of the thread records nothing, so only the calls that a test
-    makes through :meth:`record_ready` record a step.
+    makes through :meth:`record_ready` record a step. The thread makes its first pass one
+    recording interval after the workflow starts, so what a pass was given is known only
+    after :meth:`whole_pass` has returned true.
     """
 
     def __init__(self, bridge_record_ready: _RecordReady, *, by_hand: bool) -> None:
@@ -492,10 +506,34 @@ def test_a_step_recorded_during_the_run_keeps_its_node_output_in_its_report(
     assert step_targets.FD2_OUTPUT in call.get("stderr", "")
 
 
+def test_a_step_whose_unchanged_upstream_was_not_submitted_is_recorded_during_the_run(
+    tmp_path: Path,
+) -> None:
+    """In a bridged build with stable code identities in which only the second step of the harness fixture's two-step chain is stale, so its upstream is not submitted, the second step's journal entry exists while the fake's run is still going."""
+    fx = build_fixture(tmp_path)
+    first, second = fx.steps
+    ran = dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
+    assert outcomes(build(stable(fx.tasks), fx.state)) == ran
+    assert not journal_holds(fx.state, [second])
+
+    def wait_for_the_second_step(jobmon_run: JobmonRun) -> None:
+        """Wait until the journal holds the second step, before the run returns."""
+        _wait_for_the_journal(fx.state, [second])
+
+    jobmon = _Scripted(after=wait_for_the_second_step)
+    session = _bridged(stable(fx.tasks, changed={second}), fx.state, jobmon)
+
+    assert bound_names(jobmon) == [[second]]
+    assert outcomes(session) == {
+        first: TaskOutcome.SKIP_UNCHANGED,
+        second: TaskOutcome.SUCCESS,
+    }
+
+
 def test_a_result_that_appears_after_the_last_pass_is_recorded_once_at_the_end(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With a recording interval longer than the whole run, so the thread makes no pass after its first, every step still ends with exactly one SUCCESS report and one pytask.lock entry."""
+    """With a recording interval longer than the whole run, so the thread makes no pass, every step still ends with exactly one SUCCESS report and one pytask.lock entry."""
     monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", LONG_RECORD_INTERVAL)
     root = build_root(tmp_path)
     started = time.monotonic()
@@ -505,7 +543,7 @@ def test_a_result_that_appears_after_the_last_pass_is_recorded_once_at_the_end(
 
     elapsed = time.monotonic() - started
     assert elapsed < LONG_RECORD_INTERVAL, "The build outlasted the recording interval."
-    assert passes.started == 1
+    assert passes.started == 0
     assert outcomes(session) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
     assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1)
     assert _entry_counts(root) == dict.fromkeys(PLAN_ORDER, 1)
@@ -658,7 +696,7 @@ def test_the_recording_thread_has_ended_when_the_build_returns(
 def test_the_block_does_not_exit_before_the_thread_ends_when_an_interrupt_arrives(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When _record_ready is replaced by a function that blocks until released, and the main thread gets a KeyboardInterrupt while _recording_during_the_run waits for the thread on exit, the block has not exited while the function is still blocked, and it exits after the function is released."""
+    """When _record_ready is replaced by a function that blocks until released, and the main thread gets a KeyboardInterrupt while _recording_during_the_run waits for the thread on exit, the block has not exited while the function is still blocked, and after the function is released the block exits and raises the KeyboardInterrupt."""
     fx = build_fixture(tmp_path)
     built = build(fx.tasks, fx.state)
     run_directory = make_dir(tmp_path / "run")
@@ -688,23 +726,23 @@ def test_the_block_does_not_exit_before_the_thread_ends_when_an_interrupt_arrive
 
     helper = threading.Thread(target=interrupt_then_release)
     monkeypatch.setattr(execute, "_record_ready", blocked)
+    recording = execute._recording_during_the_run(built, built.tasks, run_directory, set())
     # Python raises no KeyboardInterrupt of its own where SIGINT is ignored, as in a
     # process that a shell started in the background.
     previous = signal.signal(signal.SIGINT, interrupt)
     try:
-        try:
-            with execute._recording_during_the_run(built, built.tasks, run_directory, set()):
-                assert entered.wait(timeout=WAIT_SECONDS), _NOT_CALLED
-                helper.start()
-        # The contract does not say whether the block raises the interrupt after its wait.
-        except KeyboardInterrupt:
-            pass
-        finally:
-            released_before_the_exit = release.is_set()
-            exited.set()
-        helper.join(timeout=WAIT_SECONDS)
+        with pytest.raises(KeyboardInterrupt):
+            try:
+                with recording:
+                    assert entered.wait(timeout=WAIT_SECONDS), _NOT_CALLED
+                    helper.start()
+            finally:
+                released_before_the_exit = release.is_set()
+                exited.set()
     finally:
         release.set()
+        if helper.is_alive():
+            helper.join(timeout=WAIT_SECONDS)
         signal.signal(signal.SIGINT, previous)
 
     assert exited_while_blocked == [False]
@@ -716,17 +754,23 @@ def test_an_error_in_the_recording_thread_is_a_warning_and_every_step_is_still_r
 ) -> None:
     """With _record_ready replaced by a function that raises, a bridged build still ends with one SUCCESS report and one pytask.lock entry for each step, and it prints a warning that names the error."""
     root = build_root(tmp_path)
+    called = threading.Event()
 
     def broken(
         session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
     ) -> None:
         """Fail in the recording thread."""
+        called.set()
         raise RuntimeError(_THREAD_ERROR)
+
+    def wait_for_the_error(jobmon_run: JobmonRun) -> None:
+        """Wait until the thread has made the pass that fails, before the run returns."""
+        assert called.wait(timeout=WAIT_SECONDS), _NOT_CALLED
 
     monkeypatch.setattr(execute, "_record_ready", broken)
     capsys.readouterr()
 
-    session = chain_build(tmp_path, FakeJobmon())
+    session = chain_build(tmp_path, _Scripted(after=wait_for_the_error))
 
     captured = capsys.readouterr()
     assert outcomes(session) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
@@ -735,6 +779,54 @@ def test_an_error_in_the_recording_thread_is_a_warning_and_every_step_is_still_r
     printed = captured.out + captured.err
     assert "RuntimeError" in squashed(printed), printed
     assert squashed(_THREAD_ERROR) in squashed(printed), printed
+
+
+def test_a_build_whose_recording_thread_cannot_start_records_every_step_at_the_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With threading.Thread.start made to raise RuntimeError("can't start new thread") during a bridged build, the build ends within a time limit, every step has one SUCCESS report and one pytask.lock entry, and the printed warning names the error."""
+    root = build_root(tmp_path)
+    tasks = _two_step_chain(registry(tmp_path))
+    start = threading.Thread.start
+    refused: list[str] = []
+    built: list[Session] = []
+    raised: list[BaseException] = []
+
+    def start_unless_recording(thread: threading.Thread) -> None:
+        """Start ``thread``, unless it is the bridge's recording thread."""
+        if thread.name != _RECORDING_THREAD:
+            start(thread)
+            return
+        refused.append(thread.name)
+        raise RuntimeError(_CANNOT_START)
+
+    def build_and_keep() -> None:
+        """Build the chain through FakeJobmon, and keep its session or what it raised."""
+        try:
+            built.append(_bridged(tasks, root, FakeJobmon()))
+        except BaseException as error:
+            raised.append(error)
+
+    # The build runs in a second thread, so that a build that never ends fails the test.
+    builder = threading.Thread(target=build_and_keep, daemon=True)
+    monkeypatch.setattr(threading.Thread, "start", start_unless_recording)
+    capsys.readouterr()
+
+    builder.start()
+    builder.join(timeout=_BUILD_SECONDS)
+
+    captured = capsys.readouterr()
+    assert not builder.is_alive(), f"The build did not end within {_BUILD_SECONDS} seconds."
+    assert raised == []
+    assert refused, f"The build started no thread called {_RECORDING_THREAD!r}."
+    [session] = built
+    names = [_FIRST, _SECOND]
+    assert outcomes(session) == dict.fromkeys(names, TaskOutcome.SUCCESS)
+    assert report_counts(session) == dict.fromkeys(names, 1)
+    assert _entry_counts(root) == dict.fromkeys(names, 1)
+    printed = captured.out + captured.err
+    assert "RuntimeError" in squashed(printed), printed
+    assert squashed(_CANNOT_START) in squashed(printed), printed
 
 
 # _record_ready
@@ -867,6 +959,40 @@ def test_record_ready_leaves_a_success_whose_product_is_missing_and_records_it_o
         assert given.recorded == set()
 
         set_aside.rename(product)
+
+        assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
+        assert given.recorded == {given.signature(name)}
+
+    tasks = _constant_steps(artifacts, [name])
+    _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
+
+
+def test_record_ready_leaves_a_step_whose_product_state_raises_oserror_and_records_it_later(
+    tmp_path: Path,
+) -> None:
+    """_record_ready, given a submitted task whose result reports success and one of whose product nodes raises OSError from state(), leaves it with no report and out of the recorded set, and a later call after state() stops raising records it as SUCCESS."""
+    name = "only.parquet"
+    artifacts = registry(tmp_path)
+    product = artifacts.path_for(name)
+    state = PathNode.state
+    refused: list[str] = []
+
+    def state_unless_the_product(node: PathNode) -> str | None:
+        """Return the node's state, or raise OSError if the node is the step's product."""
+        if node.path != product:
+            return state(node)
+        refused.append(str(node.path))
+        raise OSError(_STATE_ERROR)
+
+    def scenario(given: _Passes) -> None:
+        """Record while the product's state cannot be read, then once it can."""
+        assert read_result(given.result_path(name))["success"] is True
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(PathNode, "state", state_unless_the_product)
+
+            assert given.record_ready() == []
+            assert given.recorded == set()
+            assert refused, "_record_ready did not read the state of the step's product."
 
         assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
         assert given.recorded == {given.signature(name)}

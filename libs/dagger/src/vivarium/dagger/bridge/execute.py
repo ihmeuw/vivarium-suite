@@ -336,9 +336,11 @@ def pytask_execute_build(session: Session) -> bool:
     at its prompt), stops the run; the hook catches it and goes on to record and settle the
     run, so pytask still writes its lockfile.
 
-    When the run has stopped, the hook records the result of each submitted step whose
-    result file is in the run directory, in plan order, and appends its report to
-    ``session.execution_reports``. Recording runs, in this process, the per-task hooks
+    While the workflow runs, a second thread records each submitted step that is ready, as
+    the module description says, in the order the steps finish. When the run has stopped,
+    the hook records the result of each submitted step that the second thread has not
+    recorded and whose result file is in the run directory, in plan order. Each recorded
+    step's report is appended to ``session.execution_reports``. Recording runs, in this process, the per-task hooks
     that a local build runs around a step's body, except setup and the call itself: it
     logs the step's start, checks that each of its outputs exists, hashes its
     inputs and outputs into the lockfile, and logs its outcome. The output that
@@ -814,10 +816,11 @@ def _recording_during_the_run(
 ) -> Iterator[None]:
     """Record the ready steps in a second thread while the block runs.
 
-    The thread calls :func:`_record_ready` when the block starts and then every
-    ``_RECORD_INTERVAL_SECONDS`` seconds. The block exits only after the thread has
-    ended, also when an interrupt reaches the main thread while it waits for the thread.
-    An exception in the thread ends its passes and is printed as a warning when the block
+    The thread calls :func:`_record_ready` every ``_RECORD_INTERVAL_SECONDS`` seconds,
+    first one interval after the block starts, and makes no pass after the block ends.
+    The block exits only after the thread has ended, also when an interrupt reaches the
+    main thread while it waits for the thread; that interrupt is then raised. An
+    exception in the thread ends its passes and is printed as a warning when the block
     exits. It is not raised, because the caller records every remaining step afterwards.
     """
     stop = threading.Event()
@@ -825,12 +828,10 @@ def _recording_during_the_run(
     errors: list[Exception] = []
 
     def record_until_stopped() -> None:
-        """Call ``_record_ready`` now and after each interval until ``stop`` is set."""
+        """Call ``_record_ready`` after each interval until ``stop`` is set."""
         try:
-            while True:
+            while not stop.wait(_RECORD_INTERVAL_SECONDS):
                 _record_ready(session, submitted, workdir, recorded)
-                if stop.wait(_RECORD_INTERVAL_SECONDS):
-                    return
         except Exception as error:
             errors.append(error)
         finally:
@@ -844,13 +845,20 @@ def _recording_during_the_run(
         except RuntimeError as start_error:
             errors.append(start_error)
             ended.set()
+        except BaseException:
+            # The thread may or may not exist. With ``stop`` set it makes no pass, so the
+            # exit must not wait for an end that a missing thread never reports.
+            stop.set()
+            ended.set()
+            raise
         yield
     finally:
         while True:
             try:
                 stop.set()
-                # Before Python 3.13, a join that a signal handler's exception interrupts
-                # marks the running thread as ended, so the thread reports its own end.
+                # On Python 3.11 and 3.12, when a signal handler's exception interrupts a
+                # join, is_alive() reports False while the thread still runs, so a second
+                # join would return at once. The thread therefore reports its own end.
                 ended.wait()
                 if thread.is_alive():
                     thread.join()
@@ -876,7 +884,8 @@ def _record_ready(
     A task is ready when its result file in ``workdir`` can be read and reports success,
     every submitted task upstream of it is in ``recorded``, pytask has not marked it
     ``skip_ancestor_failed``, and each of its products has a state. Any other task is
-    left as it is, for a later call or for the end of the run. A task whose signature is
+    left as it is, for a later call or for the end of the run, also when reading its
+    result or a product's state raises :class:`OSError`. A task whose signature is
     in ``recorded`` is not looked at again.
     """
     # One listing per pass costs less on a network filesystem than a failed open per step.
@@ -906,9 +915,11 @@ def _ready_result(
         result = _read_checked(workdir / f"{task.signature}{RESULT_SUFFIX}")
     except (OSError, ValueError):
         return None
-    if not result["success"] or not _products_have_state(session, task):
+    try:
+        ready = result["success"] and _products_have_state(session, task)
+    except OSError:
         return None
-    return result
+    return result if ready else None
 
 
 def _products_have_state(session: Session, task: PTask) -> bool:

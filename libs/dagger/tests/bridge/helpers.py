@@ -56,8 +56,9 @@ recording thread records a step a moment after the step's result is written."""
 
 LONG_RECORD_INTERVAL = 600.0
 """A value of ``execute._RECORD_INTERVAL_SECONDS``, in seconds, that is longer than any
-build of these tests. With it the recording thread looks at the run directory only when
-the workflow starts, so every step is recorded after the workflow has ended."""
+build of these tests. With it the recording thread never looks at the run directory,
+because its first look comes one interval after the workflow starts, so every step is
+recorded after the workflow has ended."""
 
 WAIT_SECONDS = 20.0
 """The most seconds that :func:`wait_until` waits by default."""
