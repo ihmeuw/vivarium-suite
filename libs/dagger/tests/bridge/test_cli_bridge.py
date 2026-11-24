@@ -610,7 +610,7 @@ def test_dagger_force_under_a_held_lock_exits_one_and_keeps_pytask_lock(
 def test_sigterm_during_a_bridged_run_exits_130_naming_the_workflow_id(
     tmp_path: Path,
 ) -> None:
-    """Under FakeJobmon(workflow_id=4242, interrupt_after=1), 'dagger run -c def.py -P proj_test' exits 130; stderr starts with 'Interrupted.', names workflow 4242, says its jobs may still be running, and says to run the same command again to continue."""
+    """Under FakeJobmon(workflow_id=4242, interrupt_after=1), 'dagger run -c def.py -P proj_test' exits 130; stderr starts with 'Interrupted.', names workflow 4242, says its jobs may still be running, and says to run the same command again to run the pipeline again."""
     path = _definition(tmp_path)
 
     with FakeJobmon(workflow_id=4242, interrupt_after=1):
@@ -621,7 +621,7 @@ def test_sigterm_during_a_bridged_run_exits_130_naming_the_workflow_id(
     assert errors.startswith("Interrupted."), errors
     assert "4242" in errors, errors
     assert "may still be running" in errors, errors
-    assert "run the same command again to continue" in errors.lower(), errors
+    assert "run the same command again to run the pipeline again" in errors.lower(), errors
 
 
 def test_the_same_command_after_an_interrupt_continues_the_run(tmp_path: Path) -> None:
