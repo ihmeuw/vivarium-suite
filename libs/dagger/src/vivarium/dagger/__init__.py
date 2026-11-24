@@ -6,7 +6,8 @@ Vivarium Dagger
 Build and run multi-step data pipelines. The ``dagger`` CLI runs the steps that a
 YAML config defines as one Jobmon workflow. The backend builds a pipeline from tasks
 that declare their inputs and outputs, and lets pytask run only the tasks that are
-stale.
+stale. In this alpha every step that a pipeline definition adds with a step method is
+stale on every run.
 """
 
 from importlib.metadata import PackageNotFoundError, version

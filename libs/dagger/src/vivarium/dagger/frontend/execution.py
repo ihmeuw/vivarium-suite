@@ -4,7 +4,10 @@ The verbs here take the :class:`~vivarium.dagger.frontend.builder.Pipeline` that
 pipeline definition builds. Each first freezes it into a private snapshot of the steps
 added so far, so that one call reads a fixed set of steps. :func:`run` builds the
 pipeline, or only the named steps and their ancestors, and can force named steps to run
-even when they are current. :func:`preview` returns the plan without running anything,
+even when they are current. In this alpha no step that a step method adds is current,
+because each gets a new code identity on every build, so every such step runs, or, with
+``only``, every step it selects with its ancestors and the forced steps.
+:func:`preview` returns the plan without running anything,
 with each reason naming, where it can, a file key or a step instead of a file path or a
 pytask node name. :func:`run` describes a failed command or notebook step without its
 generated command and names a step that calls ``sys.exit``.
@@ -17,7 +20,7 @@ or failed in. A step must be added after the steps it depends on. Both verbs che
 before any step runs and refuse a pipeline in which a step depends on a step added after
 it, so step order is also an order in which the steps can run.
 
-With ``jobmon=True``, :func:`run` runs the stale steps through the Jobmon bridge (see
+With ``jobmon=True``, :func:`run` runs the steps through the Jobmon bridge (see
 :mod:`~vivarium.dagger.bridge.plugin`). It then gives every step its compute resources
 in the layers that :mod:`~vivarium.dagger.constants` lists, refuses a pipeline in which
 some step would have no project before anything is written, and reports a run that
@@ -164,9 +167,10 @@ class RunInterrupted(PipelineError):
 
     The bridge turns SIGTERM, or a ``KeyboardInterrupt`` from Jobmon, into an orderly
     stop: it records the steps whose results were already written and reports every
-    other submitted step as failed or skipped. Running the pipeline again continues the
-    run from what was recorded. The bridge does not cancel the Jobmon workflow, so its
-    jobs that had started on compute nodes can still be running.
+    other submitted step as failed or skipped. In this alpha, running the pipeline again
+    runs every step that a step method added again, including the recorded ones. The
+    bridge does not cancel the Jobmon workflow, so its jobs that had started on compute
+    nodes can still be running.
 
     The message names the Jobmon workflow id, or says that the run was interrupted
     before its workflow was bound, and names the run directory. Its ``exit_code`` is
@@ -276,11 +280,13 @@ def run(
         When ``only`` is given, the forced steps are added to it. In a local build, a
         forced step's descendants run again only if one of their inputs changed, so a
         forced step that writes identical bytes leaves them ``SKIP_UNCHANGED``. A string
-        is one step name.
+        is one step name. In this alpha every step that a step method adds is stale on
+        every build, so without ``only`` forcing such a step adds nothing to what runs;
+        with ``only``, the forced steps are added to the selection as above.
     build_kwargs
         Extra keyword arguments passed to
         :func:`~vivarium.dagger.backend.build.build`, and from there to
-        ``pytask.build``. ``jobmon=True`` runs the stale steps through the Jobmon bridge,
+        ``pytask.build``. ``jobmon=True`` runs the steps through the Jobmon bridge,
         unless one of the bridge's
         :data:`~vivarium.dagger.bridge.plugin.LOCAL_ONLY_MODES`, such as ``dry_run``, is
         also set. Such a run passes ``jobmon_resources`` to the build as
@@ -597,7 +603,7 @@ def _raise_for_bridge_stop(session: Session, result: dict[str, TaskOutcome]) -> 
         stopped = f"while Jobmon ran its workflow {state.workflow_id}"
     raise RunInterrupted(
         f"The run through Jobmon was interrupted {stopped}. Its run directory is "
-        f"{state.workdir}. Run the pipeline again to continue.",
+        f"{state.workdir}. Run the pipeline again to run it again.",
         workflow_id=state.workflow_id,
         run_directory=state.workdir,
         outcomes=result,

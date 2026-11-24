@@ -15,12 +15,13 @@ on a Slurm cluster.
 
 It also builds a data pipeline from tasks that each declare their inputs and
 outputs. It wires producers to consumers by file key and uses ``pytask`` to
-decide which tasks are stale and to run them. This part has four pieces: the
+run them in order. This version is an alpha: every step of a pipeline definition
+runs on every run. This part has four pieces: the
 backend (the task model, the build, and the run preview), the frontend (a
 ``Pipeline`` that a pipeline definition makes and returns after it adds Python,
 notebook, command and simulation steps to it; a check of each location's
 delivered primary data; and verbs that run or preview a whole pipeline by step
-name), a bridge that runs a build's stale steps on compute nodes as one Jobmon
+name), a bridge that runs a build's steps on compute nodes as one Jobmon
 workflow, and a test harness for staleness scenarios. The bridge needs the
 ``cluster`` extra: ``pip install "vivarium-dagger[cluster]"``. ``dagger`` also
 runs, previews, or forces the steps of a pipeline definition.

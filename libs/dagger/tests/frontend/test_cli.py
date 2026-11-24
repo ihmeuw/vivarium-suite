@@ -895,15 +895,17 @@ def test_a_failing_command_step_exits_one_and_gives_the_exit_status_not_the_comm
     assert "CalledProcessError" in result.stdout, result.stdout
 
 
-def test_an_interrupted_run_exits_130_and_says_rerunning_continues(tmp_path: Path) -> None:
-    """A step that raises KeyboardInterrupt makes 'dagger run' exit 130 and print that the run was interrupted and that running the same command again continues it."""
+def test_an_interrupted_run_exits_130_and_says_to_run_it_again(
+    tmp_path: Path,
+) -> None:
+    """A step that raises KeyboardInterrupt makes 'dagger run' exit 130 and print that the run was interrupted and to run the same command again to run the pipeline again."""
     path = _write_definition(tmp_path, _INTERRUPTED)
 
     result = _invoke("run", str(path))
 
     assert result.exit_code == 130, _describe(result)
     assert "Interrupted" in result.stderr
-    assert "run the same command again to continue" in result.stderr.lower()
+    assert "run the same command again to run the pipeline again" in result.stderr.lower()
 
 
 def test_a_step_that_raises_system_exit_makes_dagger_exit_nonzero(tmp_path: Path) -> None:
@@ -1302,7 +1304,7 @@ def test_every_command_in_the_docs_page_exits_zero(tmp_path: Path) -> None:
 def test_an_interrupt_while_loading_exits_130_with_the_verbs_message(
     tmp_path: Path, command: str
 ) -> None:
-    """A definition that raises KeyboardInterrupt at import exits 130 under run, preview and force (with a STEP), with no traceback; only run and force add that running the same command again continues."""
+    """A definition that raises KeyboardInterrupt at import exits 130 under run, preview and force (with a STEP), with no traceback; only run and force add to run the same command again to run the pipeline again."""
     path = _write_definition(tmp_path, _INTERRUPTED_WHILE_LOADING)
     steps: list[str] = ["a"] if command == "force" else []
 
@@ -1311,8 +1313,8 @@ def test_an_interrupt_while_loading_exits_130_with_the_verbs_message(
     assert result.exit_code == 130, _describe(result)
     assert result.stderr.startswith("Interrupted."), result.stderr
     assert "Traceback" not in result.stderr
-    continues = "run the same command again to continue" in result.stderr.lower()
-    assert continues == (command != "preview"), result.stderr
+    reruns = "run the same command again to run the pipeline again" in result.stderr.lower()
+    assert reruns == (command != "preview"), result.stderr
 
 
 def test_a_chained_definition_error_prints_each_exception_trimmed(tmp_path: Path) -> None:
