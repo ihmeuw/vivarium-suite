@@ -29,29 +29,38 @@ Planning goes through pytask's per-task protocol, so pytask's table lists each s
 as "would be executed", and lists it again when its result is recorded. The summary counts
 each step once.
 
-After the workflow ends, the hook records each step's result from the file that the node
-runner wrote. Recording runs pytask's own per-task hooks in the build's process, so pytask
-checks and hashes each step's outputs and writes its lockfile entry exactly as a local
-build does, and a later build skips a step whose inputs and code are unchanged. A step
-that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
-recorded while the workflow runs, so pytask's table shows no step finishing until the
-whole workflow ends.
+The hook records each step's result from the file that the node runner wrote. Recording
+runs pytask's own per-task hooks in the build's process, so pytask checks and hashes each
+step's outputs and writes its lockfile entry exactly as a local build does, and a later
+build skips a step whose inputs and code are unchanged. A step that failed on its node is
+reported as FAIL with :class:`RemoteTaskFailed`.
+
+While the workflow runs, a second thread looks at the run directory every few seconds and
+records each step that is ready: its result file reports success, every submitted step
+upstream of it is recorded, and each of its outputs can be seen from the build's process.
+pytask reads the states of the step's inputs and outputs at that moment and appends the
+step's entry to its lockfile journal, so a build that is killed during the workflow keeps
+the steps that it recorded. A result that reports a failure waits for the end of the
+workflow, because Jobmon can still run the step again. After the workflow ends, the hook
+records every step that has a result and no report yet, in plan order. A step that was
+recorded is not recorded again if Jobmon runs it again.
 
 The hook then settles every submitted step that still has no report, so each step of the
 plan ends with exactly one report. A step after a failed step is reported as
 SKIP_PREVIOUS_FAILED, and any other step without a result is reported as FAIL with a
 :class:`RemoteTaskFailed` that gives the step's Jobmon status and the workflow's id and
-status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the
-Jobmon workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the
-workflow, records the results already written, settles the rest and returns, so pytask
-still writes its lockfile. The hook does not cancel the workflow, so its jobs that are
-already on compute nodes can still be running. Each run also keeps a state file (see
-:mod:`~vivarium.dagger.bridge.state`) that gives its Jobmon workflow id even when the
-build is killed. To continue a stopped run, build again: the next build plans from the
-lockfile, so it runs every step that was not recorded as successful and every step after
-one, and skips any other recorded step whose inputs and code identity are unchanged.
-With the default code identity no step counts as unchanged, so every step runs again.
-:mod:`~vivarium.dagger.bridge.plugin` says what this means for the build's time limit.
+status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the Jobmon
+workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the workflow,
+lets the second thread finish the pass that it is making, records the other results
+already written, settles the rest and returns, so pytask still writes its lockfile. The
+hook does not cancel the workflow, so its jobs that are already on compute nodes can still
+be running. Each run also keeps a state file (see :mod:`~vivarium.dagger.bridge.state`)
+that gives its Jobmon workflow id even when the build is killed. To continue a stopped
+run, build again: the next build plans from the lockfile, so it runs every step that was
+not recorded as successful and every step after one, and skips any other recorded step
+whose inputs and code identity are unchanged. With the default code identity no step
+counts as unchanged, so every step runs again. :mod:`~vivarium.dagger.bridge.plugin` says
+what this means for the build's time limit.
 
 The hook does all of this while it holds the run lock on the build's root
 (:func:`~vivarium.dagger.backend.lock.run_lock`), so two bridged builds never plan, run or
@@ -69,7 +78,7 @@ import shlex
 import signal
 import sys
 import threading
-from collections.abc import Iterator, Mapping, MutableMapping, Sequence, Set
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence, Set
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -327,23 +336,25 @@ def pytask_execute_build(session: Session) -> bool:
     at its prompt), stops the run; the hook catches it and goes on to record and settle the
     run, so pytask still writes its lockfile.
 
-    When the run has stopped, the hook records the result of each submitted step whose
-    result file is in the run directory, in plan order, and appends its report to
-    ``session.execution_reports``. Recording runs, in this process, the per-task hooks
-    that a local build runs around a step's body, except setup and the call itself: it
-    logs the step's start, checks that each of its outputs exists, hashes its
-    inputs and outputs into the lockfile, and logs its outcome. The output that
-    the step wrote on its node is added to the report's sections as captured output of
-    the call. A step whose node reports success but which did not write every output is
-    a FAIL with pytask's own message naming the missing outputs, as in a local build. A
-    step that failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`,
-    with no lockfile entry, and pytask marks every step after it as skipped because an
-    ancestor failed. A step whose result file cannot be read is a FAIL in the same way,
-    and its :class:`RemoteTaskFailed` names the file. A step that has a result but that
-    pytask has marked in this way, because a step before it in plan order failed, also
-    when that step failed only at recording, is reported as SKIP_PREVIOUS_FAILED with no
-    lockfile entry, as a local build reports it, although its body ran on its node. Every
-    result is recorded, also after ``max_failures`` steps have failed.
+    While the workflow runs, a second thread records each submitted step that is ready, as
+    the module description says, in the order the steps finish. When the run has stopped,
+    the hook records the result of each submitted step that the second thread has not
+    recorded and whose result file is in the run directory, in plan order. Each recorded
+    step's report is appended to ``session.execution_reports``. Recording runs, in this
+    process, the per-task hooks that a local build runs around a step's body, except setup
+    and the call itself: it logs the step's start, checks that each of its outputs exists,
+    hashes its inputs and outputs into the lockfile, and logs its outcome. The output that
+    the step wrote on its node is added to the report's sections as captured output of the
+    call. A step whose node reports success but which did not write every output is a FAIL
+    with pytask's own message naming the missing outputs, as in a local build. A step that
+    failed on its node is a FAIL whose exception is :class:`RemoteTaskFailed`, with no
+    lockfile entry, and pytask marks every step after it as skipped because an ancestor
+    failed. A step whose result file cannot be read is a FAIL in the same way, and its
+    :class:`RemoteTaskFailed` names the file. A step that has a result but that pytask has
+    marked in this way, because a step before it in plan order failed, also when that step
+    failed only at recording, is reported as SKIP_PREVIOUS_FAILED with no lockfile entry,
+    as a local build reports it, although its body ran on its node. Every result is
+    recorded, also after ``max_failures`` steps have failed.
 
     Then the hook settles each submitted step that has no result file, in plan order,
     without calling pytask's execute protocol or running any step's body. A step that
@@ -454,8 +465,12 @@ def _execute(session: Session) -> bool:
     workdir = _new_run_directory(root)
     plan = _compile(session, to_submit, payloads, workdir)
     _prepare_products(session, to_submit)
-    jobmon_run, interrupted = _bind_and_run(session, plan, to_submit, workdir, timeout)
-    leftovers = _record_available(session, to_submit, workdir)
+    recorded: set[str] = set()
+    jobmon_run, interrupted = _bind_and_run(
+        session, plan, to_submit, workdir, timeout, recorded
+    )
+    unrecorded = [task for task in to_submit if task.signature not in recorded]
+    leftovers = _record_available(session, unrecorded, workdir)
     cause = _cause(jobmon_run, interrupted=interrupted)
     _settle(session, leftovers, jobmon_run, cause, workdir=workdir)
     final = RunState(
@@ -741,10 +756,13 @@ def _bind_and_run(
     submitted: Sequence[PTask],
     workdir: Path,
     timeout: int | None,
+    recorded: set[str],
 ) -> tuple[JobmonRun | None, bool]:
     """Bind and run ``plan``; return the run and whether the build was interrupted.
 
-    The run is None if the build was interrupted before the workflow was bound.
+    The run is None if the build was interrupted before the workflow was bound. The
+    signature of each step that is recorded while the workflow runs is added to
+    ``recorded``.
     """
     config = session.config
     cluster: str = config["jobmon_cluster"]
@@ -774,7 +792,8 @@ def _bind_and_run(
                     pending=tuple(task.name for task in submitted),
                 )
                 write_run_state(running)
-                _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
+                with _recording_during_the_run(session, submitted, workdir, recorded):
+                    _jobmon_adapter.run(jobmon_run, seconds_until_timeout=timeout)
     except (BridgeInterrupted, KeyboardInterrupt):
         interrupted = True
     # Raised outside the SIGTERM block, so that a SIGTERM cannot turn it into an interrupt.
@@ -785,6 +804,141 @@ def _bind_and_run(
             f"step's resources. Jobmon reported: {bind_error}"
         ) from bind_error
     return jobmon_run, interrupted
+
+
+_RECORD_INTERVAL_SECONDS = 5.0
+"""How many seconds the recording thread waits between two looks at the run directory."""
+
+
+@contextmanager
+def _recording_during_the_run(
+    session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
+) -> Iterator[None]:
+    """Record the ready steps in a second thread while the block runs.
+
+    The thread calls :func:`_record_ready` every ``_RECORD_INTERVAL_SECONDS`` seconds,
+    first one interval after the block starts, and makes no pass after the block ends.
+    The block exits only after the thread has ended, also when an interrupt reaches the
+    main thread while it waits for the thread; that interrupt is then raised. An
+    exception in the thread ends its passes and is printed as a warning at once; a thread
+    that cannot be started is printed as a warning when the block exits. Neither is raised,
+    because the caller records every remaining step afterwards.
+    """
+    stop = threading.Event()
+    ended = threading.Event()
+
+    def record_until_stopped() -> None:
+        """Call ``_record_ready`` after each interval until ``stop`` is set."""
+        try:
+            while not stop.wait(_RECORD_INTERVAL_SECONDS):
+                _record_ready(session, submitted, workdir, recorded)
+        except Exception as error:
+            _warn_recording_stopped(error)
+        finally:
+            ended.set()
+
+    thread = threading.Thread(target=record_until_stopped, name="dagger-bridge-recording")
+    start_error: RuntimeError | None = None
+    interrupt: BaseException | None = None
+    try:
+        try:
+            thread.start()
+        except RuntimeError as error:
+            start_error = error
+            ended.set()
+        except BaseException:
+            # The thread may or may not exist. With ``stop`` set it makes no pass, so the
+            # exit must not wait for an end that a missing thread never reports.
+            stop.set()
+            ended.set()
+            raise
+        yield
+    finally:
+        while True:
+            try:
+                stop.set()
+                # On Python 3.11 and 3.12, when a signal handler's exception interrupts a
+                # join, is_alive() reports False while the thread still runs, so a second
+                # join would return at once. The thread therefore reports its own end.
+                ended.wait()
+                if thread.is_alive():
+                    thread.join()
+                break
+            except (BridgeInterrupted, KeyboardInterrupt) as caught:
+                if interrupt is None:
+                    interrupt = caught
+        if start_error is not None:
+            _warn_recording_stopped(start_error)
+        if interrupt is not None:
+            raise interrupt
+
+
+def _warn_recording_stopped(error: Exception) -> None:
+    """Warn that recording during the run stopped because of ``error``."""
+    _warn(
+        f"Recording during the run stopped because of an error ({_describe(error)}). "
+        "Every remaining step is recorded when the workflow ends."
+    )
+
+
+def _record_ready(
+    session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
+) -> None:
+    """Record each submitted task that is ready, in plan order, and add it to ``recorded``.
+
+    A task is ready when its result file in ``workdir`` can be read and reports success,
+    every submitted task upstream of it is in ``recorded``, pytask has not marked it
+    ``skip_ancestor_failed``, and each of its products has a state. Any other task is
+    left as it is, for a later call or for the end of the run, also when reading its
+    result or a product's state raises :class:`OSError`. A task whose signature is
+    in ``recorded`` is not looked at again.
+    """
+    # One listing per pass costs less on a network filesystem than a failed open per step.
+    try:
+        listed = set(os.listdir(workdir))
+    except OSError:
+        return
+    submitted_signatures = {task.signature for task in submitted}
+    for task in submitted:
+        if task.signature in recorded or f"{task.signature}{RESULT_SUFFIX}" not in listed:
+            continue
+        result = _ready_result(session, task, workdir, recorded, submitted_signatures)
+        if result is not None:
+            _record(session, task, result, capture=False)
+            recorded.add(task.signature)
+
+
+def _ready_result(
+    session: Session,
+    task: PTask,
+    workdir: Path,
+    recorded: Set[str],
+    submitted_signatures: Set[str],
+) -> RunResult | None:
+    """Return the task's result if the task is ready to be recorded, or None if it is not."""
+    if not _stale_upstreams(session, task.signature, submitted_signatures) <= recorded:
+        return None
+    if _ancestor_failure(task) is not None:
+        return None
+    try:
+        result = _read_checked(workdir / f"{task.signature}{RESULT_SUFFIX}")
+    except (OSError, ValueError):
+        return None
+    try:
+        ready = result["success"] and _products_have_state(session, task)
+    except OSError:
+        return None
+    return result if ready else None
+
+
+def _products_have_state(session: Session, task: PTask) -> bool:
+    """Check whether each product of ``task`` that can have a state has one."""
+    for signature in session.dag.successors(task.signature):
+        node = session.dag.nodes[signature]
+        # A provisional product has no state of its own; pytask collects it at teardown.
+        if not isinstance(node, PProvisionalNode) and node.state() is None:
+            return False
+    return True
 
 
 def _cause(jobmon_run: JobmonRun | None, *, interrupted: bool) -> str:
@@ -892,15 +1046,17 @@ def _compile(
     return plan
 
 
-def _record_available(session: Session, stale: Sequence[PTask], workdir: Path) -> list[PTask]:
-    """Record the stale tasks that have a result file; return the others in order.
+def _record_available(
+    session: Session, unrecorded: Sequence[PTask], workdir: Path
+) -> list[PTask]:
+    """Record the unrecorded tasks that have a result file; return the others in order.
 
     A task with a result that pytask has marked ``skip_ancestor_failed`` is reported as
     SKIP_PREVIOUS_FAILED instead of being recorded.
     """
     listed = set(os.listdir(workdir))
     unfinished: list[PTask] = []
-    for task in stale:
+    for task in unrecorded:
         name = f"{task.signature}{RESULT_SUFFIX}"
         if name not in listed:
             unfinished.append(task)
@@ -942,8 +1098,15 @@ def _record_unreadable(session: Session, task: PTask, path: Path, error: Excepti
     _finish(session, task, _remote_failure(task, RemoteTaskFailed(message)))
 
 
-def _record(session: Session, task: PTask, result: RunResult) -> None:
-    """Report ``task`` from its node result through pytask's per-task hooks."""
+def _record(
+    session: Session, task: PTask, result: RunResult, *, capture: bool = True
+) -> None:
+    """Report ``task`` from its node result through pytask's per-task hooks.
+
+    With ``capture`` false, pytask's capture manager and logging manager take no part in
+    the teardown, so the call captures neither the output nor the log records of the whole
+    process.
+    """
     __tracebackhide__ = True
     if result["stdout"]:
         task.report_sections.append(("call", "stdout", result["stdout"]))
@@ -951,10 +1114,13 @@ def _record(session: Session, task: PTask, result: RunResult) -> None:
         task.report_sections.append(("call", "stderr", result["stderr"]))
     session.hook.pytask_execute_task_log_start(session=session, task=task)
     if result["success"]:
+        teardown: Callable[..., Any] = session.hook.pytask_execute_task_teardown
+        if not capture:
+            teardown = _teardown_without_capture_or_logging(session)
         # pytask's tracebacks start at the first frame that is neither hidden nor pytask's,
         # so teardown is called from this hidden frame and not from a helper.
         try:
-            session.hook.pytask_execute_task_teardown(session=session, task=task)
+            teardown(session=session, task=task)
         except Exception:
             report = ExecutionReport.from_task_and_exception(task, sys.exc_info())
         else:
@@ -973,6 +1139,20 @@ def _record(session: Session, task: PTask, result: RunResult) -> None:
         )
         report = _remote_failure(task, error)
     _finish(session, task, report)
+
+
+def _teardown_without_capture_or_logging(session: Session) -> Callable[..., Any]:
+    """Return pytask's teardown hook without its capture and logging managers' wrappers."""
+    plugin_manager = session.config["pm"]
+    # Both wrappers act on the whole process for the length of the teardown: one redirects
+    # its output, the other adds handlers to the root logger and then restores its level.
+    # So they would take what another thread writes or logs, and undo a level that it sets.
+    managers = ("capturemanager", "loggingmanager")
+    teardown: Callable[..., Any] = plugin_manager.subset_hook_caller(
+        "pytask_execute_task_teardown",
+        remove_plugins=[plugin_manager.get_plugin(name) for name in managers],
+    )
+    return teardown
 
 
 def _remote_failure(task: PTask, error: RemoteTaskFailed) -> ExecutionReport:

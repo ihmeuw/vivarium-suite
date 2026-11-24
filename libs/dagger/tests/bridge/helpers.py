@@ -6,8 +6,10 @@ builds them with ``jobmon=True`` needs the ``node_pythonpath`` fixture.
 
 import json
 import re
+import time
 import tomllib
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +24,7 @@ from vivarium.dagger.backend.wiring import FileRegistry
 from vivarium.dagger.bridge.execute import RemoteTaskFailed
 from vivarium.dagger.bridge.state import RUNS_DIR, STATE_FILE, RunState, read_run_state
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, with_stable_code_id
+from vivarium.dagger.harness import FakeJobmon, Fixture, build_fixture, with_stable_code_id
 
 LOCKFILE = "pytask.lock"
 """The name of pytask's lockfile in a build's root."""
@@ -49,6 +51,22 @@ D = INDEPENDENT
 PLAN_ORDER = (A, D, B, C)
 """The order in which the bridge plans a -> b -> c plus d: by wave, then by name."""
 
+SHORT_RECORD_INTERVAL = 0.02
+"""A value of ``execute._RECORD_INTERVAL_SECONDS``, in seconds, with which the bridge's
+recording thread records a step a moment after the step's result is written."""
+
+LONG_RECORD_INTERVAL = 600.0
+"""A value of ``execute._RECORD_INTERVAL_SECONDS``, in seconds, that is longer than any
+build of these tests. With it the recording thread never looks at the run directory,
+because its first look comes one interval after the workflow starts, so every step is
+recorded after the workflow has ended."""
+
+WAIT_SECONDS = 20.0
+"""The most seconds that :func:`wait_until` waits by default."""
+
+_POLL_SECONDS = 0.02
+"""How many seconds :func:`wait_until` sleeps between two checks."""
+
 _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 """An ANSI escape sequence, which pytask's console writes when it styles its output."""
 
@@ -67,6 +85,34 @@ def make_dir(path: Path) -> Path:
 def stable(tasks: Sequence[Task], changed: Collection[str] = ()) -> list[Task]:
     """Return ``tasks`` with stable code identities, changed for the steps in ``changed``."""
     return [with_stable_code_id(task, "2" if task.name in changed else "1") for task in tasks]
+
+
+def stable_fixture(directory: Path) -> Fixture:
+    """Return the harness fixture under ``directory`` with stable code identities."""
+    fx = build_fixture(directory)
+    return replace(fx, tasks=stable(fx.tasks))
+
+
+def constant_steps(artifacts: FileRegistry, names: Sequence[str]) -> list[Task]:
+    """Return one independent python step per name, each writing a constant frame."""
+    return [
+        python_step(step_targets.constant, inputs={}, outputs=name, registry=artifacts)
+        for name in names
+    ]
+
+
+def two_step_chain(artifacts: FileRegistry) -> list[Task]:
+    """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
+    first = python_step(
+        step_targets.constant, inputs={}, outputs="first.parquet", registry=artifacts
+    )
+    second = python_step(
+        step_targets.stack,
+        inputs={"upstream": "first.parquet"},
+        outputs="second.parquet",
+        registry=artifacts,
+    )
+    return [first, second]
 
 
 def chain_and_independent(
@@ -151,6 +197,25 @@ def journal_ids(root: Path) -> set[str]:
         return set()
     lines = path.read_text(encoding="utf-8").splitlines()
     return {json.loads(line)["id"] for line in lines if line.strip()}
+
+
+def journal_holds(root: Path, names: Collection[str]) -> bool:
+    """Check whether ``root``'s lockfile journal holds an entry for each step in ``names``."""
+    try:
+        return set(names) <= journal_ids(root)
+    # A line that another thread or process is still writing is not JSON yet.
+    except (OSError, ValueError):
+        return False
+
+
+def wait_until(condition: Callable[[], bool], limit: float = WAIT_SECONDS) -> bool:
+    """Check ``condition`` until it holds or ``limit`` seconds pass; return whether it held."""
+    deadline = time.monotonic() + limit
+    while not condition():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(_POLL_SECONDS)
+    return True
 
 
 def bound_names(jobmon: FakeJobmon) -> list[list[str]]:

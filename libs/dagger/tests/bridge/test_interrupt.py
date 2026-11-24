@@ -97,9 +97,9 @@ from pathlib import Path
 from pytask import hookimpl
 
 from tests.bridge import step_targets
-from tests.bridge.helpers import registry, stable
+from tests.bridge.helpers import LONG_RECORD_INTERVAL, registry, stable
 from vivarium.dagger.backend.build import build
-from vivarium.dagger.bridge import plugin
+from vivarium.dagger.bridge import execute, plugin
 from vivarium.dagger.frontend.python_step import python_step
 from vivarium.dagger.harness import FakeJobmon
 
@@ -122,6 +122,7 @@ def pytask_post_parse(config):
 
 
 plugin.pytask_post_parse = pytask_post_parse
+execute._RECORD_INTERVAL_SECONDS = LONG_RECORD_INTERVAL
 tmp_path = Path(sys.argv[1])
 artifacts = registry(tmp_path)
 tasks = stable(
@@ -135,7 +136,8 @@ with FakeJobmon():
 print("survived", flush=True)
 """
 """A child build of two independent steps that sends itself SIGTERM while the bridge
-records the second step."""
+records the second step. Its recording interval is long, so both steps are recorded after
+the workflow has ended, when SIGTERM has its earlier handling again."""
 
 _SIGTERM_AFTER_A_WRAPPED_RUN = """
 import os
@@ -239,26 +241,45 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from tests.bridge.helpers import WORKFLOW_ID, chain_and_independent, registry, stable
+from tests.bridge.helpers import (
+    SHORT_RECORD_INTERVAL,
+    WORKFLOW_ID,
+    build_root,
+    chain_and_independent,
+    journal_holds,
+    registry,
+    stable,
+    wait_until,
+)
 from vivarium.dagger.backend.build import build
+from vivarium.dagger.bridge import execute
 from vivarium.dagger.harness import FakeJobmon
 
 
 @dataclass
-class KilledAfterOne(FakeJobmon):
+class KilledOnceTwoAreRecorded(FakeJobmon):
     def run(self, jobmon_run, *, seconds_until_timeout=None):
-        subprocess.run(["/bin/sh", "-c", jobmon_run.plan[0].command], check=False)
+        first_two = jobmon_run.plan[:2]
+        for entry in first_two:
+            subprocess.run(["/bin/sh", "-c", entry.command], check=False)
+        names = [entry.name for entry in first_two]
+        if not wait_until(lambda: journal_holds(build_root(tmp_path), names)):
+            print("not recorded", flush=True)
+            os._exit(3)
         os.kill(os.getpid(), signal.SIGKILL)
 
 
 tmp_path = Path(sys.argv[1])
+execute._RECORD_INTERVAL_SECONDS = SHORT_RECORD_INTERVAL
 tasks = stable(chain_and_independent(registry(tmp_path)))
-with KilledAfterOne(workflow_id=WORKFLOW_ID):
-    build(tasks, tmp_path / "state", jobmon=True)
+with KilledOnceTwoAreRecorded(workflow_id=WORKFLOW_ID):
+    build(tasks, build_root(tmp_path), jobmon=True)
 print("survived", flush=True)
 """
-"""A child build of a -> b -> c plus d with stable code identities whose run sends
-itself SIGKILL after it runs the first entry."""
+"""A child build of a -> b -> c plus d with stable code identities and a short recording
+interval. Its run runs the first two entries, waits until the lockfile journal holds
+both, and then sends itself SIGKILL. If the journal does not hold them within the time
+limit, the child prints "not recorded" and exits with status 3 instead."""
 
 
 @pytest.fixture(autouse=True)
@@ -758,22 +779,27 @@ def test_sigterm_raises_is_a_no_op_off_the_main_thread() -> None:
 # SIGKILL
 
 
-def test_a_sigkilled_build_leaves_a_running_state_and_records_nothing(tmp_path: Path) -> None:
-    """In a child Python process, a bridged build through a FakeJobmon subclass whose run sends SIGKILL to the process after one entry ends with return code -9; the state file is 'running' with the fake's workflow id and every submitted step pending, pytask.lock has no entry, and the next bridged build in this process binds the same plan as the killed build."""
+def test_a_sigkilled_build_keeps_the_steps_that_finished(tmp_path: Path) -> None:
+    """In a child Python process, a bridged build with stable code identities through a FakeJobmon subclass whose run waits until the lockfile journal holds its first two entries and then sends SIGKILL to the process ends with return code -9; the state file is 'running' with the fake's workflow id and every submitted step pending, the journal holds exactly those two steps, and the next bridged build in this process reports those two as SKIP_UNCHANGED and binds a plan of the other two."""
     root = build_root(tmp_path)
 
     child = _run_child(_SIGKILL_DURING_THE_RUN, tmp_path)
 
+    printed = child.stdout.splitlines()
+    assert "not recorded" not in printed, (child.stdout, child.stderr[-4000:])
+    assert "survived" not in printed, (child.stdout, child.stderr[-4000:])
     assert child.returncode == -signal.SIGKILL, (child.returncode, child.stderr[-4000:])
     state = only_state(root)
     assert state.status == "running"
     assert state.workflow_id == WORKFLOW_ID
     assert state.pending == PLAN_ORDER
-    assert lockfile_entries(root) == {}
-    assert journal_ids(root) == set()
+    assert journal_ids(root) == {A, D}
     jobmon = FakeJobmon()
-    chain_build(tmp_path, jobmon, stable_ids=True)
-    assert bound_names(jobmon) == [list(state.pending)]
+    session = chain_build(tmp_path, jobmon, stable_ids=True)
+    reported = outcomes(session)
+    assert reported[A] == TaskOutcome.SKIP_UNCHANGED
+    assert reported[D] == TaskOutcome.SKIP_UNCHANGED
+    assert bound_names(jobmon) == [[B, C]]
 
 
 # The warning about an unfinished run
