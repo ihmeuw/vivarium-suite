@@ -11,6 +11,7 @@ import subprocess
 import sys
 import sysconfig
 import textwrap
+import threading
 import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -639,6 +640,43 @@ def test_a_data_file_passed_to_any_call_at_import_is_listed(
     _assert_python_digests(part, repo)
 
 
+_DATA_PATH_FORMS: dict[str, str] = {
+    "path_read_text": 'TEXT = (Path(__file__).parent / "t.csv").read_text()\n',
+    "path_read_bytes": 'DATA = (Path(__file__).parent / "t.csv").read_bytes()\n',
+    "path_open": 'HANDLE = (Path(__file__).parent / "t.csv").open()\n',
+    "os_path_join": 'HANDLE = open(os.path.join(os.path.dirname(__file__), "t.csv"))\n',
+    "joinpath": 'HANDLE = open(Path(__file__).parent.joinpath("t.csv"))\n',
+    "parents_index": 'HANDLE = open(Path(__file__).parents[0] / "t.csv")\n',
+    "str": 'HANDLE = open(str(Path(__file__).parent / "t.csv"))\n',
+    "fspath": 'HANDLE = open(os.fspath(Path(__file__).parent / "t.csv"))\n',
+    "resolve": 'HANDLE = open(Path(__file__).resolve().parent / "t.csv")\n',
+    "absolute": 'HANDLE = open(Path(__file__).absolute().parent / "t.csv")\n',
+}
+"""Top-level reads of ``t.csv`` through each documented form of a path built from
+``__file__``."""
+
+
+@pytest.mark.parametrize("form", list(_DATA_PATH_FORMS))
+def test_each_documented_form_of_a_data_path_lists_its_file(
+    tmp_path: Path, form: str
+) -> None:
+    """A top-level read of t.csv by Path.read_text, Path.read_bytes or Path.open on Path(__file__).parent / "t.csv", or by open of os.path.join(os.path.dirname(__file__), "t.csv"), Path(__file__).parent.joinpath("t.csv"), Path(__file__).parents[0] / "t.csv", str(...) or os.fspath(...) of the path, or a path from Path(__file__).resolve() or .absolute(), lists t.csv by its bytes."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": f"import os\nfrom pathlib import Path\n\n{_DATA_PATH_FORMS[form]}",
+            "t.csv": "a,b\n1,2\n",
+        },
+    ).resolve()
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py", "t.csv"}
+    assert part.files["t.csv"] == _bytes_digest(repo / "t.csv")
+
+
 _NO_DATA_CALLS: dict[str, str] = {
     "missing_file": 'TABLE = pd.read_csv(Path(__file__).parent / "missing.csv")\n',
     "directory": 'TABLE = pd.read_csv(Path(__file__).parent / "data")\n',
@@ -696,6 +734,86 @@ def test_a_call_that_does_not_read_an_existing_file_at_import_lists_no_data_file
 
     assert part.established, part.reason
     assert set(part.files) == {"main.py", "alpha.py"}
+
+
+_OPENS_AT_IMPORT: dict[str, tuple[str, str | None]] = {
+    "write_mode": ('open(HERE / "stamp.txt", "w")\n', None),
+    "append_mode": ('open(HERE / "stamp.txt", "a")\n', None),
+    "append_mode_keyword": ('open(HERE / "stamp.txt", mode="a")\n', None),
+    "exclusive_mode": ('open(HERE / "stamp.txt", "x")\n', None),
+    "update_mode": ('open(HERE / "stamp.txt", "r+")\n', None),
+    "write_text": ('(HERE / "s.txt").write_text("x")\n', None),
+    "default_mode": ('open(HERE / "t.txt")\n', "t.txt"),
+    "binary_read_mode": ('open(HERE / "t.txt", "rb")\n', "t.txt"),
+}
+"""Top-level calls on an existing file next to the module, each with the data file the
+code part lists: none for a call that writes the file, and the file for one that reads it."""
+
+
+@pytest.mark.parametrize("call", list(_OPENS_AT_IMPORT))
+def test_a_call_at_import_that_writes_a_file_adds_no_data_file(
+    tmp_path: Path, call: str
+) -> None:
+    """A top-level open of an existing file in mode "w", "a" (positional or keyword), "x" or "r+", and a Path.write_text on one, add no data file, while an open in the default mode or "rb" lists the file."""
+    statement, listed = _OPENS_AT_IMPORT[call]
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": (
+                f"from pathlib import Path\n\nHERE = Path(__file__).parent\n{statement}"
+            ),
+            "stamp.txt": "stamp\n",
+            "s.txt": "s\n",
+            "t.txt": "t\n",
+        },
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py", *([listed] if listed else [])}
+
+
+def test_a_data_file_through_a_symlink_to_outside_every_root_is_listed_by_its_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A data file read at import through a symlink in the repository whose target lies outside every root is listed by the link's name in the tree with the target's bytes, the code part stays established, and an edit to the target changes its digest and the node's state."""
+    outside = _write(tmp_path / "outside", {"target.csv": "a,b\n1,2\n"}).resolve()
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "ci_link_main.py": "import ci_link_alpha\n",
+            "ci_link_alpha.py": (
+                "from pathlib import Path\n\n"
+                'TABLE = open(Path(__file__).parent / "link.csv").read()\n'
+            ),
+        },
+    ).resolve()
+    try:
+        (repo / "link.csv").symlink_to(outside / "target.csv")
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks cannot be created here")
+    monkeypatch.syspath_prepend(str(repo))
+    node = CodeIdentityNode(
+        name="step::code", start=repo / "ci_link_main.py", repository_root=repo
+    )
+
+    before = _part(repo, start="ci_link_main.py")
+    state = node.state()
+    state_again = node.state()
+    (outside / "target.csv").write_text("a,b\n1,2\n3,4\n")
+    after = _part(repo, start="ci_link_main.py")
+    edited_state = node.state()
+
+    assert before.established, before.reason
+    assert set(before.files) == {"ci_link_main.py", "ci_link_alpha.py", "link.csv"}
+    assert before.files["link.csv"] == "bytes:" + hashlib.sha256(b"a,b\n1,2\n").hexdigest()
+    assert after.established, after.reason
+    assert after.files["link.csv"] == _bytes_digest(outside / "target.csv")
+    assert after.files["link.csv"] != before.files["link.csv"]
+    assert state_again == state
+    assert edited_state != state
 
 
 _REBINDINGS: dict[str, tuple[str, bool]] = {
@@ -1060,6 +1178,44 @@ def test_a_package_that_does_not_extend_its_path_resolves_only_its_own_directory
     assert set(part.files) == {"main.py", "nsp/__init__.py"}
 
 
+_DECLARE_NAMESPACE = {
+    "import_pkg_resources": (
+        "import pkg_resources\n\npkg_resources.declare_namespace(__name__)\n"
+    ),
+    "from_pkg_resources_import": (
+        "from pkg_resources import declare_namespace\n\ndeclare_namespace(__name__)\n"
+    ),
+    "dunder_import": '__import__("pkg_resources").declare_namespace(__name__)\n',
+}
+"""The spellings of a package ``__init__.py`` that declares a namespace package with
+``pkg_resources.declare_namespace``."""
+
+
+@pytest.mark.parametrize("spelling", list(_DECLARE_NAMESPACE))
+def test_a_pkg_resources_namespace_package_resolves_a_submodule_in_a_later_portion(
+    tmp_path: Path, spelling: str
+) -> None:
+    """A package whose __init__ calls pkg_resources.declare_namespace(__name__), through import pkg_resources, from pkg_resources import declare_namespace or __import__("pkg_resources"), split over two search directories that each hold that __init__, resolves a submodule that only the second portion holds, and lists only the first portion's __init__."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import nsp.portion\n",
+            "first/nsp/__init__.py": _DECLARE_NAMESPACE[spelling],
+            "second/nsp/__init__.py": _DECLARE_NAMESPACE[spelling],
+            "second/nsp/portion.py": "VALUE = 1\n",
+        },
+    )
+
+    part = _part(repo, extra=[repo / "first", repo / "second", _STDLIB])
+
+    assert part.established, part.reason
+    assert set(part.files) == {
+        "main.py",
+        "first/nsp/__init__.py",
+        "second/nsp/portion.py",
+    }
+
+
 _PORTION = {
     "engine/src/vns/__init__.py": _EXTEND_PATH["import_pkgutil"],
     "dagger/src/vns/dag/__init__.py": "",
@@ -1109,6 +1265,56 @@ def test_an_init_at_or_above_the_search_path_entry_of_the_starting_file_is_not_l
 
     assert part.established, part.reason
     assert set(part.files) == {"outer/src/pkg/start.py", "outer/src/pkg/__init__.py"}
+
+
+_SRC_LAYOUT = {
+    "src/mypkg/__init__.py": "",
+    "src/mypkg/steps.py": "VALUE = 1\n",
+    "src/mypkg/pipeline.py": "from mypkg import steps\n",
+}
+"""A repository whose package ``mypkg`` sits in ``src``, as a pipeline file run with
+``dagger run -c src/mypkg/pipeline.py`` finds it, with ``src/mypkg`` first on the search
+path."""
+
+
+@pytest.mark.parametrize("named", [True, False])
+def test_the_module_name_of_the_starting_file_decides_its_parent_packages(
+    tmp_path: Path, named: bool
+) -> None:
+    """With src/mypkg before src on the search path, the code part of src/mypkg/steps.py given module="mypkg.steps" lists src/mypkg/__init__.py as its parent package, and without a module the name is guessed from the first search entry that holds the file, so no __init__.py is listed."""
+    repo = _write(tmp_path / "repo", _SRC_LAYOUT)
+    start = repo / "src" / "mypkg" / "steps.py"
+    search_path = [str(repo / "src" / "mypkg"), str(repo / "src"), str(repo)]
+
+    if named:
+        part = code_part(start, repo, search_path, module="mypkg.steps")
+    else:
+        part = code_part(start, repo, search_path)
+
+    assert part.established, part.reason
+    parent = ["src/mypkg/__init__.py"] if named else []
+    assert set(part.files) == {"src/mypkg/steps.py", *parent}
+
+
+@pytest.mark.parametrize("statement", ["from . import b\n", "from .b import VALUE\n"])
+def test_a_relative_import_resolves_like_the_absolute_import_it_stands_for(
+    tmp_path: Path, statement: str
+) -> None:
+    """In a package ns that extends its path over the search directories p1 and p2, the starting module ns.a in p1, given module="ns.a", resolves from . import b or from .b import VALUE to p2/ns/b.py, which only p2 holds."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "p1/ns/__init__.py": _EXTEND_PATH["import_pkgutil"],
+            "p1/ns/a.py": statement,
+            "p2/ns/b.py": "VALUE = 1\n",
+        },
+    )
+    search_path = [str(repo), str(repo / "p1"), str(repo / "p2"), _STDLIB]
+
+    part = code_part(repo / "p1" / "ns" / "a.py", repo, search_path, module="ns.a")
+
+    assert part.established, part.reason
+    assert set(part.files) == {"p1/ns/a.py", "p1/ns/__init__.py", "p2/ns/b.py"}
 
 
 _LIBRARY = {
@@ -1485,6 +1691,48 @@ def test_each_python_file_is_read_once_for_its_hash_and_its_imports(
     assert sorted(opened) == sorted(files), "each file must be opened once"
 
 
+def _within(seconds: float, function: Callable[[], CodePart]) -> CodePart:
+    """Return ``function()``, failing the test if it has not returned after ``seconds``."""
+    outcome: list[CodePart | BaseException] = []
+
+    def call() -> None:
+        """Record the function's result or the exception it raised."""
+        try:
+            outcome.append(function())
+        except BaseException as error:
+            outcome.append(error)
+
+    # A daemon thread, so a call that never returns does not hold the test run open.
+    thread = threading.Thread(target=call, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    assert not thread.is_alive(), f"the call did not return within {seconds} s"
+    [result] = outcome
+    if isinstance(result, BaseException):
+        raise result
+    return result
+
+
+def test_a_long_chain_of_doubled_path_names_is_analysed_quickly(tmp_path: Path) -> None:
+    """A module whose top level binds a0 = Path(__file__).parent and a1 = a0 / a0 through a30 = a29 / a29, then opens a30, gives a code part within 5 s, established and with no data file, since a30 names the module's directory."""
+    chain = "".join(f"a{i} = a{i - 1} / a{i - 1}\n" for i in range(1, 31))
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": (
+                "from pathlib import Path\n\n"
+                f"a0 = Path(__file__).parent\n{chain}HANDLE = open(a30)\n"
+            ),
+        },
+    )
+
+    part = _within(5, lambda: _part(repo))
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py"}
+
+
 def test_code_identity_uses_no_private_name_of_code_hash() -> None:
     """The code_identity module imports no private name from code_hash and reads no private attribute of the code_hash module."""
     assert code_identity_module.__file__ is not None
@@ -1649,6 +1897,41 @@ def test_the_node_protocol(tmp_path: Path) -> None:
     assert node != renamed
 
 
+def test_the_nodes_module_is_part_of_its_equality_and_decides_its_parent_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A node's module defaults to None and takes part in equality, and with src/mypkg before src on sys.path, an edit to src/mypkg/__init__.py changes the state of a node whose module is mypkg.steps and leaves the state of a node without a module unchanged."""
+    tag = uuid.uuid4().hex
+    repo = _write(
+        tmp_path / "repo",
+        {**_SRC_LAYOUT, "src/mypkg/steps.py": f'MARKER = "steps-{tag}"\n'},
+    ).resolve()
+    package = repo / "src" / "mypkg"
+    monkeypatch.setattr(sys, "path", [str(package), str(repo / "src"), *sys.path])
+    start = package / "steps.py"
+    named = CodeIdentityNode(
+        name="step::code", start=start, repository_root=repo, module="mypkg.steps"
+    )
+    same = CodeIdentityNode(
+        name="step::code", start=start, repository_root=repo, module="mypkg.steps"
+    )
+    unnamed = CodeIdentityNode(name="step::code", start=start, repository_root=repo)
+
+    named_before = named.state()
+    named_again = named.state()
+    unnamed_before = unnamed.state()
+    (package / "__init__.py").write_text(f'MARKER = "init-{tag}"\n')
+    named_after = named.state()
+    unnamed_after = unnamed.state()
+
+    assert unnamed.module is None
+    assert named == same
+    assert named != unnamed
+    assert named_again == named_before
+    assert named_after != named_before
+    assert unnamed_after == unnamed_before
+
+
 def test_the_analysis_runs_once_per_content_within_a_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1703,10 +1986,10 @@ def test_the_analysis_runs_once_per_content_within_a_process(
     assert len(parsed_after_edit) <= 2, parsed_after_edit
 
 
-def test_an_old_unchanged_file_is_not_read_again_and_a_change_of_size_is_seen(
+def test_an_old_unchanged_file_is_not_read_again_and_a_same_size_edit_is_seen(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """With every listed file counted as old enough that its stat can be trusted, a second call of a node's state opens no listed file and gives the same state, and an edit that changes a file's size but keeps its modification time changes the next state."""
+    """With every listed file counted as old enough that its stat can be trusted, a second call of a node's state opens no listed file and gives the same state, and an edit that keeps a file's size and, restored with os.utime, its modification time changes the next state."""
     tag = uuid.uuid4().hex
     repo = _write(
         tmp_path / "repo",
@@ -1734,16 +2017,57 @@ def test_an_old_unchanged_file_is_not_read_again_and_a_change_of_size_is_seen(
     opened_again = list(opened)
     beta = repo / "ci_stat_beta.py"
     status = beta.stat()
-    beta.write_text(f'MARKER = "beta-{tag}"\nVALUE = 1000\n')
+    beta.write_text(f'MARKER = "beta-{tag}"\nVALUE = 2\n')
     os.utime(beta, ns=(status.st_atime_ns, status.st_mtime_ns))
     edited = node.state()
 
+    assert beta.stat().st_size == status.st_size
     assert opened_first == set(files), (
         f"opened {opened_first}; none means the analysis does not open files with open, "
         "io.open or os.open"
     )
     assert opened_again == []
     assert second == first
+    assert edited != first
+
+
+def test_a_newly_written_file_is_read_again_and_a_same_size_edit_is_seen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the module's own window for trusting a stat, a second call of a node's state just after the listed files were written opens each of them again and gives the same state, and a same-size edit made at once, with its old modification time restored, changes the next state."""
+    tag = uuid.uuid4().hex
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "ci_racy_main.py": f'import ci_racy_alpha\nMARKER = "main-{tag}"\n',
+            "ci_racy_alpha.py": f'import ci_racy_beta\nMARKER = "alpha-{tag}"\n',
+            "ci_racy_beta.py": f'MARKER = "beta-{tag}"\nVALUE = 1\n',
+        },
+    ).resolve()
+    files = sorted(repo.glob("*.py"))
+    monkeypatch.syspath_prepend(str(repo))
+    node = CodeIdentityNode(
+        name="step::code", start=repo / "ci_racy_main.py", repository_root=repo
+    )
+    opened: list[Path] = []
+    _watch_opens(monkeypatch, files, opened.append)
+
+    first = node.state()
+    opened.clear()
+    second = node.state()
+    opened_again = set(opened)
+    beta = repo / "ci_racy_beta.py"
+    status = beta.stat()
+    beta.write_text(f'MARKER = "beta-{tag}"\nVALUE = 2\n')
+    os.utime(beta, ns=(status.st_atime_ns, status.st_mtime_ns))
+    edited = node.state()
+
+    assert beta.stat().st_size == status.st_size
+    assert second == first
+    assert opened_again == set(files), (
+        f"opened {opened_again} in the second state; a file written just before must be "
+        "read again"
+    )
     assert edited != first
 
 

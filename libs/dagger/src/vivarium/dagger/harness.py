@@ -78,9 +78,9 @@ class _StableCodeNode:
 def stable_code_id(name: str, version: str = "1") -> PNode:
     """Return a code identity whose state is fixed by ``version``.
 
-    A task given this ``code_id`` is skipped on a rebuild when nothing else changed, which
-    the always-stale default hides. Scenarios use it to exercise skip, force, and resume;
-    changing ``version`` stands in for a code edit.
+    A task given this ``code_id`` is skipped on a rebuild when nothing else changed,
+    whether or not its code can be placed. Scenarios use it to exercise skip, force, and
+    resume; changing ``version`` stands in for a code edit.
 
     Parameters
     ----------

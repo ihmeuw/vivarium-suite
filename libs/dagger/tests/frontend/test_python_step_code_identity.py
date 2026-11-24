@@ -150,6 +150,22 @@ def test_a_python_step_gets_a_code_identity_node_that_starts_at_its_targets_modu
         assert node.repository_root == repo.resolve()
 
 
+def test_a_python_steps_code_identity_carries_its_targets_module(
+    tmp_path: Path, import_from: ImportFrom
+) -> None:
+    """A python step whose target is defined in the submodule ci_modpkg.steps of a package gets a CodeIdentityNode whose module is the target's __module__."""
+    repo = _write(
+        tmp_path / "repo", {"ci_modpkg/__init__.py": "", "ci_modpkg/steps.py": _STEPS}
+    )
+    module = import_from(repo, "ci_modpkg.steps")
+
+    node = _code_node(module.make, tmp_path, repo)
+
+    assert isinstance(node, CodeIdentityNode), repr(node)
+    assert module.make.__module__ == "ci_modpkg.steps"
+    assert node.module == "ci_modpkg.steps"
+
+
 def test_a_target_without_a_source_file_gets_an_always_stale_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

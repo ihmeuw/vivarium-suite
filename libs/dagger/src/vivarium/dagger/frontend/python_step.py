@@ -21,7 +21,8 @@ file that it imports changes or when it calls another function, and a build in w
 neither happened can skip it. A target that is not a plain function at a module's top
 level, such as a lambda, a closure, a bound method, a callable object or a function that
 a decorator wraps outside the function's own module, gets an always-stale identity, so its
-step runs on every build.
+step runs on every build, as does a target whose module has no source file, such as a
+function defined in an interactive session.
 """
 
 import importlib
@@ -411,8 +412,8 @@ def python_step(
         ``preview``. Its ``code_id`` is a
         :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at
         the file of ``target``'s module, or an always-stale node when ``target`` is not
-        a plain function at a module's top level, or is wrapped by a decorator outside
-        its own module.
+        a plain function at a module's top level, is wrapped by a decorator outside
+        its own module, or comes from a module with no source file.
 
     Raises
     ------
@@ -515,11 +516,12 @@ def _code_identity(
     """Return the step's code identity, starting at the file of ``target``'s module.
 
     The identity is named ``"<step>::code"`` and records the reference of ``target``
-    after ``inspect.unwrap``. A wrapped target counts only when its module exposes it under
-    the unwrapped function's qualified name, as a decorator applied at definition does. A
-    target that is not then a plain module-level function, such as one wrapped where the
-    pipeline is defined, or whose module has no source file, such as a function defined
-    in an interactive session, gets an always-stale identity.
+    after ``inspect.unwrap``, and its module name, from which the code part finds the
+    packages that importing the module runs. A wrapped target counts only when its module
+    exposes it under the unwrapped function's qualified name, as a decorator applied at
+    definition does. A target that is not then a plain module-level function, such as one
+    wrapped where the pipeline is defined, or whose module has no source file, such as a
+    function defined in an interactive session, gets an always-stale identity.
     """
     name = f"{task_name}::code"
     function = _plain_function(target)
@@ -535,6 +537,7 @@ def _code_identity(
         start=Path(file).resolve(),
         repository_root=root,
         target=f"{function.__module__}:{function.__qualname__}",
+        module=function.__module__,
     )
 
 

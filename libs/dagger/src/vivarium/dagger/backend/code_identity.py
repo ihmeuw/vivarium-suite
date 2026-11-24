@@ -13,14 +13,31 @@ is used only for a name that the search path does not find, because setuptools a
 finder after the path finder. A package whose ``__init__.py`` assigns ``__path__`` from
 ``pkgutil.extend_path(__path__, __name__)``, spelled as ``pkgutil.extend_path`` after
 ``import pkgutil``, as ``extend_path`` after ``from pkgutil import extend_path`` (either
-with any alias), or as ``__import__("pkgutil").extend_path``, has its submodules
+with any alias), or as ``__import__("pkgutil").extend_path``, or that calls
+``pkg_resources.declare_namespace(__name__)``, spelled as
+``pkg_resources.declare_namespace`` after ``import pkg_resources``, as
+``declare_namespace`` after ``from pkg_resources import declare_namespace`` (either with
+any alias), or as ``__import__("pkg_resources").declare_namespace``, has its submodules
 resolved in its own directory and then in each ``<entry>/<package name>`` directory that
 the path finder finds a package portion in, for each entry of the search path in order,
 as ``extend_path`` makes its ``__path__``. The ``vivarium`` package of this repository
 is such a package, so ``vivarium.<lib>`` of an editable library resolves to that
-library's source. A module that resolves to a compiled extension or to a ``.pyc`` file
-without source is listed by the SHA-256 of its bytes, so rebuilding it changes the code
-part.
+library's source. Other ways to extend a package's ``__path__``, such as a
+``__path__.append`` or a ``<dir>/<name>.pkg`` file, are not followed, so a submodule
+that only they make importable is left out of the code part. A module that resolves to
+a compiled extension or to a ``.pyc`` file without source is listed by the SHA-256 of its
+bytes, so rebuilding it changes the code part.
+
+A relative import is resolved as the absolute import it stands for. The name of the
+package it imports from is computed from the importing file's dotted module name and the
+import's level, and that name is resolved from the search path, so ``extend_path`` and
+``declare_namespace`` portions and a ``MAPPING`` apply. A relative import that goes above
+the top-level package, or one in a top-level module, adds nothing, as it fails when run.
+The dotted module name of a file that an import loads is the name it is resolved by, and
+that of the starting file is its given module name (see below). When a file's dotted name
+is not known, as for a starting file whose module name is not given or not used, or a
+file that such a relative import loads, its relative imports are resolved in the
+directories above the file.
 
 ``from <package> import *`` loads each name of the package's ``__all__`` that is a
 submodule on the package's path, as the other names of a from-import are. For a
@@ -31,11 +48,16 @@ whose ``__all__`` is bound in any other way makes the code part not established.
 ``import *`` from an installed package adds nothing.
 
 Importing the starting file also runs the ``__init__.py`` of each package that holds
-it, so these are followed too. The starting file's dotted module name is its path below
-the longest search-path directory that holds it, and each package prefix of that name is
-resolved as an import resolves it. A parent package found in another directory, such as a
-``vivarium/__init__.py`` that ``extend_path`` shares, is followed, and an
-``__init__.py`` that the import does not run is not. For a starting file below no
+it, so these are followed too. When the starting module's dotted name is given and the
+search path resolves that name to the starting file, each package prefix of that name is
+resolved as an absolute import. A pipeline file run by path puts its own directory first
+on the search path, so the name cannot be found from the file's location alone. When the
+name is not given, is ``__main__``, or resolves to another file, the starting file's
+dotted module name is its path below the longest search-path directory that holds it,
+and each package prefix of that name is resolved as an import resolves it. A parent
+package found in another directory, such as a ``vivarium/__init__.py`` that
+``extend_path`` shares, is followed, and an ``__init__.py`` that the import does not run
+is not. For a starting file below no
 search-path directory, the ``__init__.py`` of each directory above it is followed, up to
 a search-path directory or the first directory without one.
 
@@ -68,11 +90,23 @@ keyword, whose path the analysis computes, and a call of ``open()``, ``read_text
 ``read_bytes()`` adds the path that it is called on; the path must be built from the
 module's own location, ``__file__``, and name an existing file. A first-party file is
 added, an installed file adds nothing, and any other file makes the code part not
-established. So, with
-``HERE = Path(__file__).parent``, each of ``open(HERE / "t.txt")``,
+established. So, with ``HERE = Path(__file__).parent``, each of ``open(HERE / "t.txt")``,
 ``pd.read_csv(HERE / "t.csv")``, ``np.load(HERE / "a.npy")``,
 ``yaml.safe_load(HERE / "c.yaml")``, ``json.load(open(HERE / "c.json"))`` and
-``(HERE / "c.txt").read_text()`` adds its file. A path is computed from string literals,
+``(HERE / "c.txt").read_text()`` adds its file.
+
+A call that writes a file reads none. An ``open()``, ``io.open()``, ``codecs.open()`` or
+``Path.open()`` call whose mode is a string literal that contains ``w``, ``a``, ``x`` or
+``+`` adds no file, nor does any path within its arguments, and the path that
+``write_text()`` or ``write_bytes()`` is called on adds no file. The mode is the second
+positional argument of the functions, the first of the ``Path.open()`` method, or
+``mode=``. A data file is classified and named by its location, the absolute path as
+computed, and hashed by the bytes of the file it leads to, so a symlink inside the
+repository to a file outside every root is a first-party data file. A location outside
+every root is classified by its resolved path instead, and a file that two paths lead to
+is listed once.
+
+A path is computed from string literals,
 ``__file__``, the ``/`` operator, ``.parent``, ``.parents[<n>]``, ``Path()``,
 ``PurePath()`` (also as ``pathlib.Path()`` and ``pathlib.PurePath()``),
 ``os.path.join()``, ``.joinpath()``, ``os.path.dirname()``, ``str()``, ``os.fspath()``,
@@ -88,7 +122,9 @@ also as one target of ``A = B = ...``. A name with a second binding, or whose on
 is of another kind, such as an augmented assignment, a ``for`` or ``with`` target,
 ``:=``, unpacking, an import, a ``def`` or ``class``, ``del``, or an assignment nested in
 one of those blocks, is unknown, and so is ``__file__`` when the module binds it; a path
-that uses an unknown name adds nothing.
+that uses an unknown name adds nothing. The value of each part of a module's path
+expressions is kept while the module is analysed, so a chain of names that each use the
+one before twice is computed in time linear in its length.
 
 A Python file is hashed with :func:`~vivarium.dagger.backend.code_hash.python_code_hash`,
 and a data file by its bytes. Each Python file content is read once per check of a node's
@@ -151,6 +187,8 @@ def code_part(
     start: Path | str,
     repository_root: Path | str | None,
     search_path: Sequence[str],
+    *,
+    module: str | None = None,
 ) -> CodePart:
     """Return the code part of a step whose starting point is the Python file ``start``.
 
@@ -167,6 +205,13 @@ def code_part(
         :data:`sys.path`. Editable installs are recognised from the ``site-packages``
         directories on it, and entries that are not directories, such as an editable
         finder's path hook, are ignored.
+    module
+        The dotted name the starting file is imported by, such as a step function's
+        ``__module__``. Its package prefixes give the packages whose ``__init__.py``
+        importing the file runs, and it gives the package that the file's relative
+        imports start from. It is not used when it is ``None`` or ``__main__``, or when
+        the search path does not resolve it to ``start``; then the name is guessed from
+        the longest search-path directory that holds ``start``.
 
     Returns
     -------
@@ -180,13 +225,13 @@ def code_part(
     start_path = os.path.abspath(start)
     root = None if repository_root is None else os.path.realpath(repository_root)
     directories = tuple(os.path.abspath(entry) for entry in search_path)
-    key = (start_path, root, directories, sys.get_int_max_str_digits())
+    key = (start_path, root, directories, module, sys.get_int_max_str_digits())
     memo: _Memo = {}
     cached = _analyses.get(key)
     if cached is not None and _unchanged(cached.listed, memo):
         return cached.part
     walk = _Walk(root, directories, memo)
-    part = walk.run(start_path)
+    part = walk.run(start_path, module)
     if part.established:
         _analyses[key] = _Analysis(part, tuple(walk.listed))
     else:
@@ -207,8 +252,8 @@ class CodeIdentityNode:
     Within one process the code part of one starting point is analysed once for each
     content of the files it lists.
 
-    Two nodes with the same ``name``, ``start``, ``repository_root`` and ``target`` are
-    equal.
+    Two nodes with the same ``name``, ``start``, ``repository_root``, ``target`` and
+    ``module`` are equal.
     """
 
     name: str
@@ -222,6 +267,9 @@ class CodeIdentityNode:
     ``None`` for a node built without one."""
     attributes: dict[Any, Any] = field(default_factory=dict, compare=False)
     """pytask node attributes; unused, kept to satisfy the node protocol."""
+    module: str | None = None
+    """The dotted name the starting file is imported by, passed to :func:`code_part`, or
+    ``None`` to guess it from the file's location."""
 
     @property
     def signature(self) -> str:
@@ -232,7 +280,9 @@ class CodeIdentityNode:
         """Return a hash of the code part and target, or a new string if not established."""
         # A failed analysis makes the step run, rather than failing the build.
         try:
-            part = code_part(self.start, self.repository_root, list(sys.path))
+            part = code_part(
+                self.start, self.repository_root, list(sys.path), module=self.module
+            )
         except Exception:
             return _not_established()
         return _state(part, self.target) if part.established else _not_established()
@@ -276,6 +326,17 @@ _MODULE_SUFFIXES = (*EXTENSION_SUFFIXES, *SOURCE_SUFFIXES, *BYTECODE_SUFFIXES)
 
 _PATH_READS = frozenset({"open", "read_text", "read_bytes"})
 """Path methods that open or read the file of the path they are called on."""
+
+_PATH_WRITES = frozenset({"write_text", "write_bytes"})
+"""Path methods that write the file of the path they are called on."""
+
+_OPEN_FUNCTIONS = frozenset(
+    {"open", "io.open", "codecs.open", "Path.open", "pathlib.Path.open"}
+)
+"""Functions whose second positional argument is the mode a file is opened with."""
+
+_WRITE_MODES = frozenset("wax+")
+"""The mode characters that open a file for writing."""
 
 _PATH_TYPES = frozenset({"Path", "pathlib.Path", "PurePath", "pathlib.PurePath"})
 
@@ -322,7 +383,8 @@ class _Scan:
     file_known: bool
     """Whether ``__file__`` is not bound in the module."""
     extends_path: bool
-    """Whether the module assigns ``__path__`` from ``pkgutil.extend_path``."""
+    """Whether the module assigns ``__path__`` from ``pkgutil.extend_path`` or calls
+    ``pkg_resources.declare_namespace``."""
     exports: tuple[str, ...] | None
     """The names of the module's literal ``__all__``, none when the module does not bind
     ``__all__``, or None when its ``__all__`` is not a literal list or tuple of strings."""
@@ -367,6 +429,12 @@ class _Resolved:
 
     files: tuple[str, ...]
     path: tuple[str, ...] | None
+    packages: tuple[str | None, ...]
+    """The package that each file's relative imports start from, or None if not known."""
+
+    def loaded(self) -> list[tuple[str, str | None]]:
+        """Return each file with the package that its relative imports start from."""
+        return list(zip(self.files, self.packages))
 
 
 @dataclass(frozen=True)
@@ -410,10 +478,12 @@ _contents: dict[tuple[str, int], _Content] = {}
 """Each Python file content, by SHA-256 of its bytes and the int-string digit limit."""
 
 _plain_inits: set[str] = set()
-"""The SHA-256 of each ``__init__.py`` content that does not mention ``extend_path``."""
+"""The SHA-256 of each ``__init__.py`` content that mentions neither ``extend_path`` nor
+``declare_namespace``."""
 
-_analyses: dict[tuple[str, str | None, tuple[str, ...], int], _Analysis] = {}
-"""The last established code part of each starting file, root, search path and limit."""
+_analyses: dict[tuple[str, str | None, tuple[str, ...], str | None, int], _Analysis] = {}
+"""The last established code part of each starting file, root, search path, module name
+and limit."""
 
 _site_scans: dict[tuple[str, ...], _SiteScan] = {}
 """The last site scan of each search path."""
@@ -433,15 +503,16 @@ class _Walk:
         self.editable_roots = site.editable_roots
         self.search_set = {os.path.realpath(directory) for directory in self.directories}
         self.visited: set[str] = set()
+        self.data_files: set[str] = set()
         self.names: dict[str, str] = {}
-        self.queue: list[tuple[str, str, bool]] = []
+        self.queue: list[tuple[str, str, bool, str | None]] = []
         self.python: dict[str, str] = {}
         self.data: dict[str, str] = {}
         self.listed: list[tuple[str, str]] = []
         self.reason: str | None = None
 
-    def run(self, start: str) -> CodePart:
-        """Return the code part of the starting file ``start``."""
+    def run(self, start: str, module: str | None) -> CodePart:
+        """Return the code part of the starting file ``start`` of the module ``module``."""
         real = os.path.realpath(start)
         if not os.path.isfile(real):
             return CodePart({}, f"The starting file {start} does not exist.")
@@ -452,8 +523,12 @@ class _Walk:
             return CodePart({}, f"The starting file {start} is {_OUTSIDE}.")
         self.visited.add(real)
         self.names[name] = real
-        self.queue.append((start, name, True))
-        self._add_packages(start, real)
+        named = self._named_start(real, module)
+        self.queue.append((start, name, True, None if named is None else named[1]))
+        if named is None:
+            self._add_packages(start, real)
+        else:
+            self._add_all(named[0].loaded(), start)
         while self.queue and self.reason is None:
             self._visit(*self.queue.pop())
         if self.reason is not None:
@@ -516,8 +591,28 @@ class _Walk:
             self._add_enclosing_packages(real)
             return
         resolved = self._resolve(parents, self.directories, "") if parents else None
-        for found in () if resolved is None else resolved.files:
-            self._add(found, start)
+        if resolved is not None:
+            self._add_all(resolved.loaded(), start)
+
+    def _named_start(self, real: str, module: str | None) -> tuple[_Resolved, str] | None:
+        """Return the starting module's parent packages and package, or None if unnamed."""
+        if module is None or module == "__main__":
+            return None
+        *parents, last = module.split(".")
+        if not all(part.isidentifier() for part in (*parents, last)):
+            return None
+        resolved = self._resolve(parents, self.directories, "")
+        if resolved is None or resolved.path is None:
+            return None
+        found = self._find(last, resolved.path, module)
+        if found is None or found.file is None or os.path.realpath(found.file) != real:
+            return None
+        return resolved, module if found.path is not None else ".".join(parents)
+
+    def _add_all(self, loaded: Iterable[tuple[str, str | None]], importer: str) -> None:
+        """Queue or list each loaded file with its package, until the analysis ends."""
+        for found, package in loaded:
+            self._add(found, importer, package)
             if self.reason is not None:
                 return
 
@@ -554,13 +649,13 @@ class _Walk:
                 self.visited.add(init)
                 if not self._claim(name, init):
                     return
-                self.queue.append((init, name, False))
+                self.queue.append((init, name, False, None))
             parent = os.path.dirname(directory)
             if parent == directory:
                 return
             directory = parent
 
-    def _visit(self, file: str, name: str, is_start: bool) -> None:
+    def _visit(self, file: str, name: str, is_start: bool, package: str | None) -> None:
         """List one first-party Python file and follow what it imports and opens."""
         try:
             sha, data = _file_sha(file, self.memo)
@@ -576,7 +671,7 @@ class _Walk:
             return
         for statement in scan.imports:
             if is_start or not statement.main_only:
-                self._follow(statement, file)
+                self._follow(statement, file, package)
                 if self.reason is not None:
                     return
         evaluator = _PathEvaluator(file if scan.file_known else None, scan.assignments)
@@ -586,42 +681,49 @@ class _Walk:
                 if self.reason is not None:
                     return
 
-    def _follow(self, statement: _Import, file: str) -> None:
-        """Queue the first-party files that an import statement in ``file`` loads."""
-        parts = statement.module.split(".") if statement.module else []
+    def _follow(self, statement: _Import, file: str, importer: str | None) -> None:
+        """Queue the first-party files that an import statement in ``file`` loads.
+
+        ``importer`` is the package that ``file``'s relative imports start from, or None
+        when it is not known.
+        """
         module: _Resolved | None
         package: str | None
-        if statement.level:
+        if statement.level and importer is None:
+            parts = statement.module.split(".") if statement.module else []
             base = os.path.dirname(file)
             for _ in range(statement.level - 1):
                 base = os.path.dirname(base)
-            module = self._resolve(parts, (base,), None) if parts else _Resolved((), (base,))
+            if parts:
+                module = self._resolve(parts, (base,), None)
+            else:
+                module = _Resolved((), (base,), ())
             package = None
         else:
-            if not parts or parts[0] in sys.builtin_module_names:
+            if statement.level and importer is not None:
+                package = _absolute_name(importer, statement.level, statement.module)
+            else:
+                package = statement.module
+            if not package or package.split(".")[0] in sys.builtin_module_names:
                 return
-            module = self._resolve(parts, self.directories, "")
-            package = statement.module
+            module = self._resolve(package.split("."), self.directories, "")
         if module is None:
             return
-        files = list(module.files)
+        found = module.loaded()
         if module.path is not None:
             names = [name for name in statement.names if name != "*"]
             if "*" in statement.names:
                 init, exports = self._exports(module.path, file)
                 if self.reason is not None:
                     return
-                if init is not None and init not in files:
-                    files.append(init)
+                if init is not None and init not in module.files:
+                    found.append((init, package))
                 names += exports
             for name in names:
                 submodule = self._resolve([name], module.path, package)
                 if submodule is not None:
-                    files += submodule.files
-        for found in files:
-            self._add(found, file)
-            if self.reason is not None:
-                return
+                    found += submodule.loaded()
+        self._add_all(found, file)
 
     def _exports(
         self, path: Sequence[str], importer: str
@@ -652,20 +754,27 @@ class _Walk:
     ) -> _Resolved | None:
         """Return the module files that importing ``parts`` from ``path`` loads, or None."""
         files: list[str] = []
+        packages: list[str | None] = []
         for index, part in enumerate(parts):
             name = None if package is None else f"{package}.{part}" if package else part
             module = self._find(part, path, name)
             if module is None:
                 if not self._maps_below(name):
-                    return _Resolved(tuple(files), None) if index else None
+                    if not index:
+                        return None
+                    return _Resolved(tuple(files), None, tuple(packages))
                 path, package = (), name
                 continue
             if module.file is not None:
                 files.append(module.file)
+                if name is None or module.path is not None:
+                    packages.append(name)
+                else:
+                    packages.append(name.rpartition(".")[0])
             if module.path is None:
-                return _Resolved(tuple(files), None)
+                return _Resolved(tuple(files), None, tuple(packages))
             path, package = module.path, name
-        return _Resolved(tuple(files), tuple(path))
+        return _Resolved(tuple(files), tuple(path), tuple(packages))
 
     def _maps_below(self, name: str | None) -> bool:
         """Return whether an editable finder maps a module inside the package ``name``."""
@@ -713,7 +822,7 @@ class _Walk:
         return candidate if self._module_file(entry, part) is None else None
 
     def _extends_path(self, init: str) -> bool:
-        """Return whether a package's ``__init__.py`` extends its path with pkgutil."""
+        """Return whether a package's ``__init__.py`` extends its path as a namespace."""
         try:
             sha, data = _file_sha(init, self.memo)
         except OSError:
@@ -726,7 +835,7 @@ class _Walk:
                 data = Path(init).read_bytes() if data is None else data
             except OSError:
                 return False
-            if b"extend_path" not in data:
+            if b"extend_path" not in data and b"declare_namespace" not in data:
                 _plain_inits.add(sha)
                 return False
             content = _python_content(init, sha, data)
@@ -757,7 +866,7 @@ class _Walk:
                 return path
         return None
 
-    def _add(self, found: str, importer: str) -> None:
+    def _add(self, found: str, importer: str, package: str | None) -> None:
         """Queue or list a file that an import loads, or end the analysis if foreign."""
         real = os.path.realpath(found)
         if real in self.visited:
@@ -771,7 +880,7 @@ class _Walk:
         elif kind != "first" or not self._claim(name, real):
             return
         elif found.endswith(_SOURCE):
-            self.queue.append((found, name, False))
+            self.queue.append((found, name, False, package))
         else:
             try:
                 sha, _ = _file_sha(found, None)
@@ -785,25 +894,30 @@ class _Walk:
         """List a data file whose path a module builds from its ``__file__``."""
         if value is None or not value.from_file or not os.path.isabs(value.path):
             return
-        if not os.path.isfile(value.path):
+        location = os.path.abspath(value.path)
+        if not os.path.isfile(location):
             return
-        real = os.path.realpath(value.path)
-        if real in self.visited:
+        real = os.path.realpath(location)
+        if real in self.visited or real in self.data_files:
             return
-        kind, name = self._classify(real)
+        kind, name = self._classify(location)
+        if kind == "foreign":
+            # The module's own path may reach the root through a symlinked directory.
+            kind, name = self._classify(real)
         if kind == "foreign":
             self.reason = (
-                f"{reader} reads {value.path}, which is {_OUTSIDE} and is not installed code."
+                f"{reader} reads {location}, which is {_OUTSIDE} and is not installed code."
             )
             return
         if kind != "first" or not self._claim(name, real) or name in self.data:
             return
         try:
-            sha, _ = _file_sha(value.path, None)
+            sha, _ = _file_sha(location, None)
         except OSError:
             return
         self.data[name] = _BYTES + sha
-        self.listed.append((value.path, sha))
+        self.data_files.add(real)
+        self.listed.append((location, sha))
 
 
 @dataclass(frozen=True)
@@ -812,11 +926,23 @@ class _PathEvaluator:
 
     file: str | None
     assignments: Mapping[str, ast.expr]
+    computed: dict[tuple[int, int], _PathValue | None] = field(
+        default_factory=dict, compare=False, repr=False
+    )
+    """The value of each expression, by its id and the depth it was computed at."""
 
     def value(self, expression: ast.expr | None, depth: int = 0) -> _PathValue | None:
         """Return the path that ``expression`` computes, or None."""
         if expression is None or depth > _MAX_DEPTH:
             return None
+        # Keyed by depth too, since the depth limit can cut short a deeper computation.
+        key = (id(expression), depth)
+        if key not in self.computed:
+            self.computed[key] = self._value(expression, depth)
+        return self.computed[key]
+
+    def _value(self, expression: ast.expr, depth: int) -> _PathValue | None:
+        """Return the path that ``expression`` computes at ``depth``, or None."""
         if isinstance(expression, ast.Constant):
             text = expression.value
             return _PathValue(text, False) if isinstance(text, str) else None
@@ -887,6 +1013,15 @@ def _parent(value: _PathValue | None, levels: int) -> _PathValue | None:
     return _PathValue(path, value.from_file)
 
 
+def _absolute_name(package: str, level: int, module: str) -> str | None:
+    """Return the name a relative import from ``package`` imports, or None if it fails."""
+    parts = package.split(".") if package else []
+    if level > len(parts):
+        return None
+    base = parts[: len(parts) - level + 1]
+    return ".".join([*base, module] if module else base)
+
+
 def _dotted(expression: ast.expr) -> str | None:
     """Return the dotted name that an expression of names and attributes spells, or None."""
     parts: list[str] = []
@@ -906,10 +1041,16 @@ def _scan(tree: ast.Module) -> _Scan:
     path_values: list[ast.expr] = []
     pkgutil_names: set[str] = set()
     extend_names: set[str] = set()
+    calls: list[ast.Call] = []
+    resources_names: set[str] = set()
+    declare_names: set[str] = set()
+    written: set[int] = set()
     # A stack, not recursion, so that deeply nested code does not exceed the recursion limit.
     stack: list[tuple[ast.AST, bool, bool]] = [(tree, False, False)]
     while stack:
         node, deferred, main_only = stack.pop()
+        if id(node) in written:
+            continue
         children: list[tuple[ast.AST, bool, bool]]
         if isinstance(node, ast.If) and _is_type_checking(node.test):
             children = [(child, deferred, main_only) for child in node.orelse]
@@ -920,13 +1061,19 @@ def _scan(tree: ast.Module) -> _Scan:
             if isinstance(node, ast.Import):
                 imports += [_Import(alias.name, (), 0, main_only) for alias in node.names]
                 pkgutil_names.update(_aliases(node, "pkgutil"))
+                resources_names.update(_aliases(node, "pkg_resources"))
             elif isinstance(node, ast.ImportFrom):
                 names = tuple(alias.name for alias in node.names)
                 imports.append(_Import(node.module or "", names, node.level or 0, main_only))
                 if node.module == "pkgutil" and not node.level:
                     extend_names.update(_aliases(node, "extend_path"))
+                if node.module == "pkg_resources" and not node.level:
+                    declare_names.update(_aliases(node, "declare_namespace"))
             elif isinstance(node, ast.Call) and not deferred:
-                reads += [_Read(path, main_only) for path in _read_paths(node)]
+                paths, targets = _call_paths(node)
+                reads += [_Read(path, main_only) for path in paths]
+                written.update(id(target) for target in targets)
+                calls.append(node)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and not deferred:
                 if node.value is not None and "__path__" in _target_names(node):
                     path_values.append(node.value)
@@ -939,6 +1086,9 @@ def _scan(tree: ast.Module) -> _Scan:
     extends = any(
         _is_extend_path(value, pkgutil_names, extend_names) for value in path_values
     )
+    declares = any(
+        _is_declare_namespace(call, resources_names, declare_names) for call in calls
+    )
     bindings = _module_bindings(tree)
     assignments = _assignments(tree, bindings)
     return _Scan(
@@ -946,7 +1096,7 @@ def _scan(tree: ast.Module) -> _Scan:
         tuple(reads),
         assignments,
         "__file__" not in bindings,
-        extends,
+        extends or declares,
         _strings(assignments.get("__all__")) if bindings["__all__"] else (),
     )
 
@@ -991,13 +1141,49 @@ def _is_main_guard(test: ast.expr) -> bool:
     return names == ["__name__"] and constants == ["__main__"]
 
 
-def _read_paths(call: ast.Call) -> list[ast.expr]:
-    """Return a call's arguments, and the path it reads if it is a path read."""
+def _call_paths(call: ast.Call) -> tuple[list[ast.expr], list[ast.expr]]:
+    """Return the paths that a call may read, and the expressions of the file it writes."""
+    function = call.func
+    if isinstance(function, ast.Attribute) and function.attr in _PATH_WRITES:
+        return _arguments(call), [function.value]
+    if _opens_for_writing(call):
+        written = _arguments(call)
+        if isinstance(function, ast.Attribute):
+            written.append(function.value)
+        return [], written
+    paths = _arguments(call)
+    if isinstance(function, ast.Attribute) and function.attr in _PATH_READS:
+        paths.append(function.value)
+    return paths, []
+
+
+def _arguments(call: ast.Call) -> list[ast.expr]:
+    """Return a call's arguments, positional and by keyword, other than unpacked ones."""
     paths = [argument for argument in call.args if not isinstance(argument, ast.Starred)]
     paths += [keyword.value for keyword in call.keywords if keyword.arg is not None]
-    if isinstance(call.func, ast.Attribute) and call.func.attr in _PATH_READS:
-        paths.append(call.func.value)
     return paths
+
+
+def _opens_for_writing(call: ast.Call) -> bool:
+    """Return whether a call opens a file with a literal mode that writes it."""
+    if _dotted(call.func) in _OPEN_FUNCTIONS:
+        position = 1
+    elif isinstance(call.func, ast.Attribute) and call.func.attr == "open":
+        position = 0
+    else:
+        return False
+    modes = [keyword.value for keyword in call.keywords if keyword.arg == "mode"]
+    leading = call.args[: position + 1]
+    if not modes and len(leading) > position:
+        if any(isinstance(argument, ast.Starred) for argument in leading):
+            return False
+        modes = [leading[position]]
+    return any(
+        isinstance(mode, ast.Constant)
+        and isinstance(mode.value, str)
+        and not _WRITE_MODES.isdisjoint(mode.value)
+        for mode in modes
+    )
 
 
 def _module_bindings(tree: ast.Module) -> Counter[str]:
@@ -1067,15 +1253,7 @@ def _is_extend_path(value: ast.expr, modules: set[str], functions: set[str]) -> 
     """Return whether an expression is pkgutil's ``extend_path(__path__, __name__)``."""
     if not isinstance(value, ast.Call):
         return False
-    function = value.func
-    if isinstance(function, ast.Name):
-        named = function.id in functions
-    elif isinstance(function, ast.Attribute) and function.attr == "extend_path":
-        owner = function.value
-        by_name = isinstance(owner, ast.Name) and owner.id in modules
-        named = by_name or _imports_pkgutil(owner)
-    else:
-        named = False
+    named = _calls(value.func, "pkgutil", "extend_path", modules, functions)
     if not named or len(value.args) > 2:
         return False
     arguments: dict[str | None, ast.expr] = {}
@@ -1090,14 +1268,38 @@ def _is_extend_path(value: ast.expr, modules: set[str], functions: set[str]) -> 
     )
 
 
-def _imports_pkgutil(expression: ast.expr) -> bool:
-    """Return whether an expression is ``__import__("pkgutil")`` or its importlib form."""
+def _is_declare_namespace(call: ast.Call, modules: set[str], functions: set[str]) -> bool:
+    """Return whether a call is pkg_resources' ``declare_namespace(__name__)``."""
+    if not _calls(call.func, "pkg_resources", "declare_namespace", modules, functions):
+        return False
+    arguments = [*call.args, *(k.value for k in call.keywords if k.arg == "packageName")]
+    return (
+        len(call.args) + len(call.keywords) == 1
+        and len(arguments) == 1
+        and _is_name(arguments[0], "__name__")
+    )
+
+
+def _calls(
+    function: ast.expr, module: str, name: str, modules: set[str], functions: set[str]
+) -> bool:
+    """Return whether a callee is ``<module>.<name>``, given the names bound to each."""
+    if isinstance(function, ast.Name):
+        return function.id in functions
+    if not isinstance(function, ast.Attribute) or function.attr != name:
+        return False
+    owner = function.value
+    return (isinstance(owner, ast.Name) and owner.id in modules) or _imports(owner, module)
+
+
+def _imports(expression: ast.expr, module: str) -> bool:
+    """Return whether an expression is ``__import__(<module>)`` or its importlib form."""
     if not isinstance(expression, ast.Call) or _dotted(expression.func) not in _IMPORT_CALLS:
         return False
     return (
         len(expression.args) == 1
         and isinstance(expression.args[0], ast.Constant)
-        and expression.args[0].value == "pkgutil"
+        and expression.args[0].value == module
     )
 
 

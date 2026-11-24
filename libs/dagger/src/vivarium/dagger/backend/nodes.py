@@ -81,11 +81,12 @@ def run_directory_node(path: Path | str, sentinel: str) -> RunDirectoryNode:
 class AlwaysStaleNode:
     """A read-only node that reports a new state on every build, so its task always re-runs.
 
-    This is the default code identity for a step that has not declared a code
-    fingerprint. Without a fingerprint there is no way to prove the step's code is
-    unchanged between builds, so the safe default is to assume it changed and re-run.
-    Declaring a fingerprint is the opt-in that lets a step skip when its code is
-    unchanged.
+    This is the default code identity of a task built without a ``code_id``, and the
+    identity of a step whose code cannot be placed. With no way to prove that the step's
+    code is unchanged between builds, the safe default is to assume it changed and re-run.
+    A python step whose code can be placed gets a
+    :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` instead, which lets it
+    skip when its code is unchanged.
 
     It satisfies pytask's node protocol as a dependency. ``state()`` returns a fresh
     value on every call, which never matches the state pytask recorded on the previous

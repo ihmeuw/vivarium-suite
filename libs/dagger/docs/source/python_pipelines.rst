@@ -160,9 +160,14 @@ A Python step's code identity is the set of first-party files that its function'
 imports, directly or through other files, each with a hash of its code, together with
 any data file whose path one of those modules passes to a function while it is imported,
 such as ``open`` or ``pandas.read_csv``, when the path is built from the module's own
-location. A data file read only inside a function, even one that runs at import, is not
-part of it. The files are read, not imported. A comment or a formatting
-edit does not change the hash, and a code edit to any listed file makes the step stale.
+location. ``dagger`` computes such a path only from ``__file__`` and string literals with
+``/``, ``.parent``, ``.parents[n]``, ``.joinpath()``, ``.resolve()``, ``.absolute()``,
+``Path()``, ``PurePath()``, ``os.path.join()``, ``os.path.dirname()``, ``str()`` and
+``os.fspath()``, through module-level names assigned once. Any other form, such as an
+f-string, and a data file read only inside a function, even one that runs at import, is
+not part of it. A call that writes a file, such as ``open(path, "w")``, is not a read. The
+files are read, not imported. A comment or a formatting edit does not change the hash, and
+a code edit to any listed file makes the step stale.
 The identity also names the function, so pointing a step at another function makes it
 stale.
 
@@ -177,11 +182,17 @@ the repository's top directory:
 
 Without a repository root, only editable installs are first-party. A step's code cannot be
 placed, and the step runs on every build, when its function is not in first-party code,
-when its code imports a file that is neither first-party nor installed, or when its code
-builds a data path from its own location that leads outside the first-party code. So does
-a step whose function is not a plain function at a module's top level, such as a lambda, a
-closure, a callable object, or a function wrapped by a decorator in the pipeline file.
-Installed packages are not part of the code identity.
+when its code imports a file that is neither first-party nor installed, when its code
+builds a data path from its own location that leads outside the first-party code, when a
+first-party package that it imports with ``*`` has an ``__all__`` that is not a literal
+list or tuple of strings, when two different files would get the same name, or when a
+first-party file cannot be read. So does a step whose function is not a plain function at
+a module's top level, such as a lambda, a closure or a callable object, or a function that
+is wrapped after it was defined, such as ``step = cached(lib.make)``. A decorator applied
+where the function is defined, ``@cached`` with ``functools.wraps``, keeps the identity.
+
+Installed packages are not part of the code identity, so upgrading a package such as
+``pandas`` does not make a step stale; force the steps that depend on it.
 
 Until ``dagger`` can recognise code it cannot follow, a step whose code starts another
 process or imports a module by a computed name can be skipped although that code
