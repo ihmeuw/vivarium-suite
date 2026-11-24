@@ -11,6 +11,7 @@ import math
 import os
 import shlex
 import socket
+import subprocess
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -25,8 +26,11 @@ from rich.theme import Theme
 
 from tests.bridge import step_targets
 from tests.bridge.helpers import (
+    LONG_RECORD_INTERVAL,
+    SHORT_RECORD_INTERVAL,
     bound_names,
     failure_of,
+    journal_holds,
     journal_ids,
     lockfile_entries,
     make_dir,
@@ -35,6 +39,7 @@ from tests.bridge.helpers import (
     report_for,
     squashed,
     stable,
+    wait_until,
 )
 from vivarium.dagger.backend.build import build, outcomes
 from vivarium.dagger.backend.nodes import file_node
@@ -241,8 +246,10 @@ def _build_recording_with(
 
     The build's hook calls ``recording`` in place of its own call to ``_record_available``,
     after the active FakeJobmon has run every entry, so ``recording`` can change the run
-    directory and then call ``_record_available`` with the build's own session. Return the
-    session and what ``recording`` returned.
+    directory and then call ``_record_available`` with the build's own session. The
+    recording interval is long, so no step is recorded while the entries run and
+    ``recording`` gets every stale task. Return the session and what ``recording``
+    returned.
     """
     returned: list[list[PTask]] = []
 
@@ -255,6 +262,7 @@ def _build_recording_with(
     # pytask stops capturing output when a build ends, and replaying a step's teardown
     # needs that capture, so the results are recorded inside the build.
     monkeypatch.setattr(execute, "_record_available", record)
+    monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", LONG_RECORD_INTERVAL)
     session = build(tasks, root, jobmon=True)
     [unrecorded] = returned
     return session, unrecorded
@@ -262,17 +270,34 @@ def _build_recording_with(
 
 @dataclass
 class _LooksAtTheRoot(FakeJobmon):
-    """Stand in for Jobmon, and look at the build's lockfile once every entry has run."""
+    """Stand in for Jobmon, and wait for the first entry's journal entry before going on."""
 
     root: Path = Path()
     """The build's root."""
     seen: list[set[str]] = field(default_factory=list, init=False)
-    """The task ids in the root's pytask.lock and its journal at the end of each run."""
+    """The task ids in the root's lockfile journal when each run's wait ended."""
 
     def run(self, jobmon_run: JobmonRun, *, seconds_until_timeout: int | None = None) -> None:
-        """Run every entry as FakeJobmon does, then note the task ids the root holds."""
-        super().run(jobmon_run, seconds_until_timeout=seconds_until_timeout)
-        self.seen.append(set(lockfile_entries(self.root)) | journal_ids(self.root))
+        """Run every entry in plan order, waiting after the first for its journal entry.
+
+        The wait ends when the journal holds the first entry's step or a time limit passes.
+        Every entry is run, also one that waits for an entry that failed.
+        """
+        first, *others = jobmon_run.plan
+        statuses: dict[str, str | None] = {first.signature: self._run_entry(first.command)}
+        wait_until(lambda: journal_holds(self.root, [first.name]))
+        self.seen.append(journal_ids(self.root))
+        for entry in others:
+            statuses[entry.signature] = self._run_entry(entry.command)
+        jobmon_run.task_statuses = statuses
+        all_done = all(status == "D" for status in statuses.values())
+        jobmon_run.status = "D" if all_done else "E"
+
+    @staticmethod
+    def _run_entry(command: str) -> str:
+        """Run an entry's command as FakeJobmon does, and return its Jobmon task status."""
+        finished = subprocess.run(["/bin/sh", "-c", command], check=False)
+        return "D" if finished.returncode == 0 else "F"
 
 
 # End to end
@@ -362,6 +387,19 @@ def test_each_step_has_one_report_although_the_live_table_lists_it_twice(
 
 def test_a_step_is_recorded_while_the_workflow_run_is_still_going(tmp_path: Path) -> None:
     """A FakeJobmon whose run, after it has run the first entry of the harness fixture's two-step chain, waits up to a time limit for the first step's lockfile journal entry finds that entry before it runs the second entry, and both steps have pytask.lock entries once the build returns."""
+    fx = build_fixture(tmp_path)
+    first, second = fx.steps
+    jobmon = _LooksAtTheRoot(root=fx.state)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", SHORT_RECORD_INTERVAL)
+        with jobmon:
+            session = build(fx.tasks, fx.state, jobmon=True)
+
+    [before_the_second_entry] = jobmon.seen
+    assert before_the_second_entry == {first}, "The first step was not recorded in time."
+    assert outcomes(session) == dict.fromkeys(fx.steps, TaskOutcome.SUCCESS)
+    assert set(lockfile_entries(fx.state)) == {first, second}
 
 
 # A step that fails on its node

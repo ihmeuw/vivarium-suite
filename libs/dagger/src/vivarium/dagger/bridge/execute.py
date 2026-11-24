@@ -51,7 +51,7 @@ SKIP_PREVIOUS_FAILED, and any other step without a result is reported as FAIL wi
 :class:`RemoteTaskFailed` that gives the step's Jobmon status and the workflow's id and
 status. Settlement runs no step's body. SIGTERM while the bridge binds or runs the Jobmon
 workflow becomes :class:`BridgeInterrupted`: the hook then stops waiting for the workflow,
-lets the second thread finish the step that it is recording, records the other results
+lets the second thread finish the pass that it is making, records the other results
 already written, settles the rest and returns, so pytask still writes its lockfile. The
 hook does not cancel the workflow, so its jobs that are already on compute nodes can still
 be running. Each run also keeps a state file (see :mod:`~vivarium.dagger.bridge.state`)
@@ -820,8 +820,52 @@ def _recording_during_the_run(
     An exception in the thread ends its passes and is printed as a warning when the block
     exits. It is not raised, because the caller records every remaining step afterwards.
     """
-    raise NotImplementedError
-    yield
+    stop = threading.Event()
+    ended = threading.Event()
+    errors: list[Exception] = []
+
+    def record_until_stopped() -> None:
+        """Call ``_record_ready`` now and after each interval until ``stop`` is set."""
+        try:
+            while True:
+                _record_ready(session, submitted, workdir, recorded)
+                if stop.wait(_RECORD_INTERVAL_SECONDS):
+                    return
+        except Exception as error:
+            errors.append(error)
+        finally:
+            ended.set()
+
+    thread = threading.Thread(target=record_until_stopped, name="dagger-bridge-recording")
+    interrupt: BaseException | None = None
+    try:
+        try:
+            thread.start()
+        except RuntimeError as start_error:
+            errors.append(start_error)
+            ended.set()
+        yield
+    finally:
+        while True:
+            try:
+                stop.set()
+                # Before Python 3.13, a join that a signal handler's exception interrupts
+                # marks the running thread as ended, so the thread reports its own end.
+                ended.wait()
+                if thread.is_alive():
+                    thread.join()
+                break
+            except (BridgeInterrupted, KeyboardInterrupt) as caught:
+                if interrupt is None:
+                    interrupt = caught
+        if errors:
+            _warn(
+                "Recording during the run stopped because of an error "
+                f"({_describe(errors[0])}). Every remaining step is recorded when the "
+                "workflow ends."
+            )
+        if interrupt is not None:
+            raise interrupt
 
 
 def _record_ready(
@@ -835,7 +879,46 @@ def _record_ready(
     left as it is, for a later call or for the end of the run. A task whose signature is
     in ``recorded`` is not looked at again.
     """
-    raise NotImplementedError
+    # One listing per pass costs less on a network filesystem than a failed open per step.
+    try:
+        listed = set(os.listdir(workdir))
+    except OSError:
+        return
+    submitted_signatures = {task.signature for task in submitted}
+    for task in submitted:
+        if task.signature in recorded or f"{task.signature}{RESULT_SUFFIX}" not in listed:
+            continue
+        result = _ready_result(session, task, workdir, recorded, submitted_signatures)
+        if result is not None:
+            _record(session, task, result)
+            recorded.add(task.signature)
+
+
+def _ready_result(
+    session: Session, task: PTask, workdir: Path, recorded: Set[str], submitted: Set[str]
+) -> RunResult | None:
+    """Return the task's result if the task is ready to be recorded, or None if it is not."""
+    if not _stale_upstreams(session, task.signature, submitted) <= recorded:
+        return None
+    if _ancestor_failure(task) is not None:
+        return None
+    try:
+        result = _read_checked(workdir / f"{task.signature}{RESULT_SUFFIX}")
+    except (OSError, ValueError):
+        return None
+    if not result["success"] or not _products_have_state(session, task):
+        return None
+    return result
+
+
+def _products_have_state(session: Session, task: PTask) -> bool:
+    """Check whether each product of ``task`` that can have a state has one."""
+    for signature in session.dag.successors(task.signature):
+        node = session.dag.nodes[signature]
+        # A provisional product has no state of its own; pytask collects it at teardown.
+        if not isinstance(node, PProvisionalNode) and node.state() is None:
+            return False
+    return True
 
 
 def _cause(jobmon_run: JobmonRun | None, *, interrupted: bool) -> str:
