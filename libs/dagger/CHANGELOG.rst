@@ -1,3 +1,8 @@
+**0.1.2 - 11/24/26**
+
+- Fix the Read the Docs build, which read cluster-tools' version together with the date
+  on its CHANGELOG line
+
 **0.1.1 - 11/17/26**
 
 - Cap ``vivarium-dependencies`` below 3.0.0

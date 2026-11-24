@@ -1,3 +1,8 @@
+**1.1.5 - 11/24/26**
+
+- Fix the Read the Docs build, which read cluster-tools' version together with the date
+  on its CHANGELOG line
+
 **1.1.4 - 11/24/26**
 
 - Fix ``psimulate run`` crashing when an artifact path is passed on the command line
