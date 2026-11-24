@@ -1023,43 +1023,122 @@ def test_population_view_update_empty_result_keeps_column_dtype(
     pd.testing.assert_series_equal(updated, original)
 
 
-#################################
-# PopulationView.update helpers #
-##############################################
-# PopulationView._compatible_non_equal_dtypes #
-##############################################
+#########################################
+# PopulationView.update with new dtypes #
+#########################################
+
+_N_PIES = len(PIE_DF)
+_DTYPE_CASES: dict[str, tuple[pd.Series[Any], pd.Series[Any]]] = {
+    # case id: (existing column, update values)
+    "object_strings_into_str": (
+        pd.Series(["apple"] * _N_PIES, dtype="str"),
+        pd.Series(["cherry"] * _N_PIES, dtype=object),
+    ),
+    "datetime_other_unit": (
+        pd.Series(pd.date_range("2026-01-01", periods=_N_PIES, unit="us")),
+        pd.Series(pd.date_range("2030-01-01", periods=_N_PIES, unit="ns")),
+    ),
+    "timedelta_other_unit": (
+        pd.Series(pd.to_timedelta(np.arange(_N_PIES), unit="D").astype("timedelta64[us]")),
+        pd.Series(pd.to_timedelta(np.arange(_N_PIES) + 1, unit="D").astype("timedelta64[s]")),
+    ),
+    "ints_into_float": (
+        pd.Series(np.arange(_N_PIES) + 0.5),
+        pd.Series(np.arange(_N_PIES)),
+    ),
+}
+_CORRUPTING_CASES: dict[str, tuple[pd.Series[Any], pd.Series[Any]]] = {
+    "fractions_into_int": (
+        pd.Series(np.arange(_N_PIES)),
+        pd.Series(np.arange(_N_PIES) + 0.5),
+    ),
+    "strings_into_int": (
+        pd.Series(np.arange(_N_PIES)),
+        pd.Series(["cherry"] * _N_PIES, dtype="str"),
+    ),
+    # On a partial write, pandas would accept this and turn the column into float64.
+    "nan_into_int": (
+        pd.Series(np.arange(_N_PIES)),
+        pd.Series([np.nan] * _N_PIES),
+    ),
+}
 
 
-@pytest.mark.parametrize(
-    "update_dtype, existing_dtype, compatible",
-    [
-        (np.dtype(object), pd.StringDtype(), True),
-        (np.dtype("datetime64[ns]"), np.dtype("datetime64[us]"), True),
-        (np.dtype("timedelta64[ns]"), np.dtype("timedelta64[us]"), True),
-        (np.dtype("int64"), np.dtype("float64"), False),
-        (np.dtype(object), np.dtype("int64"), False),
-    ],
-    ids=[
-        "string_vs_object",
-        "datetime_unit",
-        "timedelta_unit",
-        "int_vs_float",
-        "object_vs_int",
-    ],
-)
-def test__compatible_non_equal_dtypes(
-    update_dtype: Any, existing_dtype: Any, compatible: bool
+def _add_pie_column(pop_mgr: PopulationManager, existing: pd.Series[Any]) -> pd.Series[Any]:
+    """Give the pie component an extra column and return a copy of it."""
+    private_columns = pop_mgr.private_columns
+    private_columns["extra"] = existing.set_axis(private_columns.index)
+    pop_mgr._private_column_metadata["pie_component"] = PIE_COL_NAMES + ["extra"]
+    return private_columns["extra"].copy()
+
+
+@pytest.mark.parametrize("scope", ["full", "partial"])
+@pytest.mark.parametrize("case", list(_DTYPE_CASES))
+def test_population_view_update_keeps_the_existing_dtype(
+    pies_and_cubes_pop_mgr: PopulationManager, case: str, scope: str
 ) -> None:
-    """Only differences that cannot lose data are tolerated.
+    """Values the column can hold are written, and the column keeps its dtype."""
+    existing, new_values = _DTYPE_CASES[case]
+    original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
+    index = original.index if scope == "full" else original.index[::2]
+    update = new_values.set_axis(original.index).loc[index].rename("extra")
 
-    String columns infer as ``object`` under pandas 2 and ``str`` under pandas 3, and
-    datetime and timedelta columns can differ only in unit; neither means a component
-    is corrupting the table.
-    """
-    assert (
-        PopulationView._compatible_non_equal_dtypes(update_dtype, existing_dtype)
-        is compatible
+    pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns["extra"]
+    assert updated.dtype == original.dtype
+    pd.testing.assert_series_equal(updated.loc[index], update.astype(original.dtype))
+    rest = original.index.difference(index)
+    pd.testing.assert_series_equal(updated.loc[rest], original.loc[rest])
+
+
+@pytest.mark.parametrize("scope", ["full", "partial"])
+def test_population_view_update_same_and_other_dtype_columns_together(
+    pies_and_cubes_pop_mgr: PopulationManager, scope: str
+) -> None:
+    """A same-dtype column and a different-dtype column update together correctly."""
+    existing, new_values = _DTYPE_CASES["datetime_other_unit"]
+    original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
+    original_pi = pies_and_cubes_pop_mgr.private_columns["pi"].copy()
+    index = original.index if scope == "full" else original.index[::2]
+    update = pd.DataFrame(
+        {
+            "pi": original_pi.loc[index] * 2,
+            "extra": new_values.set_axis(original.index).loc[index],
+        }
     )
+
+    pies_and_cubes_pop_mgr.get_view(PieComponent()).update(["pi", "extra"], lambda _: update)
+
+    updated = pies_and_cubes_pop_mgr.private_columns
+    assert updated["pi"].dtype == original_pi.dtype
+    assert updated["extra"].dtype == original.dtype
+    pd.testing.assert_series_equal(updated.loc[index, "pi"], update["pi"])
+    pd.testing.assert_series_equal(
+        updated.loc[index, "extra"], update["extra"].astype(original.dtype)
+    )
+    rest = original.index.difference(index)
+    pd.testing.assert_series_equal(updated.loc[rest, "pi"], original_pi.loc[rest])
+    pd.testing.assert_series_equal(updated.loc[rest, "extra"], original.loc[rest])
+
+
+@pytest.mark.parametrize("scope", ["full", "partial"])
+@pytest.mark.parametrize("case", list(_CORRUPTING_CASES))
+def test_population_view_update_values_the_dtype_cannot_hold_raise(
+    pies_and_cubes_pop_mgr: PopulationManager, case: str, scope: str
+) -> None:
+    """Values the column's dtype cannot hold raise a PopulationError."""
+    existing, new_values = _CORRUPTING_CASES[case]
+    original = _add_pie_column(pies_and_cubes_pop_mgr, existing)
+    index = original.index if scope == "full" else original.index[::2]
+    update = new_values.set_axis(original.index).loc[index].rename("extra")
+
+    with pytest.raises(
+        PopulationError,
+        match="A component is corrupting the population table by modifying the dtype "
+        rf"of a column it updates \(extra from {original.dtype} to ",
+    ):
+        pies_and_cubes_pop_mgr.get_view(PieComponent()).update("extra", lambda _: update)
 
 
 def test_population_view_update_during_a_creation_pass_raises(

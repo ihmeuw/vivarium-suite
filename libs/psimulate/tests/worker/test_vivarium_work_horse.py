@@ -11,6 +11,7 @@ from pytest_mock import MockerFixture
 from tests.conftest import make_job_parameters
 from vivarium.psimulate.jobs import JobParameters
 from vivarium.psimulate.worker.vivarium_work_horse import (
+    BackupLoadError,
     ParallelSimulation,
     get_backup,
     get_sim_from_backup,
@@ -114,6 +115,51 @@ def test_get_backup(
     else:
         backup = cast(list[int], get_backup(job_parameters))
         assert not backup
+
+
+def test_get_backup_raises_when_backup_cannot_be_loaded(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    metadata_path = backup_dir / "backup_metadata.csv"
+    job_parameters = make_job_parameters(
+        model_specification="dummy",
+        input_draw=1,
+        random_seed=2,
+        backup_configuration={
+            "backup_freq": 300,
+            "backup_dir": backup_dir,
+            "backup_metadata_path": metadata_path,
+        },
+    )
+    pd.DataFrame({"input_draw": [1], "random_seed": [2], "job_id": ["prev_job"]}).to_csv(
+        metadata_path, index=False
+    )
+    backup_path = backup_dir / "prev_job.pkl"
+    backup_path.write_bytes(b"not a pickle")
+
+    with pytest.raises(BackupLoadError, match="prev_job.pkl exists but cannot be loaded"):
+        get_backup(job_parameters)
+    # The backup stays in place so that the user can inspect or delete it.
+    assert backup_path.exists()
+
+
+def test_get_backup_raises_when_metadata_does_not_match_job(tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    metadata_path = backup_dir / "backup_metadata.csv"
+    job_parameters = make_job_parameters(
+        model_specification="dummy",
+        backup_configuration={
+            "backup_freq": 300,
+            "backup_dir": backup_dir,
+            "backup_metadata_path": metadata_path,
+        },
+    )
+    # psimulate writes this file, so a missing column is a bug, not a missing backup.
+    pd.DataFrame({"job_id": ["prev_job"]}).to_csv(metadata_path, index=False)
+
+    with pytest.raises(pd.errors.UndefinedVariableError, match="input_draw"):
+        get_backup(job_parameters)
 
 
 def test_remove_backups(tmp_path: Path) -> None:

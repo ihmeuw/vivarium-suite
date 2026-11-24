@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "vivarium-dependencies[click,loguru,pandas,pyarrow,pyyaml]",
+    "vivarium-dependencies[click,loguru,pandas,pyarrow,pyyaml]<3.0.0",
     "vivarium-build-utils>=4.0.0,<5.0.0",
     "vivarium-cluster-tools>=5.0.0",
     "pytask>=0.6.0,<0.7.0",
@@ -50,7 +50,7 @@ test = [
     # The CLI tests read CliRunner's stderr separately, which click 8.2 introduced.
     "click>=8.2",
 ]
-docs = ["vivarium-dependencies[sphinx,sphinx-click,docutils]"]
+docs = ["vivarium-dependencies[docutils,sphinx,sphinx-click]"]
 interactive = ["vivarium-dependencies[interactive]"]
 lint = ["vivarium-dependencies[lint]", "pyarrow-stubs"]
 dev = ["vivarium-dagger[test,docs,interactive,lint,cluster,simulation]"]

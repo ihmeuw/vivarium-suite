@@ -1,3 +1,20 @@
+**0.32.1 - 11/19/26**
+
+- ``model-development``: fetch from the remote in Setup, base the feature branch
+  on the fetched base branch, and pass the base to ``_finalize-core``
+
+**0.32.0 - 11/19/26**
+
+- ``team-conventions``: apply the hub page's rules for the epic or fix version, labels,
+  and story points to every ticket draft, and ask the user before changing a ticket's
+  story points
+
+**0.31.2 - 11/10/26**
+
+- ``team-conventions`` and ``brainstorming``: write a ticket's acceptance criteria only
+  from the user, or from a settled design with an explicit yes on the criteria, and
+  otherwise leave a human TODO line in their place
+
 **0.31.1 - 10/29/26**
 
 - ``model-development`` and ``_vv_writer``: describe the verification checks as built on

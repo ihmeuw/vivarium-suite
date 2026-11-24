@@ -892,17 +892,48 @@ class PopulationManager(Manager):
         Only the rows in ``update``'s index are written; every other row is left
         alone. Simulants being added are written by :meth:`initialize` instead.
 
+        Each column keeps its existing dtype, and pandas decides whether the new
+        values fit it. When they do not, the frame may already hold part of the
+        update.
+
         Parameters
         ----------
         update
             The new values, indexed by the simulants to write. Its columns must
             already exist in the frame being written.
+
+        Raises
+        ------
+        PopulationError
+            If the existing dtype of a column cannot hold the new values.
         """
         frame = self.private_columns
-        if update.index.equals(frame.index):
-            frame[update.columns] = update
-        else:
-            frame.loc[update.index, update.columns] = update
+        existing_dtypes = frame.dtypes[update.columns]
+
+        def corrupting_error() -> PopulationError:
+            changed = ", ".join(
+                f"{column} from {existing_dtypes[column]} to {update[column].dtype}"
+                for column in update.columns
+                if update[column].dtype != existing_dtypes[column]
+            )
+            return PopulationError(
+                "A component is corrupting the population table by modifying the dtype "
+                f"of a column it updates ({changed})."
+            )
+
+        # Assigning whole columns is much faster than writing into them, but it takes
+        # the update's dtypes.
+        try:
+            if (update.dtypes == existing_dtypes).all() and update.index.equals(frame.index):
+                frame[update.columns] = update
+            else:
+                frame.loc[update.index, update.columns] = update
+        except TypeError as exc:
+            raise corrupting_error() from exc
+        # pandas raises for most values a column cannot hold. On a partial write it
+        # changes the column's dtype for some, such as NaN in an int column.
+        if not frame.dtypes[update.columns].equals(existing_dtypes):
+            raise corrupting_error()
 
     def initialize(self, data: pd.DataFrame) -> None:
         """Add the given columns to the simulants being initialized.

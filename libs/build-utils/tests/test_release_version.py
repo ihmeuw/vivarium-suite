@@ -107,6 +107,9 @@ class TestCheckBump:
             (["1.2.0", "1.3.0"], "1.2.1"),
             ([], "0.1.0"),
             ([], "0.1.0b1"),
+            (["1.2.0", "1.3.0b1", "2.0.0"], "2.1.0b1"),
+            (["1.2.0", "1.3.0b1", "2.0.0"], "2.1.0"),
+            (["1.2.0", "1.3.0b1", "1.2.1"], "1.3.0b2"),
         ],
         ids=[
             "patch",
@@ -122,6 +125,9 @@ class TestCheckBump:
             "patch of an older line",
             "first final",
             "first beta",
+            "renumbered beta line after a later major",
+            "final of the replacement line",
+            "beta continues after a patch below it",
         ],
     )
     def test_allows(self, released: list[str], current: str) -> None:
@@ -137,6 +143,17 @@ class TestCheckBump:
             (["1.2.0", "1.3.0b1", "1.3.0"], "1.3.0b2", "already released"),
             (["1.2.0", "1.3.0b1"], "1.4.0", "not one step"),
             ([], "0.1.0b2", "must be 0.1.0b1"),
+            (
+                ["1.2.0", "1.3.0b1", "2.0.0"],
+                "1.3.0b2",
+                "below the newest final release 2.0.0",
+            ),
+            (
+                ["1.2.0", "1.3.0b1", "1.4.0"],
+                "1.3.0b2",
+                "below the newest final release 1.4.0",
+            ),
+            (["1.2.0", "2.0.0"], "1.2.1b1", "below the newest final release 2.0.0"),
         ],
         ids=[
             "skipped minor",
@@ -146,6 +163,9 @@ class TestCheckBump:
             "beta after its final",
             "final skips past the beta line",
             "first-ever beta is not b1",
+            "beta line overtaken by a later major",
+            "beta line overtaken by a later minor",
+            "first beta of an older line",
         ],
     )
     def test_rejects(self, released: list[str], current: str, message: str) -> None:
