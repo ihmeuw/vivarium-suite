@@ -1,5 +1,5 @@
 {
-    "description": "Add the SimSci plain-English writing text to the start of each session.",
+    "description": "Add the SimSci plain-English writing text to the start of each session. After Claude pushes to a branch with an open PR, ask it to refresh the PR's test summaries.",
     "hooks": {
         "SessionStart": [
             {
@@ -7,6 +7,18 @@
                     {
                         "type": "command",
                         "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/writing-style.sh\""
+                    }
+                ]
+            }
+        ],
+        "PostToolUse": [
+            {
+                "matcher": "Bash|mcp__.*__(push_files|create_or_update_file|delete_file)",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/test-summary-refresh.sh\"",
+                        "timeout": 30
                     }
                 ]
             }

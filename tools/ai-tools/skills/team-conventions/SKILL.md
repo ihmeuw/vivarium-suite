@@ -1,11 +1,11 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, flagging the PR for team review in `#vivarium_dev`, and refreshing a PR's test summaries after a push. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
 
-The four workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, and flag it for review. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
+The workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, flag it for review, and keep it current. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
 
 ## 1. Naming a branch
 
@@ -152,3 +152,13 @@ If the transition fails because the ticket's workflow has no path to Ready for R
 ## 5. Responding to review comments
 
 Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. Replying on the thread is fine; resolving it is not your call. Instead, to show that you have made a change to address the substance of the comment, use the "rocket ship" emoji reaction on the comment.
+
+## 6. Keeping PR test summaries current
+
+Keep the test summaries that `_finalize-core` posts up to date when the PR is updated. The plugin's push hook reminds you after each push to a branch with an open PR. Run `simsci:_test_summarizer` on the PR's full diff. Post a summary on each file in the diff that has none, and update the others. Skip a closed or merged PR. These GitHub rules apply:
+
+- A summary is a file comment by the current `gh` user that starts with **Test summary for**. Do not touch any other comment, because the user's own review comments come from the same account.
+- Match each summary to its file by the review thread's current `path`. GitHub moves a thread when a file is renamed.
+- Delete the summary of a file that left the diff. GitHub rejects new comments on files outside the diff with HTTP 422.
+- An outdated thread stays outdated after its file returns to the diff. Delete that summary and post a new one.
+- Edit and delete with `gh api repos/<owner>/<repo>/pulls/comments/<id>` and `-X PATCH -f body=<body>` or `-X DELETE`. Pass the body inline, so you need no temp files.
