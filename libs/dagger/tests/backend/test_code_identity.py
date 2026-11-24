@@ -741,20 +741,23 @@ _OPENS_AT_IMPORT: dict[str, tuple[str, str | None]] = {
     "append_mode": ('open(HERE / "stamp.txt", "a")\n', None),
     "append_mode_keyword": ('open(HERE / "stamp.txt", mode="a")\n', None),
     "exclusive_mode": ('open(HERE / "stamp.txt", "x")\n', None),
-    "update_mode": ('open(HERE / "stamp.txt", "r+")\n', None),
     "write_text": ('(HERE / "s.txt").write_text("x")\n', None),
     "default_mode": ('open(HERE / "t.txt")\n', "t.txt"),
     "binary_read_mode": ('open(HERE / "t.txt", "rb")\n', "t.txt"),
+    "read_update_mode": ('open(HERE / "t.txt", "r+")\n', "t.txt"),
+    "write_update_mode": ('open(HERE / "t.txt", "w+")\n', "t.txt"),
+    "append_update_mode": ('open(HERE / "t.txt", "a+")\n', "t.txt"),
 }
 """Top-level calls on an existing file next to the module, each with the data file the
-code part lists: none for a call that writes the file, and the file for one that reads it."""
+code part lists: none for a call that only writes the file, and the file for one that
+reads it, which a mode with "+" also does."""
 
 
 @pytest.mark.parametrize("call", list(_OPENS_AT_IMPORT))
-def test_a_call_at_import_that_writes_a_file_adds_no_data_file(
+def test_a_call_at_import_lists_a_data_file_only_when_it_can_read_the_file(
     tmp_path: Path, call: str
 ) -> None:
-    """A top-level open of an existing file in mode "w", "a" (positional or keyword), "x" or "r+", and a Path.write_text on one, add no data file, while an open in the default mode or "rb" lists the file."""
+    """A top-level open of an existing file in mode "w", "a" (positional or keyword) or "x", and a Path.write_text on one, add no data file, while an open in the default mode, "rb", or a mode with "+" ("r+", "w+", "a+"), which also reads, lists the file."""
     statement, listed = _OPENS_AT_IMPORT[call]
     repo = _write(
         tmp_path / "repo",
@@ -773,6 +776,82 @@ def test_a_call_at_import_that_writes_a_file_adds_no_data_file(
 
     assert part.established, part.reason
     assert set(part.files) == {"main.py", "alpha.py", *([listed] if listed else [])}
+
+
+_METHOD_OPENS: dict[str, tuple[str, str | None]] = {
+    "archive_member_data_csv": (
+        'zipfile.ZipFile(HERE / "d.zip").open("data.csv")\n',
+        "d.zip",
+    ),
+    "archive_member_info_txt": (
+        'zipfile.ZipFile(HERE / "d.zip").open("info.txt")\n',
+        "d.zip",
+    ),
+    "path_open_read_mode": ('(HERE / "t.txt").open("r")\n', "t.txt"),
+    "path_open_write_mode": ('(HERE / "s.txt").open("w")\n', None),
+}
+"""Top-level ``.open`` method calls with one string literal, each with the data file the
+code part lists. The literal is a mode only when the receiver is a path expression; an
+archive member's name such as ``"data.csv"`` or ``"info.txt"`` holds the letters of a
+write mode but is not one."""
+
+
+@pytest.mark.parametrize("call", list(_METHOD_OPENS))
+def test_an_open_method_call_is_a_write_only_on_a_path_expression(
+    tmp_path: Path, call: str
+) -> None:
+    """A top-level .open(<string literal>) is a write only when its receiver is a path expression, so zipfile.ZipFile(HERE / "d.zip").open("data.csv") or .open("info.txt") lists d.zip, (HERE / "t.txt").open("r") lists t.txt, and (HERE / "s.txt").open("w") adds nothing."""
+    statement, listed = _METHOD_OPENS[call]
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            # The module is read, not run, so d.zip need not be a valid archive.
+            "alpha.py": (
+                "import zipfile\n"
+                "from pathlib import Path\n\n"
+                f"HERE = Path(__file__).parent\n{statement}"
+            ),
+            "d.zip": "not an archive\n",
+            "s.txt": "s\n",
+            "t.txt": "t\n",
+        },
+    )
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py", *([listed] if listed else [])}
+
+
+def test_a_repository_reached_through_a_symlinked_directory_gives_the_same_names(
+    tmp_path: Path,
+) -> None:
+    """A repository root given as a symlink to the real directory, whose starting file reads at import a data file that is itself a symlink to a file outside every root, gives an established code part that lists that data file, with the same names as the code part computed from the real directory."""
+    outside = _write(tmp_path / "outside", {"ref.csv": "a,b\n1,2\n"})
+    real = _write(
+        tmp_path / "real",
+        {
+            "main.py": (
+                "from pathlib import Path\n\n"
+                'TABLE = open(Path(__file__).parent / "ref.csv").read()\n'
+            ),
+        },
+    )
+    link = tmp_path / "link"
+    try:
+        (real / "ref.csv").symlink_to(outside / "ref.csv")
+        link.symlink_to(real, target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks cannot be created here")
+
+    through_link = code_part(link / "main.py", link, [str(link), _STDLIB])
+    direct = code_part(real / "main.py", real, [str(real), _STDLIB])
+
+    assert through_link.established, through_link.reason
+    assert set(through_link.files) == {"main.py", "ref.csv"}
+    assert direct.established, direct.reason
+    assert set(through_link.files) == set(direct.files)
 
 
 def test_a_data_file_through_a_symlink_to_outside_every_root_is_listed_by_its_name(
@@ -1713,16 +1792,28 @@ def _within(seconds: float, function: Callable[[], CodePart]) -> CodePart:
     return result
 
 
-def test_a_long_chain_of_doubled_path_names_is_analysed_quickly(tmp_path: Path) -> None:
-    """A module whose top level binds a0 = Path(__file__).parent and a1 = a0 / a0 through a30 = a29 / a29, then opens a30, gives a code part within 5 s, established and with no data file, since a30 names the module's directory."""
-    chain = "".join(f"a{i} = a{i - 1} / a{i - 1}\n" for i in range(1, 31))
+_PATH_CHAINS: dict[str, tuple[int, str]] = {
+    "doubled_division": (30, "a{i} = a{p} / a{p}\n"),
+    "tripled_joinpath": (20, "a{i} = a{p}.joinpath(a{p}, a{p})\n"),
+}
+"""For each chain of path names, its length and the template of the binding of ``a{i}``
+from the previous name ``a{p}``."""
+
+
+@pytest.mark.parametrize("chain", list(_PATH_CHAINS))
+def test_a_long_chain_of_repeated_path_names_is_analysed_quickly(
+    tmp_path: Path, chain: str
+) -> None:
+    """A module whose top level binds a0 = Path(__file__).parent and then each name from the previous one used two or three times (a1 = a0 / a0 through a30 = a29 / a29, or a1 = a0.joinpath(a0, a0) through a20 = a19.joinpath(a19, a19)), then opens the last name, gives a code part within 5 s, established and with no data file, since the last name is the module's directory."""
+    length, template = _PATH_CHAINS[chain]
+    bindings = "".join(template.format(i=i, p=i - 1) for i in range(1, length + 1))
     repo = _write(
         tmp_path / "repo",
         {
             "main.py": "import alpha\n",
             "alpha.py": (
                 "from pathlib import Path\n\n"
-                f"a0 = Path(__file__).parent\n{chain}HANDLE = open(a30)\n"
+                f"a0 = Path(__file__).parent\n{bindings}HANDLE = open(a{length})\n"
             ),
         },
     )

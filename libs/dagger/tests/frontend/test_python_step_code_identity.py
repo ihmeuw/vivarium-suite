@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import FunctionType, ModuleType
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -166,16 +167,74 @@ def test_a_python_steps_code_identity_carries_its_targets_module(
     assert node.module == "ci_modpkg.steps"
 
 
-def test_a_target_without_a_source_file_gets_an_always_stale_identity(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A python step whose target's module has no source file (a function whose __module__ names a module without __file__) gets an always-stale code identity named "<step>::code"."""
-    module = ModuleType("ci_module_without_a_file")
-    monkeypatch.setitem(sys.modules, module.__name__, module)
+_LOOPED_WRAPPERS = f"""\
+{_STEPS}
+
+def make_v2() -> pd.DataFrame:
+    return pd.DataFrame({{"n": [4, 5, 6]}})
+
+
+make.__wrapped__ = make_v2
+make_v2.__wrapped__ = make
+"""
+"""A module of step functions in which make and make_v2 each name the other as the
+function they wrap."""
+
+
+def _function_in_module(module: ModuleType) -> FunctionType:
+    """Return a function named make whose __module__ is ``module``'s name."""
     # A function's __module__ is the __name__ of the globals it is made with.
     target = FunctionType(_constant.__code__, vars(module), "make")
     assert target.__module__ == module.__name__
-    pipeline = Pipeline(tmp_path / "out", "run1", repository_root=tmp_path)
+    return target
+
+
+def _target_without_a_source(
+    kind: str, repo: Path, monkeypatch: pytest.MonkeyPatch, import_from: ImportFrom
+) -> Callable[..., pd.DataFrame]:
+    """Return a step target of ``kind`` whose source file cannot be found."""
+    if kind == "module_without_a_file":
+        module = ModuleType("ci_module_without_a_file")
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+        return _function_in_module(module)
+    if kind == "module_file_not_a_source":
+        module = ModuleType("ci_module_of_an_extension")
+        extension = repo / "ci_module_of_an_extension.so"
+        extension.write_bytes(b"\x7fELF\x02\x01\x01 a compiled module")
+        module.__file__ = str(extension)
+        target = _function_in_module(module)
+        setattr(module, "make", target)
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+        return target
+    if kind == "module_not_imported":
+        name = "ci_module_not_in_sys_modules"
+        monkeypatch.delitem(sys.modules, name, raising=False)
+        return FunctionType(_constant.__code__, {"__name__": name}, "make")
+    if kind == "wrapped_loop":
+        _write(repo, {"ci_looped_steps.py": _LOOPED_WRAPPERS})
+        looped = import_from(repo, "ci_looped_steps").make
+        assert looped.__wrapped__.__wrapped__ is looped
+        return cast(Callable[..., pd.DataFrame], looped)
+    raise AssertionError(f"no target kind named {kind}")
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "module_without_a_file",
+        "module_file_not_a_source",
+        "module_not_imported",
+        "wrapped_loop",
+    ],
+)
+def test_a_target_whose_source_file_cannot_be_found_gets_an_always_stale_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, import_from: ImportFrom, kind: str
+) -> None:
+    """A python step gets an always-stale code identity named "<step>::code" when its target's __module__ names a module without __file__, a module in sys.modules whose __file__ ends in ".so" and so is not a source file, or a module that is not in sys.modules, or when the target's __wrapped__ chain loops (make.__wrapped__ is make_v2 and make_v2.__wrapped__ is make)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    target = _target_without_a_source(kind, repo, monkeypatch, import_from)
+    pipeline = Pipeline(tmp_path / "out", "run1", repository_root=repo)
 
     pipeline.add_python_step(target, inputs={}, outputs="a.parquet")
 

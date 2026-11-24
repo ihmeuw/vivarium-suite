@@ -77,10 +77,10 @@ same name; for any other ``MAPPING`` name the root is the directory that holds i
 The scan of the ``site-packages`` directories for these files is kept for the process for
 each search path, and is repeated only when the listing of one of those directories, the
 content of a file it read, or whether a directory it checked exists has changed.
-Code that the environment installs, including anything under a ``site-packages`` or
-``dist-packages`` directory or a virtual environment inside the repository, is not
-first-party and is not part of the code identity, so upgrading an installed package does
-not make a step stale. The analysis stops there. The standard library and built-in
+Code that the environment installs, including
+anything under a ``site-packages`` or ``dist-packages`` directory or a virtual
+environment inside the repository, is not first-party; it belongs to the environment
+part of the identity, and the analysis stops there. The standard library and built-in
 modules are installed code.
 
 A module can add data files to the code part. The code that runs when a module is
@@ -95,16 +95,24 @@ established. So, with ``HERE = Path(__file__).parent``, each of ``open(HERE / "t
 ``yaml.safe_load(HERE / "c.yaml")``, ``json.load(open(HERE / "c.json"))`` and
 ``(HERE / "c.txt").read_text()`` adds its file.
 
-A call that writes a file reads none. An ``open()``, ``io.open()``, ``codecs.open()`` or
-``Path.open()`` call whose mode is a string literal that contains ``w``, ``a``, ``x`` or
-``+`` adds no file, nor does any path within its arguments, and the path that
-``write_text()`` or ``write_bytes()`` is called on adds no file. The mode is the second
-positional argument of the functions, the first of the ``Path.open()`` method, or
-``mode=``. A data file is classified and named by its location, the absolute path as
+A call that writes a file reads none. A mode writes a file when it is a string literal
+that contains ``w``, ``a`` or ``x`` and not ``+``; a mode with ``+``, such as ``r+`` or
+``w+``, also reads the file. A call of the function ``open()``, ``io.open()``,
+``codecs.open()`` or ``Path.open()`` whose mode, its second positional argument or
+``mode=``, writes adds no file, nor does any path within its arguments. The same holds
+for an ``.open()`` method call whose mode, its first positional argument or ``mode=``,
+writes, when it is called on a path: a call of ``Path()`` or ``PurePath()`` (also as
+``pathlib.Path()`` and ``pathlib.PurePath()``), or an expression whose path is computed
+from ``__file__``. An ``.open()`` method call on anything else, such as
+``zipfile.ZipFile(HERE / "d.zip").open("data.csv")``, is not a write, so it and the
+paths within it are read as in any other call. The path that ``write_text()`` or
+``write_bytes()`` is called on adds no file. A data file is classified and named by its location, the absolute path as
 computed, and hashed by the bytes of the file it leads to, so a symlink inside the
-repository to a file outside every root is a first-party data file. A location outside
-every root is classified by its resolved path instead, and a file that two paths lead to
-is listed once.
+repository to a file outside every root is a first-party data file. The location is
+compared with the repository root and the editable roots both as given and as resolved,
+so a repository reached through a symlinked directory names its data files as it does
+when it is given by its resolved path. A location outside every root is classified by
+its resolved path instead, and a file that two paths lead to is listed once.
 
 A path is computed from string literals,
 ``__file__``, the ``/`` operator, ``.parent``, ``.parents[<n>]``, ``Path()``,
@@ -134,9 +142,9 @@ so the same content in two checkouts at different paths gives the same code part
 
 The code part is not established when the starting point is installed code or is outside
 every first-party root, when an import or a data path resolves to a file that is neither
-first-party nor installed, when two different files would get the same name, when a
-first-party file cannot be read, or when a first-party package that is imported with
-``*`` has an ``__all__`` that is not a literal list or tuple of strings. A node whose state is not established makes its step run on
+first-party nor installed, when two different files would get the same name, or when a
+first-party package that is imported with ``*`` has an ``__all__`` that is not a literal
+list or tuple of strings. A node whose state is not established makes its step run on
 every build.
 
 """
@@ -223,14 +231,16 @@ def code_part(
         analysis follows no imports from it.
     """
     start_path = os.path.abspath(start)
+    given_root = None if repository_root is None else os.path.abspath(repository_root)
     root = None if repository_root is None else os.path.realpath(repository_root)
     directories = tuple(os.path.abspath(entry) for entry in search_path)
-    key = (start_path, root, directories, module, sys.get_int_max_str_digits())
+    limit = sys.get_int_max_str_digits()
+    key = (start_path, given_root, root, directories, module, limit)
     memo: _Memo = {}
     cached = _analyses.get(key)
     if cached is not None and _unchanged(cached.listed, memo):
         return cached.part
-    walk = _Walk(root, directories, memo)
+    walk = _Walk(root, given_root, directories, memo)
     part = walk.run(start_path, module)
     if part.established:
         _analyses[key] = _Analysis(part, tuple(walk.listed))
@@ -335,8 +345,8 @@ _OPEN_FUNCTIONS = frozenset(
 )
 """Functions whose second positional argument is the mode a file is opened with."""
 
-_WRITE_MODES = frozenset("wax+")
-"""The mode characters that open a file for writing."""
+_WRITE_MODES = frozenset("wax")
+"""The mode characters that open a file for writing; with ``+`` the file is also read."""
 
 _PATH_TYPES = frozenset({"Path", "pathlib.Path", "PurePath", "pathlib.PurePath"})
 
@@ -352,6 +362,9 @@ _MAX_DEPTH = 32
 
 _Memo = dict[str, tuple[tuple[int, ...], str, bytes]]
 """The stat, SHA-256 and bytes of each Python file read during one call of code_part."""
+
+_Frame = tuple[ast.AST, bool, bool, tuple[ast.expr, ...]]
+"""A node to scan, whether it is deferred and ``__main__``-only, and its read guards."""
 
 
 @dataclass(frozen=True)
@@ -370,6 +383,9 @@ class _Read:
 
     path: ast.expr
     main_only: bool
+    guards: tuple[ast.expr, ...] = ()
+    """The receivers of the enclosing ``.open()`` calls whose mode writes; the expression
+    is not read when one of them is a path."""
 
 
 @dataclass(frozen=True)
@@ -464,6 +480,8 @@ class _SiteScan:
     mapping: Mapping[str, str]
     """The ``MAPPING`` of the editable finders, the first one for each name."""
     editable_roots: tuple[str, ...]
+    given_roots: tuple[str, ...]
+    """The editable roots as their ``.pth`` files and ``MAPPING`` give them, unresolved."""
     checked: tuple[tuple[str, bool], ...]
     """Each directory whose existence the scan depends on, and whether it existed."""
     sites: tuple[_SiteListing, ...]
@@ -481,9 +499,11 @@ _plain_inits: set[str] = set()
 """The SHA-256 of each ``__init__.py`` content that mentions neither ``extend_path`` nor
 ``declare_namespace``."""
 
-_analyses: dict[tuple[str, str | None, tuple[str, ...], str | None, int], _Analysis] = {}
-"""The last established code part of each starting file, root, search path, module name
-and limit."""
+_AnalysisKey = tuple[str, str | None, str | None, tuple[str, ...], str | None, int]
+"""A starting file, root as given and resolved, search path, module name and limit."""
+
+_analyses: dict[_AnalysisKey, _Analysis] = {}
+"""The last established code part of each analysis key."""
 
 _site_scans: dict[tuple[str, ...], _SiteScan] = {}
 """The last site scan of each search path."""
@@ -492,15 +512,24 @@ _site_scans: dict[tuple[str, ...], _SiteScan] = {}
 class _Walk:
     """One analysis of the first-party files that a starting file imports."""
 
-    def __init__(self, root: str | None, search_path: Sequence[str], memo: _Memo) -> None:
-        self.root = root
+    def __init__(
+        self,
+        root: str | None,
+        given_root: str | None,
+        search_path: Sequence[str],
+        memo: _Memo,
+    ) -> None:
         self.memo = memo
         self.listings: dict[str, frozenset[str]] = {}
         self.environments: dict[str, bool] = {}
         site = _site_scan(tuple(search_path))
         self.directories = site.directories
         self.mapping = site.mapping
+        self.roots: tuple[str, ...] = () if root is None else (root,)
+        given: tuple[str, ...] = () if given_root is None else (given_root,)
+        self.lexical_roots = self.roots + given
         self.editable_roots = site.editable_roots
+        self.lexical_editable_roots = site.editable_roots + site.given_roots
         self.search_set = {os.path.realpath(directory) for directory in self.directories}
         self.visited: set[str] = set()
         self.data_files: set[str] = set()
@@ -556,20 +585,23 @@ class _Walk:
             self.listings[directory] = listing
         return listing
 
-    def _classify(self, real: str) -> tuple[str, str]:
-        """Return a resolved file's kind (installed, first-party or foreign) and its name."""
-        if _installed(real):
+    def _classify(self, path: str, lexical: bool = False) -> tuple[str, str]:
+        """Return a file's kind and name, by the given roots too if ``lexical``."""
+        if _installed(path):
             return "installed", ""
-        if self.root is not None and _within(real, self.root):
-            holder, prefix = self.root, ""
-        else:
-            holders = [root for root in self.editable_roots if _within(real, root)]
-            if not holders:
-                return "foreign", ""
-            holder, prefix = max(holders, key=len), _EDITABLE
-        if self._in_environment(real, holder):
+        roots = self.lexical_roots if lexical else self.roots
+        editable_roots = self.lexical_editable_roots if lexical else self.editable_roots
+        holders = [root for root in roots if _within(path, root)]
+        prefix = ""
+        if not holders:
+            holders = [root for root in editable_roots if _within(path, root)]
+            prefix = _EDITABLE
+        if not holders:
+            return "foreign", ""
+        holder = max(holders, key=len)
+        if self._in_environment(path, holder):
             return "installed", ""
-        return "first", prefix + PurePath(os.path.relpath(real, holder)).as_posix()
+        return "first", prefix + PurePath(os.path.relpath(path, holder)).as_posix()
 
     def _in_environment(self, real: str, holder: str) -> bool:
         """Return whether a file is in a virtual environment below the root ``holder``."""
@@ -676,10 +708,13 @@ class _Walk:
                     return
         evaluator = _PathEvaluator(file if scan.file_known else None, scan.assignments)
         for read in scan.reads:
-            if is_start or not read.main_only:
-                self._add_data(evaluator.value(read.path), file)
-                if self.reason is not None:
-                    return
+            if not is_start and read.main_only:
+                continue
+            if any(evaluator.is_path(receiver) for receiver in read.guards):
+                continue
+            self._add_data(evaluator.value(read.path), file)
+            if self.reason is not None:
+                return
 
     def _follow(self, statement: _Import, file: str, importer: str | None) -> None:
         """Queue the first-party files that an import statement in ``file`` loads.
@@ -900,7 +935,7 @@ class _Walk:
         real = os.path.realpath(location)
         if real in self.visited or real in self.data_files:
             return
-        kind, name = self._classify(location)
+        kind, name = self._classify(location, lexical=True)
         if kind == "foreign":
             # The module's own path may reach the root through a symlinked directory.
             kind, name = self._classify(real)
@@ -940,6 +975,13 @@ class _PathEvaluator:
         if key not in self.computed:
             self.computed[key] = self._value(expression, depth)
         return self.computed[key]
+
+    def is_path(self, expression: ast.expr) -> bool:
+        """Return whether ``expression`` is a path type's call or a path from ``__file__``."""
+        if isinstance(expression, ast.Call) and _dotted(expression.func) in _PATH_TYPES:
+            return True
+        value = self.value(expression)
+        return value is not None and value.from_file
 
     def _value(self, expression: ast.expr, depth: int) -> _PathValue | None:
         """Return the path that ``expression`` computes at ``depth``, or None."""
@@ -1046,17 +1088,17 @@ def _scan(tree: ast.Module) -> _Scan:
     declare_names: set[str] = set()
     written: set[int] = set()
     # A stack, not recursion, so that deeply nested code does not exceed the recursion limit.
-    stack: list[tuple[ast.AST, bool, bool]] = [(tree, False, False)]
+    stack: list[_Frame] = [(tree, False, False, ())]
     while stack:
-        node, deferred, main_only = stack.pop()
+        node, deferred, main_only, guards = stack.pop()
         if id(node) in written:
             continue
-        children: list[tuple[ast.AST, bool, bool]]
+        children: list[_Frame]
         if isinstance(node, ast.If) and _is_type_checking(node.test):
-            children = [(child, deferred, main_only) for child in node.orelse]
+            children = [(child, deferred, main_only, guards) for child in node.orelse]
         elif isinstance(node, ast.If) and _is_main_guard(node.test):
-            children = [(child, deferred, True) for child in node.body]
-            children += [(child, deferred, main_only) for child in node.orelse]
+            children = [(child, deferred, True, guards) for child in node.body]
+            children += [(child, deferred, main_only, guards) for child in node.orelse]
         else:
             if isinstance(node, ast.Import):
                 imports += [_Import(alias.name, (), 0, main_only) for alias in node.names]
@@ -1070,8 +1112,10 @@ def _scan(tree: ast.Module) -> _Scan:
                 if node.module == "pkg_resources" and not node.level:
                     declare_names.update(_aliases(node, "declare_namespace"))
             elif isinstance(node, ast.Call) and not deferred:
-                paths, targets = _call_paths(node)
-                reads += [_Read(path, main_only) for path in paths]
+                paths, targets, receiver = _call_paths(node)
+                if receiver is not None:
+                    guards = (*guards, receiver)
+                reads += [_Read(path, main_only, guards) for path in paths]
                 written.update(id(target) for target in targets)
                 calls.append(node)
             elif isinstance(node, (ast.Assign, ast.AnnAssign)) and not deferred:
@@ -1079,7 +1123,7 @@ def _scan(tree: ast.Module) -> _Scan:
                     path_values.append(node.value)
             body = _deferred_ids(node)
             children = [
-                (child, deferred or id(child) in body, main_only)
+                (child, deferred or id(child) in body, main_only, guards)
                 for child in ast.iter_child_nodes(node)
             ]
         stack.extend(reversed(children))
@@ -1141,20 +1185,24 @@ def _is_main_guard(test: ast.expr) -> bool:
     return names == ["__name__"] and constants == ["__main__"]
 
 
-def _call_paths(call: ast.Call) -> tuple[list[ast.expr], list[ast.expr]]:
-    """Return the paths that a call may read, and the expressions of the file it writes."""
+def _call_paths(call: ast.Call) -> tuple[list[ast.expr], list[ast.expr], ast.expr | None]:
+    """Return a call's read paths, written paths, and a writing ``.open()``'s receiver."""
     function = call.func
     if isinstance(function, ast.Attribute) and function.attr in _PATH_WRITES:
-        return _arguments(call), [function.value]
-    if _opens_for_writing(call):
+        return _arguments(call), [function.value], None
+    opener = _dotted(function) in _OPEN_FUNCTIONS
+    if opener and _writes(_mode(call, 1)):
         written = _arguments(call)
         if isinstance(function, ast.Attribute):
             written.append(function.value)
-        return [], written
+        return [], written, None
     paths = _arguments(call)
+    receiver = None
     if isinstance(function, ast.Attribute) and function.attr in _PATH_READS:
         paths.append(function.value)
-    return paths, []
+        if function.attr == "open" and not opener and _writes(_mode(call, 0)):
+            receiver = function.value
+    return paths, [], receiver
 
 
 def _arguments(call: ast.Call) -> list[ast.expr]:
@@ -1164,26 +1212,24 @@ def _arguments(call: ast.Call) -> list[ast.expr]:
     return paths
 
 
-def _opens_for_writing(call: ast.Call) -> bool:
-    """Return whether a call opens a file with a literal mode that writes it."""
-    if _dotted(call.func) in _OPEN_FUNCTIONS:
-        position = 1
-    elif isinstance(call.func, ast.Attribute) and call.func.attr == "open":
-        position = 0
-    else:
-        return False
-    modes = [keyword.value for keyword in call.keywords if keyword.arg == "mode"]
+def _mode(call: ast.Call, position: int) -> ast.expr | None:
+    """Return a call's ``mode=`` or its positional argument at ``position``, or None."""
+    for keyword in call.keywords:
+        if keyword.arg == "mode":
+            return keyword.value
     leading = call.args[: position + 1]
-    if not modes and len(leading) > position:
-        if any(isinstance(argument, ast.Starred) for argument in leading):
-            return False
-        modes = [leading[position]]
-    return any(
-        isinstance(mode, ast.Constant)
-        and isinstance(mode.value, str)
-        and not _WRITE_MODES.isdisjoint(mode.value)
-        for mode in modes
-    )
+    if len(leading) <= position:
+        return None
+    if any(isinstance(argument, ast.Starred) for argument in leading):
+        return None
+    return leading[position]
+
+
+def _writes(mode: ast.expr | None) -> bool:
+    """Return whether a mode is a string literal that writes a file without reading it."""
+    if not isinstance(mode, ast.Constant) or not isinstance(mode.value, str):
+        return False
+    return "+" not in mode.value and not _WRITE_MODES.isdisjoint(mode.value)
 
 
 def _module_bindings(tree: ast.Module) -> Counter[str]:
@@ -1338,6 +1384,7 @@ def _scan_sites(search_path: Sequence[str]) -> _SiteScan:
     directories: list[str] = []
     mapping: dict[str, str] = {}
     roots: list[str] = []
+    given_roots: list[str] = []
     checked: list[tuple[str, bool]] = []
     sites: list[_SiteListing] = []
     read: list[tuple[str, str | None]] = []
@@ -1364,14 +1411,22 @@ def _scan_sites(search_path: Sequence[str]) -> _SiteScan:
                     if not exists:
                         continue
                     roots.append(os.path.realpath(directory))
+                    given_roots.append(directory)
                     if directory not in given and directory not in directories:
                         directories.append(directory)
             else:
                 for package, target in _finder_mapping(data).items():
                     mapping.setdefault(package, target)
-                    roots.append(_editable_root(package, target))
+                    roots.append(_editable_root(package, os.path.realpath(target)))
+                    given_roots.append(_editable_root(package, os.path.abspath(target)))
     return _SiteScan(
-        tuple(directories), mapping, tuple(roots), tuple(checked), tuple(sites), tuple(read)
+        tuple(directories),
+        mapping,
+        tuple(roots),
+        tuple(given_roots),
+        tuple(checked),
+        tuple(sites),
+        tuple(read),
     )
 
 
@@ -1489,12 +1544,11 @@ def _finder_mapping(data: bytes) -> dict[str, str]:
 
 def _editable_root(name: str, target: str) -> str:
     """Return the root of an editable source that maps ``name`` to ``target``."""
-    real = os.path.realpath(target)
-    parts = PurePath(real).parts
+    parts = PurePath(target).parts
     names = tuple(name.split("."))
     if len(parts) > len(names) and parts[-len(names) :] == names:
         return str(PurePath(*parts[: -len(names)]))
-    return os.path.dirname(real)
+    return os.path.dirname(target)
 
 
 @cache

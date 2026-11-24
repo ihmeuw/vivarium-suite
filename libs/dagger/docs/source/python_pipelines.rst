@@ -157,19 +157,19 @@ What a Python step's code is
 ----------------------------
 
 A Python step's code identity is the set of first-party files that its function's module
-imports, directly or through other files, each with a hash of its code, together with any
-data file whose path one of those modules passes to a function while it is imported, such
-as ``open`` or ``pandas.read_csv``, when the path is built from the module's own location.
-``dagger`` computes such a path only from ``__file__`` and string literals with ``/``,
-``.parent``, ``.parents[n]``, ``.joinpath()``, ``.resolve()``, ``.absolute()``,
-``Path()``, ``PurePath()``, ``os.path.join()``, ``os.path.dirname()``,
-``os.path.abspath()``, ``os.path.realpath()``, ``os.path.normpath()``, ``str()`` and
+imports, directly or through other files, each with a hash of its code, together with
+any data file whose path one of those modules passes to a function while it is imported,
+such as ``open`` or ``pandas.read_csv``, when the path is built from the module's own
+location. ``dagger`` computes such a path only from ``__file__`` and string literals with
+``/``, ``.parent``, ``.parents[n]``, ``.joinpath()``, ``.resolve()``, ``.absolute()``,
+``Path()``, ``PurePath()``, ``os.path.join()``, ``os.path.dirname()``, ``str()`` and
 ``os.fspath()``, through module-level names assigned once. Any other form, such as an
 f-string, and a data file read only inside a function, even one that runs at import, is
 not part of it. A call that writes a file, such as ``open(path, "w")``, is not a read. The
 files are read, not imported. A comment or a formatting edit does not change the hash, and
-a code edit to any listed file makes the step stale. The identity also names the function,
-so pointing a step at another function makes it stale.
+a code edit to any listed file makes the step stale.
+The identity also names the function, so pointing a step at another function makes it
+stale.
 
 First-party code is code under the pipeline's repository root and the source of any
 editable install in the environment ``dagger`` runs in. Name the top directory of the

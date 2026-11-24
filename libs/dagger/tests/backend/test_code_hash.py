@@ -459,6 +459,29 @@ def test_parse_source_returns_a_tree_or_none_for_a_syntax_error(kind: str) -> No
     assert code_hash_module.parse_source(broken) is None
 
 
+def test_parse_source_returns_a_tree_for_a_top_level_await() -> None:
+    """parse_source returns a module's syntax tree for source whose top level awaits, as a notebook cell may."""
+    tree = code_hash_module.parse_source("await x\n")
+
+    assert isinstance(tree, ast.Module)
+    [statement] = tree.body
+    assert isinstance(statement, ast.Expr)
+    assert isinstance(statement.value, ast.Await)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("def broken(:\n    return 1\n", id="syntax_error"),
+        pytest.param("(" * 1000 + ")" * 1000, id="nested_parentheses"),
+        pytest.param("x = " + "-" * 100_000 + "1\n", id="nested_unary_operators"),
+    ],
+)
+def test_parse_source_returns_none_for_source_it_cannot_parse(source: str) -> None:
+    """parse_source returns None, without raising, for a syntax error and for source nested deeper than the parser accepts, such as 1000 nested parentheses or 100000 nested unary minus signs."""
+    assert code_hash_module.parse_source(source) is None
+
+
 def test_parse_source_is_not_changed_by_the_warning_filters() -> None:
     """parse_source returns a tree for code that gives a SyntaxWarning with warnings turned into errors, and leaves warnings.filters as it was."""
     with warnings.catch_warnings():
