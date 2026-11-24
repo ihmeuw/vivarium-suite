@@ -6,8 +6,10 @@ so from the fake's ``run``, in the build's main thread, while the bridge's recor
 thread works beside it.
 """
 
+import os
 import shlex
 import signal
+import stat
 import subprocess
 import threading
 import time
@@ -15,7 +17,7 @@ import tomllib
 from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType, TracebackType
 from typing import Any
@@ -38,6 +40,7 @@ from tests.bridge.helpers import (
     bound_names,
     build_root,
     chain_build,
+    constant_steps,
     journal_holds,
     lockfile_entries,
     make_dir,
@@ -48,6 +51,8 @@ from tests.bridge.helpers import (
     report_for,
     squashed,
     stable,
+    stable_fixture,
+    two_step_chain,
     wait_until,
 )
 from vivarium.dagger.backend.build import build, outcomes
@@ -58,13 +63,13 @@ from vivarium.dagger.bridge import execute
 from vivarium.dagger.bridge._jobmon_adapter import JobmonRun, PlanEntry
 from vivarium.dagger.bridge.runner import RESULT_SUFFIX, read_result
 from vivarium.dagger.frontend.python_step import python_step
-from vivarium.dagger.harness import FakeJobmon, Fixture, build_fixture
+from vivarium.dagger.harness import FakeJobmon, build_fixture
 
 _SETTLE_SECONDS = 0.3
 """How many seconds a test gives the main thread to get from one statement to the next."""
 
 _FIRST, _SECOND = "first.parquet", "second.parquet"
-"""The steps of the chain that :func:`_two_step_chain` returns, in plan order."""
+"""The steps of the chain that ``helpers.two_step_chain`` returns, in plan order."""
 
 _FLAKY = "fails_on_its_first_attempt"
 """Name of the command step that fails on its first attempt and succeeds on its second."""
@@ -77,6 +82,9 @@ _BELOW = "below_the_step_without_its_product"
 
 _THREAD_ERROR = "the recording thread failed on purpose"
 """Message of the error that a test raises in the recording thread."""
+
+_STOPPED_WARNING = "Recording during the run stopped"
+"""The start of the warning that the bridge prints when its recording thread fails."""
 
 _ANCESTOR_FAILED = "Previous task 'gone.parquet' failed."
 """The reason of a skip_ancestor_failed mark, in the words that pytask gives it."""
@@ -123,8 +131,11 @@ def _node_imports(node_pythonpath: None) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _short_interval(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Shorten the recording thread's interval to a few hundredths of a second."""
+def _short_interval(monkeypatch: pytest.MonkeyPatch, long_record_interval: None) -> None:
+    """Shorten the recording thread's interval to a few hundredths of a second.
+
+    The fixture asks for ``long_record_interval``, so that it sets the interval after it.
+    """
     monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", SHORT_RECORD_INTERVAL)
 
 
@@ -162,32 +173,30 @@ def _bridged(tasks: Sequence[Task], root: Path, jobmon: FakeJobmon) -> Session:
         return build(tasks, root, jobmon=True)
 
 
-def _stable_fixture(directory: Path) -> Fixture:
-    """Return the harness fixture under ``directory`` with stable code identities."""
-    fx = build_fixture(directory)
-    return replace(fx, tasks=stable(fx.tasks))
+def _start_refusing_the_recording_thread(
+    error: BaseException, refused: list[str]
+) -> Callable[[threading.Thread], None]:
+    """Return a ``Thread.start`` that raises ``error`` for the bridge's recording thread.
+
+    It starts every other thread, and appends the name of each thread that it refuses to
+    ``refused``.
+    """
+    start = threading.Thread.start
+
+    def start_unless_recording(thread: threading.Thread) -> None:
+        """Start ``thread``, unless it is the bridge's recording thread."""
+        if thread.name != _RECORDING_THREAD:
+            start(thread)
+            return
+        refused.append(thread.name)
+        raise error
+
+    return start_unless_recording
 
 
 def _rewrite(table: Path) -> None:
     """Replace the harness fixture's root-input table with one that holds other numbers."""
     pd.DataFrame({"n": [4, 5, 6]}).to_parquet(table)
-
-
-def _constant_steps(artifacts: FileRegistry, names: Sequence[str]) -> list[Task]:
-    """Return one independent python step per name, each writing a constant frame."""
-    return [
-        python_step(step_targets.constant, inputs={}, outputs=name, registry=artifacts)
-        for name in names
-    ]
-
-
-def _two_step_chain(artifacts: FileRegistry) -> list[Task]:
-    """Return a chain of two python steps, ``first.parquet`` then ``second.parquet``."""
-    first = python_step(step_targets.constant, inputs={}, outputs=_FIRST, registry=artifacts)
-    second = python_step(
-        step_targets.stack, inputs={"upstream": _FIRST}, outputs=_SECOND, registry=artifacts
-    )
-    return [first, second]
 
 
 def _failing_step(artifacts: FileRegistry, name: str) -> Task:
@@ -248,8 +257,8 @@ class _Scripted(FakeJobmon):
     Both are called in the build's main thread while the bridge's recording thread works
     beside it. What they raise is kept and raised when this object's ``with`` block ends,
     because pytask would report it as a failure of the build. The block also fails if the
-    build never called ``run``, so a check made only during the run is never left out
-    unseen.
+    build never called ``run``, so a check that runs only during the run cannot be skipped
+    without a failure.
     """
 
     before: _DuringTheRun | None = None
@@ -357,6 +366,11 @@ class _Passes:
         return self._arguments()[1]
 
     @property
+    def workdir(self) -> Path:
+        """The run directory that the thread gives ``_record_ready``."""
+        return self._arguments()[2]
+
+    @property
     def recorded(self) -> set[str]:
         """The set of recorded signatures that the thread gives ``_record_ready``."""
         return self._arguments()[3]
@@ -373,7 +387,7 @@ class _Passes:
 
     def result_path(self, name: str) -> Path:
         """Return the result file, in the run directory, of the submitted step ``name``."""
-        return self._arguments()[2] / f"{self.signature(name)}{RESULT_SUFFIX}"
+        return self.workdir / f"{self.signature(name)}{RESULT_SUFFIX}"
 
     def outcomes_of(self, name: str) -> list[TaskOutcome]:
         """Return the outcome of each report that the session holds now for step ``name``."""
@@ -434,9 +448,9 @@ def test_an_input_edited_after_its_step_was_recorded_runs_the_step_in_the_next_b
     tmp_path: Path,
 ) -> None:
     """When a root input of the first step is edited from the fake's run after that step's journal entry exists and before the run returns, the entry in pytask.lock holds the input's state from before the edit, and the next bridged build with stable code identities binds a plan that contains the first step."""
-    unedited = _stable_fixture(make_dir(tmp_path / "unedited"))
-    edited_first = _stable_fixture(make_dir(tmp_path / "edited_first"))
-    fx = _stable_fixture(make_dir(tmp_path / "edited_during_the_run"))
+    unedited = stable_fixture(make_dir(tmp_path / "unedited"))
+    edited_first = stable_fixture(make_dir(tmp_path / "edited_first"))
+    fx = stable_fixture(make_dir(tmp_path / "edited_during_the_run"))
     first = fx.steps[0]
     build(unedited.tasks, unedited.state)
     _rewrite(edited_first.inputs["raw"])
@@ -755,11 +769,13 @@ def test_an_error_in_the_recording_thread_is_a_warning_and_every_step_is_still_r
     """With _record_ready replaced by a function that raises, a bridged build still ends with one SUCCESS report and one pytask.lock entry for each step, and it prints a warning that names the error."""
     root = build_root(tmp_path)
     called = threading.Event()
+    calls: list[Path] = []
 
     def broken(
         session: Session, submitted: Sequence[PTask], workdir: Path, recorded: set[str]
     ) -> None:
-        """Fail in the recording thread."""
+        """Note the call, then fail in the recording thread."""
+        calls.append(workdir)
         called.set()
         raise RuntimeError(_THREAD_ERROR)
 
@@ -776,9 +792,13 @@ def test_an_error_in_the_recording_thread_is_a_warning_and_every_step_is_still_r
     assert outcomes(session) == dict.fromkeys(PLAN_ORDER, TaskOutcome.SUCCESS)
     assert report_counts(session) == dict.fromkeys(PLAN_ORDER, 1)
     assert _entry_counts(root) == dict.fromkeys(PLAN_ORDER, 1)
+    # The failing pass comes one short interval into the run, and the entries then run for
+    # many more intervals, so a thread that went on making passes would have called again.
+    assert len(calls) == 1
     printed = captured.out + captured.err
     assert "RuntimeError" in squashed(printed), printed
     assert squashed(_THREAD_ERROR) in squashed(printed), printed
+    assert squashed(printed).count(squashed(_STOPPED_WARNING)) == 1, printed
 
 
 def test_a_build_whose_recording_thread_cannot_start_records_every_step_at_the_end(
@@ -786,19 +806,11 @@ def test_a_build_whose_recording_thread_cannot_start_records_every_step_at_the_e
 ) -> None:
     """With threading.Thread.start made to raise RuntimeError("can't start new thread") during a bridged build, the build ends within a time limit, every step has one SUCCESS report and one pytask.lock entry, and the printed warning names the error."""
     root = build_root(tmp_path)
-    tasks = _two_step_chain(registry(tmp_path))
-    start = threading.Thread.start
+    tasks = two_step_chain(registry(tmp_path))
     refused: list[str] = []
     built: list[Session] = []
     raised: list[BaseException] = []
-
-    def start_unless_recording(thread: threading.Thread) -> None:
-        """Start ``thread``, unless it is the bridge's recording thread."""
-        if thread.name != _RECORDING_THREAD:
-            start(thread)
-            return
-        refused.append(thread.name)
-        raise RuntimeError(_CANNOT_START)
+    start = _start_refusing_the_recording_thread(RuntimeError(_CANNOT_START), refused)
 
     def build_and_keep() -> None:
         """Build the chain through FakeJobmon, and keep its session or what it raised."""
@@ -809,7 +821,7 @@ def test_a_build_whose_recording_thread_cannot_start_records_every_step_at_the_e
 
     # The build runs in a second thread, so that a build that never ends fails the test.
     builder = threading.Thread(target=build_and_keep, daemon=True)
-    monkeypatch.setattr(threading.Thread, "start", start_unless_recording)
+    monkeypatch.setattr(threading.Thread, "start", start)
     capsys.readouterr()
 
     builder.start()
@@ -827,6 +839,40 @@ def test_a_build_whose_recording_thread_cannot_start_records_every_step_at_the_e
     printed = captured.out + captured.err
     assert "RuntimeError" in squashed(printed), printed
     assert squashed(_CANNOT_START) in squashed(printed), printed
+
+
+def test_an_interrupt_inside_thread_start_is_raised_without_waiting_for_the_thread(
+    tmp_path: Path,
+) -> None:
+    """With threading.Thread.start made to raise KeyboardInterrupt for the thread named dagger-bridge-recording, _recording_during_the_run, entered in a helper thread with the session of a finished local build, raises the KeyboardInterrupt within a time limit and never runs its body."""
+    fx = build_fixture(tmp_path)
+    built = build(fx.tasks, fx.state)
+    run_directory = make_dir(tmp_path / "run")
+    refused: list[str] = []
+    body_ran: list[bool] = []
+    raised: list[BaseException] = []
+
+    def enter_the_block() -> None:
+        """Enter the recording block, and keep what it raises."""
+        try:
+            with execute._recording_during_the_run(built, built.tasks, run_directory, set()):
+                body_ran.append(True)
+        except BaseException as error:
+            raised.append(error)
+
+    # Entered in a second thread, so that a block that never ends fails the test.
+    helper = threading.Thread(target=enter_the_block, daemon=True)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        start = _start_refusing_the_recording_thread(KeyboardInterrupt(), refused)
+        monkeypatch.setattr(threading.Thread, "start", start)
+        helper.start()
+        helper.join(timeout=WAIT_SECONDS)
+
+    assert not helper.is_alive(), f"The block did not end within {WAIT_SECONDS} seconds."
+    assert refused, f"The block started no thread called {_RECORDING_THREAD!r}."
+    [error] = raised
+    assert isinstance(error, KeyboardInterrupt), repr(error)
+    assert body_ran == []
 
 
 # _record_ready
@@ -851,7 +897,7 @@ def test_record_ready_records_a_success_and_adds_it_to_recorded(tmp_path: Path) 
         assert journal_holds(root, [name])
         assert given.recorded == {given.signature(name)}
 
-    _build_recording_by_hand(_constant_steps(artifacts, [name]), root, scenario)
+    _build_recording_by_hand(constant_steps(artifacts, [name]), root, scenario)
 
 
 def test_record_ready_records_in_plan_order_and_never_twice(tmp_path: Path) -> None:
@@ -869,7 +915,7 @@ def test_record_ready_records_in_plan_order_and_never_twice(tmp_path: Path) -> N
         calls.append(given.record_ready(submitted))
         calls.append(given.record_ready(submitted))
 
-    tasks = _constant_steps(registry(tmp_path), names)
+    tasks = constant_steps(registry(tmp_path), names)
     session = _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
 
     first_call, second_call = calls
@@ -900,7 +946,7 @@ def test_record_ready_skips_a_result_that_cannot_be_read_and_records_it_later(
         assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
         assert given.recorded == {given.signature(name)}
 
-    tasks = _constant_steps(registry(tmp_path), [name])
+    tasks = constant_steps(registry(tmp_path), [name])
     _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
 
 
@@ -937,7 +983,7 @@ def test_record_ready_leaves_a_step_that_pytask_marked_skip_ancestor_failed(
         assert given.record_ready() == []
         assert given.recorded == set()
 
-    tasks = _constant_steps(artifacts, [name])
+    tasks = constant_steps(artifacts, [name])
     _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
 
 
@@ -963,7 +1009,7 @@ def test_record_ready_leaves_a_success_whose_product_is_missing_and_records_it_o
         assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
         assert given.recorded == {given.signature(name)}
 
-    tasks = _constant_steps(artifacts, [name])
+    tasks = constant_steps(artifacts, [name])
     _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
 
 
@@ -997,7 +1043,38 @@ def test_record_ready_leaves_a_step_whose_product_state_raises_oserror_and_recor
         assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
         assert given.recorded == {given.signature(name)}
 
-    tasks = _constant_steps(artifacts, [name])
+    tasks = constant_steps(artifacts, [name])
+    _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list any directory")
+def test_record_ready_records_nothing_when_the_run_directory_cannot_be_listed_and_records_later(
+    tmp_path: Path,
+) -> None:
+    """_record_ready, given a submitted task whose result reports success and whose product exists, while listing the run directory raises OSError, appends no report and leaves the recorded set empty, and a later call after listing works records the task as SUCCESS."""
+    name = "only.parquet"
+    artifacts = registry(tmp_path)
+
+    def scenario(given: _Passes) -> None:
+        """Record while the run directory cannot be listed, then once it can."""
+        assert read_result(given.result_path(name))["success"] is True
+        assert artifacts.path_for(name).exists()
+        mode = stat.S_IMODE(given.workdir.stat().st_mode)
+        # Without its read bits a directory cannot be listed, but its files can be read.
+        given.workdir.chmod(mode & ~0o444)
+        try:
+            with pytest.raises(OSError):
+                os.listdir(given.workdir)
+
+            assert given.record_ready() == []
+            assert given.recorded == set()
+        finally:
+            given.workdir.chmod(mode)
+
+        assert given.record_ready() == [(name, TaskOutcome.SUCCESS)]
+        assert given.recorded == {given.signature(name)}
+
+    tasks = constant_steps(artifacts, [name])
     _build_recording_by_hand(tasks, build_root(tmp_path), scenario)
 
 
@@ -1050,7 +1127,7 @@ def test_record_ready_does_not_record_a_step_below_a_step_that_is_not_recorded(
         ]
         assert given.recorded == {given.signature(_FIRST), given.signature(_SECOND)}
 
-    _build_recording_by_hand(_two_step_chain(artifacts), build_root(tmp_path), scenario)
+    _build_recording_by_hand(two_step_chain(artifacts), build_root(tmp_path), scenario)
 
 
 def test_a_step_below_a_step_that_failed_at_recording_is_skipped_and_has_no_entry(

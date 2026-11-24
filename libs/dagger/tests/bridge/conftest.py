@@ -8,8 +8,10 @@ from typing import Any
 
 import pytest
 
+from tests.bridge.helpers import LONG_RECORD_INTERVAL
 from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
 from vivarium.dagger.backend.task import Task
+from vivarium.dagger.bridge import execute
 from vivarium.dagger.harness import FakeJobmon
 
 _WORKFLOW_DIR = Path(__file__).resolve().parents[2]
@@ -23,6 +25,15 @@ _PROBE_TOOL = "vivarium_dagger_bridge_probe"
 def _outside_slurm(monkeypatch: pytest.MonkeyPatch) -> None:
     """Unset SLURM_JOB_ID, so that no bridged build asks Slurm for its remaining time."""
     monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def long_record_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the recording interval long, so a bridged build records no step during its run.
+
+    A test that needs a step recorded during the run sets a short interval itself.
+    """
+    monkeypatch.setattr(execute, "_RECORD_INTERVAL_SECONDS", LONG_RECORD_INTERVAL)
 
 
 @pytest.fixture

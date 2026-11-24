@@ -78,7 +78,7 @@ import shlex
 import signal
 import sys
 import threading
-from collections.abc import Iterator, Mapping, MutableMapping, Sequence, Set
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence, Set
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -904,15 +904,19 @@ def _record_ready(
             continue
         result = _ready_result(session, task, workdir, recorded, submitted_signatures)
         if result is not None:
-            _record(session, task, result)
+            _record(session, task, result, capture=False)
             recorded.add(task.signature)
 
 
 def _ready_result(
-    session: Session, task: PTask, workdir: Path, recorded: Set[str], submitted: Set[str]
+    session: Session,
+    task: PTask,
+    workdir: Path,
+    recorded: Set[str],
+    submitted_signatures: Set[str],
 ) -> RunResult | None:
     """Return the task's result if the task is ready to be recorded, or None if it is not."""
-    if not _stale_upstreams(session, task.signature, submitted) <= recorded:
+    if not _stale_upstreams(session, task.signature, submitted_signatures) <= recorded:
         return None
     if _ancestor_failure(task) is not None:
         return None
@@ -1042,15 +1046,17 @@ def _compile(
     return plan
 
 
-def _record_available(session: Session, stale: Sequence[PTask], workdir: Path) -> list[PTask]:
-    """Record the stale tasks that have a result file; return the others in order.
+def _record_available(
+    session: Session, unrecorded: Sequence[PTask], workdir: Path
+) -> list[PTask]:
+    """Record the unrecorded tasks that have a result file; return the others in order.
 
     A task with a result that pytask has marked ``skip_ancestor_failed`` is reported as
     SKIP_PREVIOUS_FAILED instead of being recorded.
     """
     listed = set(os.listdir(workdir))
     unfinished: list[PTask] = []
-    for task in stale:
+    for task in unrecorded:
         name = f"{task.signature}{RESULT_SUFFIX}"
         if name not in listed:
             unfinished.append(task)
@@ -1092,8 +1098,15 @@ def _record_unreadable(session: Session, task: PTask, path: Path, error: Excepti
     _finish(session, task, _remote_failure(task, RemoteTaskFailed(message)))
 
 
-def _record(session: Session, task: PTask, result: RunResult) -> None:
-    """Report ``task`` from its node result through pytask's per-task hooks."""
+def _record(
+    session: Session, task: PTask, result: RunResult, *, capture: bool = True
+) -> None:
+    """Report ``task`` from its node result through pytask's per-task hooks.
+
+    With ``capture`` false, pytask's capture manager and logging manager take no part in
+    the teardown, so the call captures neither the output nor the log records of the whole
+    process.
+    """
     __tracebackhide__ = True
     if result["stdout"]:
         task.report_sections.append(("call", "stdout", result["stdout"]))
@@ -1101,10 +1114,13 @@ def _record(session: Session, task: PTask, result: RunResult) -> None:
         task.report_sections.append(("call", "stderr", result["stderr"]))
     session.hook.pytask_execute_task_log_start(session=session, task=task)
     if result["success"]:
+        teardown: Callable[..., Any] = session.hook.pytask_execute_task_teardown
+        if not capture:
+            teardown = _teardown_without_capture_or_logging(session)
         # pytask's tracebacks start at the first frame that is neither hidden nor pytask's,
         # so teardown is called from this hidden frame and not from a helper.
         try:
-            session.hook.pytask_execute_task_teardown(session=session, task=task)
+            teardown(session=session, task=task)
         except Exception:
             report = ExecutionReport.from_task_and_exception(task, sys.exc_info())
         else:
@@ -1123,6 +1139,20 @@ def _record(session: Session, task: PTask, result: RunResult) -> None:
         )
         report = _remote_failure(task, error)
     _finish(session, task, report)
+
+
+def _teardown_without_capture_or_logging(session: Session) -> Callable[..., Any]:
+    """Return pytask's teardown hook without its capture and logging managers' wrappers."""
+    plugin_manager = session.config["pm"]
+    # Both wrappers act on the whole process for the length of the teardown: one redirects
+    # its output, the other adds handlers to the root logger and then restores its level.
+    # So they would take what another thread writes or logs, and undo a level that it sets.
+    managers = ("capturemanager", "loggingmanager")
+    teardown: Callable[..., Any] = plugin_manager.subset_hook_caller(
+        "pytask_execute_task_teardown",
+        remove_plugins=[plugin_manager.get_plugin(name) for name in managers],
+    )
+    return teardown
 
 
 def _remote_failure(task: PTask, error: RemoteTaskFailed) -> ExecutionReport:
