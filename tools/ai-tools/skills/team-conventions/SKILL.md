@@ -1,11 +1,11 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, flagging the PR for team review in `#vivarium_dev`, and refreshing a PR's test summaries after a push. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
 
-The four workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, and flag it for review. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
+The workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, flag it for review, and keep it current. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
 
 ## 1. Naming a branch
 
@@ -152,3 +152,17 @@ If the transition fails because the ticket's workflow has no path to Ready for R
 ## 5. Responding to review comments
 
 Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. Replying on the thread is fine; resolving it is not your call. Instead, to show that you have made a change to address the substance of the comment, use the "rocket ship" emoji reaction on the comment.
+
+## 6. Keeping PR test summaries current
+
+`_finalize-core` posts one test summary comment on each changed file of a PR. A later push makes them stale. The plugin's push hook reminds you after each push to a branch with an open PR. Refresh the summaries before you report back. Skip the refresh when the PR is closed or merged, or when `_finalize-core` Step 5 posts them next.
+
+1. Check that the tracked files match the pushed head: `git diff --quiet <head SHA>`. If they do not, tell the user and stop. Do not stash, reset, or check out.
+2. Run `simsci:_test_summarizer` on `git diff origin/<base>...<head SHA>`, with the changed-file list and the repo's GitHub URL. In its output, remove each `## File:` line and replace each `{sha}` with the head SHA.
+3. Find the summaries. A summary is a file comment by the current `gh` user that starts with **Test summary for**. Never touch other comments. List the GraphQL `reviewThreads` with `path` and `isOutdated`, and match each summary to a file by the thread's `path`. GitHub moves the thread when a file is renamed.
+4. Update each file:
+   - **In the diff, current summary:** edit the summary if its body changed.
+   - **In the diff, outdated or no summary:** delete the outdated summary and post a new one. An outdated thread stays outdated after its file returns to the diff.
+   - **Not in the diff:** delete the summary.
+
+Edit and delete with `gh api repos/<owner>/<repo>/pulls/comments/<id>` and `-X PATCH -f body=<body>` or `-X DELETE`. Pass the body inline, so you need no temp files. Post the new comments in one review with the event `COMMENT`, so reviewers get one notification. Post only on files in the diff, because GitHub rejects other paths with HTTP 422.

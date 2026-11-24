@@ -32,6 +32,12 @@ on Windows means Git Bash. To disable the hook, set ``SIMSCI_WRITING_STYLE=off``
 the environment that starts Claude Code, or under ``env`` in
 ``~/.claude/settings.json``.
 
+A ``PostToolUse`` hook (``hooks/test-summary-refresh.sh``) runs after Claude pushes
+with ``git push`` or through the GitHub MCP. If the branch has an open PR, the hook
+asks Claude to refresh the PR's test summaries by section 6 of ``team-conventions``.
+A push made outside Claude does not trigger a refresh. The hook needs a logged-in
+``gh``. To disable it, set ``SIMSCI_TEST_SUMMARY=off``.
+
 It includes:
 
 **Model Development**
@@ -120,7 +126,7 @@ The marketplace catalog lives at the monorepo root; the plugin itself lives unde
 - ``tools/ai-tools/skills/``: Claude Code skills (workflow entry points and
   model-loaded reference material).
 - ``tools/ai-tools/hooks/``: the ``SessionStart`` hook that adds the writing-style
-  text to each session.
+  text to each session, and the push hook that asks for a test summary refresh.
 - ``tools/ai-tools/CHANGELOG.rst``: history of plugin changes.
 
 Top-level project metadata (license, code of conduct, contributing guide) lives at the

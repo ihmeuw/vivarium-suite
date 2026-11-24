@@ -1,7 +1,3 @@
-**0.6.0 - 11/20/26**
-
-- Refresh PR test summaries after Claude pushes to an open PR
-
 **0.5.1 - 11/19/26**
 
 - Fetch from the remote in ``/simsci:framework-development`` Phase 0 and base

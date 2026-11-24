@@ -42,5 +42,5 @@ pr=$(timeout 20 gh pr list "${repo_args[@]}" --head "$branch" --state open \
     --json number,url -q '.[0] | "#\(.number) (\(.url))"' 2>/dev/null)
 [ -n "$pr" ] || exit 0
 
-msg="You pushed to branch \`$branch\`, which has open pull request $pr. Its test summary comments may now be stale. Refresh them with the \`simsci:_test-summary-refresh\` skill before you report back, unless the current workflow posts them itself next (for example \`_finalize-core\` Step 5). Set SIMSCI_TEST_SUMMARY=off to turn this off."
+msg="You pushed to branch \`$branch\`, which has open pull request $pr. Its test summaries may now be stale. Refresh them by section 6 of the \`simsci-internal:team-conventions\` skill before you report back. Set SIMSCI_TEST_SUMMARY=off to turn this off."
 printf '{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "%s"}}\n' "$msg"

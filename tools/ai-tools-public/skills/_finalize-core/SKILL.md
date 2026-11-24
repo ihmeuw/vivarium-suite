@@ -122,11 +122,20 @@ when the two differ.
 Either way, put Step 1's summary and the validation verdict, residuals included, in
 the body.
 
-Once the PR exists, post the per-file test tables by the posting rules in the
-`simsci:_test-summary-refresh` skill.
+Once the PR exists, post the per-file test tables. Replace each ``{sha}`` with
+``git rev-parse HEAD`` as pushed. Each ``## File: <path>`` part, with the
+``## File:`` line removed, becomes a file-level review comment on ``<path>`` at
+the head commit. With the GitHub MCP, open one pending review, add every file
+comment to it, and submit it with the event ``COMMENT``, so reviewers get one
+notification. Without the MCP, post each comment with
+``gh api repos/<owner>/<repo>/pulls/<number>/comments`` and the fields
+``path``, ``commit_id``, ``subject_type=file``, and ``body``.
 
-The push in this step triggers the plugin's push hook, which asks for a refresh.
-This step is that refresh, so do not run the summarizer again.
+On an existing PR, edit the earlier comment that starts with **Test summary for**
+on each file rather than adding a second one, and post new ones only for files
+that have none. GitHub
+rejects a comment longer than 65,536 characters. If one file's table is longer,
+split its rows across two comments on that file.
 
 Prefer the GitHub MCP's pull-request tools over the `gh` CLI when both are
 available: the MCP needs no shell access and works in sandboxed environments where
