@@ -77,10 +77,10 @@ same name; for any other ``MAPPING`` name the root is the directory that holds i
 The scan of the ``site-packages`` directories for these files is kept for the process for
 each search path, and is repeated only when the listing of one of those directories, the
 content of a file it read, or whether a directory it checked exists has changed.
-Code that the environment installs, including
-anything under a ``site-packages`` or ``dist-packages`` directory or a virtual
-environment inside the repository, is not first-party; it belongs to the environment
-part of the identity, and the analysis stops there. The standard library and built-in
+Code that the environment installs, including anything under a ``site-packages`` or
+``dist-packages`` directory or a virtual environment inside the repository, is not
+first-party and is not part of the code identity, so upgrading an installed package does
+not make a step stale. The analysis stops there. The standard library and built-in
 modules are installed code.
 
 A module can add data files to the code part. The code that runs when a module is
@@ -134,9 +134,9 @@ so the same content in two checkouts at different paths gives the same code part
 
 The code part is not established when the starting point is installed code or is outside
 every first-party root, when an import or a data path resolves to a file that is neither
-first-party nor installed, when two different files would get the same name, or when a
-first-party package that is imported with ``*`` has an ``__all__`` that is not a literal
-list or tuple of strings. A node whose state is not established makes its step run on
+first-party nor installed, when two different files would get the same name, when a
+first-party file cannot be read, or when a first-party package that is imported with
+``*`` has an ``__all__`` that is not a literal list or tuple of strings. A node whose state is not established makes its step run on
 every build.
 
 """
