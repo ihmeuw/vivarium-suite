@@ -216,6 +216,8 @@ under ``tools/ai-tools-public/``:
   workflow skills.
 - ``tools/ai-tools-public/skills/``: Claude Code skills — both the
   user-invocable workflow entry points and internal building blocks.
+- ``tools/ai-tools-public/hooks/``: the push hook that keeps PR test summaries
+  current. It needs a logged-in ``gh``.
 - ``tools/ai-tools-public/CHANGELOG.rst``: history of plugin changes.
 
 Installing in Claude Code
@@ -396,8 +398,18 @@ passes the testing strategy agreed in the design, every strategy item gets a row
 and an item with no test or check says ``Not tested``. Without a strategy, the
 rows come from the diff's tests alone. With the GitHub MCP, the file comments go
 in one review, so reviewers get one notification. Each test link is a GitHub
-permalink at the pushed head commit, so a later rebase leaves the links pointing
-at the older commit. Three paths share it — ``/simsci:pr-prep``,
+permalink at the pushed head commit.
+
+The summary stays current after later pushes by Claude. The plugin's
+``PostToolUse`` hook runs after Claude pushes with ``git push`` or through the
+GitHub MCP. If the branch has an open PR, the hook asks Claude to run the internal
+``_test-summary-refresh`` skill. That skill runs ``_test_summarizer`` on the PR's
+current diff and updates the comments by written rules: it edits current
+comments, and it deletes comments whose file left the diff or whose thread is
+outdated. A refresh does not know the testing strategy, so its rows come from the
+diff's tests alone. A push made outside Claude does not trigger a refresh. The
+next push by Claude brings the summary up to date. Set
+``SIMSCI_TEST_SUMMARY=off`` to turn the hook off. Three paths share the finish — ``/simsci:pr-prep``,
 ``/simsci:framework-development``'s Phase 5, and the ``simsci-internal`` plugin's
 model-development loop — so the steps that are easy to drop when improvising, like
 the backlog dedup and the not-addressed comment, are structural rather than
@@ -436,7 +448,8 @@ Code:
   are fed review context by ``_review-core`` and analyze code with
   ``Read``, ``Grep``, and ``Glob`` only.
 - ``_test_summarizer`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
-  only. ``_finalize-core`` spawns it to write the test summary.
+  only. ``_finalize-core`` and ``_test-summary-refresh`` spawn it to write the
+  test summary.
 - ``_trace_extractor`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
   only. It is the one agent that deliberately reads *outside* the working
   tree: Claude Code session transcripts under ``~/.claude/projects/`` (which
