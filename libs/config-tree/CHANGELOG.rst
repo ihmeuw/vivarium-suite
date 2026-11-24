@@ -1,3 +1,8 @@
+**5.3.0b2 - 11/24/26**
+
+- Add an ``absolute`` argument to ``get()`` and ``get_tree()`` to resolve a key
+  path from the root tree
+
 **5.3.0b1 - 11/17/26**
 
 - Add ``ConfigTree.get_leaves()``, which lists a tree's leaf nodes

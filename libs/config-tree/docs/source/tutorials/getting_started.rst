@@ -248,13 +248,31 @@ resolves to a sub-tree, ``layer`` is ignored entirely -- even a layer name that
 does not exist on the tree is accepted without error. Use
 :meth:`~vivarium.config_tree.main.ConfigTree.get_tree` when you want an
 unresolvable key path to raise.
+
+By default, ``get()`` resolves the key path from the tree you call it on. Pass
+``absolute=True`` to resolve it from the root of the whole tree instead. This
+lets a sub-tree read values that live outside it:
+
+.. testcode::
+
+    database = tree.database
+    print(database.get("name"))                             # relative: not in sub-tree
+    print(database.get("name", absolute=True))              # absolute: from the root
+    print(database.get(["database", "port"], absolute=True))  # absolute key path
+
+.. testoutput::
+
+    None
+    some_service
+    5432
        
 get_tree() method access
 ------------------------
 
 :meth:`~vivarium.config_tree.main.ConfigTree.get_tree` *guarantees* the result 
 is a sub-tree. Note that it does *not* support a ``layer`` argument or return a default
-value like :meth:`~vivarium.config_tree.main.ConfigTree.get`.
+value like :meth:`~vivarium.config_tree.main.ConfigTree.get`. Like ``get()``, it
+accepts ``absolute=True`` to resolve the key path from the root of the tree.
 
 .. testcode::
 
