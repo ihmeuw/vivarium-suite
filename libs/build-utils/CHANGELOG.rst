@@ -1,3 +1,8 @@
+**4.14.3 - 11/24/26**
+
+- Build one environment for vivarium_gates_nutrition_optimization instead of two
+  (one for simulations and one for artifact-building)
+
 **4.14.2 - 11/13/26**
 
 - Build one ``<model>_current`` shared environment for each model repo in
