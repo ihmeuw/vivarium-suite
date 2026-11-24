@@ -443,18 +443,19 @@ assert report_frame["title"].tolist() == ["Adults 15+"], report_frame
 #
 # The archive step is `p.add_command_step("cp {report} {copy}", ...)`. Each `{name}` becomes
 # the absolute path of the input or output of that name, quoted for the shell, and the
-# output's folder is made before the command runs. The cell checks that the copy matches
-# the report. C1-real's artifact step is a command step that runs a script in the model's
-# artifact env. A misspelled placeholder and a failing command are in the plain-errors
-# table below.
-#
-# A `Pipeline` has no public way to show a step's filled-in command yet. A planned
-# `dagger show` command (MIC-7818) will print each step's inputs, outputs and command without
-# running anything, and this section will use it; until then it checks the result only.
+# output's folder is made before the command runs. `dagger show` (MIC-7818) prints the archive
+# step's inputs, outputs and the command it runs, with the paths filled in, without running
+# anything. The cell then checks that the copy matches the report. C1-real's artifact step is
+# a command step that runs a script in the model's artifact env. A misspelled placeholder and
+# a failing command are in the plain-errors table below.
 
 # %%
+shown = dagger("show", "-c", "pipeline.py", "archive", cwd=INPUTS_COPY)
+assert shown.returncode == 0, shown.returncode
 copy = INPUTS_COPY / "output/walk/archive/report.csv"
 report = INPUTS_COPY / "output/walk/report.csv"
+command = shown.stdout.split("  runs   ", 1)[1]
+assert "cp " in command and str(report) in command and str(copy) in command, command
 assert copy.read_bytes() == report.read_bytes()
 
 # %% [markdown]
