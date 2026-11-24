@@ -25,7 +25,10 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
+cluster = [
+    "vivarium-cluster-tools[cluster]>={{cookiecutter.vivarium_cluster_tools_version}}",
+    "vivarium-psimulate[cluster]>={{cookiecutter.vivarium_psimulate_version}}",
+]
 data = [
     "vivarium-inputs>={{cookiecutter.vivarium_inputs_version}}",
 ]
