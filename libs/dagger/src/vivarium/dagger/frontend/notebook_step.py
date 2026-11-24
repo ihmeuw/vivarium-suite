@@ -54,6 +54,7 @@ from typing import Any
 from pytask import PathNode
 
 from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY, describe_exit
+from vivarium.dagger.backend.code_hash import PARAMETERS_TAG, cell_source
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
@@ -83,9 +84,6 @@ _RESERVED_NAMES = frozenset(
 )
 """Names no step input, output or notebook parameter may take, because a task or the
 backend uses them."""
-
-_PARAMETERS_TAG = "parameters"
-"""The cell tag papermill injects parameters after, in the first cell that carries it."""
 
 _LISTED_NAMES = 10
 """The most names one definition-time error lists before it counts the rest."""
@@ -519,7 +517,7 @@ def _parameters_cell(task_name: str, source: Path) -> str | None:
         tags = metadata.get("tags", [])
         if not isinstance(tags, list):
             raise _unreadable(task_name, source, f"the tags of cells[{index}] are not a list")
-        if _PARAMETERS_TAG not in tags:
+        if PARAMETERS_TAG not in tags:
             continue
         cell_type = cell.get("cell_type")
         if cell_type != "code":
@@ -529,10 +527,8 @@ def _parameters_cell(task_name: str, source: Path) -> str | None:
                 "be a code cell, because papermill injects the parameters after it. Make "
                 "it a code cell that assigns each name the step passes."
             )
-        text = cell.get("source")
-        if isinstance(text, list) and all(isinstance(line, str) for line in text):
-            return "".join(text)
-        if isinstance(text, str):
+        text = cell_source(cell.get("source"))
+        if text is not None:
             return text
         raise _unreadable(
             task_name,

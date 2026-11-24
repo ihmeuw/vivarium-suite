@@ -1,16 +1,23 @@
 """Tests of the code hash of Python files and notebooks."""
 
+import builtins
 import copy
 import json
 import os
 import shutil
+import sys
+import uuid
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from vivarium.dagger.backend import code_hash as code_hash_module
 from vivarium.dagger.backend.code_hash import CodeHash, notebook_hash, python_file_hash
+from vivarium.dagger.backend.wiring import FileRegistry
+from vivarium.dagger.frontend.notebook_step import notebook_step
 
 _FIXED_SOURCES = Path(__file__).parent / "data" / "code_hash"
 """The sources whose digests are stored, for the test across Python versions."""
@@ -166,6 +173,11 @@ def _notebook_hash(directory: Path, name: str, notebook: dict[str, Any]) -> Code
     return notebook_hash(path)
 
 
+def _cell_hash(directory: Path, name: str, source: str) -> CodeHash:
+    """Write a notebook with one code cell into ``directory`` and return its code hash."""
+    return _notebook_hash(directory, name, _notebook([_code_cell(source)]))
+
+
 # Python files: edits that do not change the code
 
 
@@ -219,6 +231,34 @@ def test_two_files_with_different_code_have_different_hashes(tmp_path: Path) -> 
         assert first.digest != second.digest, (first_source, second_source)
 
 
+def test_an_int_of_any_size_is_hashed_by_its_parsed_code(tmp_path: Path) -> None:
+    """A Python file that assigns an int with more decimal digits than the int-to-string limit is parsed and gets the same hash whatever sys.set_int_max_str_digits is set to, another such int gets another hash, and True, False, 1 and 0 each get a different hash."""
+    source = f"X = 0x{'f' * 5000}\n"
+    default_limit = sys.get_int_max_str_digits()
+    results: list[CodeHash] = []
+    try:
+        for index, limit in enumerate([640, 0, default_limit]):
+            sys.set_int_max_str_digits(limit)
+            results.append(
+                _python_hash(tmp_path, f"limit_{index}.py", f"# limit {limit}\n{source}")
+            )
+    finally:
+        sys.set_int_max_str_digits(default_limit)
+    assert all(result.parsed for result in results), results
+    assert len({result.digest for result in results}) == 1, results
+
+    other = _python_hash(tmp_path, "other.py", f"X = 0x{'f' * 4999}e\n")
+    assert other.parsed
+    assert other.digest != results[0].digest
+
+    values = ["True", "False", "1", "0"]
+    digests = {
+        value: _python_hash(tmp_path, f"value_{index}.py", f"value = {value}\n").digest
+        for index, value in enumerate(values)
+    }
+    assert len(set(digests.values())) == len(values), digests
+
+
 # Python files: the same hash on every supported Python version
 
 
@@ -231,25 +271,12 @@ def test_the_hash_of_fixed_sources_matches_the_stored_digests(tmp_path: Path) ->
     assert names, f"no fixed sources in {_FIXED_SOURCES}"
     assert sorted(stored) == names, "digests.json must have one entry per fixed source"
 
-    results: dict[str, CodeHash] = {}
     for name in names:
         # Hash a copy in another directory, because the hash must not depend on the path.
         shutil.copyfile(_FIXED_SOURCES / name, tmp_path / name)
         hash_file = notebook_hash if name.endswith(".ipynb") else python_file_hash
-        results[name] = hash_file(tmp_path / name)
-
-    missing = [name for name in names if stored[name]["digest"] is None]
-    if missing:
-        pytest.fail(
-            "\n".join(
-                f"digests.json has no digest for {name}; fill it from the reference version"
-                f" (this Python gives {results[name]})"
-                for name in missing
-            )
-        )
-    for name in names:
         expected = CodeHash(digest=stored[name]["digest"], parsed=stored[name]["parsed"])
-        assert results[name] == expected, name
+        assert hash_file(tmp_path / name) == expected, name
 
 
 # Python files that cannot be parsed
@@ -283,6 +310,37 @@ def test_a_python_file_with_an_encoding_marker_is_hashed_by_its_code(
     assert plain.parsed
     assert marked.parsed
     assert marked.digest == plain.digest
+
+
+def test_a_python_file_nested_deeper_than_the_recursion_limit_is_parsed(
+    tmp_path: Path,
+) -> None:
+    """A Python file whose expression nests deeper than Python's default recursion limit, but which the parser accepts, is parsed, and a change to its innermost term changes the hash."""
+    terms = ["1"] * 2000
+    original = _python_hash(tmp_path, "deep.py", "x = " + " + ".join(terms) + "\n")
+    edited = _python_hash(
+        tmp_path, "edited.py", "x = " + " + ".join(["2", *terms[1:]]) + "\n"
+    )
+    assert original.parsed
+    assert edited.parsed
+    assert edited.digest != original.digest
+
+
+def test_a_syntax_warning_does_not_change_a_python_files_hash(tmp_path: Path) -> None:
+    """A Python file with an invalid escape such as "\\d", which gives a SyntaxWarning, gets the same parsed result with warnings turned into errors as a file with the same code does without."""
+    source = 'pattern = "\\d"\n'
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        strict = _python_hash(tmp_path, "strict.py", f"# warnings as errors\n{source}")
+    default = _python_hash(tmp_path, "default.py", f"# default warnings\n{source}")
+    assert strict.parsed
+    assert strict == default
+
+
+def test_a_python_file_with_a_null_byte_is_hashed_by_its_bytes(tmp_path: Path) -> None:
+    """A Python file that contains a NUL byte gets a hash without raising, and the result says it was not parsed."""
+    result = _python_hash(tmp_path, "null.py", b"value = 1\n\x00\nother = 2\n")
+    assert not result.parsed
 
 
 def test_a_missing_python_file_raises_oserror(tmp_path: Path) -> None:
@@ -422,6 +480,111 @@ def test_a_cell_with_ipython_syntax_is_hashed_as_parsed_code(
     assert commented.digest == original.digest
 
 
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        pytest.param("%cd /tmp\nx = f()\npass", "pass\nx = f()\n%cd /tmp", id="line_magic"),
+        pytest.param("x = !ls\nx = None", "x = None\nx = !ls", id="shell_assignment"),
+        pytest.param("!echo a\n!echo b", "!echo b\n!echo a", id="two_shell_lines"),
+    ],
+)
+def test_the_position_of_an_ipython_line_is_part_of_the_hash(
+    tmp_path: Path, first: str, second: str
+) -> None:
+    """Two cells that differ only in where an IPython line stands among the other lines have different hashes."""
+    first_hash = _cell_hash(tmp_path, "first.ipynb", first)
+    second_hash = _cell_hash(tmp_path, "second.ipynb", second)
+    assert first_hash.parsed
+    assert second_hash.parsed
+    assert first_hash.digest != second_hash.digest
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("!pip install -q \\\n    numpy\nx = 1", id="shell_line"),
+        pytest.param("%pip install -q \\\n    numpy\nx = 1", id="line_magic"),
+        pytest.param("files = !pip download \\\n    numpy\nx = 1", id="shell_assignment"),
+        pytest.param("!pip install \\\n    -q \\\n    numpy\nx = 1", id="two_continuations"),
+    ],
+)
+def test_an_ipython_line_ending_in_a_backslash_continues_on_the_next_line(
+    tmp_path: Path, source: str
+) -> None:
+    """A !shell line, a %line magic or a shell assignment that ends with a backslash continues on the next line, also over several lines, so the cell is parsed, and a change to the continuation text changes the hash."""
+    original = _cell_hash(tmp_path, "original.ipynb", source)
+    edited = _cell_hash(tmp_path, "edited.ipynb", _edited(source, "numpy", "pandas"))
+    assert original.parsed
+    assert edited.parsed
+    assert edited.digest != original.digest
+
+
+@pytest.mark.parametrize(
+    "line, inner",
+    [
+        pytest.param("%matplotlib inline", "%time a = 1; b = 2", id="line_magic"),
+        pytest.param("!ls", "!echo a; echo b", id="shell_line"),
+    ],
+)
+def test_a_semicolon_ending_a_cells_last_ipython_line_is_not_part_of_the_hash(
+    tmp_path: Path, line: str, inner: str
+) -> None:
+    """A semicolon added at the end of a cell's last line leaves the hash unchanged when that line is a %magic or a !shell line, while a semicolon inside such a line is part of its text."""
+    plain = _cell_hash(tmp_path, "plain.ipynb", f"value = 1\n{line}")
+    ended = _cell_hash(tmp_path, "ended.ipynb", f"value = 1\n{line};")
+    assert plain.parsed
+    assert ended == plain
+
+    with_inner = _cell_hash(tmp_path, "with_inner.ipynb", f"value = 1\n{inner}")
+    without_inner = _cell_hash(
+        tmp_path, "without_inner.ipynb", f"value = 1\n{inner.replace(';', '')}"
+    )
+    assert with_inner.parsed
+    assert without_inner.parsed
+    assert with_inner.digest != without_inner.digest
+
+
+@pytest.mark.parametrize(
+    "first, second, same",
+    [
+        pytest.param("a, b = !ls", "a, b = !ls -a", False, id="tuple_target"),
+        pytest.param("naïve = !ls", "naïve = !ls -a", False, id="non_ascii_target"),
+        pytest.param("x = 1\nx %= 3", "x = 1\nx%=3", True, id="augmented_assignment"),
+        pytest.param("a = b = 1\na != b", "a = b = 1\na!=b", True, id="comparison"),
+        pytest.param(
+            'text = """\nb = !ls\n"""', "text = '\\nb = !ls\\n'", True, id="inside_a_string"
+        ),
+    ],
+)
+def test_a_shell_or_magic_assignment_is_recognised_only_at_a_statement_start(
+    tmp_path: Path, first: str, second: str, same: bool
+) -> None:
+    """A shell assignment to a tuple target or to a non-ASCII name is parsed and its command is part of the hash, while an augmented assignment such as x %= 3, a comparison such as a != b, and such text inside a string stay Python, so a change of spacing that keeps their code leaves the hash unchanged."""
+    first_hash = _cell_hash(tmp_path, "first.ipynb", first)
+    second_hash = _cell_hash(tmp_path, "second.ipynb", second)
+    assert first_hash.parsed
+    assert second_hash.parsed
+    assert (first_hash.digest == second_hash.digest) == same
+
+
+@pytest.mark.parametrize(
+    "source, old, new",
+    [
+        pytest.param("import asyncio\nawait asyncio.sleep(0)", "0", "1", id="statement"),
+        pytest.param("result = await fetch()\nresult", "fetch", "load", id="assignment"),
+    ],
+)
+def test_a_cell_with_a_top_level_await_is_parsed(
+    tmp_path: Path, source: str, old: str, new: str
+) -> None:
+    """A code cell with an await at its top level is parsed, and a change to the awaited call changes the hash."""
+    original = _cell_hash(tmp_path, "original.ipynb", source)
+    edited = _cell_hash(tmp_path, "edited.ipynb", _edited(source, old, new))
+    assert original.parsed
+    assert edited.parsed
+    assert edited.digest != original.digest
+
+
 # Notebooks that cannot be parsed
 
 
@@ -517,3 +680,77 @@ def test_two_paths_with_the_same_content_have_the_same_hash(tmp_path: Path) -> N
     (first / "one.ipynb").write_bytes(notebook_bytes)
     (second / "two.ipynb").write_bytes(notebook_bytes)
     assert notebook_hash(first / "one.ipynb") == notebook_hash(str(second / "two.ipynb"))
+
+
+def test_each_content_is_parsed_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hashing two paths with the same Python bytes twice each, and two paths with the same notebook bytes twice each, calls compile once per distinct content."""
+    calls: list[object] = []
+
+    def counting_compile(*args: Any, **kwargs: Any) -> Any:
+        calls.append(args[0] if args else kwargs.get("source"))
+        return builtins.compile(*args, **kwargs)
+
+    monkeypatch.setattr(code_hash_module, "compile", counting_compile, raising=False)
+    # A marker no other test writes, so no earlier call has cached these contents.
+    marker = uuid.uuid4().hex
+    python_bytes = f"# {marker}\n{_BASE_SOURCE}".encode("utf-8")
+    notebook = _notebook([_code_cell(f"# {marker}\nvalue = 1")])
+    notebook_bytes = json.dumps(notebook, indent=1).encode("utf-8")
+    python_paths = [tmp_path / "one.py", tmp_path / "two.py"]
+    notebook_paths = [tmp_path / "one.ipynb", tmp_path / "two.ipynb"]
+    for path in python_paths:
+        path.write_bytes(python_bytes)
+    for path in notebook_paths:
+        path.write_bytes(notebook_bytes)
+
+    for _ in range(2):
+        for path in python_paths:
+            assert python_file_hash(path).parsed
+    assert len(calls) == 1, (
+        f"compile was called {len(calls)} times for one Python content; 0 means code_hash "
+        "does not call compile by that name"
+    )
+    for _ in range(2):
+        for path in notebook_paths:
+            assert notebook_hash(path).parsed
+    assert len(calls) == 2, f"compile was called {len(calls) - 1} times for one notebook"
+
+
+# The parameters cell shared with notebook_step
+
+
+def test_notebook_step_and_the_hash_agree_on_the_parameters_cell(tmp_path: Path) -> None:
+    """For code cells whose sources are lists of strings split inside a name, notebook_step accepts a name the joined parameters cell assigns, the notebook's hash equals that of the same notebook with each source as one string, and moving the parameters tag to a cell that does not assign the name makes notebook_step reject the name and changes the hash."""
+    sources = [["oth", "er = 1"], ["loca", "tion = None\n", "year = 2025"]]
+
+    def notebook(tagged: int, as_lists: bool) -> dict[str, Any]:
+        cells: list[dict[str, Any]] = []
+        for index, source in enumerate(sources):
+            cell = _code_cell("", tags=["parameters"] if index == tagged else None)
+            cell["source"] = source if as_lists else "".join(source)
+            cells.append(cell)
+        return _notebook(cells)
+
+    listed = _notebook_hash(tmp_path, "listed.ipynb", notebook(tagged=1, as_lists=True))
+    joined = _notebook_hash(tmp_path, "joined.ipynb", notebook(tagged=1, as_lists=False))
+    moved = _notebook_hash(tmp_path, "moved.ipynb", notebook(tagged=0, as_lists=True))
+    assert listed.parsed
+    assert listed == joined
+    assert moved.digest != listed.digest
+
+    registry = FileRegistry(tmp_path / "out", "run1")
+    notebook_step(
+        tmp_path / "listed.ipynb",
+        executed="listed_run.ipynb",
+        registry=registry,
+        env="env",
+        parameters={"location": "Kenya"},
+    )
+    with pytest.raises(ValueError, match="does not assign 'location'"):
+        notebook_step(
+            tmp_path / "moved.ipynb",
+            executed="moved_run.ipynb",
+            registry=registry,
+            env="env",
+            parameters={"location": "Kenya"},
+        )

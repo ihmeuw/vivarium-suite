@@ -7,21 +7,27 @@ Hash the code of a Python file or a Jupyter notebook so that an edit that does n
 the code, such as a comment or a re-wrapped line, does not change the hash.
 
 A Python file is hashed by a canonical text of its syntax tree. The text holds each node's
-name and its fields, and leaves out what only describes how the code was written. It is
-the same on every Python version that dagger supports, so a hash taken on one version
-equals the hash of the same file taken on another. Docstrings, annotations, decorators,
-the order of imports and string literals are part of the code and change the hash.
+name and its fields, and leaves out what only describes how the code was written. For a
+file that every Python version that dagger supports can parse, the text is the same on
+all of them, so a hash taken on one version equals the hash taken on another. Docstrings,
+annotations, decorators, the order of imports and string literals are part of the code
+and change the hash.
 
 A notebook is hashed by its non-empty code cells, in order. Outputs, execution counts,
-markdown cells and the notebook's metadata are not read, so a notebook and an executed
-copy of it have the same hash. IPython syntax in a cell, such as a ``%magic`` or a
-``!shell`` line, is replaced so that the cell parses as Python, and the text of each such
-line is also part of the hash. The position of the cell tagged ``parameters`` is part of
-the hash, because it decides where the pipeline's values are injected. A semicolon at the
-end of a cell's last line is not, because it only hides a displayed value.
+markdown cells and the notebook's metadata are not read, so they do not change the hash;
+a cell that papermill injects into an executed copy does. IPython syntax in a cell, such
+as a ``%magic`` or a ``!shell`` line, is replaced so that the cell parses as Python, and
+the text and the position of each such line are part of the hash. The positions of the
+cells tagged ``parameters`` and ``injected-parameters`` are part of the hash, because they
+decide where the pipeline's values are injected. A semicolon at the end of a cell's last
+line is not, also on an IPython line, because it only hides a displayed value.
 
 A file or a cell that cannot be parsed is hashed by its bytes, and the result says so.
-Neither function raises for a file whose content cannot be parsed.
+This includes code that uses syntax newer than the running Python, code nested deeper than
+the running Python's parser accepts, and a decimal int literal with more digits than the
+process's limit for converting ints to text; such a file can have a parsed hash on one
+Python and a bytes hash on another. Neither function raises for a file whose content
+cannot be parsed.
 
 """
 
@@ -35,6 +41,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
+PARAMETERS_TAG = "parameters"
+"""The tag of the notebook cell that papermill injects parameters after. Only the first
+cell that carries it is used."""
+
 _AST_PREFIX = "ast:"
 _BYTES_PREFIX = "bytes:"
 _NOTEBOOK_PREFIX = "nb:"
@@ -47,10 +57,13 @@ _PARSE_ERRORS = (SyntaxError, ValueError, RecursionError, MemoryError)
 _PYTHON_CELL_MAGICS = frozenset({"time", "timeit", "capture", "prun"})
 """Cell magics whose body is Python."""
 
-_PARAMETER_TAGS = ("parameters", "injected-parameters")
+_PARAMETER_TAGS = (PARAMETERS_TAG, "injected-parameters")
 
-_IPYTHON_ASSIGNMENT = re.compile(r"(?P<target>\s*[A-Za-z_][\w.\[\]'\"]*\s*=\s*)[!%]")
-"""Matches a shell or magic assignment such as ``files = !ls`` or ``x = %who_ls``."""
+_IPYTHON_CALL = "__ipython__"
+"""The name of the call that stands for an IPython line in the Python a cell becomes."""
+
+_OPERATOR_BEFORE_EQUALS = frozenset("=!<>+-*/%&|^@:")
+"""Characters that, directly before an ``=``, make it part of another operator."""
 
 _HELP = re.compile(r"[\w.*]+\?{1,2}")
 """Matches a help line such as ``len?`` or ``np.*load*??``."""
@@ -61,7 +74,8 @@ class CodeHash:
     """The hash of the code of one file."""
 
     digest: str
-    """The hash. Two files have the same digest only if their code is the same."""
+    """The hash. Two files with the same code have the same digest, and files with
+    different code have different digests."""
     parsed: bool
     """Whether the digest was taken from parsed code. ``False`` means that the file, or
     at least one code cell of a notebook, could not be parsed and its bytes were hashed
@@ -101,8 +115,9 @@ def python_file_hash(path: Path | str) -> CodeHash:
 def notebook_hash(path: Path | str) -> CodeHash:
     """Return the hash of the code in the Jupyter notebook at ``path``.
 
-    The hash covers the notebook's non-empty code cells in order, the text of the IPython
-    lines in them, and the position of the cell tagged ``parameters``. A cell that cannot
+    The hash covers the notebook's non-empty code cells in order, the text and position
+    of the IPython lines in them, and the positions of the cells tagged ``parameters`` and
+    ``injected-parameters``. A cell that cannot
     be parsed after its IPython syntax is replaced is hashed by its bytes, and so is a
     file that is not a notebook. In both cases the result's ``parsed`` is ``False``. The
     result for one content is computed once per process; a file whose bytes changed is
@@ -123,6 +138,29 @@ def notebook_hash(path: Path | str) -> CodeHash:
         If the file cannot be read.
     """
     return _cached_hash(path, "notebook", _notebook_code_hash)
+
+
+def cell_source(source: object) -> str | None:
+    """Return the text of a notebook cell's source.
+
+    A notebook stores a cell's source as one string or as a list of strings, which are
+    joined with nothing between them.
+
+    Parameters
+    ----------
+    source
+        The value of the cell's source field, as read from the notebook's JSON.
+
+    Returns
+    -------
+        The cell's text, or ``None`` if ``source`` is neither a string nor a list of
+        strings.
+    """
+    if isinstance(source, str):
+        return source
+    if isinstance(source, list) and all(isinstance(part, str) for part in source):
+        return "".join(source)
+    return None
 
 
 def _cached_hash(
@@ -149,22 +187,27 @@ def _python_code_hash(data: bytes) -> CodeHash:
     return CodeHash(digest, parsed=True)
 
 
-def _syntax_tree_digest(source: str | bytes, flags: int = 0) -> str | None:
+def _syntax_tree_digest(source: str | bytes) -> str | None:
     """Return the digest of the canonical text of the source's syntax tree, or None."""
     try:
-        with warnings.catch_warnings():
-            # A SyntaxWarning, such as for an invalid escape sequence, becomes a
-            # SyntaxError under an "error" filter, which would make the hash depend on the
-            # caller's warning settings.
-            warnings.simplefilter("ignore")
-            tree = compile(
-                source, "<code_hash>", "exec", ast.PyCF_ONLY_AST | flags, dont_inherit=True
-            )
-        # ValueError is also raised by ascii() for an int literal past the digit limit.
-        text = _canonical_text(tree)
+        text = _canonical_text(_parse(source))
     except _PARSE_ERRORS:
         return None
     return _AST_PREFIX + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _parse(source: str | bytes) -> ast.AST:
+    """Return the source's syntax tree, whatever the warning filters."""
+    # Only a syntax tree is built, so a top-level await is accepted.
+    with warnings.catch_warnings():
+        # A SyntaxWarning, such as for an invalid escape sequence, becomes a SyntaxError
+        # under an "error" filter, which would make the hash depend on the caller's
+        # warning settings.
+        warnings.simplefilter("ignore")
+        tree: ast.AST = compile(
+            source, "<code_hash>", "exec", ast.PyCF_ONLY_AST, dont_inherit=True
+        )
+    return tree
 
 
 class _Text(str):
@@ -198,6 +241,9 @@ def _canonical_text(tree: ast.AST) -> str:
             for element in item:
                 children += [element, _Text(",")]
             children.append(_Text("]"))
+        elif isinstance(item, int) and not isinstance(item, bool):
+            # Hex has no digit limit; decimal past sys.get_int_max_str_digits() raises.
+            parts.append(f"int:{item:#x}")
         else:
             # ascii(), not repr(): repr() leaves a character unescaped when the
             # interpreter's Unicode tables call it printable, and those tables differ
@@ -212,13 +258,6 @@ class _CodeCell(NamedTuple):
 
     source: str
     tags: tuple[str, ...]
-
-
-class _TransformedCell(NamedTuple):
-    """A cell's Python, None for a non-Python cell magic, and its IPython lines."""
-
-    python: str | None
-    ipython_lines: list[str]
 
 
 class _LineState(NamedTuple):
@@ -270,10 +309,8 @@ def _code_cells(data: bytes) -> list[_CodeCell] | None:
             return None
         if raw.get("cell_type") != "code":
             continue
-        source = raw.get("source", raw.get("input", ""))
-        if isinstance(source, list) and all(isinstance(part, str) for part in source):
-            source = "".join(source)
-        if not isinstance(source, str):
+        source = cell_source(raw.get("source", raw.get("input", "")))
+        if source is None:
             return None
         cells.append(_CodeCell(source, _parameter_tags(raw.get("metadata"))))
     return cells
@@ -308,48 +345,123 @@ def _parameter_tags(metadata: object) -> tuple[str, ...]:
 
 def _cell_entry(source: str) -> list[object]:
     """Return what the notebook hash holds for one non-empty code cell."""
-    cell = _transform_cell(source)
-    if cell.python is None:
-        return ["magic", cell.ipython_lines]
-    digest = _syntax_tree_digest(cell.python, ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+    lines = source.split("\n")
+    first = next((i for i, line in enumerate(lines) if line.strip()), 0)
+    header = lines[first].strip()
+    if header.startswith("%%"):
+        words = header[2:].split()
+        if not words or words[0] not in _PYTHON_CELL_MAGICS:
+            return ["magic", header, "\n".join(lines[first + 1 :])]
+        lines = [_ipython_call(header), *lines[first + 1 :]]
+    digest = _syntax_tree_digest(_cell_python(lines))
     if digest is None:
         return ["bytes", _bytes_digest(source.encode("utf-8", "surrogatepass"))]
-    return ["code", digest, cell.ipython_lines]
+    return ["code", digest]
 
 
-def _transform_cell(source: str) -> _TransformedCell:
-    """Replace a cell's IPython syntax so that the cell parses as Python."""
-    lines = source.split("\n")
-    ipython_lines: list[str] = []
-    first = next((i for i, line in enumerate(lines) if line.strip()), 0)
-    if lines[first].lstrip().startswith("%%"):
-        magic_line = lines[first].strip()
-        words = magic_line[2:].split()
-        if not words or words[0] not in _PYTHON_CELL_MAGICS:
-            return _TransformedCell(None, [magic_line, "\n".join(lines[first + 1 :])])
-        ipython_lines.append(magic_line)
-        lines = lines[first + 1 :]
-    python_lines: list[str] = []
+def _cell_python(lines: list[str]) -> str:
+    """Return a cell's Python, each IPython line replaced by a call that holds its text."""
+    last = max((i for i, line in enumerate(lines) if _is_code(line)), default=-1)
+    python: list[str] = []
     state = _LineState()
-    for line in lines:
-        replacement = _replace_ipython_line(line) if state.at_statement_start else None
-        if replacement is None:
-            python_lines.append(line)
+    start = 0
+    while start < len(lines):
+        line = lines[start]
+        split = _split_ipython_line(line) if state.at_statement_start else None
+        if split is None:
+            python.append(line)
             state = _scan_line(line, state)
-        else:
-            python_lines.append(replacement)
-            ipython_lines.append(line.strip())
-    return _TransformedCell("\n".join(python_lines), ipython_lines)
+            start += 1
+            continue
+        end = start
+        while end + 1 < len(lines) and _continues(lines[end]):
+            end += 1
+        target, head = split
+        text = _joined([head, *lines[start + 1 : end + 1]])
+        if end >= last and text.endswith(";"):
+            text = text[:-1].rstrip()
+        call = _ipython_call(text)
+        indent = line[: len(line) - len(line.lstrip())]
+        python.append(indent + call if target is None else f"{target.rstrip()} = {call}")
+        start = end + 1
+    return "\n".join(python)
 
 
-def _replace_ipython_line(line: str) -> str | None:
-    """Return the Python that replaces an IPython line, or None for a line of Python."""
+def _is_code(line: str) -> bool:
+    """Return whether a line is neither blank nor only a comment."""
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _continues(line: str) -> bool:
+    """Return whether a line ends with a backslash that continues it on the next line."""
+    return line.rstrip("\r").endswith("\\")
+
+
+def _joined(parts: list[str]) -> str:
+    """Return an IPython line and its continuation lines as one line of text."""
+    pieces = [part.rstrip("\r")[:-1].strip() for part in parts[:-1]] + [parts[-1].strip()]
+    return " ".join(piece for piece in pieces if piece)
+
+
+def _ipython_call(text: str) -> str:
+    """Return the Python call that stands for the IPython text."""
+    return f"{_IPYTHON_CALL}({ascii(text)})"
+
+
+def _split_ipython_line(line: str) -> tuple[str | None, str] | None:
+    """Return an IPython line's target, or None, and its text; None for a line of Python."""
     stripped = line.lstrip()
-    assignment = _IPYTHON_ASSIGNMENT.match(line)
-    if assignment:
-        return assignment["target"] + "None"
     if stripped.startswith(("!", "%", "?")) or _HELP.fullmatch(stripped.rstrip()):
-        return line[: len(line) - len(stripped)] + "pass"
+        return None, line
+    equals = _ipython_assignment_equals(line)
+    if equals is None:
+        return None
+    return line[:equals], line[equals + 1 :]
+
+
+def _ipython_assignment_equals(line: str) -> int | None:
+    """Return the index of the top-level ``=`` of a shell or magic assignment, or None."""
+    depth = 0
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if char == "#":
+            return None
+        if char in "\"'":
+            end = _string_end(line, index)
+            if end is None:
+                return None
+            index = end
+            continue
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth = max(depth - 1, 0)
+        elif char == "=" and depth == 0:
+            if line[index - 1 : index] in _OPERATOR_BEFORE_EQUALS:
+                return None
+            if line[index + 1 : index + 2] == "=":
+                return None
+            if line[index + 1 :].lstrip(" \t").startswith(("!", "%")):
+                return index
+            return None
+        index += 1
+    return None
+
+
+def _string_end(line: str, start: int) -> int | None:
+    """Return the index after the string literal that starts at ``start``, or None."""
+    char = line[start]
+    quote = char * 3 if line.startswith(char * 3, start) else char
+    index = start + len(quote)
+    while index < len(line):
+        if line[index] == "\\":
+            index += 2
+        elif line.startswith(quote, index):
+            return index + len(quote)
+        else:
+            index += 1
     return None
 
 
