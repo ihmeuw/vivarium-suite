@@ -14,8 +14,10 @@ The task's ``run`` is a :class:`PythonStepRun`, a data-only object rather than a
 closure, so the same step can be rebuilt in another process from the target's
 import reference (:func:`target_reference`) and the output suffix or suffixes.
 
-Code identity defaults to always-stale: a per-target code fingerprint is deferred,
-so in this cut a step re-runs on every build.
+The step's code identity is a
+:class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at the file
+of the target's module, so the step runs again when a first-party file that it imports
+changes, and a build in which none changed can skip it.
 """
 
 import importlib
@@ -26,6 +28,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
+from pytask import PNode
 
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
@@ -348,6 +351,7 @@ def python_step(
     registry: FileRegistry,
     resources: dict[str, Any] | None = None,
     name: str | None = None,
+    repository_root: Path | str | None = None,
 ) -> Task:
     """Compile ``target`` into one backend task wired through ``registry``.
 
@@ -383,6 +387,10 @@ def python_step(
         The step's name, which becomes the task name. Defaults to ``outputs`` when it
         is a key, or to its one key when it is a mapping with one entry. Required when
         it has more than one.
+    repository_root
+        The pipeline's repository root, whose files are first-party code for the step's
+        code identity, or ``None``; see
+        :class:`~vivarium.dagger.frontend.builder.Pipeline`.
 
     Returns
     -------
@@ -391,7 +399,9 @@ def python_step(
         name's suffix), whose outputs are the registry's node for ``outputs`` under
         ``"__output__"``, or for each mapped key under its name, and whose inputs are the
         resolved nodes, ready to collect into a list and hand to ``build`` or
-        ``preview``.
+        ``preview``. Its ``code_id`` is a
+        :class:`~vivarium.dagger.backend.code_identity.CodeIdentityNode` that starts at
+        the file of ``target``'s module.
 
     Raises
     ------
@@ -413,7 +423,9 @@ def python_step(
         of these is raised before anything is registered.
     """
     if isinstance(outputs, Mapping):
-        return _compile_outputs(target, inputs, dict(outputs), registry, resources, name)
+        return _compile_outputs(
+            target, inputs, dict(outputs), registry, resources, name, repository_root
+        )
     task_name = outputs if name is None else name
     if not task_name:
         raise ValueError(f"python_step: name must be a non-empty string, got {task_name!r}.")
@@ -428,8 +440,6 @@ def python_step(
         node = registry.register_output(outputs)
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=run,
@@ -437,6 +447,7 @@ def python_step(
         outputs={_PYTHON_OUTPUT: node},
         resources={} if resources is None else resources,
         env=None,
+        code_id=_code_identity(task_name, target, repository_root),
     )
 
 
@@ -447,6 +458,7 @@ def _compile_outputs(
     registry: FileRegistry,
     resources: dict[str, Any] | None,
     name: str | None,
+    repository_root: Path | str | None,
 ) -> Task:
     """Compile a python step whose ``outputs`` maps output names to file keys."""
     task_name = _step_name(outputs, name, "python_step")
@@ -475,8 +487,6 @@ def _compile_outputs(
         nodes = {output: registry.register_output(key) for output, key in outputs.items()}
     except WiringError as error:
         raise WiringError(f"Step {task_name!r}: {error}") from None
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=PythonStepRun(target, suffixes),
@@ -484,4 +494,16 @@ def _compile_outputs(
         outputs=nodes,
         resources={} if resources is None else resources,
         env=None,
+        code_id=_code_identity(task_name, target, repository_root),
     )
+
+
+def _code_identity(
+    task_name: str, target: Callable[..., Any], repository_root: Path | str | None
+) -> PNode:
+    """Return the step's code identity, starting at the file of ``target``'s module.
+
+    A target whose module has no source file, such as a function defined in an
+    interactive session, gets an always-stale identity named ``"<step>::code"``.
+    """
+    raise NotImplementedError

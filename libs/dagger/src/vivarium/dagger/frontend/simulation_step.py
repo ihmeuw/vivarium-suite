@@ -258,8 +258,9 @@ def simulation_step(
     except WiringError as error:
         raise WiringError(f"Step {step!r}: {error}") from None
     command = _psimulate_command(spec_path, branches_path, artifact_path, run_dir, options)
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
+    # TODO(MIC-7759): a simulation step's code identity starts at the components that its
+    # model specification names (the specification reader); until then code_id defaults
+    # to always-stale.
     return Task(
         name=step,
         run=command,

@@ -6,6 +6,8 @@
   build that is killed keeps the steps it had recorded
 - Add a hash of the code of a Python file or a notebook that comments and formatting do not
   change
+- Give each python step a code identity from the first-party files it imports, so a build
+  can skip a step whose code is unchanged; a pipeline declares its ``repository_root``
 
 **0.1.0 - 11/04/26**
 

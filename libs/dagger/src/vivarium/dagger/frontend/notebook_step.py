@@ -221,8 +221,8 @@ def notebook_step(
         [registry.path_for(key) for key in output_keys.values()],
         values,
     )
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
+    # TODO(MIC-7759): a notebook step's code identity starts at its code cells, which no
+    # task covers yet; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=command,

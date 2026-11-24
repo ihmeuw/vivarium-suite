@@ -177,8 +177,8 @@ def command_step(
 
     paths = {param: Path(str(node.path)) for param, node in dependencies.items()}
     paths.update(output_paths)
-    # TODO(MIC-7760): let a step declare an opt-in code fingerprint so it can skip
-    # when its code is unchanged; until then code_id defaults to always-stale.
+    # TODO(MIC-7858): a command step that names its script gets a code identity that
+    # starts at the script; until then code_id defaults to always-stale.
     return Task(
         name=task_name,
         run=_shell_command(segments, paths, output_paths.values()),
