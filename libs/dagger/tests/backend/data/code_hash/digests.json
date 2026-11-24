@@ -1,0 +1,22 @@
+{
+  "annotations_and_decorators.py": {
+    "digest": "ast:8c5411ad6e57bcc685fc57fb69637001d673e994aa42e8675be803b22e032659",
+    "parsed": true
+  },
+  "fstrings.py": {
+    "digest": "ast:8207d44b37ce5506b3ca3a5f639619bc8838f4071cb96556f2cc78562262faa6",
+    "parsed": true
+  },
+  "ipython_lines.ipynb": {
+    "digest": "nb:24187d942d9099bb9032305b38c3b89e8e33e8a520c680fc11b9056051593a64",
+    "parsed": true
+  },
+  "match_statement.py": {
+    "digest": "ast:06591935a265aa74e46246b734a99f578356b3f713bca41284e93e88a2db77bf",
+    "parsed": true
+  },
+  "unicode_literals.py": {
+    "digest": "ast:ce960242a2816bfb3a792f412045fa653623488cbb2bbd5de516d3ff8ced3e28",
+    "parsed": true
+  }
+}
