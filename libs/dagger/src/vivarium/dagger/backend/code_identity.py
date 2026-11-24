@@ -22,6 +22,23 @@ library's source. A module that resolves to a compiled extension or to a ``.pyc`
 without source is listed by the SHA-256 of its bytes, so rebuilding it changes the code
 part.
 
+``from <package> import *`` loads each name of the package's ``__all__`` that is a
+submodule on the package's path, as the other names of a from-import are. For a
+first-party package, ``__all__`` is read only as a list or tuple of string literals that
+is the one binding of ``__all__``, at the top level of the package's ``__init__.py``. A
+package without ``__all__`` adds no submodule, as Python imports none, and a package
+whose ``__all__`` is bound in any other way makes the code part not established.
+``import *`` from an installed package adds nothing.
+
+Importing the starting file also runs the ``__init__.py`` of each package that holds
+it, so these are followed too. The starting file's dotted module name is its path below
+the longest search-path directory that holds it, and each package prefix of that name is
+resolved as an import resolves it. A parent package found in another directory, such as a
+``vivarium/__init__.py`` that ``extend_path`` shares, is followed, and an
+``__init__.py`` that the import does not run is not. For a starting file below no
+search-path directory, the ``__init__.py`` of each directory above it is followed, up to
+a search-path directory or the first directory without one.
+
 First-party code is code in the pipeline's declared repository root, or in the source of
 an editable install. An editable install is recognised in either of the two forms that
 setuptools writes into a ``site-packages`` directory on the search path: a ``.pth`` file
@@ -35,6 +52,9 @@ that it adds. For a ``MAPPING`` name whose dotted parts are the last components 
 target's resolved path, such as ``vivarium.dagger`` for ``/src/vivarium/dagger``, the root
 is that path with those components removed (``/src``), so the two forms give one file the
 same name; for any other ``MAPPING`` name the root is the directory that holds its target.
+The scan of the ``site-packages`` directories for these files is kept for the process for
+each search path, and is repeated only when the listing of one of those directories, the
+content of a file it read, or whether a directory it checked exists has changed.
 Code that the environment installs, including
 anything under a ``site-packages`` or ``dist-packages`` directory or a virtual
 environment inside the repository, is not first-party; it belongs to the environment
@@ -46,7 +66,9 @@ imported is its top level, including the bodies of its classes but not the bodie
 functions and lambdas. A call there adds a data file for each argument, positional or by
 keyword, whose path the analysis computes, and a call of ``open()``, ``read_text()`` or
 ``read_bytes()`` adds the path that it is called on; the path must be built from the
-module's own location, ``__file__``, and name an existing first-party file. So, with
+module's own location, ``__file__``, and name an existing file. A first-party file is
+added, an installed file adds nothing, and any other file makes the code part not
+established. So, with
 ``HERE = Path(__file__).parent``, each of ``open(HERE / "t.txt")``,
 ``pd.read_csv(HERE / "t.csv")``, ``np.load(HERE / "a.npy")``,
 ``yaml.safe_load(HERE / "c.yaml")``, ``json.load(open(HERE / "c.json"))`` and
@@ -75,8 +97,11 @@ kept for the process. Each file is named by its path relative to the root that h
 so the same content in two checkouts at different paths gives the same code part.
 
 The code part is not established when the starting point is installed code or is outside
-every first-party root, or when an import resolves to a file that is neither first-party
-nor installed. A node whose state is not established makes its step run on every build.
+every first-party root, when an import or a data path resolves to a file that is neither
+first-party nor installed, when two different files would get the same name, or when a
+first-party package that is imported with ``*`` has an ``__all__`` that is not a literal
+list or tuple of strings. A node whose state is not established makes its step run on
+every build.
 
 """
 
@@ -90,7 +115,7 @@ import time
 import uuid
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from importlib.machinery import (
     BYTECODE_SUFFIXES,
@@ -146,8 +171,9 @@ def code_part(
     Returns
     -------
         The code part. It is not established when ``start`` is installed code or is
-        outside every first-party root, or when an import resolves to a file outside the
-        first-party roots that is not installed code; the reason names the file. A
+        outside every first-party root, or in the other cases that the module describes,
+        such as an import that resolves to a file outside the first-party roots that is
+        not installed code; the reason names the file. A
         first-party file that cannot be parsed is listed with its bytes hash, and the
         analysis follows no imports from it.
     """
@@ -297,6 +323,9 @@ class _Scan:
     """Whether ``__file__`` is not bound in the module."""
     extends_path: bool
     """Whether the module assigns ``__path__`` from ``pkgutil.extend_path``."""
+    exports: tuple[str, ...] | None
+    """The names of the module's literal ``__all__``, none when the module does not bind
+    ``__all__``, or None when its ``__all__`` is not a literal list or tuple of strings."""
 
 
 @dataclass(frozen=True)
@@ -348,6 +377,32 @@ class _PathValue:
     from_file: bool
 
 
+@dataclass(frozen=True)
+class _SiteListing:
+    """The editable-install files of a ``site-packages`` directory, and its stat then."""
+
+    directory: str
+    stat: tuple[int, ...] | None
+    trusted: bool
+    names: frozenset[str]
+
+
+@dataclass(frozen=True)
+class _SiteScan:
+    """The search directories and editable installs that a search path gives."""
+
+    directories: tuple[str, ...]
+    """The directories of the search path, and those that ``.pth`` files add, in order."""
+    mapping: Mapping[str, str]
+    """The ``MAPPING`` of the editable finders, the first one for each name."""
+    editable_roots: tuple[str, ...]
+    checked: tuple[tuple[str, bool], ...]
+    """Each directory whose existence the scan depends on, and whether it existed."""
+    sites: tuple[_SiteListing, ...]
+    read: tuple[tuple[str, str | None], ...]
+    """Each file read, with the SHA-256 of its bytes, or None if it could not be read."""
+
+
 _seen: dict[str, _Seen] = {}
 """The last reading of each file, by path."""
 
@@ -360,6 +415,9 @@ _plain_inits: set[str] = set()
 _analyses: dict[tuple[str, str | None, tuple[str, ...], int], _Analysis] = {}
 """The last established code part of each starting file, root, search path and limit."""
 
+_site_scans: dict[tuple[str, ...], _SiteScan] = {}
+"""The last site scan of each search path."""
+
 
 class _Walk:
     """One analysis of the first-party files that a starting file imports."""
@@ -368,12 +426,14 @@ class _Walk:
         self.root = root
         self.memo = memo
         self.listings: dict[str, frozenset[str]] = {}
-        self.mapping: dict[str, str] = {}
-        self.editable_roots: list[str] = []
         self.environments: dict[str, bool] = {}
-        self.directories = self._search_directories(search_path)
+        site = _site_scan(tuple(search_path))
+        self.directories = site.directories
+        self.mapping = site.mapping
+        self.editable_roots = site.editable_roots
         self.search_set = {os.path.realpath(directory) for directory in self.directories}
         self.visited: set[str] = set()
+        self.names: dict[str, str] = {}
         self.queue: list[tuple[str, str, bool]] = []
         self.python: dict[str, str] = {}
         self.data: dict[str, str] = {}
@@ -391,8 +451,9 @@ class _Walk:
         if kind != "first":
             return CodePart({}, f"The starting file {start} is {_OUTSIDE}.")
         self.visited.add(real)
+        self.names[name] = real
         self.queue.append((start, name, True))
-        self._add_packages(real)
+        self._add_packages(start, real)
         while self.queue and self.reason is None:
             self._visit(*self.queue.pop())
         if self.reason is not None:
@@ -400,36 +461,14 @@ class _Walk:
         files = {**self.data, **self.python}
         return CodePart(dict(sorted(files.items())))
 
-    def _search_directories(self, search_path: Sequence[str]) -> list[str]:
-        """Return the directories on the search path and those that ``.pth`` files add."""
-        given = set(search_path)
-        directories: list[str] = []
-        for entry in search_path:
-            if entry in directories or not os.path.isdir(entry):
-                continue
-            directories.append(entry)
-            if os.path.basename(entry) in _INSTALLED_NAMES:
-                for added in self._read_site(entry):
-                    if added not in given and added not in directories:
-                        directories.append(added)
-        return directories
-
-    def _read_site(self, site: str) -> list[str]:
-        """Return the directories that ``site``'s ``.pth`` files add; read its finders."""
-        added: list[str] = []
-        for name in sorted(self._listing(site)):
-            path = os.path.join(site, name)
-            if name.startswith("."):
-                continue
-            if name.endswith(".pth"):
-                for directory in _pth_directories(path, site):
-                    added.append(directory)
-                    self.editable_roots.append(os.path.realpath(directory))
-            elif name.startswith("__editable___") and name.endswith("_finder.py"):
-                for package, target in _finder_mapping(path).items():
-                    self.mapping.setdefault(package, target)
-                    self.editable_roots.append(_editable_root(package, target))
-        return added
+    def _claim(self, name: str, real: str) -> bool:
+        """Give ``name`` to the resolved file ``real``, or end the analysis if it is taken."""
+        holder = self.names.setdefault(name, real)
+        if holder != real:
+            self.reason = (
+                f"The files {holder} and {real} would both be named {name} in the code part."
+            )
+        return holder == real
 
     def _listing(self, directory: str) -> frozenset[str]:
         """Return the names in a directory, or none if it cannot be listed."""
@@ -470,8 +509,39 @@ class _Walk:
             directory = os.path.dirname(directory)
         return False
 
-    def _add_packages(self, start: str) -> None:
-        """Queue the ``__init__.py`` of each package that holds the starting file."""
+    def _add_packages(self, start: str, real: str) -> None:
+        """Queue the ``__init__.py`` of each package that importing the starting file runs."""
+        parents = self._parent_names(real)
+        if parents is None:
+            self._add_enclosing_packages(real)
+            return
+        resolved = self._resolve(parents, self.directories, "") if parents else None
+        for found in () if resolved is None else resolved.files:
+            self._add(found, start)
+            if self.reason is not None:
+                return
+
+    def _parent_names(self, real: str) -> list[str] | None:
+        """Return the parent packages of the starting file's module, or None if unknown."""
+        holders = [entry for entry in self.search_set if _within(real, entry)]
+        if not holders:
+            return None
+        entry = max(holders, key=len)
+        *packages, filename = PurePath(os.path.relpath(real, entry)).parts
+        suffix = next((s for s in _MODULE_SUFFIXES if filename.endswith(s)), None)
+        if suffix is None:
+            return None
+        stem = filename[: -len(suffix)]
+        if stem == "__init__":
+            if not packages:
+                return None
+            packages.pop()
+        elif not stem.isidentifier():
+            return None
+        return packages if all(part.isidentifier() for part in packages) else None
+
+    def _add_enclosing_packages(self, start: str) -> None:
+        """Queue the ``__init__.py`` of each directory above ``start``, as far as they go."""
         directory = os.path.dirname(start)
         if os.path.basename(start) == "__init__.py":
             directory = os.path.dirname(directory)
@@ -482,6 +552,8 @@ class _Walk:
                 return
             if init not in self.visited:
                 self.visited.add(init)
+                if not self._claim(name, init):
+                    return
                 self.queue.append((init, name, False))
             parent = os.path.dirname(directory)
             if parent == directory:
@@ -510,7 +582,9 @@ class _Walk:
         evaluator = _PathEvaluator(file if scan.file_known else None, scan.assignments)
         for read in scan.reads:
             if is_start or not read.main_only:
-                self._add_data(evaluator.value(read.path))
+                self._add_data(evaluator.value(read.path), file)
+                if self.reason is not None:
+                    return
 
     def _follow(self, statement: _Import, file: str) -> None:
         """Queue the first-party files that an import statement in ``file`` loads."""
@@ -532,15 +606,46 @@ class _Walk:
             return
         files = list(module.files)
         if module.path is not None:
-            for name in statement.names:
-                if name != "*":
-                    submodule = self._resolve([name], module.path, package)
-                    if submodule is not None:
-                        files += submodule.files
+            names = [name for name in statement.names if name != "*"]
+            if "*" in statement.names:
+                init, exports = self._exports(module.path, file)
+                if self.reason is not None:
+                    return
+                if init is not None and init not in files:
+                    files.append(init)
+                names += exports
+            for name in names:
+                submodule = self._resolve([name], module.path, package)
+                if submodule is not None:
+                    files += submodule.files
         for found in files:
             self._add(found, file)
             if self.reason is not None:
                 return
+
+    def _exports(
+        self, path: Sequence[str], importer: str
+    ) -> tuple[str | None, tuple[str, ...]]:
+        """Return a first-party package's ``__init__`` and the names that ``*`` imports."""
+        init = self._module_file(path[0], "__init__") if path else None
+        if init is None or self._classify(os.path.realpath(init))[0] != "first":
+            return None, ()
+        prefix = f"{importer} imports * from the package {init}, whose __all__"
+        if not init.endswith(_SOURCE):
+            self.reason = f"{prefix} cannot be read from source."
+            return None, ()
+        try:
+            sha, data = _file_sha(init, self.memo)
+            scan = _python_content(init, sha, data).scan
+        except OSError:
+            self.reason = f"The first-party file {init} cannot be read."
+            return None, ()
+        if scan is None:
+            return init, ()
+        if scan.exports is None:
+            self.reason = f"{prefix} is not a literal list or tuple of strings."
+            return None, ()
+        return init, scan.exports
 
     def _resolve(
         self, parts: Sequence[str], path: Sequence[str], package: str | None
@@ -663,9 +768,11 @@ class _Walk:
             self.reason = (
                 f"{importer} imports {found}, which is {_OUTSIDE} and is not installed code."
             )
-        elif kind == "first" and found.endswith(_SOURCE):
+        elif kind != "first" or not self._claim(name, real):
+            return
+        elif found.endswith(_SOURCE):
             self.queue.append((found, name, False))
-        elif kind == "first":
+        else:
             try:
                 sha, _ = _file_sha(found, None)
             except OSError:
@@ -674,8 +781,8 @@ class _Walk:
             self.python[name] = _BYTES + sha
             self.listed.append((found, sha))
 
-    def _add_data(self, value: _PathValue | None) -> None:
-        """List a first-party data file whose path a module builds from its ``__file__``."""
+    def _add_data(self, value: _PathValue | None, reader: str) -> None:
+        """List a data file whose path a module builds from its ``__file__``."""
         if value is None or not value.from_file or not os.path.isabs(value.path):
             return
         if not os.path.isfile(value.path):
@@ -684,7 +791,12 @@ class _Walk:
         if real in self.visited:
             return
         kind, name = self._classify(real)
-        if kind != "first" or name in self.data:
+        if kind == "foreign":
+            self.reason = (
+                f"{reader} reads {value.path}, which is {_OUTSIDE} and is not installed code."
+            )
+            return
+        if kind != "first" or not self._claim(name, real) or name in self.data:
             return
         try:
             sha, _ = _file_sha(value.path, None)
@@ -828,13 +940,27 @@ def _scan(tree: ast.Module) -> _Scan:
         _is_extend_path(value, pkgutil_names, extend_names) for value in path_values
     )
     bindings = _module_bindings(tree)
+    assignments = _assignments(tree, bindings)
     return _Scan(
         tuple(imports),
         tuple(reads),
-        _assignments(tree, bindings),
+        assignments,
         "__file__" not in bindings,
         extends,
+        _strings(assignments.get("__all__")) if bindings["__all__"] else (),
     )
+
+
+def _strings(value: ast.expr | None) -> tuple[str, ...] | None:
+    """Return the strings of a list or tuple of string literals, or None for another value."""
+    if not isinstance(value, (ast.List, ast.Tuple)):
+        return None
+    strings = [
+        element.value
+        for element in value.elts
+        if isinstance(element, ast.Constant) and isinstance(element.value, str)
+    ]
+    return tuple(strings) if len(strings) == len(value.elts) else None
 
 
 def _deferred_ids(node: ast.AST) -> set[int]:
@@ -994,29 +1120,143 @@ def _assignments(tree: ast.Module, bindings: Counter[str]) -> dict[str, ast.expr
     return assignments
 
 
-def _pth_directories(path: str, site: str) -> list[str]:
-    """Return the existing directories that the lines of a ``.pth`` file name."""
-    try:
-        text = Path(path).read_text(encoding="utf-8-sig", errors="replace")
-    except OSError:
-        return []
+def _site_scan(search_path: tuple[str, ...]) -> _SiteScan:
+    """Return the site scan of a search path, scanning again only if its inputs changed."""
+    cached = _site_scans.get(search_path)
+    current = None if cached is None else _current_scan(cached)
+    if current is None:
+        current = _scan_sites(search_path)
+    _site_scans[search_path] = current
+    return current
+
+
+def _scan_sites(search_path: Sequence[str]) -> _SiteScan:
+    """Return the directories and editable installs that a search path's sites give."""
+    given = set(search_path)
     directories: list[str] = []
-    for line in text.splitlines():
+    mapping: dict[str, str] = {}
+    roots: list[str] = []
+    checked: list[tuple[str, bool]] = []
+    sites: list[_SiteListing] = []
+    read: list[tuple[str, str | None]] = []
+    for entry in search_path:
+        if entry in directories:
+            continue
+        exists = os.path.isdir(entry)
+        checked.append((entry, exists))
+        if not exists:
+            continue
+        directories.append(entry)
+        if os.path.basename(entry) not in _INSTALLED_NAMES:
+            continue
+        listing = _site_listing(entry)
+        sites.append(listing)
+        for name in sorted(listing.names):
+            path = os.path.join(entry, name)
+            sha, data = _site_file(path)
+            read.append((path, sha))
+            if name.endswith(".pth"):
+                for directory in _pth_directories(data, entry):
+                    exists = os.path.isdir(directory)
+                    checked.append((directory, exists))
+                    if not exists:
+                        continue
+                    roots.append(os.path.realpath(directory))
+                    if directory not in given and directory not in directories:
+                        directories.append(directory)
+            else:
+                for package, target in _finder_mapping(data).items():
+                    mapping.setdefault(package, target)
+                    roots.append(_editable_root(package, target))
+    return _SiteScan(
+        tuple(directories), mapping, tuple(roots), tuple(checked), tuple(sites), tuple(read)
+    )
+
+
+def _current_scan(scan: _SiteScan) -> _SiteScan | None:
+    """Return a site scan with its listings refreshed, or None if its inputs changed."""
+    if any(os.path.isdir(directory) != exists for directory, exists in scan.checked):
+        return None
+    sites: list[_SiteListing] = []
+    for listing in scan.sites:
+        current = _current_listing(listing)
+        if current is None:
+            return None
+        sites.append(current)
+    if any(_sha_or_none(path) != sha for path, sha in scan.read):
+        return None
+    return replace(scan, sites=tuple(sites))
+
+
+def _site_listing(directory: str) -> _SiteListing:
+    """Return the editable-install files of a ``site-packages`` directory."""
+    now = time.time_ns()
+    try:
+        status = os.stat(directory)
+        names = os.listdir(directory)
+    except OSError:
+        return _SiteListing(directory, None, False, frozenset())
+    # As for a file, a listing within the timestamp resolution of a change is not trusted.
+    trusted = max(status.st_mtime_ns, status.st_ctime_ns) < now - _RACY_NS
+    found = frozenset(name for name in names if _is_site_file(name))
+    return _SiteListing(directory, _stat_key(status), trusted, found)
+
+
+def _current_listing(listing: _SiteListing) -> _SiteListing | None:
+    """Return a directory's listing if its editable-install files are unchanged, or None."""
+    if listing.trusted:
+        try:
+            if _stat_key(os.stat(listing.directory)) == listing.stat:
+                return listing
+        except OSError:
+            return None
+    current = _site_listing(listing.directory)
+    return current if current.names == listing.names else None
+
+
+def _is_site_file(name: str) -> bool:
+    """Return whether a ``site-packages`` entry is a ``.pth`` file or an editable finder."""
+    if name.startswith("."):
+        return False
+    return name.endswith(".pth") or (
+        name.startswith("__editable___") and name.endswith("_finder.py")
+    )
+
+
+def _site_file(path: str) -> tuple[str | None, bytes]:
+    """Return the SHA-256 and bytes of a file, or None and no bytes if it cannot be read."""
+    try:
+        sha, data = _file_sha(path, None)
+        if data is None:
+            data = Path(path).read_bytes()
+            sha = hashlib.sha256(data).hexdigest()
+    except OSError:
+        return None, b""
+    return sha, data
+
+
+def _sha_or_none(path: str) -> str | None:
+    """Return the SHA-256 of a file's bytes, or None if it cannot be read."""
+    try:
+        return _file_sha(path, None)[0]
+    except OSError:
+        return None
+
+
+def _pth_directories(data: bytes, site: str) -> list[str]:
+    """Return the directories that the lines of a ``.pth`` file in ``site`` name."""
+    directories: list[str] = []
+    for line in data.decode("utf-8-sig", errors="replace").splitlines():
         # A line that starts with "import" is code that site runs; it is not run here.
         if not line.strip() or line.startswith(("#", "import ", "import\t")):
             continue
-        directory = os.path.abspath(os.path.join(site, line.rstrip()))
-        if os.path.isdir(directory):
-            directories.append(directory)
+        directories.append(os.path.abspath(os.path.join(site, line.rstrip())))
     return directories
 
 
-def _finder_mapping(path: str) -> dict[str, str]:
-    """Return the literal ``MAPPING`` of a setuptools editable finder module."""
-    try:
-        tree = parse_source(Path(path).read_bytes())
-    except OSError:
-        return {}
+def _finder_mapping(data: bytes) -> dict[str, str]:
+    """Return the literal ``MAPPING`` of a setuptools editable finder module's source."""
+    tree = parse_source(data) if data else None
     if not isinstance(tree, ast.Module):
         return {}
     for statement in tree.body:
@@ -1075,16 +1315,21 @@ def _within(path: str, directory: str) -> bool:
     return path == directory or path.startswith(directory.rstrip(os.sep) + os.sep)
 
 
-def _file_sha(path: str, memo: _Memo | None) -> tuple[str, bytes | None]:
-    """Return the SHA-256 of a file's bytes, and the bytes if they were read in this call."""
-    status = os.stat(path)
-    stat = (
+def _stat_key(status: os.stat_result) -> tuple[int, ...]:
+    """Return the parts of a stat that change when a file or directory changes."""
+    return (
         status.st_dev,
         status.st_ino,
         status.st_size,
         status.st_mtime_ns,
         status.st_ctime_ns,
     )
+
+
+def _file_sha(path: str, memo: _Memo | None) -> tuple[str, bytes | None]:
+    """Return the SHA-256 of a file's bytes, and the bytes if they were read in this call."""
+    status = os.stat(path)
+    stat = _stat_key(status)
     remembered = None if memo is None else memo.get(path)
     if remembered is not None and remembered[0] == stat:
         return remembered[1], remembered[2]

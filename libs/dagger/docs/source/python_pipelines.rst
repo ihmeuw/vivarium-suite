@@ -158,25 +158,30 @@ What a Python step's code is
 
 A Python step's code identity is the set of first-party files that its function's module
 imports, directly or through other files, each with a hash of its code, together with
-any data file that one of those modules opens while it is imported, by a path built from
-the module's own location. The files are read, not imported. A comment or a formatting
+any data file whose path one of those modules passes to a function while it is imported,
+such as ``open`` or ``pandas.read_csv``, when the path is built from the module's own
+location. A data file read only inside a function, even one that runs at import, is not
+part of it. The files are read, not imported. A comment or a formatting
 edit does not change the hash, and a code edit to any listed file makes the step stale.
 The identity also names the function, so pointing a step at another function makes it
 stale.
 
 First-party code is code under the pipeline's repository root and the source of any
-editable install in the environment ``dagger`` runs in. Name the root when you make the
-pipeline:
+editable install in the environment ``dagger`` runs in. Name the top directory of the
+repository that holds the pipeline's code when you make the pipeline, for a definition in
+the repository's top directory:
 
 .. code-block:: python
 
    pipeline = Pipeline(output_root, "baseline", repository_root=Path(__file__).parent)
 
-Without a repository root, only editable installs are first-party. A step whose code is
-not first-party, such as a function in a directory that is neither under the root nor an
-editable install, cannot have its code placed, so it runs on every build. So does a step
-whose function is not a plain function at a module's top level, such as a lambda, a
-closure or a callable object. Installed packages are not part of the code identity.
+Without a repository root, only editable installs are first-party. A step's code cannot be
+placed, and the step runs on every build, when its function is not in first-party code,
+when its code imports a file that is neither first-party nor installed, or when its code
+builds a data path from its own location that leads outside the first-party code. So does
+a step whose function is not a plain function at a module's top level, such as a lambda, a
+closure, a callable object, or a function wrapped by a decorator in the pipeline file.
+Installed packages are not part of the code identity.
 
 Until ``dagger`` can recognise code it cannot follow, a step whose code starts another
 process or imports a module by a computed name can be skipped although that code

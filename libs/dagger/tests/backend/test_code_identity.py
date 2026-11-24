@@ -332,6 +332,90 @@ def test_each_form_of_import_resolves_to_its_files(tmp_path: Path, form: str) ->
     _assert_python_digests(part, repo)
 
 
+_STAR_PACKAGE = {
+    "main.py": "from pkg import *\n",
+    "pkg/sub.py": "VALUE = 1\n",
+    "pkg/other.py": "VALUE = 2\n",
+    "pkg/unused.py": "VALUE = 3\n",
+}
+"""A repository whose starting file star-imports the package ``pkg``, without the
+package's ``__init__.py``."""
+
+_STAR_ALL: dict[str, tuple[str, set[str]]] = {
+    "literal_list": (
+        '__all__ = ["sub", "other", "NAME"]\nNAME = 1\n',
+        {"pkg/sub.py", "pkg/other.py"},
+    ),
+    "literal_tuple": (
+        '__all__ = ("sub", "other", "NAME")\nNAME = 1\n',
+        {"pkg/sub.py", "pkg/other.py"},
+    ),
+    "missing": ("NAME = 1\n", set()),
+}
+"""For each ``__all__`` of ``pkg/__init__.py`` that a code part can read, the text of the
+``__init__.py`` and the submodules that ``from pkg import *`` adds."""
+
+_NON_LITERAL_ALL = {
+    "concatenation": '__all__ = ["sub"] + ["other"]\n',
+    "comprehension": '__all__ = [name for name in ("sub", "other")]\n',
+    "call": '__all__ = list(("sub", "other"))\n',
+    "non_string_element": 'OTHER = "other"\n__all__ = ["sub", OTHER]\n',
+    "string": '__all__ = "sub"\n',
+}
+"""Texts of a package ``__init__.py`` whose ``__all__`` is not a literal list or tuple of
+strings."""
+
+
+@pytest.mark.parametrize("form", list(_STAR_ALL))
+def test_a_star_import_of_a_package_lists_the_submodules_that_its_literal_all_names(
+    tmp_path: Path, form: str
+) -> None:
+    """from pkg import * on a first-party package lists each submodule that a literal __all__ list or tuple names, and no file for a name that is not a submodule, and lists no submodule when the package has no __all__."""
+    init, submodules = _STAR_ALL[form]
+    repo = _write(tmp_path / "repo", {**_STAR_PACKAGE, "pkg/__init__.py": init})
+
+    part = _part(repo)
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "pkg/__init__.py", *submodules}
+
+
+@pytest.mark.parametrize("form", list(_NON_LITERAL_ALL))
+def test_a_star_import_of_a_first_party_package_with_a_non_literal_all_is_not_established(
+    tmp_path: Path, form: str
+) -> None:
+    """from pkg import * on a first-party package whose __all__ is a concatenation, a comprehension, a call, a list with a name in it, or a bare string gives a code part that is not established, with a reason that names the package's __init__.py."""
+    repo = _write(
+        tmp_path / "repo", {**_STAR_PACKAGE, "pkg/__init__.py": _NON_LITERAL_ALL[form]}
+    )
+
+    part = _part(repo)
+
+    _assert_not_established(part, "__init__.py")
+
+
+@pytest.mark.parametrize("form", [*_STAR_ALL, *_NON_LITERAL_ALL])
+def test_a_star_import_of_an_installed_package_adds_nothing(
+    tmp_path: Path, form: str
+) -> None:
+    """from pkg import * on an installed package adds no file and keeps the code part established, whether the package's __all__ is literal, missing or not literal."""
+    init = _STAR_ALL[form][0] if form in _STAR_ALL else _NON_LITERAL_ALL[form]
+    repo = _write(tmp_path / "repo", {"main.py": "from instpkg import *\n"})
+    site = _write(
+        _site(tmp_path),
+        {
+            "instpkg/__init__.py": init,
+            "instpkg/sub.py": "VALUE = 1\n",
+            "instpkg/other.py": "VALUE = 2\n",
+        },
+    )
+
+    part = _part(repo, extra=[site])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py"}
+
+
 _NEVER_RUN: dict[str, dict[str, str]] = {
     "type_checking": {
         "main.py": """\
@@ -573,16 +657,31 @@ _NO_DATA_CALLS: dict[str, str] = {
     "name_bound_only_in_if": (
         'if True:\n    HERE = Path(__file__).parent\nTABLE = pd.read_csv(HERE / "t.csv")\n'
     ),
+    "name_read_in_a_function_run_at_import": (
+        'DATA = Path(__file__).parent / "t.csv"\n'
+        "\n\n"
+        "def load():\n"
+        "    return pd.read_csv(DATA)\n"
+        "\n\n"
+        "TABLE = load()\n"
+    ),
+    "class_local_name": (
+        "class Tables:\n"
+        '    DATA = Path(__file__).parent / "t.csv"\n'
+        "    TABLE = read(DATA)\n"
+    ),
 }
 """Calls with a path built from ``__file__`` that name no existing file or do not run at
-import."""
+import, and two that do read an existing file at import but that the analysis accepts it
+does not see: a module-level path read only in a function that a top-level call runs, and
+a path through a name local to a class body."""
 
 
 @pytest.mark.parametrize("call", list(_NO_DATA_CALLS))
 def test_a_call_that_does_not_read_an_existing_file_at_import_lists_no_data_file(
     tmp_path: Path, call: str
 ) -> None:
-    """A call whose path names a missing file or a directory, a call in the body of a function, an async function, a lambda or a method, and a call whose path goes through a name bound only inside an if block rather than at the module's top level, add no data file."""
+    """A call whose path names a missing file or a directory, a call in the body of a function, an async function, a lambda or a method, a call whose path goes through a name bound only inside an if block rather than at the module's top level, and, as accepted limits of the detection, a module-level path read only inside a function that runs at import and a path through a class-local name, add no data file."""
     repo = _write(
         tmp_path / "repo",
         {
@@ -797,6 +896,37 @@ def test_a_virtual_environment_inside_the_repository_is_installed_code(
     assert set(part.files) == {"main.py", "alpha.py"}
 
 
+def test_a_data_path_to_an_installed_file_adds_nothing(tmp_path: Path) -> None:
+    """A path built from __file__ that resolves to an existing data file in a site-packages directory adds no file, and the code part stays established."""
+    site = _write(_site(tmp_path), {"instpkg/d.csv": "a,b\n1,2\n"})
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": """\
+                from pathlib import Path
+
+                TABLE = pd.read_csv(
+                    Path(__file__).parent
+                    / ".."
+                    / "env"
+                    / "lib"
+                    / "python3"
+                    / "site-packages"
+                    / "instpkg"
+                    / "d.csv"
+                )
+                """,
+        },
+    )
+    assert (repo / ".." / "env" / "lib" / "python3" / "site-packages").samefile(site)
+
+    part = _part(repo, extra=[site])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"main.py", "alpha.py"}
+
+
 @pytest.mark.parametrize("form", _EDITABLE_FORMS)
 def test_the_source_of_an_editable_install_is_first_party(tmp_path: Path, form: str) -> None:
     """A module of an editable install outside the repository, recognised from a .pth file that adds its source directory to the search path or from a setuptools editable finder module whose plain or annotated MAPPING maps its top-level or dotted package name to the package's directory, is listed by a name relative to a root, and modules it imports from the same source are listed too; for a .pth entry the root is the source directory, and for a MAPPING key it is the mapped directory with the key's components removed from its end when its last components equal them, and the mapped directory's parent when they do not."""
@@ -930,6 +1060,57 @@ def test_a_package_that_does_not_extend_its_path_resolves_only_its_own_directory
     assert set(part.files) == {"main.py", "nsp/__init__.py"}
 
 
+_PORTION = {
+    "engine/src/vns/__init__.py": _EXTEND_PATH["import_pkgutil"],
+    "dagger/src/vns/dag/__init__.py": "",
+    "dagger/src/vns/dag/step.py": "VALUE = 1\n",
+    "dagger/src/vns/dag/unused.py": "VALUE = 2\n",
+}
+"""A repository laid out as this one: the package ``vns``, whose ``__init__.py`` calls
+:func:`pkgutil.extend_path`, in ``engine/src``, and the subpackage ``vns.dag``, which holds
+the starting file, in a portion of ``vns`` without an ``__init__.py`` in ``dagger/src``."""
+
+
+@pytest.mark.parametrize("order", ["extended_package_first", "portion_first"])
+def test_a_starting_module_in_a_portion_of_an_extended_package_lists_the_packages_init(
+    tmp_path: Path, order: str
+) -> None:
+    """A starting file in a portion of a package that extends its path, with the package's own directory and the portion's directory both on the search path in either order, lists the extend_path __init__.py from the other directory and the __init__.py of its own subpackage, by the module's dotted name."""
+    repo = _write(tmp_path / "repo", _PORTION)
+    entries = [repo / "engine" / "src", repo / "dagger" / "src"]
+    if order == "portion_first":
+        entries.reverse()
+
+    part = _part(repo, start="dagger/src/vns/dag/step.py", extra=[*entries, _STDLIB])
+
+    assert part.established, part.reason
+    assert set(part.files) == {
+        "dagger/src/vns/dag/step.py",
+        "dagger/src/vns/dag/__init__.py",
+        "engine/src/vns/__init__.py",
+    }
+
+
+def test_an_init_at_or_above_the_search_path_entry_of_the_starting_file_is_not_listed(
+    tmp_path: Path,
+) -> None:
+    """For a starting file under a search-path entry, an __init__.py in the entry's own directory or in a directory above it, which importing the starting module by its dotted name does not run, is not listed, while its package's __init__.py is."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "outer/__init__.py": "",
+            "outer/src/__init__.py": "",
+            "outer/src/pkg/__init__.py": "",
+            "outer/src/pkg/start.py": "VALUE = 1\n",
+        },
+    )
+
+    part = _part(repo, start="outer/src/pkg/start.py", extra=[repo / "outer" / "src"])
+
+    assert part.established, part.reason
+    assert set(part.files) == {"outer/src/pkg/start.py", "outer/src/pkg/__init__.py"}
+
+
 _LIBRARY = {
     "vns/lib/__init__.py": "",
     "vns/lib/core.py": "from vns.lib import helper\n",
@@ -973,6 +1154,32 @@ def test_the_two_editable_forms_name_a_library_under_an_extended_package_alike(
         assert parts[form].established, (form, parts[form].reason)
         assert set(parts[form].files) == expected, form
     assert parts["pth_path_entry"] == parts["dotted_finder_mapping"]
+
+
+def test_an_editable_source_inside_the_repository_is_named_relative_to_the_repository(
+    tmp_path: Path,
+) -> None:
+    """An editable install whose source directory lies inside the repository root, installed by a .pth entry of the source directory and by a finder MAPPING of the package to its directory, names the package's files by their paths relative to the repository root without the <editable>/ prefix, and the two forms give equal code parts."""
+    package = {
+        f"editable/src/edpkg/{name}": text.format(package="edpkg")
+        for name, text in _EDITABLE_PACKAGE.items()
+    }
+    repo = _write(tmp_path / "repo", {"main.py": "import edpkg.core\n", **package})
+    source = repo / "editable" / "src"
+    pth_site = _site(tmp_path / "pth_path_entry")
+    (pth_site / "__editable__.edpkg-0.1.pth").write_text(f"{source}\n")
+    finder_site = _site(tmp_path / "finder_mapping")
+    hook = _write_finder(finder_site, {"edpkg": source / "edpkg"}, tmp_path / "ran.txt")
+
+    parts = {
+        "pth_path_entry": _part(repo, extra=[pth_site, source]),
+        "finder_mapping": _part(repo, extra=[finder_site, hook]),
+    }
+
+    for form, part in parts.items():
+        assert part.established, (form, part.reason)
+        assert set(part.files) == {"main.py", *package}, form
+    assert parts["pth_path_entry"] == parts["finder_mapping"]
 
 
 # code_part: when it is not established
@@ -1035,6 +1242,58 @@ def test_an_import_of_a_file_outside_the_roots_that_is_not_installed_is_not_esta
     part = _part(repo, extra=[elsewhere])
 
     _assert_not_established(part, "stray.py")
+
+
+def test_a_data_path_to_a_file_outside_the_roots_that_is_not_installed_is_not_established(
+    tmp_path: Path,
+) -> None:
+    """A path built from __file__ at import that resolves to an existing data file outside every first-party root and not installed gives a code part that is not established, with a reason that names that file."""
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "main.py": "import alpha\n",
+            "alpha.py": """\
+                from pathlib import Path
+
+                TABLE = pd.read_csv(Path(__file__).parent / ".." / "outside" / "foreign.csv")
+                """,
+        },
+    )
+    _write(tmp_path / "outside", {"foreign.csv": "a,b\n1,2\n"})
+
+    part = _part(repo)
+
+    _assert_not_established(part, "foreign.csv")
+
+
+def test_two_files_that_nested_editable_roots_give_one_name_are_not_established(
+    tmp_path: Path,
+) -> None:
+    """With two .pth entries of editable sources, one nested in the other, two different files that would get the same name in the code part, each relative to its own root, give a code part that is not established, with a reason that names both files."""
+    outer = (tmp_path / "editable" / "src").resolve()
+    inner = outer / "inner"
+    reads_table = (
+        "from pathlib import Path\n\n"
+        'TABLE = open(Path(__file__).parent / "t.csv").read()\n'
+    )
+    _write(
+        outer,
+        {
+            "outer_mod.py": reads_table,
+            "t.csv": "a\n1\n",
+            "inner/inner_mod.py": reads_table,
+            "inner/t.csv": "a\n2\n",
+        },
+    )
+    site = _site(tmp_path)
+    (site / "__editable__.nested-0.1.pth").write_text(f"{inner}\n{outer}\n")
+    repo = _write(tmp_path / "repo", {"main.py": "import outer_mod\nimport inner_mod\n"})
+
+    part = _part(repo, extra=[site, inner, outer, _STDLIB])
+
+    _assert_not_established(part, str(outer / "t.csv"))
+    assert part.reason is not None
+    assert str(inner / "t.csv") in part.reason, part.reason
 
 
 def test_an_import_that_resolves_to_nothing_keeps_the_code_part_established(
@@ -1486,3 +1745,51 @@ def test_an_old_unchanged_file_is_not_read_again_and_a_change_of_size_is_seen(
     assert opened_again == []
     assert second == first
     assert edited != first
+
+
+def test_the_site_scan_is_not_repeated_for_the_same_search_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a node's first state, the state of a node of another starting file, with the same search path and every file old enough that its stat can be trusted, opens none of the .pth files or the editable finder module again."""
+    install = _editable_install(tmp_path, "finder_mapping")
+    site = Path(install.search_path[0])
+    compat = _write(tmp_path / "compat" / "src", {"ci_scan_compat.py": "VALUE = 1\n"})
+    (site / "ci_scan_compat.pth").write_text(f"{compat}\n")
+    scanned = [
+        site / "__editable__.edpkg-0.1.pth",
+        site / f"{_FINDER}.py",
+        site / "ci_scan_compat.pth",
+    ]
+    imports = f"import {install.package}.core\nimport ci_scan_compat\n"
+    repo = _write(
+        tmp_path / "repo",
+        {
+            "ci_scan_one.py": f"{imports}VALUE = 1\n",
+            "ci_scan_two.py": f"{imports}VALUE = 2\n",
+        },
+    ).resolve()
+    # Every stat counts as old enough to be trusted, so the cache can check a file that it
+    # read before without opening it.
+    monkeypatch.setattr(code_identity_module, "_RACY_NS", -10_000_000_000)
+    monkeypatch.setattr(
+        sys, "path", [str(repo), *install.search_path, str(compat), *sys.path]
+    )
+    opened: list[Path] = []
+    _watch_opens(monkeypatch, scanned, opened.append)
+
+    first = CodeIdentityNode(
+        name="one::code", start=repo / "ci_scan_one.py", repository_root=repo
+    ).state()
+    opened_first = set(opened)
+    opened.clear()
+    second = CodeIdentityNode(
+        name="two::code", start=repo / "ci_scan_two.py", repository_root=repo
+    ).state()
+    opened_again = list(opened)
+
+    assert first and second
+    assert opened_first == {path.resolve() for path in scanned}, (
+        f"opened {opened_first} in the first state; none means the scan does not open files "
+        "with open, io.open or os.open"
+    )
+    assert opened_again == []

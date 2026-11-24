@@ -215,8 +215,19 @@ def logged(function):
         return function(*args, **kwargs)
 
     return wrapper
+
+
+def retry(times):
+    def decorate(function):
+        @functools.wraps(function)
+        def wrapper(*args, **kwargs):
+            return function(*args, **kwargs)
+
+        return wrapper
+
+    return decorate
 """
-"""A module of a decorator that uses functools.wraps."""
+"""A module of two decorators that use functools.wraps, one of which takes arguments."""
 
 _TARGET_KINDS_MODULE = """\
 import functools
@@ -267,13 +278,29 @@ def decorated_without_wraps():
 @ci_kinds_decorator.logged
 def decorated_with_wraps():
     return make()
+
+
+@ci_kinds_decorator.retry(times=3)
+def decorated_with_arguments():
+    return make()
 """
 """A module of step targets of each kind that is not a plain module-level function, and
-one decorated with a decorator from another module that uses functools.wraps."""
+two decorated at their definition with decorators from another module that use
+functools.wraps, one of which takes arguments."""
+
+_PIPELINE_MODULE = """\
+import ci_kinds_decorator
+import ci_kinds_steps
+
+wrapped = ci_kinds_decorator.logged(ci_kinds_steps.make)
+wrapped_with_arguments = ci_kinds_decorator.retry(times=3)(ci_kinds_steps.make)
+"""
+"""A pipeline file that wraps a function of the steps module with each decorator."""
 
 _TARGET_KINDS_FILES = {
     "ci_kinds_decorator.py": _DECORATOR_MODULE,
     "ci_kinds_steps.py": _TARGET_KINDS_MODULE,
+    "ci_kinds_pipeline.py": _PIPELINE_MODULE,
 }
 """The files of the repository of the step targets of each kind."""
 
@@ -302,20 +329,37 @@ def test_a_target_that_is_not_a_plain_module_level_function_gets_an_always_stale
     assert node.name == "a.parquet::code"
 
 
+@pytest.mark.parametrize("attribute", ["decorated_with_wraps", "decorated_with_arguments"])
 def test_a_target_decorated_with_functools_wraps_starts_at_the_wrapped_functions_module(
-    tmp_path: Path, import_from: ImportFrom
+    tmp_path: Path, import_from: ImportFrom, attribute: str
 ) -> None:
-    """A step whose target is decorated by a decorator from another module that uses functools.wraps gets a CodeIdentityNode that starts at the wrapped function's module and gives the same state on two calls."""
+    """A step whose target is decorated at its definition, in the module that exposes it under its own name, by a decorator from another module that uses functools.wraps, with or without arguments, gets a CodeIdentityNode that starts at that module and gives the same state on two calls."""
     repo = _write(tmp_path / "repo", _TARGET_KINDS_FILES)
     module = import_from(repo, "ci_kinds_steps")
     assert module.__file__ is not None
 
-    node = _code_node(module.decorated_with_wraps, tmp_path, repo)
+    node = _code_node(getattr(module, attribute), tmp_path, repo)
 
     assert isinstance(node, CodeIdentityNode), repr(node)
     assert node.start == Path(module.__file__).resolve()
     assert node.repository_root == repo.resolve()
     assert node.state() == node.state()
+
+
+@pytest.mark.parametrize("attribute", ["wrapped", "wrapped_with_arguments"])
+def test_a_function_wrapped_outside_its_module_gets_an_always_stale_identity(
+    tmp_path: Path, import_from: ImportFrom, attribute: str
+) -> None:
+    """A step whose target is a function of the steps module wrapped in the pipeline file by a decorator that uses functools.wraps, with or without arguments, so that the steps module does not expose the wrapper under the wrapped function's name, gets an always-stale code identity named "<step>::code"."""
+    repo = _write(tmp_path / "repo", _TARGET_KINDS_FILES)
+    pipeline_module = import_from(repo, "ci_kinds_pipeline")
+    target = getattr(pipeline_module, attribute)
+    assert target.__wrapped__ is sys.modules["ci_kinds_steps"].make
+
+    node = _code_node(target, tmp_path, repo)
+
+    assert isinstance(node, AlwaysStaleNode), repr(node)
+    assert node.name == "a.parquet::code"
 
 
 @pytest.mark.parametrize("kind", ["command", "notebook", "simulation"])
