@@ -124,7 +124,7 @@ The underlying ``make`` targets can also be run directly: ``make build-env``
 and ``make build-shared-env``; see the ``help`` target in the ``Makefile``
 for their arguments.
 
-Supported Python versions: 3.10, 3.11, 3.12
+Supported Python versions: 3.11, 3.12, 3.13
 
 Making Artifacts
 ----------------
