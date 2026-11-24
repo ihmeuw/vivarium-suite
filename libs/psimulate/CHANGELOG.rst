@@ -1,3 +1,8 @@
+**1.1.4 - 11/24/26**
+
+- Fix ``psimulate run`` crashing when an artifact path is passed on the command line
+  and the model specification has no ``input_data`` section
+
 **1.1.3 - 11/23/26**
 
 - Support ``str`` dtypes when appending ``vipin`` performance data to central logs
