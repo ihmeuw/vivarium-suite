@@ -26,6 +26,18 @@ in the layers that :mod:`~vivarium.dagger.constants` lists, refuses a pipeline i
 some step would have no project before anything is written, and reports a run that
 another run's lock refused as :class:`RunRefused` and a run that was interrupted while
 Jobmon ran it as :class:`RunInterrupted`.
+
+This runs a pipeline definition through Jobmon, as ``dagger run -c pipeline.py -P
+proj_example`` does::
+
+    from vivarium.dagger.frontend import load_pipeline, run
+
+    pipeline = load_pipeline("pipeline.py")
+    run(pipeline, jobmon=True, jobmon_resources={"project": "proj_example"})
+
+Like the command, it needs the ``cluster`` extra (``pip install
+"vivarium-dagger[cluster]"``) and a compute node with ``/opt/slurm/bin`` on ``PATH``
+(see :ref:`running_through_jobmon`).
 """
 
 import difflib

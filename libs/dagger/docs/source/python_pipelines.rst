@@ -274,6 +274,8 @@ alpha every step is stale, so it runs the same steps as ``dagger run``: in this 
 all three. It is for later, when a step can be current: it will then run a named step
 that a run would skip.
 
+.. _running_through_jobmon:
+
 Running through Jobmon
 ----------------------
 
@@ -338,6 +340,30 @@ half when it retries a step that ran out of them.
 Every step needs a project. If some step would have none, ``dagger`` names each such step
 and the three ways to set a project (``-P``, ``Pipeline(resources=...)``, and the step's
 ``resources=``), and exits with status 2 before anything is written.
+
+From Python
+~~~~~~~~~~~
+
+:func:`~vivarium.dagger.frontend.execution.run` runs a pipeline from Python, for
+example from a script. With ``jobmon=True`` it runs the steps through Jobmon, as
+``dagger run`` does without ``--local``:
+
+.. code-block:: python
+
+   from vivarium.dagger.frontend import load_pipeline, run
+
+   pipeline = load_pipeline("pipeline.py")
+   run(pipeline, jobmon=True, jobmon_resources={"project": "proj_example"})
+
+``jobmon_resources`` takes the place of ``-P`` and ``-q``, ``jobmon_max_attempts`` the
+place of ``-m``, and ``only=`` the place of ``--until``. A run from Python needs the
+``cluster`` extra and a compute node with ``/opt/slurm/bin`` on ``PATH``, as the command
+does. :func:`~vivarium.dagger.frontend.execution.run` returns each step's outcome. It
+raises :class:`~vivarium.dagger.frontend.execution.StepFailed` when a step fails,
+:class:`~vivarium.dagger.frontend.execution.StepExited` when a step ends the process,
+:class:`~vivarium.dagger.frontend.execution.RunRefused` when another run holds the lock,
+and :class:`~vivarium.dagger.frontend.execution.RunInterrupted` when the run is
+interrupted.
 
 When a run through Jobmon stops
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -410,8 +436,19 @@ simulation again; the step does not resume a partial run.
 
 The step replaces its run directory on every successful run, so no other step may write
 under it: an output inside it, declared by another step in either order, is refused when
-the second of the two steps is added. The scratch folder ``<run directory>.psimulate`` is replaced on every run too; dagger does not
-check it, so do not put other outputs there.
+the second of the two steps is added. The scratch folder
+``<run directory>.psimulate`` is replaced on every run too; dagger does not check it, so
+do not put other outputs there.
+
+The step's command runs psimulate and then a check that confirms that every simulation
+finished and moves the run to the run directory. The command names the check's script
+as ``"$DAGGER_COLLECT_SIMULATION"``, an environment variable that ``dagger`` sets when
+it runs the step, and ends with a comment that holds a hash of the script, so that a
+change to the check changes the command. A command copied from ``dagger show`` therefore
+does not run by hand as it is. Without that variable, the shell runs psimulate and then
+stops at the check with a message that names ``DAGGER_COLLECT_SIMULATION``, and the run
+stays in ``<run directory>.psimulate``. Run the step with ``dagger`` instead, for
+example with ``dagger run --until`` and the step's name.
 
 ``options`` holds psimulate's options for ``run``, keyed by long option name with
 ``_`` for ``-``. ``project`` is required. ``backup_freq``, ``hardware``,
@@ -688,3 +725,91 @@ line for it gives the status, or the signal that stopped the command:
    Step 'adults' failed: the command exited with status 1; its output is in pytask's report for the step.
 
 The command and its output are in pytask's report for the step.
+
+Notebook steps
+--------------
+
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_notebook_step` adds a step that
+runs a Jupyter notebook with papermill in the environment named by ``env``. Use it when
+the work is already a notebook, or when you want to keep the notebook with the outputs
+of every cell as a record of the run.
+
+This example puts a notebook step after a Python step. The ``population`` step writes a
+table, and ``summary`` runs ``summarize.ipynb`` on it:
+
+.. literalinclude:: ../../tests/frontend/notebook_example/pipeline.py
+   :language: python
+   :caption: pipeline.py
+
+The notebook, ``summarize.ipynb``, is in the same directory. Its first cell has the tag
+``parameters``:
+
+.. code-block:: python
+
+   population = None
+   summary = None
+   excluded_age_group = "0-14"
+
+Its second cell sums the rows that are not in the excluded age group:
+
+.. code-block:: python
+
+   import pandas as pd
+
+   frame = pd.read_csv(population)
+   kept = frame[frame["age_group"] != excluded_age_group]
+   pd.DataFrame({"adults": [kept["count"].sum()]}).to_csv(summary, index=False)
+
+It runs like any other definition:
+
+.. code-block:: text
+
+   dagger preview -c pipeline.py
+   dagger run -c pipeline.py --local
+
+``inputs``, ``outputs`` and ``parameters`` map the names of notebook parameters to
+values. In ``inputs`` and ``outputs`` each value is a file key, and the notebook gets
+the absolute path of that file as a ``str``. The notebook reads and writes those paths
+itself. ``parameters`` gives scalar values: a ``str``, a real number, a ``bool`` or
+``None``. Each keeps its Python type, so the string ``"123"`` stays a string. Give the
+notebook a file through ``inputs``, so that the step runs after the step that writes the
+file. A name can be in only one of the three mappings. The notebook runs with its own
+directory as the working directory.
+
+Every name that the step passes must be assigned at the top level of the notebook's
+first cell tagged ``parameters``, by a plain assignment such as ``population = None`` or
+an annotated one such as ``population: str``. papermill puts the values that the step
+passes in a new cell after that cell, so the notebook's own values are the defaults when
+you run it by hand. Assignments in loops, in conditions or through ``globals()`` are not
+counted. The cell must be a code cell that is valid Python, so keep magics and shell
+commands in a later cell. A notebook with no cell tagged ``parameters`` takes no names.
+The step checks this when it is added, so a misspelled name stops the definition before
+any step runs. The error names the step, the notebook and each name that the cell does
+not assign, with the closest name that it does assign (see
+`Errors in a definition or a command`_).
+
+``executed`` is the file key of the executed notebook, which must end in ``.ipynb``. It
+is an output of the step, and the step is named after it unless you give ``name=``. It
+holds the outputs of every cell that ran. The step removes the executed notebook of an
+earlier run before the notebook starts, so an executed notebook found after a failure is
+always from the run that failed. The step does not remove the other outputs of an
+earlier run, so the notebook must write every output on every run. ``dagger`` creates
+the directory of each output, and of the executed notebook, before the notebook runs.
+
+``env`` is required. It names the environment that the notebook runs in, as a conda env
+or venv name or the path to its prefix, and it is checked when the pipeline is built or
+previewed. That environment must have ``papermill`` and ``ipykernel`` installed; the
+environment that ``dagger`` runs in needs neither. The notebook always runs on the
+Python of ``env``: the step makes a temporary Jupyter kernel for it, and the kernel that
+the notebook's metadata names is not used. The example uses ``sys.prefix``, the
+environment that ``dagger`` runs in, so that environment must then have ``papermill``
+and ``ipykernel``.
+
+Like every step in the alpha, a notebook step runs on every build (see
+`What the alpha does`_). ``resources=`` sets the step's compute resources for a run
+through Jobmon, as for the other steps (see `Compute resources`_).
+
+When the notebook raises an error, the step fails, and ``dagger``'s line for it names
+the notebook, the error, the cell, and the path of the executed notebook, which has the
+error's traceback. `When a step fails`_ shows an example and describes a notebook that
+stops before it records an error.
