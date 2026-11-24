@@ -28,7 +28,10 @@ $(if $(DIST_NAME),,$(error Could not read the [project] name from pyproject.toml
 # Helper function for validating enum arguments
 validate_arg = $(if $(filter-out $(2),$(1)),$(error Error: '$(3)' must be one of: $(2), got '$(1)'))
 
-SUPPORTED_PY_VERSIONS = $(shell python -c 'import json, sys; v = json.load(open(sys.argv[1])); print(" ".join(v) if isinstance(v, list) and all(isinstance(x, str) for x in v) else "")' "$(CURDIR)/python_versions.json" 2>/dev/null)
+# Python for reading python_versions.json. With conda's auto_activate off and no environment
+# active, there is no `python` on PATH, so fall back to `python3`.
+PYTHON := $(shell command -v python 2>/dev/null || command -v python3 2>/dev/null)
+SUPPORTED_PY_VERSIONS = $(shell $(PYTHON) -c 'import json, sys; v = json.load(open(sys.argv[1])); print(" ".join(v) if isinstance(v, list) and all(isinstance(x, str) for x in v) else "")' "$(CURDIR)/python_versions.json" 2>/dev/null)
 
 # Environment selector for conda: a prefix when `path` is given, otherwise a name.
 CONDA_ENV_FLAG = $(if $(path),-p $(path),-n $(name))
@@ -170,6 +173,7 @@ build-env: # Create a new environment with installed packages
 	@$(if $(and $(filter artifact,$(type)),$(filter no,$(artifactory_access))),$(error Error: type=artifact requires artifactory_access=yes))
 #	python version - must be listed in python_versions.json; defaults to the latest listed.
 #	Validated before the force check below so a bad py never removes an existing env.
+	@$(if $(PYTHON),,$(error Error: build-env needs python or python3 on PATH to read python_versions.json))
 	@$(eval _py_versions := $(SUPPORTED_PY_VERSIONS))
 	@$(if $(_py_versions),,$(error Error: could not read supported Python versions from $(CURDIR)/python_versions.json))
 #	Numeric sort, so 3.10 beats 3.9 regardless of file order.
