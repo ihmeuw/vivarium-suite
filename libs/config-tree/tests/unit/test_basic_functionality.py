@@ -1244,27 +1244,44 @@ class TestAbsolutePaths:
         assert tree.a.b.get("x", absolute=True) == "changed"
         assert tree.a.b.get_tree("b", absolute=True) is tree.b
 
-    def test_deleted_subtree_uses_former_root(self) -> None:
-        """A subtree removed from its parent with ``del`` still resolves absolute key paths from its former root."""
+    def test_deleted_subtree_is_own_root(self) -> None:
+        """A subtree removed with ``del`` resolves absolute ``get`` and ``get_tree`` from itself, not its former root."""
+        # Delete a nested subtree with bracket syntax
         tree = self._make_tree()
-
         deep = tree.a.b
         del tree.a["b"]
-        assert "b" not in tree.a
-        assert deep.get("x", absolute=True) == "root_x"
-        assert deep.get_tree("b", absolute=True) is tree.b
-        # The former root no longer contains the deleted subtree
-        assert deep.get(["a", "b"], "some_default", absolute=True) == "some_default"
 
+        assert deep.get("x", absolute=True) == "a_b_x"
+        assert deep.get(["c", "z"], absolute=True) == "a_b_c_z"
+        assert deep.c.get("x", absolute=True) == "a_b_x"
+        assert deep.get_tree("c", absolute=True) is deep.c
+        assert deep.c.get_tree("c", absolute=True) is deep.c
+        # "b" and ["a", "x"] exist only in the former root
+        assert deep.get("b", absolute=True) is None
+        assert deep.get("b", "some_default", absolute=True) == "some_default"
+        assert deep.get(["a", "x"], "some_default", absolute=True) == "some_default"
+        with pytest.raises(ConfigurationKeyError):
+            deep.get_tree("b", absolute=True)
+        with pytest.raises(ConfigurationKeyError):
+            deep.c.get_tree(["a", "b"], absolute=True)
+
+        # Delete a top-level subtree with attribute syntax
+        tree = self._make_tree()
         sub = tree.a
         del tree.a
-        assert "a" not in tree
-        assert sub.get("x", absolute=True) == "root_x"
-        assert sub.get(["b", "x"], absolute=True) == "b_x"
-        assert sub.get_tree("b", absolute=True) is tree.b
-        assert sub.get("a", "some_default", absolute=True) == "some_default"
+
+        assert sub.get("x", absolute=True) == "a_x"
+        assert sub.b.get("x", absolute=True) == "a_x"
+        assert sub.b.c.get(["b", "x"], absolute=True) == "a_b_x"
+        assert sub.b.get_tree("b", absolute=True) is sub.b
+        assert sub.b.c.get_tree(["b", "c"], absolute=True) is sub.b.c
+        assert sub.b.get_tree("b", absolute=True) is not tree.b
+        # "c" exists only in the former root
+        assert sub.b.get("c", "some_default", absolute=True) == "some_default"
         with pytest.raises(ConfigurationKeyError):
-            sub.get_tree("a", absolute=True)
+            sub.b.get_tree("c", absolute=True)
+        with pytest.raises(ConfigurationKeyError):
+            sub.b.c.get_tree(["a", "b"], absolute=True)
 
     def test_dotted_string_is_one_key(self) -> None:
         """With ``absolute=True``, a string that contains dots is one key, not a key path."""
@@ -1427,3 +1444,221 @@ def test_repr_display() -> None:
     tree.update({"Key1": "value_ov_1"}, layer="override_1", source="ov1_src")
     tree.update({"Key1": "value_ov_2"}, layer="override_2", source="ov2_src")
     assert repr(tree) == textwrap.dedent(expected_repr)
+
+
+def _delete_by_attr(tree: ConfigTree, key: str) -> None:
+    delattr(tree, key)
+
+
+def _delete_by_item(tree: ConfigTree, key: str) -> None:
+    del tree[key]
+
+
+_DELETE_SYNTAXES = pytest.mark.parametrize(
+    "delete",
+    [_delete_by_attr, _delete_by_item],
+    ids=["attribute", "bracket"],
+)
+
+
+class TestDeleteChild:
+    """Deleting a child clears the child's link to its former parent."""
+
+    def test_delattr_clears_subtree_parent(self) -> None:
+        """``del tree.key`` on a ``ConfigTree`` child sets the child's ``_parent`` to None."""
+        tree = ConfigTree({"x": 1, "a": {"b": {"y": 2}}})
+        top = tree.a
+        nested = tree.a.b
+
+        del tree.a.b
+        assert nested._parent is None
+        assert "b" not in top
+
+        del tree.a
+        assert top._parent is None
+        assert "a" not in tree
+
+    def test_delitem_clears_subtree_parent(self) -> None:
+        """``del tree["key"]`` on a ``ConfigTree`` child sets the child's ``_parent`` to None."""
+        tree = ConfigTree({"x": 1, "a": {"b": {"y": 2}}})
+        top = tree.a
+        nested = tree.a.b
+
+        del tree["a"]["b"]
+        assert nested._parent is None
+        assert "b" not in top
+
+        del tree["a"]
+        assert top._parent is None
+        assert "a" not in tree
+
+    def test_delattr_clears_node_parent(self) -> None:
+        """``del tree.key`` on a ``ConfigNode`` child sets the node's ``_parent`` to None."""
+        tree = ConfigTree({"x": 1, "a": {"y": 2}})
+        x_node = tree._get_node(["x"])
+        y_node = tree._get_node(["a", "y"])
+        assert isinstance(x_node, ConfigNode) and isinstance(y_node, ConfigNode)
+
+        del tree.x
+        assert x_node._parent is None
+        assert "x" not in tree
+
+        del tree.a.y
+        assert y_node._parent is None
+        assert "y" not in tree.a
+
+    def test_delitem_clears_node_parent(self) -> None:
+        """``del tree["key"]`` on a ``ConfigNode`` child sets the node's ``_parent`` to None."""
+        tree = ConfigTree({"x": 1, "a": {"y": 2}})
+        x_node = tree._get_node(["x"])
+        y_node = tree._get_node(["a", "y"])
+        assert isinstance(x_node, ConfigNode) and isinstance(y_node, ConfigNode)
+
+        del tree["x"]
+        assert x_node._parent is None
+        assert "x" not in tree
+
+        del tree["a"]["y"]
+        assert y_node._parent is None
+        assert "y" not in tree["a"]
+
+    @_DELETE_SYNTAXES
+    def test_deleted_subtree_key_paths_start_from_itself(
+        self, delete: Callable[[ConfigTree, str], None]
+    ) -> None:
+        """A deleted subtree's key path is empty, and the key paths of the trees and nodes inside it start from it."""
+        tree = ConfigTree({"x": 1, "a": {"b": {"y": 2, "c": {"z": 3}}}})
+        sub = tree.a.b
+        inner = sub.c
+        y_node = sub._get_node(["y"])
+        z_node = sub._get_node(["c", "z"])
+        assert isinstance(y_node, ConfigNode) and isinstance(z_node, ConfigNode)
+
+        delete(tree.a, "b")
+
+        assert sub._get_key_path() == ()
+        assert inner._get_key_path() == ("c",)
+        assert y_node._get_key_path() == ("y",)
+        assert z_node._get_key_path() == ("c", "z")
+
+    @_DELETE_SYNTAXES
+    def test_deleted_subtree_find_and_display_start_from_itself(
+        self, delete: Callable[[ConfigTree, str], None]
+    ) -> None:
+        """``find()`` on a deleted subtree and the IPython display of its nodes show key paths that start from the deleted subtree."""
+        tree = ConfigTree({"x": 1, "a": {"b": {"y": 2, "c": {"z": 3}}}})
+        sub = tree.a.b
+
+        delete(tree.a, "b")
+
+        assert [node._get_key_path() for node in sub.find()] == [("y",), ("c", "z")]
+        [z_node] = sub.find("c.z")
+        assert z_node._get_key_path() == ("c", "z")
+        # The former parent keys are no longer part of the searched path
+        assert sub.find("a.b") == []
+        assert sub.find("a.b.c.z") == []
+
+        assert [_pretty(node) for node in sub.find()] == [
+            'ConfigNode(("y",), 2)',
+            'ConfigNode(("c", "z"), 3)',
+        ]
+
+    @_DELETE_SYNTAXES
+    def test_deleted_node_is_outside_any_tree(
+        self, delete: Callable[[ConfigTree, str], None]
+    ) -> None:
+        """A deleted ``ConfigNode`` has an empty key path and displays as its ``repr``, the same as a node outside any tree."""
+        tree = ConfigTree({"x": 1, "a": {"y": 2}})
+        x_node = tree._get_node(["x"])
+        y_node = tree._get_node(["a", "y"])
+        assert isinstance(x_node, ConfigNode) and isinstance(y_node, ConfigNode)
+
+        delete(tree, "x")
+        delete(tree.a, "y")
+
+        for node in [x_node, y_node]:
+            assert node._get_key_path() == ()
+            assert _pretty(node) == repr(node)
+
+    @_DELETE_SYNTAXES
+    def test_rest_of_tree_unchanged_after_delete(
+        self, delete: Callable[[ConfigTree, str], None]
+    ) -> None:
+        """Deleting one child leaves the other children, their parent links, and their key paths unchanged."""
+        tree = ConfigTree({"x": 1, "a": {"y": 2, "w": 4}, "b": {"z": 3}})
+        a = tree.a
+        assert isinstance(a, ConfigTree)
+        b = tree.b
+        x_node = tree._get_node(["x"])
+        w_node = tree._get_node(["a", "w"])
+        z_node = tree._get_node(["b", "z"])
+        assert isinstance(x_node, ConfigNode)
+        assert isinstance(w_node, ConfigNode)
+        assert isinstance(z_node, ConfigNode)
+
+        delete(tree.a, "y")
+        delete(tree, "b")
+
+        assert list(tree.keys()) == ["x", "a"]
+        assert list(a.keys()) == ["w"]
+        assert tree._get_node(["a"]) is a
+        assert tree._get_node(["x"]) is x_node
+        assert a._get_node(["w"]) is w_node
+
+        assert a._parent is tree
+        assert x_node._parent is tree
+        assert w_node._parent is a
+        # A child of the deleted subtree still links to that subtree
+        assert z_node._parent is b
+
+        assert a._get_key_path() == ("a",)
+        assert x_node._get_key_path() == ("x",)
+        assert w_node._get_key_path() == ("a", "w")
+
+        assert tree.to_dict() == {"x": 1, "a": {"w": 4}}
+
+    @_DELETE_SYNTAXES
+    def test_delete_missing_key_does_nothing(
+        self, delete: Callable[[ConfigTree, str], None]
+    ) -> None:
+        """Deleting a key that is not in the tree, with either syntax, does not raise and leaves the tree unchanged."""
+        tree = ConfigTree({"x": 1, "a": {"y": 2}})
+        a = tree.a
+        assert isinstance(a, ConfigTree)
+        x_node = tree._get_node(["x"])
+        y_node = tree._get_node(["a", "y"])
+        assert isinstance(x_node, ConfigNode) and isinstance(y_node, ConfigNode)
+        before = tree.to_dict()
+
+        delete(tree, "missing")
+        delete(tree.a, "missing")
+
+        assert tree.to_dict() == before
+        assert list(tree.keys()) == ["x", "a"]
+        assert tree._get_node(["a"]) is a
+        assert a._parent is tree
+        assert x_node._parent is tree
+        assert y_node._parent is a
+
+    def test_deleted_subtree_can_be_added_back_by_value(self) -> None:
+        """A deleted subtree added back with ``update(subtree.to_dict())`` builds a new child that resolves from its new tree."""
+        tree = ConfigTree({"x": "root_x", "a": {"b": {"y": "b_y"}}})
+        sub = tree.a.b
+        del tree.a["b"]
+
+        tree.a.update({"b": sub.to_dict()})
+
+        added = tree.a.b
+        assert added is not sub
+        assert added.to_dict() == {"y": "b_y"}
+        assert added._parent is tree.a
+        assert added._get_key_path() == ("a", "b")
+        [y_node] = added.find("y")
+        assert y_node._get_key_path() == ("a", "b", "y")
+        assert added.get("x", absolute=True) == "root_x"
+        assert added.get_tree("a", absolute=True) is tree.a
+
+        # The deleted subtree stays detached
+        assert sub._parent is None
+        assert sub._get_key_path() == ()
+        assert sub.get("x", absolute=True) is None

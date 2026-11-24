@@ -874,15 +874,34 @@ class ConfigTree:
             raise ConfigurationKeyError(f"No value at name {name}.", name)
         return self.get(name)
 
+    def _remove_child(self, name: str) -> None:
+        """Remove a child and clear its link back to this tree.
+
+        The removed child becomes the root of its own tree. Key paths and
+        absolute lookups on it, and on anything inside it, start from the
+        removed child.
+
+        Parameters
+        ----------
+        name
+            The name of the child to remove. It must be a child of this tree.
+        """
+        child = self._children.pop(name)
+        if isinstance(child, ConfigTree):
+            # ConfigTree.__setattr__ is custom, so write to __dict__ directly.
+            child.__dict__["_parent"] = None
+        else:
+            child._parent = None
+
     def __delattr__(self, name: str) -> None:
         """Delete a child by name using attribute syntax."""
         if name in self:
-            del self._children[name]
+            self._remove_child(name)
 
     def __delitem__(self, name: str) -> None:
         """Delete a child by name using bracket syntax."""
         if name in self:
-            del self._children[name]
+            self._remove_child(name)
 
     def __contains__(self, name: str) -> bool:
         """Test if a configuration key exists in any layer."""
