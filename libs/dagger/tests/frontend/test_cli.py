@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import textwrap
 import traceback
 import uuid
 from collections.abc import Callable, Iterator
@@ -25,6 +26,12 @@ from tests.backend.file_snapshot import age_files, changed_files, snapshot_files
 from tests.backend.order_names import EIGHT
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from tests.frontend.pipelines import stable_snapshot
+from tests.frontend.simulations import (
+    copy_simulation_example,
+    make_stub_env,
+    write_branches,
+    write_spec,
+)
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
@@ -742,14 +749,14 @@ def _forget_loaded_definitions(tmp_path: Path) -> Iterator[None]:
 # The command and its entry point
 
 
-def test_dagger_help_lists_run_preview_force_and_restart() -> None:
-    """'dagger --help' exits 0 and lists the subcommands run, preview, force and restart, and no others."""
+def test_dagger_help_lists_run_preview_force_restart_and_show() -> None:
+    """'dagger --help' exits 0 and lists the subcommands run, preview, force, restart and show, and no others."""
     result = _dagger("--help")
 
     assert result.exit_code == 0, _describe(result)
     _, _, commands = result.output.partition("Commands:")
     listed = set(re.findall(r"^  (\S+)", commands, flags=re.MULTILINE))
-    assert listed == {"run", "preview", "force", "restart"}
+    assert listed == {"run", "preview", "force", "restart", "show"}
 
 
 def test_the_dagger_console_script_resolves_to_the_click_group() -> None:
@@ -2904,8 +2911,8 @@ def test_preview_with_a_closed_stdout_exits_one_without_blaming_the_build(
 
 
 def test_help_shows_no_rst_double_backticks() -> None:
-    """'dagger --help' and '--help' for each of run, preview, force and restart print no double backtick (``)."""
-    commands: list[list[str]] = [[], ["run"], ["preview"], ["force"], ["restart"]]
+    """'dagger --help' and '--help' for each of run, preview, force, restart and show print no double backtick (``)."""
+    commands: list[list[str]] = [[], ["run"], ["preview"], ["force"], ["restart"], ["show"]]
     for command in commands:
         result = _dagger(*command, "--help")
 
@@ -3097,3 +3104,435 @@ def test_dagger_preview_of_a_pipeline_that_has_run_changes_no_state_file(
     assert result.exit_code == 0, _describe(result)
     assert before, f"'dagger run' wrote nothing under {state}"
     assert changed_files(before, snapshot_files(state)) == []
+
+
+# dagger show
+
+_PYTHON_THEN_COMMAND = (
+    _HEADER
+    + """
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_python_step(frame, inputs={}, outputs="population.parquet", name="population")
+    p.add_command_step(
+        "cp {source} {target}",
+        inputs={"source": "population.parquet"},
+        outputs={"target": "copy.parquet"},
+        env=sys.prefix,
+        name="copy",
+    )
+    return p
+"""
+)
+"""A definition of the python step 'population', which calls ``frame`` and writes
+'population.parquet', then the command step 'copy' with the env ``sys.prefix``, which copies
+that file to 'copy.parquet'."""
+
+_READS_A_ROOT_INPUT = (
+    _HEADER
+    + """
+
+def pipeline():
+    p = Pipeline(
+        HERE / "out",
+        "run1",
+        root_inputs={"raw.parquet": HERE / "raw.parquet"},
+        state=HERE / "state",
+    )
+    p.add_python_step(
+        plus_one, inputs={"path": "raw.parquet"}, outputs="next.parquet", name="next"
+    )
+    return p
+"""
+)
+"""A definition of the python step 'next', which reads the root input 'raw.parquet' beside the
+definition under the name 'path'."""
+
+_RUNS_A_NOTEBOOK = (
+    _HEADER
+    + """
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_notebook_step(
+        HERE / "summarize.ipynb",
+        executed="executed/summarize.ipynb",
+        env=sys.prefix,
+        name="summarize",
+    )
+    return p
+"""
+)
+"""A definition of the notebook step 'summarize', which runs summarize.ipynb beside the
+definition under the env ``sys.prefix``."""
+
+_SPLITS = (
+    _HEADER
+    + """
+
+def split():
+    return {"a": frame(), "b": frame()}
+
+
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_python_step(frame, inputs={}, outputs="population.parquet", name="population")
+    p.add_python_step(split, inputs={}, outputs={"a": "a.csv", "b": "b.csv"}, name="split")
+    return p
+"""
+)
+"""A definition of the single-output python step 'population' and the python step 'split',
+whose outputs map 'a' to 'a.csv' and 'b' to 'b.csv'."""
+
+
+def _blocks(result: Result) -> list[list[str]]:
+    """Return the blocks ``dagger show`` wrote to standard output, each as its lines."""
+    text = result.stdout.strip("\n")
+    if not text:
+        return []
+    return [block.split("\n") for block in text.split("\n\n")]
+
+
+def _block(result: Result, step: str) -> list[str]:
+    """Return the one block ``dagger show`` wrote for ``step``."""
+    found = [block for block in _blocks(result) if block[0].startswith(f"Step '{step}' (")]
+    assert len(found) == 1, result.stdout
+    return found[0]
+
+
+# The 2-space indent, the 6-character label and one space.
+_CONTINUED = " " * 9
+"""The indent of each further line of a step's command, below its ``runs`` line."""
+
+
+def _runs_line(block: list[str]) -> str:
+    """Return the one ``runs`` line of ``block`` joined with its continuation lines."""
+    starts = [index for index, line in enumerate(block) if line.startswith("  runs   ")]
+    assert len(starts) == 1, block
+    lines = [block[starts[0]]]
+    for line in block[starts[0] + 1 :]:
+        if not line.startswith(_CONTINUED):
+            break
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _run_output(directory: Path) -> Path:
+    """Return the run's output directory for a definition in ``directory``."""
+    return directory.resolve() / "out" / "run1"
+
+
+def test_show_prints_each_step_in_definition_order_with_its_files_and_command(
+    tmp_path: Path,
+) -> None:
+    """'dagger show -c def.py' of a definition with a python step, then a command step with an env that reads its output, exits 0 and prints one block per step in definition order: "Step '<name>' (python step)" with its output line and a "calls <module>:<qualname>" line, then "Step '<name>' (command step, env <env>)" with an input line naming the python step's key and absolute path, an output line, and a "runs" line holding the filled-in shell command with absolute paths; blocks are separated by one blank line."""
+    path = _write_definition(tmp_path, _PYTHON_THEN_COMMAND)
+    population = _run_output(tmp_path) / "population.parquet"
+    copy = _run_output(tmp_path) / "copy.parquet"
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert "\n\n\n" not in result.stdout, result.stdout
+    blocks = _blocks(result)
+    assert len(blocks) == 2, result.stdout
+    # A file loaded by load_pipeline is imported as a module named by its stem.
+    assert blocks[0] == [
+        "Step 'population' (python step)",
+        f"  output 'population.parquet' at {population}",
+        f"  calls  {path.stem}:frame",
+    ], result.stdout
+    assert blocks[1][:3] == [
+        f"Step 'copy' (command step, env {sys.prefix})",
+        f"  input  source: 'population.parquet' at {population}",
+        f"  output target: 'copy.parquet' at {copy}",
+    ], result.stdout
+    assert blocks[1][3:4] and blocks[1][3].startswith("  runs   "), result.stdout
+    runs = _runs_line(blocks[1])
+    assert "cp " in runs, runs
+    assert str(population) in runs, runs
+    assert str(copy) in runs, runs
+
+
+def test_show_labels_a_root_input_by_its_key_and_path(tmp_path: Path) -> None:
+    """A step that reads a declared root input shows an input line "<name>: '<key>' at <absolute path>" for it."""
+    raw = tmp_path.resolve() / "raw.parquet"
+    raw.write_bytes(b"")
+    path = _write_definition(tmp_path, _READS_A_ROOT_INPUT)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert f"  input  path: 'raw.parquet' at {raw}" in _block(result, "next"), result.stdout
+
+
+def test_show_prints_a_notebook_step_with_its_source_executed_notebook_and_command(
+    tmp_path: Path,
+) -> None:
+    """A notebook step's block reads "(notebook step, env <env>)" and has an input line "notebook: <source path>", an output line "executed: '<key>' at <path>", and a "runs" line holding its papermill command."""
+    source = write_source_notebook(tmp_path / "summarize.ipynb").resolve()
+    executed = _run_output(tmp_path) / "executed" / "summarize.ipynb"
+    path = _write_definition(tmp_path, _RUNS_A_NOTEBOOK)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    block = _block(result, "summarize")
+    assert block[0] == f"Step 'summarize' (notebook step, env {sys.prefix})", result.stdout
+    assert f"  input  notebook: {source}" in block, result.stdout
+    assert (
+        f"  output executed: 'executed/summarize.ipynb' at {executed}" in block
+    ), result.stdout
+    runs = _runs_line(block)
+    assert "papermill" in runs, runs
+    assert str(source) in runs, runs
+    assert str(executed) in runs, runs
+
+
+def test_show_prints_a_simulation_step_with_its_run_directory_and_command(
+    tmp_path: Path,
+) -> None:
+    """A simulation step's block has input lines "spec: <path>" and "branches: <path>", an output line "run directory '<key>' at <path>" with no name, and a "runs" line holding its psimulate command."""
+    env = make_stub_env(tmp_path / "env")
+    path = copy_simulation_example(tmp_path / "example", env)
+    directory = path.parent.resolve()
+    spec = directory / "toy_model.yaml"
+    branches = directory / "branches.yaml"
+    run_directory = directory / "output" / "example" / "sims" / "toy"
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    block = _block(result, "sims/toy")
+    assert f"  input  spec: {spec}" in block, result.stdout
+    assert f"  input  branches: {branches}" in block, result.stdout
+    assert f"  output run directory 'sims/toy' at {run_directory}" in block, result.stdout
+    runs = _runs_line(block)
+    assert f"psimulate run -M {spec} -B {branches}" in runs, runs
+
+
+def test_show_names_a_task_added_with_add_task(tmp_path: Path) -> None:
+    """A task added with add_task is shown as "Step '<name>' (task added with add_task)" with its inputs and outputs."""
+    path = _write_definition(tmp_path, _UNREGISTERED)
+    source = tmp_path.resolve() / "source.txt"
+    target = tmp_path.resolve() / "target.txt"
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    block = _block(result, "copy")
+    assert block[0] == "Step 'copy' (task added with add_task)", result.stdout
+    assert f"  input  source: {source}" in block, result.stdout
+    assert f"  output target: {target}" in block, result.stdout
+
+
+def test_show_leaves_out_the_env_of_a_step_without_one(tmp_path: Path) -> None:
+    """The header of a step without an env (a python step) has no ", env" part."""
+    path = _write_definition(tmp_path, _KEYED_CHAIN)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert _block(result, "a")[0] == "Step 'a' (python step)", result.stdout
+
+
+def test_show_names_each_output_of_a_python_step_with_a_mapping(tmp_path: Path) -> None:
+    """A python step with outputs={'a': 'a.csv', 'b': 'b.csv'} shows the output lines "a: 'a.csv' at <path>" and "b: 'b.csv' at <path>", while a single-output python step's output line has no name."""
+    path = _write_definition(tmp_path, _SPLITS)
+    out = _run_output(tmp_path)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    split = _block(result, "split")
+    assert f"  output a: 'a.csv' at {out / 'a.csv'}" in split, result.stdout
+    assert f"  output b: 'b.csv' at {out / 'b.csv'}" in split, result.stdout
+    single = [line for line in _block(result, "population") if line.startswith("  output ")]
+    assert single == [
+        f"  output 'population.parquet' at {out / 'population.parquet'}"
+    ], result.stdout
+
+
+def test_show_prints_only_the_named_steps_in_definition_order(tmp_path: Path) -> None:
+    """'dagger show -c def.py b a' of a definition adding a, b and c prints the blocks of a and then b, and no block for c."""
+    path = _write_definition(tmp_path, _KEYED_CHAIN)
+
+    result = _invoke("show", str(path), "b", "a")
+
+    assert result.exit_code == 0, _describe(result)
+    headers = [block[0] for block in _blocks(result)]
+    assert headers == ["Step 'a' (python step)", "Step 'b' (python step)"], result.stdout
+
+
+def test_show_selects_a_step_whose_name_has_a_slash(tmp_path: Path) -> None:
+    """'dagger show -c def.py sims/toy' prints the block of the step named 'sims/toy'."""
+    path = copy_simulation_example(tmp_path / "example", make_stub_env(tmp_path / "env"))
+
+    result = _invoke("show", str(path), "sims/toy")
+
+    assert result.exit_code == 0, _describe(result)
+    blocks = _blocks(result)
+    assert len(blocks) == 1, result.stdout
+    assert blocks[0][0].startswith("Step 'sims/toy' ("), result.stdout
+
+
+def test_show_of_an_unknown_step_exits_two_naming_the_valid_steps(tmp_path: Path) -> None:
+    """'dagger show -c def.py nope' exits 2, its error output names 'nope' and the valid step names, and nothing is printed to standard output."""
+    path = _write_definition(tmp_path, _KEYED_CHAIN)
+
+    result = _invoke("show", str(path), "nope")
+
+    assert result.exit_code == 2, _describe(result)
+    assert "'nope'" in result.stderr, result.stderr
+    assert "Valid steps: 'a', 'b', 'c'." in result.stderr, result.stderr
+    assert result.stdout == "", result.stdout
+
+
+def test_show_of_a_definition_that_raises_exits_two_as_preview_does(tmp_path: Path) -> None:
+    """For a definition whose pipeline function raises, 'dagger show' exits 2 with the same error output as 'dagger preview' of that definition."""
+    path = _write_definition(tmp_path, _RAISES["function"])
+    previewed = _invoke("preview", str(path))
+    assert previewed.exit_code == 2, _describe(previewed)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert result.stderr == previewed.stderr
+
+
+def test_show_writes_nothing(tmp_path: Path) -> None:
+    """'dagger show' of a definition that never ran leaves its state root and outputs absent; after 'dagger run --local' of it, 'dagger show' leaves every file under the state root with the same bytes and modification time."""
+    path = _write_definition(tmp_path, _KEYED_CHAIN)
+    state = tmp_path / "state"
+
+    fresh = _invoke("show", str(path))
+
+    assert fresh.exit_code == 0, _describe(fresh)
+    assert not state.exists()
+    assert not any(_product(tmp_path, step).exists() for step in _CHAIN_STEPS)
+
+    ran = _invoke("run", str(path))
+    assert ran.exit_code == 0, _describe(ran)
+    age_files(state)
+    before = snapshot_files(state)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert before, f"'dagger run' wrote nothing under {state}"
+    assert changed_files(before, snapshot_files(state)) == []
+
+
+_DOCS_PAGE = Path(__file__).parents[2] / "docs" / "source" / "python_pipelines.rst"
+"""The docs page that shows a sample of 'dagger show' for the command step example."""
+
+_DOCS_ROOT = "/home/user/model"
+"""The folder the docs page shows the example's paths under."""
+
+_CALLABLE_WITH_A_VALUE = (
+    _HEADER
+    + """
+import pytask
+
+
+def pipeline():
+    task = Task(
+        name="threshold",
+        run=lambda threshold: None,
+        inputs={"threshold": pytask.PythonNode(name="threshold_value", value=3)},
+        outputs={"product": file_node(HERE / "made.txt")},
+        resources={},
+        env=None,
+    )
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(task)
+    return p
+"""
+)
+"""A definition of the hand-built task 'threshold', whose run is a lambda and whose input
+'threshold' is a PythonNode named 'threshold_value'."""
+
+_SIMULATION_WITH_AN_ARTIFACT = (
+    _HEADER
+    + """
+
+def pipeline():
+    p = Pipeline(
+        HERE / "out",
+        "run1",
+        root_inputs={"artifact.hdf": HERE / "artifact.hdf"},
+        state=HERE / "state",
+    )
+    p.add_simulation_step(
+        spec=HERE / "model.yaml",
+        branches=HERE / "branches.yaml",
+        outputs="sims/toy",
+        env=sys.prefix,
+        options={"project": "proj_simscience"},
+        artifact="artifact.hdf",
+    )
+    return p
+"""
+)
+"""A definition of the simulation step 'sims/toy', given the root input 'artifact.hdf' as its
+artifact, with model.yaml and branches.yaml beside the definition."""
+
+
+def _show_sample() -> str:
+    """Return the literal block after "adults`` prints::" on the docs page, dedented."""
+    lines = _DOCS_PAGE.read_text().splitlines()
+    starts = [index for index, line in enumerate(lines) if line.endswith("adults`` prints::")]
+    assert len(starts) == 1, f"no single 'adults`` prints::' line in {_DOCS_PAGE}"
+    sample: list[str] = []
+    for line in lines[starts[0] + 1 :]:
+        if line.strip() and not line.startswith(" "):
+            break
+        sample.append(line)
+    return textwrap.dedent("\n".join(sample)).strip("\n")
+
+
+def test_show_prints_the_docs_sample_for_the_command_example(tmp_path: Path) -> None:
+    """'dagger show -c pipeline.py adults' on a copy of tests/frontend/command_example prints the sample on the docs page, with the sample's folder replaced by the copy's and its env by sys.prefix."""
+    definition = _copy_command_example(tmp_path)
+    sample = _show_sample()
+    header = re.search(r"^Step 'adults' \(command step, env (.+)\)$", sample, re.MULTILINE)
+    assert header, sample
+    expected = sample.replace(header.group(1), sys.prefix).replace(
+        _DOCS_ROOT, str(tmp_path.resolve())
+    )
+
+    result = _invoke("show", str(definition), "adults")
+
+    assert result.exit_code == 0, _describe(result)
+    assert result.stdout.strip("\n") == expected
+
+
+def test_show_of_a_hand_built_task_with_a_callable_and_a_non_path_node(
+    tmp_path: Path,
+) -> None:
+    """A task added with add_task whose run is a lambda and whose input is a PythonNode named 'threshold_value' shows a non-empty "calls" line and an input line ending with the node's name."""
+    path = _write_definition(tmp_path, _CALLABLE_WITH_A_VALUE)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    block = _block(result, "threshold")
+    calls = [line for line in block if line.startswith("  calls  ")]
+    assert len(calls) == 1 and calls[0].removeprefix("  calls  ").strip(), result.stdout
+    inputs = [line for line in block if line.startswith("  input  ")]
+    assert any(line.endswith("threshold_value") for line in inputs), result.stdout
+
+
+def test_show_names_a_simulations_artifact_input(tmp_path: Path) -> None:
+    """A simulation step given artifact= the key of a root input shows an input line starting "  input  artifact: "."""
+    write_spec(tmp_path / "model.yaml")
+    write_branches(tmp_path / "branches.yaml")
+    (tmp_path / "artifact.hdf").write_bytes(b"")
+    path = _write_definition(tmp_path, _SIMULATION_WITH_AN_ARTIFACT)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    block = _block(result, "sims/toy")
+    assert any(line.startswith("  input  artifact: ") for line in block), result.stdout

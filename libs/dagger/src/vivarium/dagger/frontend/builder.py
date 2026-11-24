@@ -172,6 +172,8 @@ class Pipeline:
         # Outputs of steps added with add_task, by resolved path: the registry does not
         # know their keys.
         self._task_outputs: dict[Path, str] = {}
+        # Which method added each step, by step name, for 'dagger show'.
+        self._kinds: dict[str, str] = {}
 
     @property
     def output_root(self) -> Path:
@@ -268,7 +270,7 @@ class Pipeline:
             resources=resources,
             name=name,
         )
-        self._add(task, keys)
+        self._add(task, keys, "python")
 
     def add_notebook_step(
         self,
@@ -350,7 +352,7 @@ class Pipeline:
             resources=resources,
             name=name,
         )
-        self._add(task, keys)
+        self._add(task, keys, "notebook")
 
     def add_command_step(
         self,
@@ -424,7 +426,7 @@ class Pipeline:
             resources=resources,
             name=name,
         )
-        self._add(task, keys)
+        self._add(task, keys, "command")
 
     def add_simulation_step(
         self,
@@ -504,7 +506,7 @@ class Pipeline:
             resources=resources,
             name=name,
         )
-        self._add(task, keys)
+        self._add(task, keys, "simulation")
 
     def add_task(self, task: Task) -> None:
         """Add ``task``, a step that is already compiled, to the end of the pipeline.
@@ -565,6 +567,7 @@ class Pipeline:
                 )
         self._check_name(task.name)
         self._tasks.append(task)
+        self._kinds[task.name] = "task"
         for path in paths:
             self._task_outputs[path] = task.name
 
@@ -601,16 +604,17 @@ class Pipeline:
             return self._producers[key]
         return self._task_outputs.get(path)
 
-    def _add(self, task: Task, keys: Iterable[FileKey]) -> None:
-        """Append ``task`` and record it as the producer of each of ``keys``."""
+    def _add(self, task: Task, keys: Iterable[FileKey], kind: str) -> None:
+        """Append ``task`` of ``kind`` and record it as the producer of each of ``keys``."""
         self._tasks.append(task)
+        self._kinds[task.name] = kind
         for key in keys:
             self._producers[key] = task.name
 
 
 @dataclass(frozen=True)
 class _PipelineSnapshot:
-    """Hold the fixed tasks, state directory, registry and resources that one run reads."""
+    """Hold the fixed tasks, state directory, registry, resources and step kinds of a run."""
 
     tasks: Sequence[Task]
     # The absolute directory for pytask's configuration, state database and lockfile.
@@ -618,6 +622,9 @@ class _PipelineSnapshot:
     # Without a registry, preview names files by path.
     registry: FileRegistry | None = None
     resources: Mapping[str, Any] = field(default_factory=dict)
+    # Each step's kind by step name, as the Pipeline method that added it names it:
+    # "python", "notebook", "command", "simulation", or "task" for add_task.
+    kinds: Mapping[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Store ``tasks`` as a tuple; reject a relative root or non-mapping resources."""
@@ -654,8 +661,9 @@ def freeze(pipeline: Pipeline) -> _PipelineSnapshot:
     -------
         A new snapshot on each call, whose ``tasks`` are the tasks of the steps added so
         far, as a tuple in the order they were added, whose ``root`` is
-        :attr:`Pipeline.state`, whose ``registry`` is the pipeline's registry, and whose
-        ``resources`` are a copy of :attr:`Pipeline.resources`.
+        :attr:`Pipeline.state`, whose ``registry`` is the pipeline's registry, whose
+        ``resources`` are a copy of :attr:`Pipeline.resources`, and whose ``kinds`` map
+        each step's name to the kind of step the pipeline added it as.
 
     Raises
     ------
@@ -670,6 +678,7 @@ def freeze(pipeline: Pipeline) -> _PipelineSnapshot:
         root=pipeline.state,
         registry=pipeline._registry,
         resources=pipeline.resources,
+        kinds=dict(pipeline._kinds),
     )
 
 

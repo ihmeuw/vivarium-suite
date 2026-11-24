@@ -3,7 +3,7 @@
 Pipeline definitions
 ====================
 
-Run, preview, or force the steps of a Python pipeline definition for the ``dagger``
+Run, preview, force or show the steps of a Python pipeline definition for the ``dagger``
 command, which calls these functions when ``-c`` names a definition.
 
 Each function loads a definition with
@@ -11,12 +11,13 @@ Each function loads a definition with
 returns once into a snapshot of its steps, checks on that snapshot that no output has
 more than one producing step and that the pipeline's state directory can be used, and
 runs or previews that snapshot as the verbs of :mod:`~vivarium.dagger.frontend.execution`
-do, so it runs exactly the steps it checked.
+do, or prints its steps, so it uses exactly the steps it checked.
 A run or a force goes through the Jobmon bridge unless ``local`` is set; Jobmon is then
 checked before anything is written and imported only when the bridge runs the workflow,
 so a preview and a local run never import it. :doc:`/python_pipelines` shows an example
 of each command and describes the exit status and how each error is reported. The
-preview plan goes to standard output, as do pytask's progress table and failure reports.
+preview plan and the steps that ``dagger show`` prints go to standard output, as do
+pytask's progress table and failure reports.
 The command's own messages and tracebacks go to standard error, and so does pytask's
 output when pytask stops a preview's plan for a reason other than a definition error.
 
@@ -25,7 +26,7 @@ output when pytask stops a preview's plan for a reason other than a definition e
 import os
 import sys
 import traceback
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 from types import FrameType
@@ -34,7 +35,10 @@ from typing import Any, NoReturn
 import click
 import pytask
 
+from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
+from vivarium.dagger.backend.nodes import RunDirectoryNode
 from vivarium.dagger.backend.preview import StepPreview
+from vivarium.dagger.backend.task import Task
 from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
 from vivarium.dagger.frontend.builder import _PipelineSnapshot, freeze
@@ -46,8 +50,10 @@ from vivarium.dagger.frontend.execution import (
     StepExited,
     StepFailed,
     _preview,
+    _resolve,
     _run,
 )
+from vivarium.dagger.frontend.python_step import PythonStepRun, target_reference
 from vivarium.dagger.frontend.root_inputs import LocationInputError
 
 _FRAMEWORK_MODULES = (
@@ -73,6 +79,20 @@ _SKIP_REASONS = {
     pytask.TaskOutcome.SKIP: "not selected",
 }
 """How ``dagger preview`` words the outcomes of steps that would not run."""
+
+_SHOWN_NAMES: dict[str, str | None] = {
+    "__notebook__": "notebook",
+    "__executed__": "executed",
+    "__spec__": "spec",
+    "__branches__": "branches",
+    "__artifact__": "artifact",
+    "__output__": None,
+    "__run__": None,
+}
+"""How ``dagger show`` names dagger's reserved inputs and outputs; ``None`` for no name."""
+
+_SHOW_LABEL_WIDTH = 6
+"""The width of the longest line label of ``dagger show``, ``output``."""
 
 _EXIT_INTERRUPTED = 130
 """Exit status after an interrupt, as a shell reports a process stopped by SIGINT."""
@@ -143,6 +163,60 @@ def preview_definition(definition: str, until: tuple[str, ...]) -> None:
         with _verb_errors(pipeline, until, "'--until'"):
             plan = _quiet_preview(pipeline, until)
         _print_plan(plan)
+    except KeyboardInterrupt:
+        _interrupted(resumable=False)
+
+
+def show_definition(definition: str, steps: tuple[str, ...]) -> None:
+    """Print each step of ``definition``, or only ``steps``, as a block of labeled lines.
+
+    The definition is loaded, frozen and checked as for :func:`preview_definition`, with
+    the same errors, and nothing runs or is written. So, as for a preview, a pipeline
+    root that cannot be written exits with status 2, although ``show`` writes nothing
+    there. The steps are printed in the order the definition adds them, one block each,
+    with a blank line between blocks::
+
+        Step '<name>' (<kind> step, env <env>)
+          input  <name>: '<key>' at <path>
+          output <name>: '<key>' at <path>
+          runs   <command>
+
+    ``<kind>`` is ``python``, ``notebook``, ``command`` or ``simulation``; a task added
+    with :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task` reads ``(task added
+    with add_task)``. The env part is left out for a step without an env. A file that the
+    pipeline's registry knows, an output or a root input, is shown by its key and
+    absolute path, and a run directory that it knows as ``run directory '<key>' at
+    <path>``. Any other path node, such as a notebook's source, a simulation's spec or an
+    output of a task added with ``add_task``, is shown by its path as the task holds it,
+    and a node that is not a path node by its name. dagger's own reserved input and
+    output names are shown without their underscores, and the one output of a python
+    step or a simulation step's run directory has no name. A step whose command is
+    a string shows it on its ``runs`` line, each further line of the command on its own
+    line below, indented to the same column; a python step shows ``calls
+    <module>:<qualname>``, the import reference of its function.
+
+    Parameters
+    ----------
+    definition
+        The pipeline definition, as for :func:`preview_definition`.
+    steps
+        The names of the steps to print; all steps when empty. A name that is not a step
+        of the definition exits with status 2 and names the valid steps, as for
+        :func:`force_definition`.
+    """
+    try:
+        pipeline = _load(definition)
+        selected: set[str] | None = None
+        if steps:
+            with _verb_errors(pipeline, steps, "'STEP...'"):
+                selected = _resolve(pipeline, steps)
+        blocks = [
+            _step_block(pipeline, task)
+            for task in pipeline.tasks
+            if selected is None or task.name in selected
+        ]
+        if blocks:
+            click.echo("\n\n".join(blocks))
     except KeyboardInterrupt:
         _interrupted(resumable=False)
 
@@ -417,6 +491,56 @@ def _plan_line(step: StepPreview) -> str:
         return f"run  {step.name}: {reasons}" if reasons else f"run  {step.name}"
     reason = _SKIP_REASONS.get(step.outcome, step.outcome.description.lower())
     return f"skip {step.name}: {reason}"
+
+
+def _step_block(pipeline: _PipelineSnapshot, task: Task) -> str:
+    """Return the block of lines ``dagger show`` prints for ``task``."""
+    kind = pipeline.kinds.get(task.name, "task")
+    header = "task added with add_task" if kind == "task" else f"{kind} step"
+    if task.env:
+        header += f", env {task.env}"
+    lines = [f"Step {task.name!r} ({header})"]
+    for direction, nodes in (("input", task.inputs), ("output", task.outputs)):
+        for name, node in nodes.items():
+            if name in (CODE_ID_KEY, COMMAND_KEY):
+                continue
+            shown = _SHOWN_NAMES.get(name, name)
+            label = _file_label(pipeline, node)
+            text = label if shown is None else f"{shown}: {label}"
+            lines.append(_show_line(direction, text))
+    if isinstance(task.run, str):
+        lines.append(_show_line("runs", task.run))
+    else:
+        target = task.run.target if isinstance(task.run, PythonStepRun) else task.run
+        lines.append(_show_line("calls", _reference(target)))
+    return "\n".join(lines)
+
+
+def _show_line(label: str, text: str) -> str:
+    """Return ``text`` after ``label``, with any further lines of ``text`` aligned under it."""
+    indent = " " * (_SHOW_LABEL_WIDTH + 3)
+    return f"  {label:<{_SHOW_LABEL_WIDTH}} " + text.replace("\n", "\n" + indent)
+
+
+def _file_label(pipeline: _PipelineSnapshot, node: pytask.PNode) -> str:
+    """Return how ``dagger show`` names ``node``: by key and path, by path, or by name."""
+    path = _local_path(node)
+    if path is None:
+        return node.name
+    key = None if pipeline.registry is None else pipeline.registry.key_for(path)
+    if key is None:
+        return str(path)
+    if isinstance(node, RunDirectoryNode):
+        return f"run directory {key!r} at {path}"
+    return f"{key!r} at {path}"
+
+
+def _reference(target: Callable[..., Any]) -> str:
+    """Return ``target``'s import reference, or its repr if it has none."""
+    try:
+        return target_reference(target)
+    except ValueError:
+        return repr(target)
 
 
 def _quoted(names: list[str]) -> str:

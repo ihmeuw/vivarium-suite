@@ -180,7 +180,8 @@ def dagger() -> None:
     'run' to launch it and 'restart' to resume it from its output directory. A
     pipeline definition is a Python file or module with a function (by default
     'pipeline') that returns a Pipeline; 'run' runs its stale steps, 'preview'
-    shows which would run and why, and 'force' runs named steps even if current.
+    shows which would run and why, 'force' runs named steps even if current, and
+    'show' prints what each step reads, writes and runs.
 
     A pipeline definition's 'run' and 'force' go through Jobmon unless given
     --local. -P/--project and -q/--queue then set the project and queue of every
@@ -392,6 +393,23 @@ def preview(config: Path | str, until: tuple[str, ...]) -> None:
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.preview_definition(definition, until)
+
+
+@dagger.command()
+@_with_config
+@click.argument("steps", nargs=-1, metavar="[STEP]...")
+def show(config: Path | str, steps: tuple[str, ...]) -> None:
+    """Print what each step of a pipeline definition reads, writes and runs.
+
+    Each step is printed in the order the definition adds it, with its kind, its env if
+    any, one line for each input and output, and the command it runs, or the function a
+    python step calls. An input or output line shows its name and, where the pipeline
+    knows the file, its file key and absolute path; any other file is shown by its path
+    as the step gives it, and a node that is not a file by its name. Given STEPs, only
+    those steps are printed. Nothing runs and nothing is written.
+    """
+    definition = _require_definition(click.get_current_context(), config)
+    definitions.show_definition(definition, steps)
 
 
 @dagger.command()

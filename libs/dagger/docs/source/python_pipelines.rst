@@ -129,6 +129,41 @@ for a reason other than the errors listed under `Errors in a definition or a com
 for example because a step's input file is missing, ``dagger`` writes pytask's output to
 standard error, followed by a line naming pytask's exit code, and exits with status 1.
 
+Showing what a definition compiled to
+-------------------------------------
+
+.. code-block:: console
+
+   $ dagger show -c pipeline.py
+
+``dagger show`` prints what each step reads, writes and runs, without running anything
+or writing anything. Like ``dagger preview``, it exits with status 2 if the pipeline's
+root cannot be written. Each step is a block of labeled lines, in the order the
+definition adds the steps: the step's name and kind, and its env if it has one; one
+``input`` or ``output`` line per file; and a ``runs`` line with the step's whole shell
+command, or, for a python step, a ``calls`` line with the function it calls. An input
+or output line gives the file's name and, for a file that the pipeline knows (an output
+of a step method or a root input), its file key and absolute path; a run directory is
+shown as ``run directory '<key>' at <path>``. Any other file, such as a notebook's
+source or an output of a task added with
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, is shown by its path as the
+step gives it, and a node that is not a file by its name. Each further line of a
+command is on its own line below, indented to the same column; a command step's command
+starts with the line that ``dagger`` adds to create the directories of its outputs.
+``dagger show -c pipeline.py STEP...`` prints only the named steps.
+
+This is the output for the command example's own ``pipeline.py``, the definition shown
+in `Steps that run a command`_, not the example above. Run from that example's
+directory, ``dagger show -c pipeline.py adults`` prints::
+
+   Step 'adults' (command step, env /home/user/miniconda3/envs/model)
+     input  script: 'select_adults.py' at /home/user/model/select_adults.py
+     input  population: 'population.csv' at /home/user/model/output/example/population.csv
+     output adults: 'adults.csv' at /home/user/model/output/example/adults.csv
+     runs   mkdir -p /home/user/model/output/example || exit $?
+            python /home/user/model/select_adults.py /home/user/model/output/example/population.csv /home/user/model/output/example/adults.csv
+
+
 Running steps
 -------------
 
