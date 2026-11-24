@@ -21,6 +21,7 @@ import pytest
 from click.testing import CliRunner, Result
 from pytask import TaskOutcome
 
+from tests.backend.file_snapshot import age_files, changed_files, snapshot_files
 from tests.backend.order_names import EIGHT
 from tests.frontend.notebooks import broken_env, recorded_errors, write_source_notebook
 from tests.frontend.pipelines import stable_snapshot
@@ -3075,3 +3076,24 @@ def test_run_exits_two_for_an_output_that_leaves_the_run(tmp_path: Path) -> None
     assert f"Step 'escape': {outside.value}" in result.stderr, result.stderr
     assert not registry.path_for("../escaped.csv").exists()
     assert not (tmp_path / "state").exists()
+
+
+# A preview writes nothing under the state root
+
+
+def test_dagger_preview_of_a_pipeline_that_has_run_changes_no_state_file(
+    tmp_path: Path,
+) -> None:
+    """'dagger run --local' of a definition, then 'dagger preview' of it: every file under the pipeline's state root keeps its bytes and modification time."""
+    path = _write_definition(tmp_path, _CHAIN)
+    state = tmp_path / "state"
+    ran = _invoke("run", str(path))
+    assert ran.exit_code == 0, _describe(ran)
+    age_files(state)
+    before = snapshot_files(state)
+
+    result = _invoke("preview", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert before, f"'dagger run' wrote nothing under {state}"
+    assert changed_files(before, snapshot_files(state)) == []
