@@ -58,6 +58,11 @@ where = ["src"]
 tag_regex = '^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 fallback_version = "0.0.0+no-git-tag"
 
+# Only use version-like tags (v1.2.3 or 1.2.3) for the package version so that
+# other tags (for example, model13.0) do not break the build.
+[tool.setuptools_scm.scm.git]
+describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v[0-9]*", "--match", "[0-9]*"]
+
 [tool.black]
 line-length = 94
 
