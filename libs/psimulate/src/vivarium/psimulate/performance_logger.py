@@ -166,6 +166,12 @@ def _header_matches_schema(file_path: str) -> bool:
     return header == list(CENTRAL_LOG_SCHEMA)
 
 
+def _count_rows(log_file_path: str) -> int:
+    """Return the number of data rows in a central log file, excluding the header."""
+    with open(log_file_path) as f:
+        return sum(1 for _ in f) - 1
+
+
 def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
     """Append child job data and return name of first file containing this data.
 
@@ -194,11 +200,18 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
     # The append below is positional, so it is only safe when the target file's header
     # is already the canonical schema. If the most recent file predates the schema, roll
     # to a fresh file rather than corrupting it with rows in a different column order.
-    if not _header_matches_schema(most_recent_file_path):
+    # Also roll when the file is full, so first_file_with_data names the file the rows
+    # land in.
+    header_matches = _header_matches_schema(most_recent_file_path)
+    if not header_matches:
         logger.warning(
             f"Most recent central log file {most_recent_file_path} does not match the "
             "current schema; starting a new log file rather than appending to it."
         )
+    if (
+        not header_matches
+        or _count_rows(most_recent_file_path) >= NUM_ROWS_PER_CENTRAL_LOG_FILE
+    ):
         most_recent_file_path = _next_log_file_path(most_recent_file_path)
         _create_empty_log_file(most_recent_file_path)
 
@@ -211,11 +224,7 @@ def append_child_job_data(child_job_performance_data: pd.DataFrame) -> str:
 
     while len(child_job_performance_data) != 0:
         child_job_performance_data = child_job_performance_data.reset_index(drop=True)
-        with open(most_recent_file_path) as f:
-            # Subtract 1 for the header row
-            num_existing_rows = sum(1 for _ in f) - 1
-
-        available_rows = NUM_ROWS_PER_CENTRAL_LOG_FILE - num_existing_rows
+        available_rows = NUM_ROWS_PER_CENTRAL_LOG_FILE - _count_rows(most_recent_file_path)
         rows_to_append = min(len(child_job_performance_data), available_rows)
 
         data_to_append = child_job_performance_data[:rows_to_append]
@@ -281,7 +290,10 @@ def append_perf_data_to_central_logs(
         return
 
     child_job_performance_data = transform_perf_df_for_appending(perf_df, output_paths)
-    job_number = int(child_job_performance_data["job_number"].unique().squeeze())
+    job_numbers = child_job_performance_data["job_number"].unique()
+    if len(job_numbers) != 1:
+        raise ValueError(f"Expected exactly one job number, got {list(job_numbers)}.")
+    job_number = int(job_numbers[0])
     first_file_with_data = append_child_job_data(child_job_performance_data)
 
     runner_data = generate_runner_job_data(job_number, output_paths, first_file_with_data)

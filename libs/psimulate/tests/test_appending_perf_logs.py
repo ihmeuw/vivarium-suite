@@ -142,7 +142,7 @@ def test_data_parsing(
         ] * 6
     assert (central_perf_df["scenario_parameters"] == expected_scenario_parameters).all()
 
-    job_number = int(central_perf_df["job_number"].unique().squeeze())
+    job_number = int(central_perf_df["job_number"].unique()[0])
     runner_data = generate_runner_job_data(job_number, output_paths, "first_file_with_data")
 
     assert runner_data["project_name"].squeeze() == "project_name"
@@ -175,6 +175,53 @@ def test_valid_log_path(
     # test no warnings were raised
     append_perf_data_to_central_logs(artifact_perf_df, output_paths)
     assert not caplog.records
+
+
+def _set_job_number(perf_df: pd.DataFrame, job_numbers: list[str]) -> pd.DataFrame:
+    """Replace the job_number index level with str values, as a real run produces."""
+    df = perf_df.reset_index()
+    df["job_number"] = pd.Series(
+        [job_numbers[i % len(job_numbers)] for i in range(len(df))], dtype="str"
+    )
+    return df.set_index(perf_df.index.names)
+
+
+def test_append_with_str_job_number(
+    result_directory: Path,
+    artifact_perf_df: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    pd.DataFrame(columns=CENTRAL_LOG_SCHEMA).to_csv(
+        tmp_path / "log_summary_0000.csv", index=False
+    )
+    perf_df = _set_job_number(artifact_perf_df, ["12345"])
+    # The job number comes from an environment variable, so it is a string.
+    assert pd.api.types.is_string_dtype(perf_df.index.get_level_values("job_number"))
+
+    append_perf_data_to_central_logs(perf_df, output_paths)
+
+    child_data = pd.read_csv(tmp_path / "log_summary_0000.csv")
+    assert len(child_data) == len(perf_df)
+    assert (child_data["job_number"] == 12345).all()
+    runner_data = pd.read_csv(tmp_path / "runner_data.csv", header=None)
+    assert runner_data.iloc[0, 0] == 12345
+
+
+def test_append_with_multiple_job_numbers_raises(
+    result_directory: Path,
+    artifact_perf_df: pd.DataFrame,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=100)
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    perf_df = _set_job_number(artifact_perf_df, ["12345", "67890"])
+
+    with pytest.raises(ValueError, match="Expected exactly one job number"):
+        append_perf_data_to_central_logs(perf_df, output_paths)
 
 
 @pytest.mark.parametrize(
@@ -410,6 +457,32 @@ def test_appending_does_not_roll_when_header_matches(
     assert not (tmp_path / "log_summary_0001.csv").exists()
     assert "does not match" not in caplog.text
     assert len(pd.read_csv(log_file)) == len(central_perf_df)
+
+
+def test_appending_to_full_file_returns_next_file(
+    artifact_perf_df: pd.DataFrame,
+    result_directory: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full most-recent file is skipped, and the returned file is the one that has the data."""
+    max_num_rows = 4
+    _patch_central_logs(monkeypatch, tmp_path, num_rows=max_num_rows)
+
+    output_paths = get_output_paths_from_output_directory(result_directory)
+    central_perf_df = transform_perf_df_for_appending(artifact_perf_df, output_paths).reindex(
+        columns=CENTRAL_LOG_SCHEMA
+    )
+    full_file = tmp_path / "log_summary_0000.csv"
+    central_perf_df[:max_num_rows].to_csv(full_file, index=False)
+    data_to_append = central_perf_df[:2].reset_index(drop=True)
+
+    first_file_with_data = append_child_job_data(data_to_append.copy())
+
+    next_file = tmp_path / "log_summary_0001.csv"
+    assert first_file_with_data == str(next_file)
+    assert len(pd.read_csv(full_file)) == max_num_rows
+    assert_frame_equal(pd.read_csv(next_file), data_to_append, check_dtype=False)
 
 
 def test_appending_drifted_data_rolls_across_files(
