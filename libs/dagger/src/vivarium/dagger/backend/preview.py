@@ -96,8 +96,16 @@ def preview(tasks: Iterable[Task], root: Path, **kwargs: Any) -> list[StepPrevie
 
     Runs pytask with execution off (``dry_run=True, explain=True``) and reads one
     entry per step off the session's execution reports, in the order of ``tasks``. A
-    preview reads ``pytask.lock`` and the ``.pytask`` store but writes no declared
-    output.
+    preview reads ``pytask.lock`` and the ``.pytask`` store and writes nothing under the
+    ``root`` of a pipeline that has run: no declared output, not ``pytask.lock`` and not
+    pytask's file-hash cache, so it is safe next to a build of the same root. dagger's
+    pytask plugin, :mod:`vivarium.dagger.bridge.plugin`, keeps that cache from being saved;
+    pytask loads the plugin through dagger's entry point, so every environment where
+    dagger is installed has it, except an editable install made before the plugin existed.
+    On a ``root`` that was never built, a preview creates ``root``, its ``pytask.toml``
+    and pytask's ``.pytask`` folder, as
+    :func:`~vivarium.dagger.backend.build.build` does, but still writes no output, no
+    ``pytask.lock`` and no file-hash cache.
 
     Parameters
     ----------

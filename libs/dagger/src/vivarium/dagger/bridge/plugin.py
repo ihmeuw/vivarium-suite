@@ -1,11 +1,13 @@
-"""Register the Jobmon bridge with pytask.
+"""Register the Jobmon bridge with pytask, and keep a dry run from writing.
 
 pytask loads this module in every run through the ``vivarium_dagger_bridge`` entry
-point, so it imports only pytask and the standard library. It does nothing unless a
-build sets ``jobmon=True``. Such a build runs its stale steps through
-:mod:`~vivarium.dagger.bridge.execute` as one Jobmon workflow, unless it is a dry run,
-an explanation, or runs under the debugger or a trace (:data:`LOCAL_ONLY_MODES`), which
-stay in the build's process.
+point, so it imports only pytask and the standard library. In a dry run, such as a
+preview, it keeps pytask from saving its file-hash cache, ``.pytask/file_hashes.json``,
+so the dry run writes nothing under the root of a build that has run. Otherwise it
+does nothing unless a build sets ``jobmon=True``. Such a build runs its stale steps
+through :mod:`~vivarium.dagger.bridge.execute` as one Jobmon workflow, unless it is a
+dry run, an explanation, or runs under the debugger or a trace
+(:data:`LOCAL_ONLY_MODES`), which stay in the build's process.
 
 :func:`~vivarium.dagger.backend.build.build` passes its extra keyword arguments to
 pytask's configuration, so a build sets the bridge's keys there:
@@ -124,17 +126,29 @@ def pytask_parse_config(config: dict[str, Any]) -> None:
 
 @hookimpl(trylast=True)
 def pytask_post_parse(config: dict[str, Any]) -> None:
-    """Register :mod:`~vivarium.dagger.bridge.execute` for a build that uses Jobmon.
+    """Stop a dry run from saving pytask's file-hash cache, and register the bridge.
 
-    The module is registered with the build's own plugin manager, ``config["pm"]``,
-    only when ``config["jobmon"]`` is true and none of :data:`LOCAL_ONLY_MODES` is. It is
-    imported only then, so a build without Jobmon does not import it.
+    In a dry run (``config["dry_run"]``), pytask's ``_pytask.build`` hook module is
+    unregistered from the build's own plugin manager, ``config["pm"]``. That module has
+    already read the cache by then, because this hook runs last, and its only hook still
+    to come saves the cache when the session ends, so the dry run reads the cache and
+    never writes it. A missing cache entry only means pytask hashes that file again.
+
+    :mod:`~vivarium.dagger.bridge.execute` is registered with ``config["pm"]`` only when
+    ``config["jobmon"]`` is true and none of :data:`LOCAL_ONLY_MODES` is. It is imported
+    only then, so a build without Jobmon does not import it.
 
     Parameters
     ----------
     config
         pytask's configuration for the build, after every plugin has parsed it.
     """
+    if config.get("dry_run"):
+        # pytask's pytask_unconfigure in _pytask.build saves the cache without checking
+        # dry_run.
+        pytask_build = config["pm"].get_plugin("_pytask.build")
+        if pytask_build is not None:
+            config["pm"].unregister(pytask_build)
     if not config.get("jobmon") or any(config.get(mode) for mode in LOCAL_ONLY_MODES):
         return
     from vivarium.dagger.bridge import execute

@@ -61,7 +61,8 @@ ci_jenkins = ["vivarium-dagger[ci_github,cluster]"]
 dagger = "vivarium.dagger.cli:dagger"
 
 [project.entry-points.pytask]
-# pytask loads this module in every run; it does nothing unless a build sets jobmon=True.
+# pytask loads this module in every run; it keeps a dry run from writing pytask's hash
+# cache and does nothing else unless a build sets jobmon=True.
 vivarium_dagger_bridge = "vivarium.dagger.bridge.plugin"
 
 [project.urls]

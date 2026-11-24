@@ -4,14 +4,17 @@ Each scenario converges a small file pipeline, perturbs one thing, and asserts
 the exact set of steps the dry-run reports as would-run.
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytask
 import pytest
 
+from tests.backend.file_snapshot import age_files, changed_files, snapshot_files
 from tests.backend.order_names import EIGHT, TEN
 from vivarium.dagger.backend.build import build, failure_message
+from vivarium.dagger.backend.lock import RUN_LOCK_NAME, run_lock
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.preview import PlanFailed, Reason, StepPreview, preview
 from vivarium.dagger.backend.task import Task
@@ -63,6 +66,11 @@ def _would_run(plan: list[StepPreview]) -> set[str]:
 @pytest.fixture
 def converged(tmp_path: Path) -> tuple[list[Task], Path, Path, Path]:
     """A built, converged two-step pipeline: build (raw -> artifact) -> pafs."""
+    return _converge(tmp_path)
+
+
+def _converge(tmp_path: Path) -> tuple[list[Task], Path, Path, Path]:
+    """Build the pipeline build (raw -> artifact) -> pafs, with root tmp_path/state."""
     raw = tmp_path / "raw.csv"
     raw.write_text("one\n")
     artifact = tmp_path / "artifact.csv"
@@ -317,3 +325,96 @@ def test_plan_failed_lists_failed_steps_in_the_order_of_the_tasks_given(
 
     lines = [line for line in str(info.value).splitlines() if line.startswith("Step ")]
     assert [line.split("'")[1] for line in lines] == names, lines
+
+
+# A preview writes nothing under the root
+
+
+def test_a_preview_after_a_build_changes_no_file_under_the_root(tmp_path: Path) -> None:
+    """After build() of a two-step pipeline, preview() of the same tasks and root leaves every file under the root with the same bytes and the same modification time, including .pytask/file_hashes.json and pytask.lock."""
+    tasks, root, _raw, _artifact = _converge(tmp_path)
+    age_files(root)
+    before = snapshot_files(root)
+
+    preview(tasks, root)
+
+    assert {".pytask/file_hashes.json", "pytask.lock"} <= before.keys(), sorted(before)
+    assert changed_files(before, snapshot_files(root)) == []
+
+
+def test_a_preview_after_an_input_changed_changes_no_file_under_the_root(
+    tmp_path: Path,
+) -> None:
+    """After build(), an edit to the root input and preview() that reports the steps as stale: every file under the root keeps its bytes and modification time."""
+    tasks, root, raw, _artifact = _converge(tmp_path)
+    raw.write_text("two\n")
+    age_files(root)
+    before = snapshot_files(root)
+
+    plan = preview(tasks, root)
+
+    assert _would_run(plan) == {"build", "pafs"}
+    assert changed_files(before, snapshot_files(root)) == []
+
+
+def test_a_preview_of_selected_steps_changes_no_file_under_the_root(tmp_path: Path) -> None:
+    """After build(), preview(selected={one step}) leaves every file under the root unchanged."""
+    tasks, root, _raw, _artifact = _converge(tmp_path)
+    age_files(root)
+    before = snapshot_files(root)
+
+    preview(tasks, root, selected={"pafs"})
+
+    assert changed_files(before, snapshot_files(root)) == []
+
+
+def test_a_build_after_a_preview_still_saves_the_hash_cache(tmp_path: Path) -> None:
+    """preview() of a pipeline that has not run, then build() of it: .pytask/file_hashes.json exists after the build and holds at least one entry. This guards against a fix that, to keep a preview from writing the cache, also stops a later build in the same process from saving it; it passes without the fix too."""
+    tasks, root, _outputs = _unbuilt(tmp_path)
+    preview(tasks, root)
+
+    session = build(tasks, root)
+
+    assert session.exit_code == pytask.ExitCode.OK
+    cache = root / ".pytask" / "file_hashes.json"
+    assert cache.is_file()
+    assert len(json.loads(cache.read_text())) >= 1, cache.read_text()
+
+
+def test_a_first_preview_creates_only_the_root_and_pytasks_files(tmp_path: Path) -> None:
+    """preview() of a two-step pipeline whose root does not exist yet: afterwards the root contains pytask.toml and pytask's .pytask folder, and there is no .pytask/file_hashes.json, no pytask.lock and no step output."""
+    tasks, root, outputs = _unbuilt(tmp_path)
+    assert not root.exists()
+
+    preview(tasks, root)
+
+    assert (root / "pytask.toml").is_file()
+    assert (root / ".pytask").is_dir()
+    assert not (root / ".pytask" / "file_hashes.json").exists()
+    assert not (root / "pytask.lock").exists()
+    assert [output for output in outputs if output.exists()] == []
+
+
+def _unbuilt(tmp_path: Path) -> tuple[list[Task], Path, list[Path]]:
+    """Return the tasks build (raw -> artifact) -> pafs, an unbuilt root, and the outputs."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("one\n")
+    artifact, pafs = tmp_path / "artifact.csv", tmp_path / "pafs.csv"
+    tasks = [_copy_task("build", raw, artifact), _copy_task("pafs", artifact, pafs)]
+    return tasks, tmp_path / "state", [artifact, pafs]
+
+
+def test_a_preview_while_the_run_lock_is_held_changes_no_file_under_the_root(
+    tmp_path: Path,
+) -> None:
+    """After build(), with the root's run lock held (as a running build holds it), preview() succeeds and leaves every file under the root unchanged."""
+    tasks, root, _raw, _artifact = _converge(tmp_path)
+
+    with run_lock(root / RUN_LOCK_NAME):
+        age_files(root)
+        before = snapshot_files(root)
+        preview(tasks, root)
+        after = snapshot_files(root)
+
+    assert RUN_LOCK_NAME in before, sorted(before)
+    assert changed_files(before, after) == []

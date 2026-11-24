@@ -106,7 +106,10 @@ Previewing a run
 
    $ dagger preview -c pipeline.py
 
-``dagger preview`` runs nothing and writes no output. It prints one line per step, in
+``dagger preview`` runs nothing and writes nothing under the state root of a pipeline
+that has run, so it is safe while ``dagger run`` works on the same pipeline. On a pipeline
+that never ran, it creates the state root, its ``pytask.toml`` and pytask's ``.pytask``
+folder, and no output. It prints one line per step, in
 the order the definition adds the steps. A step that would run is printed as ``run <step>``,
 followed by pytask's reasons, separated by semicolons. A step that would not run is
 printed as ``skip <step>``, followed by why: ``unchanged``, or ``not selected`` when
