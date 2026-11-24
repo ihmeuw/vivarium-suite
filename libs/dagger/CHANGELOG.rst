@@ -4,6 +4,8 @@
 - Pin the ``cluster`` extra to ``jobmon_installer_ihme`` 10.12.2
 - Record each step of a build through Jobmon a few seconds after the step finishes, so a
   build that is killed keeps the steps it had recorded
+- Add a hash of the code of a Python file or a notebook that comments and formatting do not
+  change
 
 **0.1.0 - 11/04/26**
 
