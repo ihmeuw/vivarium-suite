@@ -392,9 +392,10 @@ def restart(
 def preview(config: Path | str, until: tuple[str, ...]) -> None:
     """Show which steps of a pipeline definition would run, and why.
 
-    Nothing runs and no output is written. --until plans only the named steps and
-    the steps they depend on. In this alpha every step that --until does not leave out
-    would run.
+    Nothing runs and no output file is written; on a pipeline that never ran, the
+    pipeline's state folder and an empty output folder are created. --until plans only
+    the named steps and the steps they depend on. In this alpha every step that --until
+    does not leave out would run.
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.preview_definition(definition, until)

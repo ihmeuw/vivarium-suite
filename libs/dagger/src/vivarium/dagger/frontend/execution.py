@@ -456,7 +456,8 @@ def preview(
     and writes nothing under the pipeline's state root once the pipeline has run, not
     even pytask's file-hash cache, so it is safe while a run of the same pipeline holds
     its lock. On a pipeline that never ran, it creates the state root, its
-    ``pytask.toml`` and pytask's ``.pytask`` folder, and no other file. Like
+    ``pytask.toml``, pytask's ``.pytask`` folder and the run's output folder, which
+    stays empty, and no other file. Like
     :func:`run`, it first freezes ``pipeline`` and plans
     that snapshot, so a step added to ``pipeline`` afterwards is not in this plan. Each
     reason's ``node`` is relabeled. A file the pipeline's registry knows reads
