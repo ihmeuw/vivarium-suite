@@ -131,6 +131,11 @@ source = ["vivarium.dagger"]
 # Measure the processes the tests start, such as the bridge's runner and a controller
 # under the fake Jobmon, so that their lines count toward the floor.
 patch = ["subprocess"]
+# sys.monitoring costs each of those processes less than the C tracer does. Python 3.11
+# does not have it, so coverage uses its default core there; the warning that says so
+# would go to the stderr of every process.
+core = "sysmon"
+disable_warnings = ["no-sysmon"]
 # The YAML runner imports Jobmon, which the GitHub CI env does not install, so its tests
 # skip there and cannot count toward the floor.
 omit = ["*/vivarium/dagger/config/*", "*/vivarium/dagger/runner.py"]
