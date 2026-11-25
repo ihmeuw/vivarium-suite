@@ -12,10 +12,10 @@ fi
 
 # Define variables
 username=$(whoami)
-env_type="simulation"
 make_new="no"
 use_shared="no"
 install_git_lfs="no"
+use_public="no"
 days_until_stale=7 # Number of days until environment is considered stale
 
 # Reset OPTIND so help can be invoked multiple times per shell session.
@@ -26,42 +26,50 @@ Help()
    echo
    echo "Script to automatically create and validate conda environments."
    echo
-   echo "Syntax: source environment.sh [-h|t|s|f|l]"
+   echo "Syntax: source environment.sh [-h|s|f|l|p]"
    echo "options:"
    echo "h     Print this Help."
-   echo "t     Type of conda environment. Either 'simulation' (default) or 'artifact'."
    echo "s     Use shared environment (venv overlay). Recommended for cluster development."
    echo "f     Force creation of a new environment."
    echo "l     Install git lfs (only applies when creating a new conda environment)."
+   echo "p     Install only the public extra, for machines without access to the IHME"
+   echo "      artifactory (off VPN) or cluster. It can run simulations but not build"
+   echo "      artifacts or run psimulate. Not compatible with -s. The full and public"
+   echo "      environments have the same name, so pass -f to switch between them."
 }
 
 # Process input options
-while getopts ":hsflt:" option; do
+while getopts ":hsflp" option; do
    case $option in
       h) # display help
          Help
          return;;
-      t) # Type of conda environment to build
-         env_type=$OPTARG;;
       s) # Use shared environment
          use_shared="yes";;
       f) # Force creation of a new environment
          make_new="yes";;
       l) # Install git lfs
          install_git_lfs="yes";;
+      p) # Install only the public extra (no IHME artifactory access)
+         use_public="yes";;
      \?) # Invalid option
          echo
          echo "ERROR: Invalid option"
          return;;
    esac
 done
+# The shared environment is on the cluster, which needs the VPN.
+if [[ "$use_shared" == "yes" && "$use_public" == "yes" ]]; then
+  echo
+  echo "ERROR: -p cannot be used with -s. The shared environment is only on the cluster."
+  return 1
+fi
 # Parse environment name
 env_name=$(make -s print-dist-name)
 if [[ -z "$env_name" ]]; then
   echo "ERROR: could not determine the distribution name from pyproject.toml" >&2
   return 1
 fi
-env_name+="_$env_type"
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
 # Pull repo to get latest changes from remote if remote exists
@@ -91,7 +99,7 @@ if [[ "$use_shared" == "yes" ]]; then
   if [[ ! -d "$venv_path" ]] || [[ "$make_new" == "yes" ]]; then
     # Venv doesn't exist or user requested force rebuild
     echo "Creating venv for shared environment in $venv_path"
-    make build-shared-env type=$env_type force=yes
+    make build-shared-env force=yes
   fi
   echo "Activating shared environment venv $env_name"
   source ".venv/$env_name/bin/activate"
@@ -118,9 +126,15 @@ else
   if [[ "$install_git_lfs" == "yes" ]]; then
     lfs_flag="lfs=yes"
   fi
+  access_flag=""
+  if [[ "$use_public" == "yes" ]]; then
+    access_flag="artifactory_access=no"
+  fi
 
   need_to_build="yes"
-  env_info=$(conda info --envs | grep $env_name | head -n 1)
+  # Match the name exactly so that an environment whose name starts with this one
+  # (for example, <name>_child) does not also match.
+  env_info=$(conda info --envs | awk -v name="$env_name" '$1 == name' | head -n 1)
   
   if [[ "$env_info" != "" ]]; then
     # Environment exists
@@ -145,7 +159,7 @@ else
       conda deactivate
     fi
     echo "Creating conda environment '$env_name'"
-    make build-env type=$env_type name=$env_name force=yes $lfs_flag
+    make build-env name=$env_name force=yes $lfs_flag $access_flag
   fi
   echo "Activating conda environment '$env_name'"
   conda activate $env_name

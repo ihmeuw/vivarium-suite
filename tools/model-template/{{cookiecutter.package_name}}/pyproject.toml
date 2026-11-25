@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "{{cookiecutter.package_name}}"
 description = "{{cookiecutter.package_description}}"
 readme = "README.rst"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = {text = "BSD-3-Clause"}
 authors = [{name = "The vivarium developers", email = "vivarium.dev@gmail.com"}]
 dynamic = ["version"]
@@ -25,17 +25,22 @@ test = [
     "vivarium-dependencies[pytest]",
     "pytest-vivarium",
 ]
-cluster = ["vivarium-cluster-tools>={{cookiecutter.vivarium_cluster_tools_version}}"]
+cluster = [
+    "vivarium-cluster-tools[cluster]>={{cookiecutter.vivarium_cluster_tools_version}}",
+    "vivarium-psimulate[cluster]>={{cookiecutter.vivarium_psimulate_version}}",
+]
 data = [
     "vivarium-inputs>={{cookiecutter.vivarium_inputs_version}}",
-    "{{cookiecutter.package_name}}[cluster]",
 ]
 interactive = [
     "vivarium-dependencies[interactive]",
     "vivarium-interactive>={{cookiecutter.vivarium_interactive_version}}",
 ]
 lint = ["vivarium-dependencies[lint]"]
-dev = ["{{cookiecutter.package_name}}[test,cluster,interactive,lint]"]
+# Every extra that installs from public PyPI alone. cluster and data need the IHME
+# artifactory, so `make build-env artifactory_access=no` installs this instead of dev.
+public = ["{{cookiecutter.package_name}}[test,interactive,lint]"]
+dev = ["{{cookiecutter.package_name}}[public,cluster,data]"]
 
 [project.urls]
 Homepage = "{{cookiecutter.package_url}}"
@@ -52,6 +57,11 @@ where = ["src"]
 [tool.setuptools_scm]
 tag_regex = '^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$'
 fallback_version = "0.0.0+no-git-tag"
+
+# Only use version-like tags (v1.2.3 or 1.2.3) for the package version so that
+# other tags (for example, model13.0) do not break the build.
+[tool.setuptools_scm.scm.git]
+describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v[0-9]*", "--match", "[0-9]*"]
 
 [tool.black]
 line-length = 94
