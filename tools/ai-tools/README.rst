@@ -18,7 +18,7 @@ team-specific layer on top, and ``simsci``'s optional seams (branch and PR
 conventions, ticket filing, environment setup) resolve automatically to the
 team skills below when both plugins are enabled.
 
-The ``_vv_writer``, ``_claim_auditor``, and ``_duplicate_finder`` agents carry the
+The ``_vv_writer``, ``_claim_auditor``, ``_duplicate_finder``, and ``_test_summarizer`` agents carry the
 same one-line plain-English writing rule as the ``simsci`` review agents.
 
 A ``SessionStart`` hook adds a short plain-English writing text
@@ -186,6 +186,8 @@ The agents that ship in *this* plugin:
 - ``_duplicate_finder`` has **no shell or file access at all** — its only
   tools are the read-only Jira MCP ``search`` and ``get_issue`` calls it
   uses to check candidate tickets against the backlog.
+- ``_test_summarizer`` has **no Bash access** — ``Read``, ``Grep``, ``Glob``
+  only. ``team-conventions`` §6 spawns it to write a PR's test summaries.
 - ``_model_implementer`` and ``_vv_writer`` (the ``model-development`` workflow)
   are write-capable (``Write``/``Edit``, no ``Bash``): they author
   files but never run the simulation, ``git``, or shell commands, and their

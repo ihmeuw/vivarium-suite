@@ -1,7 +1,8 @@
-**0.33.0 - 11/25/26**
+**0.32.3 - 11/25/26**
 
-- ``team-conventions``: refresh a PR's test summaries after every push to it, and
-  read the skill before a push
+- ``team-conventions``: post a PR's test summaries when the PR is opened, refresh
+  them after every push to it, and read the skill before a push
+- Move ``_test_summarizer`` here from ``simsci``
 
 **0.32.2 - 11/25/26**
 
