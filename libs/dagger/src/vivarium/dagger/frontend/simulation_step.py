@@ -194,8 +194,11 @@ def simulation_step(
     ------
     vivarium.dagger.backend.wiring.WiringError
         If ``artifact`` resolves to no producer and no root input, or ``outputs`` is a
-        declared root input, resolves to the path of a different registered key, is
-        already registered as a file output, resolves to a path that is not strictly
+        declared root input, resolves to a declared root input's path or a folder that
+        holds one (with the messages of
+        :meth:`~vivarium.dagger.backend.wiring.FileRegistry.check_not_root_input`),
+        resolves to the path of another step's output, is already registered as a file
+        output, resolves to a path that is not strictly
         inside the registry's run output directory (such as ``.``, ``..`` or an absolute
         path outside it), or is inside another registered output or contains one, since
         the step replaces that directory on every run. The message starts with

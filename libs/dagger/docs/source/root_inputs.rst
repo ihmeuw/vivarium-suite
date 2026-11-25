@@ -28,7 +28,12 @@ file when the definition loads, so any check of its format or columns is the job
 the function that returns the mapping. In the alpha every step runs on every build
 (see :ref:`what_the_alpha_does`); once a step can be current, a change to a root input's
 contents will make the steps that read it stale. A step cannot produce a key that is a
-root input; the ``Pipeline`` refuses such an output.
+root input, or an output at a root input's file or at a folder that holds one, so that
+no step's declared output can overwrite or replace a root input; the ``Pipeline``
+refuses such an output, also for a task added with
+:meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`. A command can still write
+files that it does not declare, so this does not stop a command from changing a root
+input.
 
 Call any function that returns the mapping inside the definition's ``pipeline()``
 function, not at the top level of the definition's module. In a run through Jobmon, the

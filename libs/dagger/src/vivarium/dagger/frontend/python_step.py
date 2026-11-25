@@ -410,9 +410,11 @@ def python_step(
     vivarium.dagger.backend.wiring.WiringError
         If an input key resolves to no producer and no root input, or an ``outputs``
         key is a declared root input, resolves to a path that is not strictly inside
-        the run's output directory, resolves to the path of a different key that is
-        already registered, or resolves to a path inside another step's output or one
-        that contains it. The message starts with ``Step '<name>':``, followed by the
+        the run's output directory, resolves to a declared root input's path or a
+        folder that holds one (with the messages of
+        :meth:`~vivarium.dagger.backend.wiring.FileRegistry.check_not_root_input`),
+        resolves to the path of another step's output, or resolves to a path inside
+        another step's output or one that contains it. The message starts with ``Step '<name>':``, followed by the
         registry's message, which names the file key. Raised before any key is
         registered.
     ValueError
