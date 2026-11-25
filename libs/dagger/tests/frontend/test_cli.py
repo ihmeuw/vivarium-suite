@@ -3823,3 +3823,267 @@ def test_graph_of_a_definition_that_raises_exits_two_as_show_does(tmp_path: Path
     assert result.exit_code == 2, _describe(result)
     assert result.stderr == shown.stderr
     assert not target.exists()
+
+
+# show and graph refuse what preview refuses (MIC-7818, MIC-7765)
+
+_NAMED_CYCLE = _CYCLE.replace('("a", y, x)', '("cycle_alpha", y, x)').replace(
+    '("b", x, y)', '("cycle_bravo", x, y)'
+)
+"""``_CYCLE`` with its steps named cycle_alpha and cycle_bravo, so that their names can be
+found in a message."""
+
+_CYCLE_ERROR = "Error: The DAG contains cycles"
+"""How standard error starts when a command reports pytask's description of a cycle."""
+
+
+def test_show_of_a_step_added_before_its_producer_exits_two_with_previews_message(
+    tmp_path: Path,
+) -> None:
+    """'dagger show' on a definition that adds a step before a step it depends on (with add_task) exits 2 with the same order message as 'dagger preview' on it, prints no step block, and writes nothing."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+    before = _without_bytecode(snapshot_files(tmp_path))
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert _OUT_OF_ORDER in result.stderr, result.stderr
+    assert result.stdout == "", result.stdout
+    assert changed_files(before, _without_bytecode(snapshot_files(tmp_path))) == []
+    previewed = _invoke("preview", str(path))
+    assert previewed.exit_code == 2, _describe(previewed)
+    assert result.stderr == previewed.stderr
+
+
+def test_show_of_a_cycle_exits_two_with_the_cycle(tmp_path: Path) -> None:
+    """'dagger show' on a definition whose two add_task tasks read each other's output exits 2, its standard error starts 'Error: The DAG contains cycles' and names both steps, and it prints no step block."""
+    assert "cycle_alpha" in _NAMED_CYCLE and "cycle_bravo" in _NAMED_CYCLE
+    path = _write_definition(tmp_path, _NAMED_CYCLE)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 2, _describe(result)
+    assert result.stderr.startswith(_CYCLE_ERROR), result.stderr
+    for step in ("cycle_alpha", "cycle_bravo"):
+        assert step in result.stderr, (step, result.stderr)
+    assert result.stdout == "", result.stdout
+    assert not (tmp_path / "x.txt").exists()
+    assert not (tmp_path / "y.txt").exists()
+
+
+def test_graph_of_a_step_added_before_its_producer_exits_two_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """'dagger graph -c DEF graph.mmd' on a definition with a step before its producer exits 2 with the order message and writes no graph file; the same holds for a cycle."""
+    for case, source in (("order", _CONSUMER_FIRST), ("cycle", _NAMED_CYCLE)):
+        folder = tmp_path / case
+        path = _write_definition(folder, source)
+        shown = _invoke("show", str(path))
+        assert shown.exit_code == 2, (case, _describe(shown))
+        before = _without_bytecode(snapshot_files(folder))
+        target = folder / "graph.mmd"
+
+        result = _invoke("graph", str(path), str(target))
+
+        assert result.exit_code == 2, (case, _describe(result))
+        if case == "order":
+            assert _OUT_OF_ORDER in result.stderr, result.stderr
+        else:
+            assert result.stderr.startswith(_CYCLE_ERROR), result.stderr
+        assert result.stderr == shown.stderr, case
+        assert not target.exists(), case
+        assert changed_files(before, _without_bytecode(snapshot_files(folder))) == [], case
+
+
+def test_show_and_graph_still_work_on_an_ordered_definition(tmp_path: Path) -> None:
+    """On the pipeline example, 'dagger show' and 'dagger graph' still exit 0 with their usual output."""
+    definition = _copy_pipeline_example(tmp_path)
+    target = tmp_path / "graph.mmd"
+
+    shown = _invoke("show", str(definition))
+    drawn = _invoke("graph", str(definition), str(target))
+
+    assert shown.exit_code == 0, _describe(shown)
+    assert shown.stderr == "", shown.stderr
+    assert [block[0] for block in _blocks(shown)] == [
+        f"Step '{step}' (python step)" for step in ("population", "adults", "summary")
+    ], shown.stdout
+    assert drawn.exit_code == 0, _describe(drawn)
+    assert drawn.stdout == "", drawn.stdout
+    assert drawn.stderr == "", drawn.stderr
+    assert target.read_text() == _graph_docs_sample()
+
+
+_COMMAND_TASK = (
+    _HEADER
+    + """
+
+def command(name, run, inputs, outputs):
+    return Task(name=name, run=run, inputs=inputs, outputs=outputs, resources={}, env=None)
+
+"""
+)
+"""The start of a definition whose ``command`` builds a hand-built command task."""
+
+_ORDER_AND_CYCLE = (
+    _COMMAND_TASK
+    + """
+def copy(name, source, target):
+    inputs, outputs = {"source": file_node(source)}, {"target": file_node(target)}
+    return command(name, f"cp {source} {target}", inputs, outputs)
+
+
+def pipeline():
+    a, b = HERE / "a.txt", HERE / "b.txt"
+    x, y = HERE / "x.txt", HERE / "y.txt"
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(copy("consumer", a, b))
+    p.add_task(command("producer", f"touch {a}", {}, {"target": file_node(a)}))
+    p.add_task(copy("cycle_alpha", y, x))
+    p.add_task(copy("cycle_bravo", x, y))
+    return p
+"""
+)
+"""A definition that adds 'consumer' before 'producer', as ``_CONSUMER_FIRST`` does, and then
+the steps cycle_alpha and cycle_bravo, which read each other's output."""
+
+_UNSIGNED_INPUT = (
+    _COMMAND_TASK
+    + """
+class Unsigned:
+    name = "unsigned_value"
+
+    def __init__(self):
+        self.attributes = {}
+
+    @property
+    def signature(self):
+        raise RuntimeError("this node has no signature")
+
+    def state(self):
+        return "v1"
+
+    def load(self, is_product=False):
+        return 3
+
+    def save(self, value):
+        raise NotImplementedError
+
+
+def pipeline():
+    made = {"made": file_node(HERE / "made.txt")}
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(command("unsigned", "true", {"value": Unsigned()}, made))
+    return p
+"""
+)
+"""A definition of the hand-built step 'unsigned', whose input 'value' is a node named
+'unsigned_value' whose ``signature`` raises, so that pytask cannot build a graph of it."""
+
+_RETURN_OUTPUT = (
+    _COMMAND_TASK
+    + """
+def pipeline():
+    p = Pipeline(HERE / "out", "run1", state=HERE / "state")
+    p.add_task(command("returns", "true", {}, {"return": file_node(HERE / "made.txt")}))
+    return p
+"""
+)
+"""A definition of the hand-built command step 'returns', whose one output is named 'return',
+a name that the backend cannot convert."""
+
+
+def test_show_reports_an_order_error_before_a_cycle_as_preview_does(tmp_path: Path) -> None:
+    """'dagger show' on a definition with both a step added before its producer and a two-step cycle exits 2 with the order message, and its standard error is the same as 'dagger preview' gives on it."""
+    path = _write_definition(tmp_path, _ORDER_AND_CYCLE)
+
+    shown = _invoke("show", str(path))
+    previewed = _invoke("preview", str(path))
+
+    assert shown.exit_code == 2, _describe(shown)
+    assert _OUT_OF_ORDER in shown.stderr, shown.stderr
+    assert shown.stdout == "", shown.stdout
+    assert previewed.exit_code == 2, _describe(previewed)
+    assert shown.stderr == previewed.stderr
+
+
+def test_show_of_an_unknown_step_of_an_out_of_order_definition_names_the_step(
+    tmp_path: Path,
+) -> None:
+    """'dagger show -c DEF bb' on a definition with a step added before its producer, where 'bb' is not a step, exits 2 with click's usage error for 'STEP...' and "No step named 'bb'.", and not with the order message."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+
+    result = _invoke("show", str(path), "bb")
+
+    assert result.exit_code == 2, _describe(result)
+    assert (
+        "Error: Invalid value for 'STEP...': No step named 'bb'." in result.stderr
+    ), result.stderr
+    assert _OUT_OF_ORDER not in result.stderr, result.stderr
+    assert result.stdout == "", result.stdout
+
+
+@pytest.mark.parametrize("step", ["consumer", "producer"])
+def test_show_of_a_known_step_of_an_out_of_order_definition_exits_two_with_the_order_message(
+    tmp_path: Path, step: str
+) -> None:
+    """'dagger show -c DEF STEP' on a definition with 'consumer' added before 'producer', for either step, exits 2 with the order message as 'dagger show' without a step gives it, not as a bad STEP argument, and prints no step block."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+    whole = _invoke("show", str(path))
+
+    result = _invoke("show", str(path), step)
+
+    assert result.exit_code == 2, _describe(result)
+    assert _OUT_OF_ORDER in result.stderr, result.stderr
+    assert "Invalid value" not in result.stderr, result.stderr
+    assert "Usage:" not in result.stderr, result.stderr
+    assert result.stderr == whole.stderr
+    assert result.stdout == "", result.stdout
+
+
+def test_graph_to_a_bad_extension_of_an_out_of_order_definition_gives_the_order_message(
+    tmp_path: Path,
+) -> None:
+    """'dagger graph -c DEF graph.txt' on a definition with a step added before its producer exits 2 with the order message and not the extension message, since the order is checked first, and writes no file."""
+    path = _write_definition(tmp_path, _CONSUMER_FIRST)
+    target = tmp_path / "graph.txt"
+
+    result = _invoke("graph", str(path), str(target))
+
+    assert result.exit_code == 2, _describe(result)
+    assert _OUT_OF_ORDER in result.stderr, result.stderr
+    assert "'FILE'" not in result.stderr, result.stderr
+    assert "graph.txt" not in result.stderr, result.stderr
+    assert not target.exists()
+
+
+def test_show_of_a_definition_pytask_cannot_graph_prints_its_steps(tmp_path: Path) -> None:
+    """'dagger show' on a definition whose step has an input node whose signature raises, so that pytask cannot build a graph of it, is not stopped by the order check: it exits 0 with no traceback and prints the step's block."""
+    path = _write_definition(tmp_path, _UNSIGNED_INPUT)
+
+    result = _invoke("show", str(path))
+
+    assert result.exit_code == 0, _describe(result)
+    assert "Traceback" not in result.output, result.output
+    assert "no signature" not in result.output, result.output
+    block = _block(result, "unsigned")
+    assert block[0] == "Step 'unsigned' (task added with add_task)", result.stdout
+    inputs = [line for line in block if line.startswith("  input  ")]
+    assert any(line.endswith("unsigned_value") for line in inputs), result.stdout
+
+
+def test_show_of_a_task_the_backend_cannot_convert_exits_two_as_preview_does(
+    tmp_path: Path,
+) -> None:
+    """'dagger show' on a definition whose hand-built step has an output named 'return' exits 2 with the backend's "Step 'returns': ..." message, with the same standard error as 'dagger preview', and prints no step block."""
+    path = _write_definition(tmp_path, _RETURN_OUTPUT)
+
+    shown = _invoke("show", str(path))
+    previewed = _invoke("preview", str(path))
+
+    assert shown.exit_code == 2, _describe(shown)
+    assert re.search(r"Step 'returns': .*return", shown.stderr), shown.stderr
+    assert "Traceback" not in shown.stderr, shown.stderr
+    assert shown.stdout == "", shown.stdout
+    assert previewed.exit_code == 2, _describe(previewed)
+    assert shown.stderr == previewed.stderr

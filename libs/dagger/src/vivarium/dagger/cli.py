@@ -411,7 +411,9 @@ def show(config: Path | str, steps: tuple[str, ...]) -> None:
     python step calls. An input or output line shows its name and, where the pipeline
     knows the file, its file key and absolute path; any other file is shown by its path
     as the step gives it, and a node that is not a file by its name. Given STEPs, only
-    those steps are printed. Nothing runs and nothing is written.
+    those steps are printed. Nothing runs and nothing is written. As for preview, the
+    command exits with status 2 if a step is added before a step it depends on or steps
+    depend on each other in a cycle.
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.show_definition(definition, steps)
@@ -429,7 +431,9 @@ def graph(config: Path | str, output: Path) -> None:
     each root input a step reads and each output no step reads. There is one edge from a
     step to each step that reads files it writes, labeled with the keys of those files;
     the edges from root inputs and to final outputs have no label. Nothing runs, and FILE
-    is the only file written.
+    is the only file written. As for preview, the command exits with status 2, and writes
+    nothing, if a step is added before a step it depends on or steps depend on each
+    other in a cycle.
     """
     definition = _require_definition(click.get_current_context(), config)
     definitions.graph_definition(definition, output)
