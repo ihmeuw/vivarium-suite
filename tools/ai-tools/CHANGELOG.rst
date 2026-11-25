@@ -1,3 +1,8 @@
+**0.33.0 - 11/24/26**
+
+- ``team-conventions``: refresh a PR's test summaries after every push to it, and
+  read the skill before a push
+
 **0.32.1 - 11/19/26**
 
 - ``model-development``: fetch from the remote in Setup, base the feature branch

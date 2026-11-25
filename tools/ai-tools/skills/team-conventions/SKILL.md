@@ -1,11 +1,11 @@
 ---
 name: team-conventions
-description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, and flagging the PR for team review in `#vivarium_dev`. Use whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", or anything similar where the team convention is the answer.
+description: SimSci Engineering team conventions for everyday git/Jira/PR mechanics — branch naming from a MIC ticket, interacting with Jira, opening a PR with the repo's `.github/pull_request_template.md` via the GitHub MCP, flagging the PR for team review in `#vivarium_dev`, and refreshing its test summaries. Read it before every push to a branch (`git push`, a force-push, or a GitHub MCP push), because a push leaves the PR's test summaries stale. Use it whenever the user asks to "make a branch", "name this branch", "create a ticket", "write a Jira ticket", "point this ticket", "open a PR", "flag a PR for review", "post my PR", "refresh the test summaries", or anything similar where the team convention is the answer.
 ---
 
 # SimSci Engineering team conventions
 
-The four workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, and flag it for review. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
+The workflows below are the team-standard ways to start a change, file the ticket that justifies it, ship the resulting PR, flag it for review, and keep it current. Follow them exactly — drift here makes branches, tickets, and PRs harder to cross-reference in tooling later.
 
 ## 1. Naming a branch
 
@@ -152,3 +152,12 @@ If the transition fails because the ticket's workflow has no path to Ready for R
 ## 5. Responding to review comments
 
 Address a review comment by making the change and pushing it. **Do not resolve the review thread yourself** — the team leaves each thread for its author (the reviewer who raised it) to resolve once they're satisfied. The author resolving their own comment is the signal that it's settled. Replying on the thread is fine; resolving it is not your call. Instead, to show that you have made a change to address the substance of the comment, use the "rocket ship" emoji reaction on the comment.
+
+## 6. Keeping PR test summaries current
+
+A PR's test summaries go stale when the PR changes. After every push to a branch with an open PR, and when asked, refresh them. The refresh is part of the push, so do it without asking. Skip a closed or merged PR.
+
+1. Make sure the working tree matches the PR head. Run `simsci:_test_summarizer` on the PR's full diff (`gh pr diff`), and replace each `{sha}` with the head SHA. Every test that the PR adds must appear in a summary.
+2. Your summaries are your own file comments that start with the summarizer's ``**Test summary for `<file>`**`` line. Never touch any other comment.
+3. Keep a summary only if it was posted at the head commit (`original_commit_id`) and its file is still in the diff, and edit it if its text changed. Delete every other summary. Then post a file comment (`subject_type=file`) at the head commit on each changed file that has no summary.
+4. Pass each body inline (`gh api ... -f body='...'`). Do not write temp files.
