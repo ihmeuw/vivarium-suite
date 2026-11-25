@@ -1,3 +1,12 @@
+**6.1.2 - 11/24/26**
+
+- Make ``SimulationClock.register_step_modifier`` a method instead of an attribute
+  assigned in ``setup``
+- Annotate ``required_resources`` as a ``Sequence`` on the ``ValuesManager``
+  registration methods, which matches ``ValuesInterface``
+- Test that each ``Builder`` interface method that forwards to a manager method keeps
+  its signature
+
 **6.1.1 - 11/19/26**
 
 - Fix bugs preventing a simulation from being able to be unpickled
