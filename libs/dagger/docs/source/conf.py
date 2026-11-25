@@ -204,7 +204,7 @@ autodoc_default_options = {
 # Display type hints in the description instead of the signature.
 autodoc_typehints = "description"
 # Render the recursive JSON alias by name rather than expanding it.
-autodoc_type_aliases = {"JSONValue": "vivarium.dagger.bridge.payload.JSONValue"}
+autodoc_type_aliases = {"JSONValue": "vivarium.dagger.runtime.recipe.JSONValue"}
 suppress_warnings = [
     "sphinx_autodoc_typehints.guarded_import",
     "sphinx_autodoc_typehints.forward_reference",

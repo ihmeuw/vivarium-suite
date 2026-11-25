@@ -58,6 +58,7 @@ from vivarium.dagger.backend.code_hash import PARAMETERS_TAG, cell_source
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileKey, FileRegistry, WiringError
+from vivarium.dagger.runtime.python_run import PYTHON_OUTPUT as _PYTHON_OUTPUT
 
 NotebookParameter = str | int | float | bool | None
 """A scalar notebook parameter, which reaches the notebook with this Python type.
@@ -75,9 +76,6 @@ _NOTEBOOK_INPUT = "__notebook__"
 
 _EXECUTED_OUTPUT = "__executed__"
 """Task output name under which the executed notebook's node is attached."""
-
-_PYTHON_OUTPUT = "__output__"
-"""Task output name under which a python step with one output gets its output's path."""
 
 _RESERVED_NAMES = frozenset(
     {_NOTEBOOK_INPUT, _EXECUTED_OUTPUT, _PYTHON_OUTPUT, CODE_ID_KEY, COMMAND_KEY}

@@ -1131,3 +1131,117 @@ def test_main_called_in_process_keeps_a_sys_path_entry_that_was_already_there(
     assert status == 0, _read(tmp_path / _RESULT_NAME)["exc"]
     assert _observed(observed).count(str(modules)) == 1
     assert sys.path == before
+
+
+# The node-side runtime without pytask (MIC-7871)
+
+_CONTROLLER_MODULES = ("pytask", "_pytask", "sqlalchemy")
+"""Top-level names of the modules that running a recipe on a node must not import."""
+
+_RUN_RECIPE = """
+import json
+import sys
+
+from vivarium.dagger.bridge.runner import main
+
+payload, result, *names = sys.argv[1:]
+status = main([payload, result])
+loaded = sorted(
+    module
+    for module in sys.modules
+    if any(module == name or module.startswith(name + ".") for name in names)
+)
+print(json.dumps({"status": status, "loaded": loaded}))
+"""
+"""Script that runs ``main([payload, result])`` and then prints, as one line of JSON, its
+status and the loaded modules that are one of the remaining arguments or inside one."""
+
+
+def _fresh_interpreter(code: str, *arguments: str, cwd: Path | None = None) -> Any:
+    """Run ``code`` with ``arguments`` in an isolated child interpreter started in ``cwd``.
+
+    Return the JSON value on the last line that the child printed to standard output.
+    """
+    process = subprocess.run(
+        [sys.executable, "-I", "-c", code, *arguments],
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=_TIMEOUT,
+    )
+    assert process.returncode == 0, process.stderr
+    lines = process.stdout.splitlines()
+    assert lines, process.stderr
+    return json.loads(lines[-1])
+
+
+def test_a_python_step_recipe_runs_in_a_fresh_interpreter_without_pytask(
+    tmp_path: Path,
+) -> None:
+    """A fresh interpreter that runs a python-step recipe with the runner's main() gets status 0 and the step's output, and afterwards no pytask, _pytask or sqlalchemy module is in sys.modules."""
+    modules = tmp_path / "modules"
+    name = _sys_path_module(modules, 1, tmp_path / "observed.json")
+    recipe = _sys_path_payload("python_step", tmp_path, f"{name}:make", [str(modules)])
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+    result_path = tmp_path / _RESULT_NAME
+
+    report = _fresh_interpreter(
+        _RUN_RECIPE,
+        str(payload),
+        str(result_path),
+        *_CONTROLLER_MODULES,
+        cwd=_mkdir(tmp_path / "elsewhere"),
+    )
+
+    result = _read(result_path)
+    assert report["status"] == 0, result["exc"]
+    assert (result["task"], result["success"]) == ("python_step", True), result["exc"]
+    product = tmp_path / "out" / "python_step.parquet"
+    assert pd.read_parquet(product)["n"].tolist() == [1]
+    assert report["loaded"] == [], report["loaded"]
+
+
+def test_a_command_step_recipe_runs_in_a_fresh_interpreter_without_pytask_or_pandas(
+    tmp_path: Path,
+) -> None:
+    """A fresh interpreter that runs a command-step recipe with the runner's main() gets status 0, and afterwards no pytask, _pytask, sqlalchemy or pandas module is in sys.modules."""
+    recipe = _command_payload("command_step", tmp_path, "echo ran")
+    payload = _write_payload(tmp_path / "step.payload.json", recipe)
+    result_path = tmp_path / _RESULT_NAME
+
+    report = _fresh_interpreter(
+        _RUN_RECIPE,
+        str(payload),
+        str(result_path),
+        *_CONTROLLER_MODULES,
+        "pandas",
+        cwd=_mkdir(tmp_path / "elsewhere"),
+    )
+
+    result = _read(result_path)
+    assert report["status"] == 0, result["exc"]
+    assert (result["task"], result["success"]) == ("command_step", True), result["exc"]
+    assert result["stdout"] == "ran\n"
+    assert report["loaded"] == [], report["loaded"]
+
+
+def test_each_runtime_module_imports_without_pytask() -> None:
+    """In a fresh interpreter, importing vivarium.dagger.runtime.recipe, vivarium.dagger.runtime.command and vivarium.dagger.runtime.python_run leaves pytask, _pytask and sqlalchemy out of sys.modules."""
+    code = (
+        "import json, sys\n"
+        "import vivarium.dagger.runtime.recipe\n"
+        "import vivarium.dagger.runtime.command\n"
+        "import vivarium.dagger.runtime.python_run\n"
+        "names = sys.argv[1:]\n"
+        "loaded = [\n"
+        "    module for module in sys.modules\n"
+        "    if any(module == name or module.startswith(name + '.') for name in names)\n"
+        "]\n"
+        "print(json.dumps(sorted(loaded)))"
+    )
+
+    loaded = _fresh_interpreter(code, *_CONTROLLER_MODULES)
+
+    assert loaded == [], loaded
