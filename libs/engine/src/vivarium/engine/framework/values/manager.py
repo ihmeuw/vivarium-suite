@@ -92,9 +92,15 @@ class ValuesManager(Manager):
             # Unsourced pipelines might occur when generic components register
             # modifiers to values that aren't required in a simulation.
             if not pipeline.source:
-                self.logger.warning(
-                    f"Pipeline {pipeline.name} has no source. It will not be usable."
+                message = f"Pipeline {pipeline.name} has no source. It will not be usable."
+                modifier_components = sorted(
+                    {modifier.component.name for modifier in pipeline.modifiers}
                 )
+                if modifier_components:
+                    message += (
+                        f" Modifiers were registered by: {', '.join(modifier_components)}."
+                    )
+                self.logger.warning(message)
 
     def register_value_producer(
         self,

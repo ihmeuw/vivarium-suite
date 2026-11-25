@@ -1,3 +1,8 @@
+**6.1.2 - 11/25/26**
+
+- Name the components that registered modifiers in the warning for a pipeline
+  with no source
+
 **6.1.1 - 11/19/26**
 
 - Fix bugs preventing a simulation from being able to be unpickled
