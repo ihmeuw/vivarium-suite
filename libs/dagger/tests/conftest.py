@@ -6,6 +6,15 @@ from collections.abc import Iterator
 import pytest
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _one_math_thread_per_process() -> Iterator[None]:
+    """Give numpy and pyarrow one thread in every process that the tests start."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("OPENBLAS_NUM_THREADS", "1")
+        patch.setenv("OMP_NUM_THREADS", "1")
+        yield
+
+
 @pytest.fixture
 def umask_022() -> Iterator[None]:
     """Set the process's umask to 0o022 for the test, and restore it after."""
