@@ -145,6 +145,43 @@ def test_configure_modifier_calls_methods_correctly(mocker: MockerFixture) -> No
     manager._add_resource.assert_called_once_with(mock_value_modifier)  # type: ignore[attr-defined]
 
 
+def test_on_post_setup_warns_for_unsourced_pipelines(mocker: MockerFixture) -> None:
+    class FirstModifier(Component):
+        pass
+
+    class SecondModifier(Component):
+        pass
+
+    manager = ValuesManager()
+    manager._add_resource = mocker.Mock()
+    manager._add_constraint = mocker.Mock()
+    logger = mocker.Mock()
+    manager.logger = logger
+
+    # Two components modify a value that nothing produces. The second component
+    # registers twice to check that each name is listed once.
+    for component in [SecondModifier(), FirstModifier(), SecondModifier()]:
+        manager._get_current_component = mocker.Mock(return_value=component)
+        manager.register_value_modifier("modified_value", lambda idx, val: val)
+
+    # A value that a component asks for but that nothing produces or modifies.
+    manager.get_value("requested_value")
+
+    # A value that has a source does not get a warning.
+    manager._get_current_component = mocker.Mock(return_value=FirstModifier())
+    manager.register_value_producer("produced_value", lambda idx: idx)
+    manager.register_value_modifier("produced_value", lambda idx, val: val)
+
+    manager.on_post_setup(mocker.Mock())
+
+    warnings_logged = [call.args[0] for call in logger.warning.call_args_list]
+    assert warnings_logged == [
+        "Pipeline modified_value has no source. It will not be usable. "
+        "Modifiers were registered by: first_modifier, second_modifier.",
+        "Pipeline requested_value has no source. It will not be usable.",
+    ]
+
+
 @pytest.fixture
 def static_step() -> Callable[[pd.Index[int]], pd.Series[pd.Timedelta]]:
     return lambda idx: pd.Series(pd.Timedelta(days=6), index=idx)
