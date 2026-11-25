@@ -12,6 +12,7 @@ import pandas as pd
 import pytest
 from _pytest.logging import LogCaptureFixture
 from pytest_mock import MockerFixture
+from pytest_vivarium.signatures import assert_signatures_agree
 from vivarium.engine import Component
 from vivarium.engine.framework.engine import BaseSimulation, Builder
 from vivarium.engine.framework.event import Event
@@ -1672,25 +1673,21 @@ def test_init_signature_agrees_with_base_simulation() -> None:
     passing ``*args``/``**kwargs`` through, so a new parent parameter would otherwise
     be silently dropped.
 
-    Covers signature shape only: names, order, annotations, defaults, and kinds.
+    Uses ``assert_signatures_agree`` with ``self``, ``observe``, and ``setup``
+    ignored and only ``logging_verbosity``'s default allowed to differ.
     """
-    parent = inspect.signature(BaseSimulation.__init__).parameters
-    child = inspect.signature(Simulation.__init__).parameters
-
-    child_only = ("self", "observe", "setup")
-    inherited = [name for name in parent if name != "self"]
-    assert [name for name in child if name not in child_only] == inherited
-
-    for name in inherited:
-        assert child[name].annotation == parent[name].annotation, name
-        # Kind parity is what lets callers pass these positionally to
-        # Simulation, as test_positional_arguments_map_to_parameters does.
-        assert child[name].kind == parent[name].kind, name
-        if name == "logging_verbosity":
-            # Deliberately quieter than the parent; see the class docstring.
-            assert child[name].default == 0 and parent[name].default == 1
-        else:
-            assert child[name].default == parent[name].default, name
+    assert_signatures_agree(
+        Simulation.__init__,
+        BaseSimulation.__init__,
+        ignore=("self", "observe", "setup"),
+        allowed={
+            ("defaults", "logging_verbosity"): (
+                "Simulation is deliberately quieter than its parent: interactive use logs "
+                "only warnings and errors by default."
+            ),
+        },
+    )
+    assert inspect.signature(Simulation.__init__).parameters["logging_verbosity"].default == 0
 
 
 def test_positional_arguments_map_to_parameters() -> None:
