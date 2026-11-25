@@ -11,6 +11,7 @@ PYPI_PACKAGES = [
     "vivarium-interactive",
     "vivarium-public-health",
     "vivarium-cluster-tools",
+    "vivarium-psimulate",
     "vivarium-gbd-mapping",
     "vivarium-build-utils",
 ]

@@ -28,17 +28,17 @@ $(if $(DIST_NAME),,$(error Could not read the [project] name from pyproject.toml
 # Helper function for validating enum arguments
 validate_arg = $(if $(filter-out $(2),$(1)),$(error Error: '$(3)' must be one of: $(2), got '$(1)'))
 
-SUPPORTED_PY_VERSIONS = $(shell python -c 'import json, sys; v = json.load(open(sys.argv[1])); print(" ".join(v) if isinstance(v, list) and all(isinstance(x, str) for x in v) else "")' "$(CURDIR)/python_versions.json" 2>/dev/null)
+# Python for reading python_versions.json. With conda's auto_activate off and no environment
+# active, there is no `python` on PATH, so fall back to `python3`.
+PYTHON := $(shell command -v python 2>/dev/null || command -v python3 2>/dev/null)
+SUPPORTED_PY_VERSIONS = $(shell $(PYTHON) -c 'import json, sys; v = json.load(open(sys.argv[1])); print(" ".join(v) if isinstance(v, list) and all(isinstance(x, str) for x in v) else "")' "$(CURDIR)/python_versions.json" 2>/dev/null)
 
 # Environment selector for conda: a prefix when `path` is given, otherwise a name.
 CONDA_ENV_FLAG = $(if $(path),-p $(path),-n $(name))
 
-# Extras group that `type` selects from base.mk's `install` target.
-ENV_REQS_FOR_TYPE = $(if $(filter artifact,$(type)),data,dev)
-
 # Macro for validating make target arguments
 # Usage: $(call validate_make_args,target_name,allowed_args)
-# Example: $(call validate_make_args,build-env,type name path)
+# Example: $(call validate_make_args,build-env,name path)
 define validate_make_args
 	@allowed="$(2)"; \
 	for arg in $(filter-out $(1),$(MAKECMDGOALS)) $(MAKEFLAGS); do \
@@ -74,19 +74,17 @@ help:
 	@echo "================================================================================"
 	@echo
 	@echo "This target creates a new conda environment and installs all required"
-	@echo "packages for development or artifact generation, depending on the 'type' argument."
+	@echo "packages for running simulations and making artifacts."
 	@echo "It is recommended to use this target only if you cannot use the 'build-shared-env' target,"
 	@echo "either because you are not on the cluster or because you need to customize the environment,"
 	@echo "particularly if you need non-python packages installed via conda."
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-env [type=<environment type>] [name=<environment name>] [path=<environment path>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [force=<yes|no>] [keep_env=<yes|no>] [artifactory_access=<yes|no>]"
+	@echo "  make build-env [name=<environment name>] [path=<environment path>] [py=<python version>] [include_timestamp=<yes|no>] [lfs=<yes|no>] [force=<yes|no>] [keep_env=<yes|no>] [artifactory_access=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
-	@echo "  type [optional]"
-	@echo "      Type of conda environment. Either 'simulation' (default) or 'artifact'"
 	@echo "  name [optional]"
-	@echo "      Name of the conda environment to create (defaults to <PACKAGE_NAME>_<TYPE>)"
+	@echo "      Name of the conda environment to create (defaults to <PACKAGE_NAME>)"
 	@echo "  path [optional]"
 	@echo "      Absolute path where the environment should be created (overrides name for location)"
 	@echo "  include_timestamp [optional]"
@@ -102,7 +100,9 @@ help:
 	@echo "      Either 'yes' or 'no' (default, i.e. tear it down)."
 	@echo "  artifactory_access [optional]"
 	@echo "      Whether the build host can reach the IHME artifactory. Either 'yes'"
-	@echo "      (default) or 'no'; use 'no' to build off-VPN. Not available with type=artifact."
+	@echo "      (default) or 'no'; use 'no' to build off-VPN. With 'no', the environment"
+	@echo "      gets the 'public' extra instead of 'dev'. It can run simulations but not"
+	@echo "      build artifacts or run psimulate."
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'conda activate <environment_name>'"
@@ -117,15 +117,13 @@ help:
 	@echo "while allowing you to install the local package in editable mode."
 	@echo
 	@echo "USAGE:"
-	@echo "  make build-shared-env [type=<environment type>] [venv_dir=<directory>] [venv_name=<name>] [shared_env_dir=<path>] [force=<yes|no>]"
+	@echo "  make build-shared-env [venv_dir=<directory>] [venv_name=<name>] [shared_env_dir=<path>] [force=<yes|no>]"
 	@echo
 	@echo "ARGUMENTS:"
-	@echo "  type [optional]"
-	@echo "      Type of shared environment to use. Either 'simulation' (default) or 'artifact'"
 	@echo "  venv_dir [optional]"
 	@echo "      Directory where venvs are stored (defaults to '.venv')"
 	@echo "  venv_name [optional]"
-	@echo "      Name of the venv to create (defaults to '<PACKAGE_NAME>_<TYPE>')"
+	@echo "      Name of the venv to create (defaults to '<PACKAGE_NAME>')"
 	@echo "  shared_env_dir [optional]"
 	@echo "      Base directory for shared environments (defaults to Jenkins shared env location)"
 	@echo "  force [optional]"
@@ -140,14 +138,11 @@ endif
 .PHONY: build-env
 build-env: # Create a new environment with installed packages
 #	Validate arguments - exit if unsupported arguments are passed
-	$(call validate_make_args,build-env,type name path lfs py include_timestamp force keep_env artifactory_access)
+	$(call validate_make_args,build-env,name path lfs py include_timestamp force keep_env artifactory_access)
 	
 #   Handle arguments and set defaults
-#   type
-	@$(eval type ?= simulation)
-	@$(call validate_arg,$(type),simulation artifact,type)
 #	name
-	@$(eval name ?= $(PACKAGE_NAME)_$(type))
+	@$(eval name ?= $(PACKAGE_NAME))
 #	timestamp
 	@$(eval include_timestamp ?= no)
 	@$(call validate_arg,$(include_timestamp),yes no,include_timestamp)
@@ -166,10 +161,9 @@ build-env: # Create a new environment with installed packages
 #	artifactory_access
 	@$(eval artifactory_access ?= yes)
 	@$(call validate_arg,$(artifactory_access),yes no,artifactory_access)
-#	The artifact env needs vivarium-gbd-access, which is only on the IHME artifactory.
-	@$(if $(and $(filter artifact,$(type)),$(filter no,$(artifactory_access))),$(error Error: type=artifact requires artifactory_access=yes))
 #	python version - must be listed in python_versions.json; defaults to the latest listed.
 #	Validated before the force check below so a bad py never removes an existing env.
+	@$(if $(PYTHON),,$(error Error: build-env needs python or python3 on PATH to read python_versions.json))
 	@$(eval _py_versions := $(SUPPORTED_PY_VERSIONS))
 	@$(if $(_py_versions),,$(error Error: could not read supported Python versions from $(CURDIR)/python_versions.json))
 #	Numeric sort, so 3.10 beats 3.9 regardless of file order.
@@ -192,7 +186,7 @@ build-env: # Create a new environment with installed packages
 
 #	The force check above guarantees we only tear down an env this invocation created.
 	@if ! $(MAKE) --no-print-directory _build-env \
-			name=$(name) path=$(path) py=$(py) type=$(type) lfs=$(lfs) \
+			name=$(name) path=$(path) py=$(py) lfs=$(lfs) \
 			artifactory_access=$(artifactory_access); then \
 		echo >&2; \
 		if [ "$(keep_env)" = "yes" ]; then \
@@ -207,7 +201,6 @@ build-env: # Create a new environment with installed packages
 	@echo
 	@echo "Finished building environment"
 	@$(if $(path),echo "  path: $(path)",echo "  name: $(name)")
-	@echo "  type: $(type)"
 	@echo "  git-lfs installed: $(lfs)"
 	@echo "  python version: $(py)"
 	@echo "  forced rebuild: $(force)"
@@ -224,8 +217,10 @@ _build-env:
 	conda create $(CONDA_ENV_FLAG) python=$(py) --yes
 # 	--no-capture-output streams output, so a failure isn't hidden behind a long silence.
 	conda run --no-capture-output $(CONDA_ENV_FLAG) pip install vivarium-build-utils
-# 	artifactory_access=no passes an empty IHME_PYPI, which clears base.mk's EXTRA_INDEX_FLAGS.
-	conda run --no-capture-output $(CONDA_ENV_FLAG) make install ENV_REQS=$(ENV_REQS_FOR_TYPE) \
+# 	artifactory_access=no installs the public extra, and passes an empty IHME_PYPI, which
+# 	clears base.mk's EXTRA_INDEX_FLAGS. cluster and data need the IHME artifactory.
+	conda run --no-capture-output $(CONDA_ENV_FLAG) make install \
+		ENV_REQS=$(if $(filter no,$(artifactory_access)),public,dev) \
 		$(if $(filter no,$(artifactory_access)),IHME_PYPI=)
 # 	`set -e` is load-bearing: a multi-command line reports only its last command's status.
 	@if [ "$(lfs)" = "yes" ]; then \
@@ -243,16 +238,13 @@ SHARED_ENV_DIR ?= /mnt/team/simulation_science/priv/engineering/jenkins/shared_e
 .PHONY: build-shared-env
 build-shared-env: # Create a lightweight venv overlay on top of a shared conda environment
 #	Validate arguments - exit if unsupported arguments are passed
-	$(call validate_make_args,build-shared-env,type venv_dir venv_name shared_env_dir force)
+	$(call validate_make_args,build-shared-env,venv_dir venv_name shared_env_dir force)
 
 #	Handle arguments and set defaults
-#	type
-	@$(eval type ?= simulation)
-	@$(call validate_arg,$(type),simulation artifact,type)
 #	venv_dir
 	@$(eval venv_dir ?= .venv)
 #	venv_name
-	@$(eval venv_name ?= $(DIST_NAME)_$(type))
+	@$(eval venv_name ?= $(DIST_NAME))
 #	Construct full venv path
 	@$(eval venv_path := $(venv_dir)/$(venv_name))
 #	shared_env_dir
@@ -261,7 +253,7 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 	@$(eval force ?= no)
 	@$(call validate_arg,$(force),yes no,force)
 #	Construct shared environment path
-	@$(eval SHARED_ENV_NAME := $(DIST_NAME)_$(type)_current)
+	@$(eval SHARED_ENV_NAME := $(DIST_NAME)_current)
 	@$(eval SHARED_ENV_PATH := $(shared_env_dir)/$(SHARED_ENV_NAME))
 
 #	Verify shared environment exists
@@ -321,7 +313,6 @@ build-shared-env: # Create a lightweight venv overlay on top of a shared conda e
 	@echo "  venv name: $(venv_name)"
 	@echo "  full path: $(venv_path)"
 	@echo "  base environment: $(SHARED_ENV_PATH)"
-	@echo "  type: $(type)"
 	@echo
 	@echo "After creating the environment:"
 	@echo "  1. Activate it: 'source $(venv_path)/bin/activate'"

@@ -83,12 +83,6 @@ We recommend installing `Miniforge <https://github.com/conda-forge/miniforge>`_.
 The platform-specific instructions for installation can be found at that link.
 Once you have ``conda`` installed, you are ready to proceed.
 
-Currently, the process of making artifacts and running simulations requires
-two distinct environments.
-**Note that it will not be possible to create the environment for making artifacts
-unless you are on the IHME network.**
-We call these the "artifact" and "simulation" environments.
-
 There are two environment options: a **local conda environment** (for personal
 machines) or a **shared environment on the cluster** with a lightweight venv wrapper.
 
@@ -98,9 +92,7 @@ automatically create the environment if it doesn't exist.
 **Local conda environment** (default)::
 
   :~$ source environment.sh
-  ...creates/activates the simulation conda environment...
-  :~$ source environment.sh -t artifact
-  ...creates/activates the artifact conda environment...
+  ...creates/activates the conda environment...
 
 Local conda environments are automatically rebuilt if they are stale (older
 than a week). To deactivate a local conda environment, run ``conda deactivate``.
@@ -108,18 +100,23 @@ than a week). To deactivate a local conda environment, run ``conda deactivate``.
 **Shared environment on the cluster** (recommended for cluster development)::
 
   :~$ source environment.sh -s
-  ...creates/activates a venv overlay on the shared simulation environment...
-  :~$ source environment.sh -s -t artifact
-  ...creates/activates a venv overlay on the shared artifact environment...
+  ...creates/activates a venv overlay on the shared environment...
 
 To deactivate a shared cluster environment, run ``deactivate``.
 
-The shared environments are conda environments built nightly by Jenkins;
+The shared environment is a conda environment built nightly by Jenkins;
 ``source environment.sh -s`` layers a lightweight virtual environment on top
-of one, with this repository installed in editable mode. Note that this
+of it, with this repository installed in editable mode. Note that this
 requires the repository to have been added to the Jenkins shared-environment
 nightly build; until then (or if the shared environment is otherwise
 unavailable), use the local conda environment instead.
+
+**Note that it will not be possible to make artifacts unless you are on the IHME
+network.** By default, the environment installs packages that are only on the IHME
+artifactory, so it can only be built on the IHME network (VPN). To build a public-only
+environment off the network, use ``source environment.sh -p``. That environment can
+run simulations but cannot make artifacts or run ``psimulate``. The full and public
+environments have the same name, so pass ``-f`` to switch between them.
 
 Additional options are available; pass the ``-h`` flag to see them
 (e.g. ``-f`` to force a rebuild, ``-l`` to install git lfs).
@@ -127,7 +124,7 @@ The underlying ``make`` targets can also be run directly: ``make build-env``
 and ``make build-shared-env``; see the ``help`` target in the ``Makefile``
 for their arguments.
 
-Supported Python versions: 3.10, 3.11, 3.12
+Supported Python versions: 3.11, 3.12, 3.13
 
 Making Artifacts
 ----------------
@@ -138,11 +135,10 @@ artifacts; see the next section for how to do this.
 
 In order to make an artifact for a location (e.g. Pakistan), you will first have to add the
 location to the ``LOCATIONS`` constant in the ``src/{{ cookiecutter.package_name }}/constants/metadata.py`` file.
-Then, you can make the artifact by activating the artifact environment
-(``source environment.sh -t artifact``, plus ``-s`` for a shared environment)
-and running the following::
+Then, you can make the artifact by activating the environment (``source environment.sh``,
+plus ``-s`` for a shared environment) and running the following::
 
-  ({{ cookiecutter.package_name }}_artifact) :~$ make_artifacts -vvv -l "Pakistan" -o src/{{ cookiecutter.package_name }}/artifacts
+  ({{ cookiecutter.package_name }}) :~$ make_artifacts -vvv -l "Pakistan" -o src/{{ cookiecutter.package_name }}/artifacts
 
 Running Simulations
 -------------------
@@ -184,9 +180,9 @@ You can edit this file to modify the simulation that runs.
 For more about this, see the documentation at
 https://vivarium-engine.readthedocs.io/en/latest/concepts/model_specification/index.html
 
-With the simulation environment active, you can run a single simulation (1 draw, 1 seed, and 1 scenario) by, e.g.::
+With the environment active, you can run a single simulation (1 draw, 1 seed, and 1 scenario) by, e.g.::
 
-   ({{ cookiecutter.package_name }}_simulation) :~/{{ cookiecutter.package_name }}$ simulate run -v src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml
+   ({{ cookiecutter.package_name }}) :~/{{ cookiecutter.package_name }}$ simulate run -v src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml
 
 The ``-v`` flag will log verbosely, so you will get log messages every time
 step. For more ways to run simulations, see the tutorials at
@@ -195,19 +191,15 @@ and https://vivarium-interactive.readthedocs.io/en/latest/tutorials/exploration.
 
 **If you are on the IHME cluster**, you can also run simulations of multiple draws, seeds, and scenarios in parallel across nodes::
 
-  ({{ cookiecutter.package_name }}_simulation) :~/{{ cookiecutter.package_name }}$ psimulate run src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml src/{{ cookiecutter.package_name }}/model_specifications/branches/scenarios.yaml
+  ({{ cookiecutter.package_name }}) :~/{{ cookiecutter.package_name }}$ psimulate run src/{{ cookiecutter.package_name }}/model_specifications/model_spec.yaml src/{{ cookiecutter.package_name }}/model_specifications/branches/scenarios.yaml
 
 Running Tests
 -------------
 
 You can run tests with::
 
-  ({{ cookiecutter.package_name }}_simulation) :~/{{ cookiecutter.package_name }}$ pytest --runslow
+  ({{ cookiecutter.package_name }}) :~/{{ cookiecutter.package_name }}$ pytest --runslow
   ...pytest will run all tests in the tests directory...
-
-It may be the case that a different set of tests will run, depending on whether you are in the artifact
-or simulation environment.
-To be safe, it is best to run the tests in both environments.
 
 Repository Layout
 -----------------

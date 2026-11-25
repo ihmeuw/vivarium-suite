@@ -7,7 +7,7 @@ description: Reference for the vivarium-ecosystem console scripts that a standar
 
 ## What this skill covers
 
-The vivarium-ecosystem console scripts that a standard model-repo conda env (the one `make build-env type=simulation` produces in a `vivarium_gates_*` or similar repo) puts on PATH.
+The vivarium-ecosystem console scripts that a standard model-repo conda env (the one `make build-env` produces in a `vivarium_gates_*` or similar repo) puts on PATH.
 
 | CLI | Ships in | Entry point | What it does |
 |---|---|---|---|

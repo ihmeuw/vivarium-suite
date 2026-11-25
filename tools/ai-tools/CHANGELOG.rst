@@ -1,3 +1,8 @@
+**0.32.2 - 11/25/26**
+
+- ``framework-clis``: drop the ``type=simulation`` argument, since model repos now
+  build one environment
+
 **0.32.1 - 11/19/26**
 
 - ``model-development``: fetch from the remote in Setup, base the feature branch
