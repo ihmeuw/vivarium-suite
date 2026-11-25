@@ -3,8 +3,8 @@
 The node runs ``python -m vivarium.dagger.bridge.runner <payload.json> <result.json>``
 (:func:`runner_command` builds this line), which exits 0 when the step succeeds and 1 when
 it fails. A python recipe is rebuilt into the same
-:class:`~vivarium.dagger.frontend.python_step.PythonStepRun` that a local build calls,
-and a command recipe runs through the same backend helper as a local build, so a node runs
+:class:`~vivarium.dagger.runtime.python_run.PythonStepRun` that a local build calls,
+and a command recipe runs through the same helper as a local build, so a node runs
 exactly the code a local build runs.
 
 Everything written to file descriptors 1 and 2 while the step runs, including the output
@@ -29,9 +29,8 @@ from pathlib import Path
 from types import FrameType, TracebackType
 from typing import Any, TextIO, TypedDict, cast
 
-from vivarium.dagger.backend.build import run_command_with_bin_path
-from vivarium.dagger.bridge.payload import Payload, PythonPayload, decode
-from vivarium.dagger.frontend.python_step import PythonStepRun, resolve_reference
+from vivarium.dagger.runtime.command import run_command_with_bin_path
+from vivarium.dagger.runtime.recipe import Payload, PythonPayload, decode
 
 RESULT_SUFFIX = ".result.json"
 """Suffix of a result file's name, which tells it apart from the payload, capture and
@@ -159,7 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ``cwd`` and runs a python recipe as
     ``PythonStepRun(resolve_reference(target), suffix)(**decode(kwargs))``, where
     ``suffix`` is a suffix or a mapping of output names to suffixes, or a command recipe
-    through :func:`~vivarium.dagger.backend.build.run_command_with_bin_path`. Any
+    through :func:`~vivarium.dagger.runtime.command.run_command_with_bin_path`. Any
     exception is a failure, including :class:`SystemExit` or :class:`KeyboardInterrupt`
     from the step, an unreadable payload, and an unknown ``kind``. On a failure the runner
     also writes the captured standard error tail and then the traceback to its own standard
@@ -287,8 +286,12 @@ def _run_step(payload: Payload) -> None:
     os.chdir(payload["cwd"])
     try:
         if payload["kind"] == "python":
+            # Imported here so that a command recipe does not import pandas.
+            from vivarium.dagger.runtime.python_run import PythonStepRun, resolve_reference
+
             with _appended_to_sys_path(payload["sys_path"]):
-                step = PythonStepRun(_resolve_target(payload), payload["suffix"])
+                target = _resolve_target(payload, resolve_reference)
+                step = PythonStepRun(target, payload["suffix"])
                 step(**decode(payload["kwargs"]))
         elif payload["kind"] == "command":
             run_command_with_bin_path(payload["command"], payload["env_path"])
@@ -296,7 +299,9 @@ def _run_step(payload: Payload) -> None:
         os.chdir(previous)
 
 
-def _resolve_target(payload: PythonPayload) -> Callable[..., Any]:
+def _resolve_target(
+    payload: PythonPayload, resolve_reference: Callable[[str], Callable[..., Any]]
+) -> Callable[..., Any]:
     """Import the payload's target, adding a note that names the step if the import fails."""
     try:
         return resolve_reference(payload["target"])
