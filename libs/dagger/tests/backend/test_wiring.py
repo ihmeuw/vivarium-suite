@@ -106,17 +106,20 @@ def test_declared_root_input_without_a_file_is_unresolved(tmp_path: Path) -> Non
 def test_root_input_colliding_with_an_output_path_is_a_definition_error(
     tmp_path: Path,
 ) -> None:
-    """A root input resolving onto a produced key's path is caught, not silently merged."""
+    """A root input resolving onto a produced key's path is caught, not silently merged: register_output raises check_not_root_input's message naming both the output key and the root input's key, and the output key stays unproduced."""
     out = tmp_path / "out"
-    reg = FileRegistry(out, "run1", root_inputs={"raw": out / "run1" / "collide.csv"})
+    source = out / "run1" / "collide.csv"
+    reg = FileRegistry(out, "run1", root_inputs={"raw": source})
 
     with pytest.raises(WiringError) as excinfo:
         reg.register_output("collide.csv")
 
-    message = str(excinfo.value)
-    assert "raw" in message
-    assert "collide.csv" in message
-    assert "one path" in message
+    assert str(excinfo.value) == (
+        f"output 'collide.csv' at {source.resolve()} is the declared root input 'raw'; "
+        "a step cannot also produce it."
+    )
+    with pytest.raises(WiringError, match="no registered producer"):
+        reg.resolve_input("collide.csv")
 
 
 def test_registry_wires_a_runnable_pipeline(tmp_path: Path) -> None:
@@ -200,6 +203,166 @@ def test_key_for_returns_the_key_of_a_root_input(tmp_path: Path) -> None:
 
     assert reg.key_for(source) == "bop"
     assert reg.key_for(str(source)) == "bop"
+
+
+def test_check_not_root_input_refuses_a_root_inputs_path_naming_its_key(
+    tmp_path: Path,
+) -> None:
+    """check_not_root_input of a declared root input's path, given as declared, relative, through '..' or through a symbolic link, with the label repr of the root key, raises WiringError reading "output '<root key>' is a declared root input at <path>; a step cannot also produce it."."""
+    source = tmp_path / "sources" / "bop.csv"
+    source.parent.mkdir()
+    source.write_text("x")
+    (tmp_path / "link").symlink_to(tmp_path / "sources", target_is_directory=True)
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"bop": source})
+    expected = (
+        f"output 'bop' is a declared root input at {source.resolve()}; a step cannot "
+        "also produce it."
+    )
+
+    for path in _spellings_of(tmp_path, source):
+        with pytest.raises(WiringError) as excinfo:
+            reg.check_not_root_input(path, "'bop'")
+
+        assert str(excinfo.value) == expected, path
+
+
+def _spellings_of(tmp_path: Path, source: Path) -> list[Path | str]:
+    """Return spellings of ``source``, where ``tmp_path/link`` links to its folder."""
+    return [
+        source,
+        str(source),
+        os.path.relpath(source),
+        tmp_path / "sources" / ".." / "sources" / "bop.csv",
+        tmp_path / "link" / "bop.csv",
+    ]
+
+
+def test_check_not_root_input_names_both_keys_when_the_label_is_another_key(
+    tmp_path: Path,
+) -> None:
+    """check_not_root_input of a declared root input's path, in any spelling, with a label that is not repr of the root key raises WiringError reading "output <label> at <path> is the declared root input '<root key>'; a step cannot also produce it."."""
+    source = tmp_path / "sources" / "bop.csv"
+    source.parent.mkdir()
+    source.write_text("x")
+    (tmp_path / "link").symlink_to(tmp_path / "sources", target_is_directory=True)
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"bop": source})
+
+    for path in _spellings_of(tmp_path, source):
+        for label in ("'other_key'", repr(str(path)), "bop"):
+            with pytest.raises(WiringError) as excinfo:
+                reg.check_not_root_input(path, label)
+
+            assert str(excinfo.value) == (
+                f"output {label} at {source.resolve()} is the declared root input 'bop'; "
+                "a step cannot also produce it."
+            ), (path, label)
+
+
+def _holds_message(label: str, folder: Path, key: str, source: Path) -> str:
+    """Return check_not_root_input's message for a folder that holds a root input."""
+    return (
+        f"output {label} at {folder.resolve()} holds the declared root input {key!r} at "
+        f"{source.resolve()}; a step's output cannot hold a root input."
+    )
+
+
+def test_check_not_root_input_refuses_a_folder_that_holds_a_root_input(
+    tmp_path: Path,
+) -> None:
+    """check_not_root_input of a folder that holds a declared root input, directly or deeper, raises WiringError that names the label, the folder's path, the root input's key and its path, and says a step's output cannot hold a root input; with two root inputs inside, it names the first declared."""
+    sources = tmp_path / "sources"
+    zeta = sources / "nested" / "zeta.csv"
+    alpha = sources / "alpha.csv"
+    zeta.parent.mkdir(parents=True)
+    zeta.write_text("z")
+    alpha.write_text("a")
+    # 'zeta' is declared first though it sorts last and lies deeper than 'alpha'.
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"zeta": zeta, "alpha": alpha})
+    folders = {
+        "'nested'": sources / "nested",
+        "'sources'": sources,
+        repr(str(tmp_path)): tmp_path,
+        "'dotted'": sources / "nested" / ".." / "nested",
+    }
+
+    for label, folder in folders.items():
+        with pytest.raises(WiringError) as excinfo:
+            reg.check_not_root_input(folder, label)
+
+        assert str(excinfo.value) == _holds_message(label, folder, "zeta", zeta), folder
+
+
+def test_check_not_root_input_accepts_other_paths(tmp_path: Path) -> None:
+    """check_not_root_input raises nothing for a sibling of a root input, a file inside a folder next to it, a registered output's path, or a path where nothing is registered."""
+    sources = tmp_path / "sources"
+    source = sources / "nested" / "bop.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("x")
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"bop": source})
+    reg.register_output("x.csv")
+    reg.register_directory_output("sims/one", "finished.txt")
+    paths = [
+        sources / "nested" / "sibling.csv",
+        sources / "nested" / "beside" / "inner.csv",
+        sources / "nested_too" / "inner.csv",
+        sources / "nest",
+        reg.path_for("x.csv"),
+        reg.path_for("sims/one"),
+        tmp_path / "elsewhere.csv",
+    ]
+
+    for path in paths:
+        reg.check_not_root_input(path, repr(str(path)))
+
+
+def test_register_output_refuses_a_folder_key_that_holds_a_root_input(
+    tmp_path: Path,
+) -> None:
+    """With a root input declared at a file inside the run's output directory, register_output and register_directory_output of a key whose path is a folder holding that file raise WiringError with check_not_root_input's message, naming the key as the label."""
+    source = tmp_path / "out" / "run1" / "inputs" / "deep" / "raw.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("x")
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs={"raw": source})
+    calls: list[Callable[[str], object]] = [
+        reg.register_output,
+        lambda key: reg.register_directory_output(key, "finished.txt"),
+    ]
+
+    for call in calls:
+        for key in ("inputs", "inputs/deep"):
+            expected = _holds_message(repr(key), reg.path_for(key), "raw", source)
+            assert _wiring_message(call, key) == expected, key
+            assert reg.key_for(reg.path_for(key)) is None, key
+
+
+def test_a_folder_key_that_holds_a_root_input_declared_as_a_symbolic_link_is_refused(
+    tmp_path: Path,
+) -> None:
+    """With a root input declared at <run dir>/inputs/raw.csv, a symbolic link to a file outside the run, register_output and register_directory_output of the folder key 'inputs' raise WiringError with check_not_root_input's folder message, naming the label 'inputs' and the root key, while a file output beside the link is accepted."""
+    target = tmp_path / "sources" / "raw.csv"
+    target.parent.mkdir()
+    target.write_text("x")
+    link = tmp_path / "out" / "run1" / "inputs" / "raw.csv"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(target)
+    root_inputs = {"raw": link}
+    reg = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+    calls: list[Callable[[str], object]] = [
+        reg.register_output,
+        lambda key: reg.register_directory_output(key, "finished.txt"),
+    ]
+    folder = reg.path_for("inputs")
+
+    for call in calls:
+        message = _wiring_message(call, "inputs")
+
+        assert message.startswith(
+            f"output 'inputs' at {folder} holds the declared root input 'raw' at "
+        ), message
+        assert message.endswith("; a step's output cannot hold a root input."), message
+        assert reg.key_for(folder) is None
+    beside = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
+    assert beside.register_output("inputs/other.csv").path == folder / "other.csv"
 
 
 def test_key_for_returns_none_for_an_unregistered_path(tmp_path: Path) -> None:
@@ -882,8 +1045,10 @@ def test_root_inputs_anywhere_are_unaffected(tmp_path: Path) -> None:
     ]
 
 
-def test_root_inputs_are_not_part_of_the_nesting_rule(tmp_path: Path) -> None:
-    """With a root input at <run dir>/delivered/coverage.csv, register_directory_output('delivered', ...) and register_output('delivered/other.csv'), each in a fresh registry, are both accepted."""
+def test_a_folder_output_over_a_root_input_is_refused_and_a_file_beside_it_is_not(
+    tmp_path: Path,
+) -> None:
+    """With a root input at <run dir>/delivered/coverage.csv, register_directory_output('delivered', ...) raises check_not_root_input's folder message with the label 'delivered' and registers nothing, while register_output('delivered/other.csv') in a fresh registry is accepted."""
     source = tmp_path / "out" / "run1" / "delivered" / "coverage.csv"
     source.parent.mkdir(parents=True)
     source.write_text("x")
@@ -892,8 +1057,11 @@ def test_root_inputs_are_not_part_of_the_nesting_rule(tmp_path: Path) -> None:
     for_directory = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
     for_file = FileRegistry(tmp_path / "out", "run1", root_inputs=root_inputs)
 
-    directory = for_directory.register_directory_output("delivered", _DONE)
+    with pytest.raises(WiringError) as excinfo:
+        for_directory.register_directory_output("delivered", _DONE)
     file = for_file.register_output("delivered/other.csv")
 
-    assert directory.path == for_directory.path_for("delivered")
+    folder = for_directory.path_for("delivered")
+    assert str(excinfo.value) == _holds_message("'delivered'", folder, "coverage", source)
+    assert for_directory.key_for(folder) is None
     assert file.path == for_file.path_for("delivered/other.csv")

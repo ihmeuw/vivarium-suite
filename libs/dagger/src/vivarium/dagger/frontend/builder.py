@@ -522,7 +522,8 @@ class Pipeline:
 
         The pipeline checks the task before anything changes, and a task that is refused
         is not added. Each output that is a file path node is compared, by its resolved
-        path, with the outputs of the steps already added; any other output is not. The
+        path, with the pipeline's declared root inputs and with the outputs of the steps
+        already added; any other output is not. The
         ``dagger`` command refuses a pipeline in which two steps have an output that is
         not a path node with the same node name.
 
@@ -548,6 +549,13 @@ class Pipeline:
             If the task's name is the name of a step already added; the message starts
             with ``Step '<name>':`` and says to give each step a different ``name=``.
         vivarium.dagger.backend.wiring.WiringError
+            If one of the task's output paths is the path of a declared root input, or
+            a folder that holds one; the message starts with ``Step '<name>':`` and goes
+            on as
+            :meth:`~vivarium.dagger.backend.wiring.FileRegistry.check_not_root_input`
+            describes, naming an output that the pipeline's registry does not know by
+            its path. A task with such an output gets this error even if another of its
+            outputs is another step's output or its name is already taken.
             If one of the task's output paths is an output of a step already added,
             whichever way that step was added; the message starts with
             ``Step '<name>':`` and names the output, by its file key if the pipeline's
@@ -556,6 +564,13 @@ class Pipeline:
             pipeline, this error is raised, not the ``ValueError`` for the name.
         """
         paths = _output_paths(task)
+        for path in paths:
+            key = self._registry.key_for(path)
+            label = repr(key) if key is not None else repr(str(path))
+            try:
+                self._registry.check_not_root_input(path, label)
+            except WiringError as error:
+                raise WiringError(f"Step {task.name!r}: {error}") from None
         for path in paths:
             producer = self._producer_of(path)
             if producer is not None:

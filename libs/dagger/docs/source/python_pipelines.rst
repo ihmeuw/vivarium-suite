@@ -96,8 +96,9 @@ pipeline. Add a step after the steps that produce the files it reads. A step
 reads a file that no step produces through the pipeline's root inputs (see
 :doc:`root_inputs`). A step's outputs go under ``<output root>/<run name>``: an output
 key is a path relative to that directory, and a step whose output would land outside it
-(with ``..``, an absolute path, or a symbolic link to another place) or inside another
-step's output is refused when it is added. A file outside the run is a root input. The
+(with ``..``, an absolute path outside it, or a symbolic link to another place), inside
+another step's output, or on a root input or a folder that holds one is refused when it
+is added. A file outside the run is a root input. The
 pipeline's root, the directory that holds its pytask state, is
 ``<output root>/.dagger/<run name>``, so two runs under one output root whose run names
 name different directories, neither inside the other, keep separate state. Pass

@@ -17,7 +17,7 @@ import vivarium.dagger.frontend
 from tests.bridge.helpers import lockfile_entries
 from tests.frontend.notebooks import write_source_notebook
 from tests.frontend.simulations import write_branches, write_spec
-from vivarium.dagger.backend.nodes import file_node
+from vivarium.dagger.backend.nodes import file_node, run_directory_node
 from vivarium.dagger.backend.task import Task
 from vivarium.dagger.backend.wiring import FileRegistry, WiringError
 from vivarium.dagger.frontend import PipelineError, preview, run
@@ -1387,6 +1387,209 @@ def test_a_step_method_refuses_an_output_add_task_produces(tmp_path: Path) -> No
     assert "'first'" in message, message
     assert [task.name for task in freeze(p).tasks] == ["first"]
     assert not _registered(p, "shared.parquet")
+
+
+def test_add_task_refuses_an_output_at_a_root_inputs_path_naming_its_key(
+    tmp_path: Path,
+) -> None:
+    """With a root input 'raw.csv' declared at a file outside the run, add_task of a command task 'writer' whose output is that file raises WiringError starting "Step 'writer':" that names the key 'raw.csv', the file's path and that a step cannot also produce it, and the task is not added, even though no step reads 'raw.csv'."""
+    p = _pipeline(tmp_path)
+    raw = tmp_path / _RAW
+
+    with pytest.raises(WiringError) as info:
+        p.add_task(_command_task("writer", raw))
+
+    message = str(info.value)
+    assert message.startswith("Step 'writer':"), message
+    assert f"output {_RAW!r}" in message, message
+    assert str(raw.resolve()) in message, message
+    assert "a step cannot also produce it" in message, message
+    assert message == _root_input_refusal(tmp_path, "writer")
+    assert freeze(p).tasks == ()
+    assert raw.read_text() == "n\n1\n2\n"
+
+
+def _root_input_refusal(tmp_path: Path, name: str) -> str:
+    """Return the message that refuses a python step ``name`` producing 'raw.csv'."""
+    other = Pipeline(tmp_path / "other", "run1", root_inputs={_RAW: tmp_path / _RAW})
+    with pytest.raises(WiringError) as info:
+        other.add_python_step(_constant, inputs={}, outputs=_RAW, name=name)
+    return str(info.value)
+
+
+def _path_task(name: str, outputs: Mapping[str, PathNode]) -> Task:
+    """Return a hand-built task ``name`` that runs nothing and has ``outputs``."""
+    return Task(
+        name=name, run="true", inputs={}, outputs=dict(outputs), resources={}, env=None
+    )
+
+
+def test_add_task_refuses_a_root_inputs_path_given_through_a_symlink(
+    tmp_path: Path,
+) -> None:
+    """add_task of a task whose output path reaches a declared root input's file through a symbolic link, or as a path with '..', is refused in the same way, naming the root input's key."""
+    p = _pipeline(tmp_path)
+    raw = tmp_path / _RAW
+    _link(tmp_path / "alias", tmp_path)
+    _link(tmp_path / "raw_link.csv", raw)
+    (tmp_path / "sub").mkdir()
+    spellings = {
+        "via_folder_link": tmp_path / "alias" / _RAW,
+        "via_file_link": tmp_path / "raw_link.csv",
+        "via_dots": tmp_path / "sub" / ".." / _RAW,
+    }
+
+    for name, spelling in spellings.items():
+        with pytest.raises(WiringError) as info:
+            p.add_task(_path_task(name, {"out": PathNode(path=spelling)}))
+
+        message = str(info.value)
+        assert message.startswith(f"Step {name!r}:"), message
+        assert f"output {_RAW!r}" in message, message
+        assert str(raw.resolve()) in message, message
+        assert message == _root_input_refusal(tmp_path, name)
+    assert freeze(p).tasks == ()
+
+
+def test_add_task_checks_the_root_input_before_the_other_producers(
+    tmp_path: Path,
+) -> None:
+    """A task with two outputs, the first another added task's output and the second a root input's path, gets the root-input error, as the docstring says."""
+    p = _pipeline(tmp_path)
+    first = tmp_path / "first.txt"
+    p.add_task(_command_task("first", first))
+    task = _path_task(
+        "second", {"taken": file_node(first), "clobber": file_node(tmp_path / _RAW)}
+    )
+
+    with pytest.raises(WiringError) as info:
+        p.add_task(task)
+
+    assert str(info.value) == _root_input_refusal(tmp_path, "second")
+    assert [task.name for task in freeze(p).tasks] == ["first"]
+
+
+def test_add_task_refuses_a_folder_output_that_holds_a_root_input(
+    tmp_path: Path,
+) -> None:
+    """add_task of a task whose output is a folder (a path node, and a run directory node) holding a declared root input raises WiringError starting "Step '<name>':" with check_not_root_input's folder message, naming the output by its path, and the task is not added."""
+    folder = (tmp_path / "sources").resolve()
+    raw = folder / _RAW
+    folder.mkdir()
+    raw.write_text("n\n1\n")
+    p = Pipeline(tmp_path / "out", "run1", root_inputs={_RAW: raw})
+    outputs = {
+        "as_path_node": file_node(folder),
+        "as_run_directory": run_directory_node(folder, "finished.txt"),
+    }
+
+    for name, node in outputs.items():
+        with pytest.raises(WiringError) as info:
+            p.add_task(_path_task(name, {"out": node}))
+
+        assert str(info.value) == (
+            f"Step {name!r}: output {str(folder)!r} at {folder} holds the declared root "
+            f"input {_RAW!r} at {raw}; a step's output cannot hold a root input."
+        )
+    assert freeze(p).tasks == ()
+    assert raw.read_text() == "n\n1\n"
+
+
+def test_add_task_refuses_a_folder_output_given_relative_or_through_a_symlink(
+    tmp_path: Path,
+) -> None:
+    """add_task of a task whose output is a folder holding a declared root input, given as a path relative to the current directory or through a symbolically linked folder and not resolved first, raises WiringError starting "Step '<name>':" with check_not_root_input's folder message, and the task is not added."""
+    folder = (tmp_path / "sources").resolve()
+    raw = folder / _RAW
+    folder.mkdir()
+    raw.write_text("n\n1\n")
+    _link(tmp_path / "alias", folder)
+    p = Pipeline(tmp_path / "out", "run1", root_inputs={_RAW: raw})
+    spellings = {
+        "relative": Path(os.path.relpath(folder)),
+        "via_link": tmp_path / "alias",
+    }
+
+    for name, spelling in spellings.items():
+        with pytest.raises(WiringError) as info:
+            p.add_task(_path_task(name, {"out": PathNode(path=spelling)}))
+
+        message = str(info.value)
+        assert message.startswith(f"Step {name!r}: output "), message
+        assert f" at {folder} holds the declared root input {_RAW!r} at {raw}; " in message
+        assert message.endswith("a step's output cannot hold a root input."), message
+    assert freeze(p).tasks == ()
+
+
+def test_a_step_method_refuses_an_output_folder_that_holds_a_root_input(
+    tmp_path: Path,
+) -> None:
+    """With a root input declared at a file inside the run's output directory, add_command_step with an output key whose path is a folder holding that file raises WiringError starting "Step '<name>':" that names the output key and the root input, and the step is not added."""
+    raw = tmp_path / "out" / "run1" / "inputs" / _RAW
+    raw.parent.mkdir(parents=True)
+    raw.write_text("n\n1\n")
+    p = Pipeline(tmp_path / "out", "run1", root_inputs={_RAW: raw})
+    folder = _registry_of(p).path_for("inputs")
+
+    with pytest.raises(WiringError) as info:
+        p.add_command_step("mkdir -p {folder}", outputs={"folder": "inputs"}, name="clobber")
+
+    message = str(info.value)
+    assert message.startswith("Step 'clobber':"), message
+    assert message == (
+        f"Step 'clobber': output 'inputs' at {folder} holds the declared root input "
+        f"{_RAW!r} at {raw.resolve()}; a step's output cannot hold a root input."
+    )
+    assert freeze(p).tasks == ()
+    assert not _registered(p, "inputs")
+
+
+def test_a_notebook_step_whose_executed_key_lands_on_a_root_input_names_both_keys(
+    tmp_path: Path,
+) -> None:
+    """With a root input 'template' declared at the existing file <run dir>/report.ipynb, add_notebook_step with executed='report.ipynb' raises WiringError reading "Step '<name>': output 'report.ipynb' at <path> is the declared root input 'template'; a step cannot also produce it.", and the step is not added."""
+    template = tmp_path / "out" / "run1" / "report.ipynb"
+    template.parent.mkdir(parents=True)
+    template.write_text("{}")
+    root_inputs = {**_root_inputs(tmp_path), "template": template}
+    p = Pipeline(tmp_path / "out", "run1", root_inputs=root_inputs)
+    arguments = {
+        **_arguments("notebook", tmp_path, "nb", name="render"),
+        "executed": "report.ipynb",
+    }
+
+    with pytest.raises(WiringError) as info:
+        _add(p, "notebook", arguments)
+
+    assert str(info.value) == (
+        f"Step 'render': output 'report.ipynb' at {template.resolve()} is the declared "
+        "root input 'template'; a step cannot also produce it."
+    )
+    assert freeze(p).tasks == ()
+    assert template.read_text() == "{}"
+    assert not _registered(p, "nb_table.csv")
+
+
+def test_add_task_accepts_an_output_next_to_a_root_input(tmp_path: Path) -> None:
+    """add_task of a task whose output is a different file in the root input's folder is accepted and runs."""
+    p = _pipeline(tmp_path)
+    raw = tmp_path / _RAW
+    cooked = tmp_path / "cooked.csv"
+    task = Task(
+        name="cook",
+        run=f"cp {raw} {cooked}",
+        inputs={"raw": file_node(raw)},
+        outputs={"out": file_node(cooked)},
+        resources={},
+        env=None,
+    )
+
+    p.add_task(task)
+
+    assert freeze(p).tasks == (task,)
+    assert run(p) == {"cook": TaskOutcome.SUCCESS}
+    assert cooked.read_text() == "n\n1\n2\n"
+    assert raw.read_text() == "n\n1\n2\n"
 
 
 def test_add_task_refuses_an_output_another_added_task_produces_naming_its_path(

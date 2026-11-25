@@ -22,7 +22,8 @@ inside another's (a run directory is replaced on every run, and a file cannot ho
 another file), a hard error when two keys resolve to one path (which pytask
 would otherwise silently merge), a hard error when a step declares a root input's key
 as its output (which would otherwise shadow the root input for every consumer), a
-hard error when one key is registered as both a file output and a run directory
+hard error when an output's path is a root input's path or a folder that holds one
+(the step would otherwise overwrite or replace a source file), a hard error when one key is registered as both a file output and a run directory
 output, and a did-you-mean on a mistyped key. Root inputs may point anywhere. An
 unresolved input (no producer and no root-input file) is caught here with a
 did-you-mean; everything heavier (a cycle, two tasks claiming one output) is left to
@@ -30,6 +31,7 @@ pytask, which fails safe.
 """
 
 import difflib
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path, PurePosixPath
 
@@ -78,13 +80,24 @@ class FileRegistry:
         root_inputs: Mapping[FileKey, Path | str] | None = None,
     ) -> None:
         self._run_dir = Path(output_root).resolve() / run_name
-        self._root_inputs = {key: Path(p).resolve() for key, p in (root_inputs or {}).items()}
-        self._producers: dict[FileKey, PathNode] = {}
-        # Seed the collision guard with root-input paths so an output cannot land on
-        # one and be silently merged into it by pytask.
-        self._key_by_path: dict[Path, FileKey] = {
-            path: key for key, path in self._root_inputs.items()
+        given = root_inputs or {}
+        self._root_inputs = {key: Path(p).resolve() for key, p in given.items()}
+        # normpath drops '..' so the declared path's parents are real folders above it.
+        declared = {
+            key: Path(os.path.normpath(Path(p).absolute())) for key, p in given.items()
         }
+        self._producers: dict[FileKey, PathNode] = {}
+        # Root-input paths are seeded so key_for names a root input at its path. An
+        # output never lands on one: check_not_root_input refuses it first.
+        self._key_by_path: dict[Path, FileKey] = {}
+        # Each folder that holds a root input, by its resolved path or its path as
+        # declared, mapped to the first root input declared under it and that path.
+        self._root_under: dict[Path, tuple[FileKey, Path]] = {}
+        for key, source in self._root_inputs.items():
+            self._key_by_path.setdefault(source, key)
+            for path in (source, declared[key]):
+                for parent in path.parents:
+                    self._root_under.setdefault(parent, (key, path))
         # Each folder that holds a registered output, up to the run directory, mapped to
         # one output under it, so a new output that contains one is found in one lookup.
         self._key_under: dict[Path, FileKey] = {}
@@ -110,6 +123,60 @@ class FileRegistry:
             key is registered there.
         """
         return self._key_by_path.get(Path(path).resolve())
+
+    def check_not_root_input(self, path: Path | str, label: str) -> None:
+        """Refuse an output at ``path`` that is, or is a folder that holds, a root input.
+
+        ``path`` is resolved first, as for :meth:`key_for`, and compared with the
+        resolved path of each declared root input. A folder is also compared with each
+        root input's path as declared, made absolute, so a folder that holds a root
+        input that is a symbolic link to a file elsewhere is refused too. The step
+        methods' outputs go through this check when they are registered, and
+        :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task` calls it for each
+        output of a hand-built task, so no output can overwrite or replace a root input.
+
+        Parameters
+        ----------
+        path
+            The output's path.
+        label
+            How the message names the output, such as ``repr`` of its key, or of its
+            path for an output that has no key.
+
+        Raises
+        ------
+        WiringError
+            If ``path`` is a declared root input's path: when ``label`` is ``repr`` of
+            the root input's key, the message reads ``output <root key> is a declared
+            root input at <path>; a step cannot also produce it.``, and otherwise it
+            reads ``output <label> at <path> is the declared root input <root key>; a
+            step cannot also produce it.`` If ``path`` is a folder that holds a declared
+            root input, at any depth: the message reads ``output <label> at <path> holds
+            the declared root input <root key> at <root path>; a step's output cannot
+            hold a root input.``, with the first such root input in the order they were
+            declared, and ``<root path>`` its resolved path or, when only that is inside
+            the folder, its path as declared. When several root inputs share a path, the
+            first declared is named.
+        """
+        resolved = Path(path).resolve()
+        key = self._key_by_path.get(resolved)
+        if key is not None and key in self._root_inputs:
+            if label == repr(key):
+                raise WiringError(
+                    f"output {key!r} is a declared root input at {resolved}; a step cannot "
+                    "also produce it."
+                )
+            raise WiringError(
+                f"output {label} at {resolved} is the declared root input {key!r}; a step "
+                "cannot also produce it."
+            )
+        held = self._root_under.get(resolved)
+        if held is not None:
+            key, source = held
+            raise WiringError(
+                f"output {label} at {resolved} holds the declared root input {key!r} at "
+                f"{source}; a step's output cannot hold a root input."
+            )
 
     def check_output(self, key: FileKey) -> Path:
         """Return ``key``'s path, raising as :meth:`register_output` would for it.
@@ -159,19 +226,20 @@ class FileRegistry:
         ------
         WiringError
             If ``key`` is itself a declared root input, which a step cannot also
-            produce; if ``key``'s path, with symbolic links followed, is not strictly
-            inside the run's output directory: when it is that directory itself, as for
-            ``.`` or an empty key, the message names the key and the directory and says
-            that an output must be a file or folder inside it, and when it is outside,
-            as for a key with a ``..`` that leaves it or an absolute key outside it, the
-            message names the key, its path and the run's output directory, and says to
-            use a key that stays inside it, or a root input for a file outside the run;
-            if a different key -- an output or a declared root input -- already resolves
-            to this key's path; if ``key``'s path is inside the path of another
-            registered output, or contains one (the message names both keys and both
-            paths, and says that a run directory is replaced on every run when the outer
-            output is a run directory, or that one output cannot hold another
-            otherwise); or if ``key`` is already registered as a directory output by
+            produce; if ``key``'s path is a declared root input's path or a folder that
+            holds one, with the messages of :meth:`check_not_root_input`; if ``key``'s
+            path, with symbolic links followed, is not strictly inside the run's output
+            directory: when it is that directory itself, as for ``.`` or an empty key,
+            the message names the key and the directory and says that an output must be
+            a file or folder inside it, and when it is outside, as for a key with a
+            ``..`` that leaves it or an absolute key outside it, the message names the
+            key, its path and the run's output directory, and says to use a key that
+            stays inside it, or a root input for a file outside the run; if another
+            output's key already resolves to this key's path; if ``key``'s path is
+            inside the path of another registered output, or contains one (the message
+            names both keys and both paths, and says that a run directory is replaced
+            on every run when the outer output is a run directory, or that one output
+            cannot hold another otherwise); or if ``key`` is already registered as a directory output by
             :meth:`register_directory_output`. The last message names the key.
             Registering the same key again is not an error.
         """
@@ -208,9 +276,10 @@ class FileRegistry:
         Raises
         ------
         WiringError
-            If ``key`` is a declared root input, if the directory's path is not strictly
-            inside the run's output directory, if a different key already resolves to
-            the directory's path, or if the directory is inside another registered
+            If ``key`` is a declared root input, if the directory's path is a declared
+            root input's path or holds one, if the directory's path is not strictly
+            inside the run's output directory, if another output's key already resolves
+            to the directory's path, or if the directory is inside another registered
             output or contains one, with the same messages as :meth:`register_output`;
             or if ``key`` is already registered as a file output by
             :meth:`register_output`, with a message that names the key.
@@ -249,6 +318,7 @@ class FileRegistry:
                 f"which is not inside the run's output directory {run_dir}; use a key that "
                 "stays inside it, or declare a file outside the run as a root input."
             )
+        self.check_not_root_input(resolved, repr(key))
         claimant = self._key_by_path.get(resolved)
         if claimant is not None and claimant != key:
             raise WiringError(
