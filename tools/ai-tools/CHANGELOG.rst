@@ -1,3 +1,9 @@
+**0.32.3 - 11/25/26**
+
+- ``team-conventions``: post a PR's test summaries when the PR is opened, refresh
+  them after every push to it, and read the skill before a push
+- Move ``_test_summarizer`` here from ``simsci``
+
 **0.32.2 - 11/25/26**
 
 - ``framework-clis``: drop the ``type=simulation`` argument, since model repos now
