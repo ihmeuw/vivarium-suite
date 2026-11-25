@@ -32,10 +32,10 @@ each step once.
 After the workflow ends, the hook records each step's result from the file that the node
 runner wrote. Recording runs pytask's own per-task hooks in the build's process, so pytask
 checks and hashes each step's outputs and writes its lockfile entry exactly as a local
-build does, and a later build skips a step whose inputs and code are unchanged. A step
-that failed on its node is reported as FAIL with :class:`RemoteTaskFailed`. Nothing is
-recorded while the workflow runs, so pytask's table shows no step finishing until the
-whole workflow ends.
+build does, and a later build skips a step whose inputs and code identity are unchanged
+(with the default code identity, none is). A step that failed on its node is reported as
+FAIL with :class:`RemoteTaskFailed`. Nothing is recorded while the workflow runs, so
+pytask's table shows no step finishing until the whole workflow ends.
 
 The hook then settles every submitted step that still has no report, so each step of the
 plan ends with exactly one report. A step after a failed step is reported as

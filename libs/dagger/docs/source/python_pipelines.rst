@@ -25,6 +25,8 @@ By default, ``dagger run`` and ``dagger force`` run a pipeline definition's step
 through Jobmon, as one Jobmon workflow, with each step on a compute node (see
 `Running through Jobmon`_). With ``--local``, they run the steps in this process
 instead. ``dagger preview`` never runs anything and never uses Jobmon.
+:doc:`troubleshooting` covers problems that people meet in a run, most of them in a
+run through Jobmon.
 
 .. contents::
    :local:
@@ -554,11 +556,14 @@ Exit status
 Code  Meaning
 ====  ===================================================================================
 0     The command succeeded.
-1     A step failed or exited, another run through Jobmon holds the pipeline's root, or
-      the build stopped for another reason, possibly before any step ran.
+1     A step failed or exited, another run through Jobmon holds the pipeline's root,
+      Jobmon stopped the workflow at its time limit, or the build stopped for another
+      reason, possibly before any step ran.
 2     The definition or the command is wrong, or Jobmon cannot run here, and nothing
       ran.
-130   The command was interrupted, also by SIGTERM while Jobmon ran the workflow.
+130   The command was interrupted: by Ctrl-C, or, while ``dagger`` submitted or waited
+      for the Jobmon workflow, by SIGTERM, SIGHUP, or the stop at half the settle
+      margin before the allocation ends.
 ====  ===================================================================================
 
 Errors in a definition or a command
