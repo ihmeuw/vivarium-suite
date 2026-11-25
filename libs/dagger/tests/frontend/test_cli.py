@@ -2,6 +2,7 @@
 
 import ast
 import importlib.metadata
+import json
 import os
 import re
 import shlex
@@ -2564,6 +2565,93 @@ def test_preview_of_the_several_outputs_example_names_each_missing_output(
     assert {"file 'children.csv'", "file 'adults.parquet'"} <= set(nodes), split.reasons
 
 
+# The notebook step example (MIC-7764)
+
+_NOTEBOOK_EXAMPLE = Path(__file__).parent / "notebook_example"
+"""The notebook step example, whose definition and notebook the docs page shows."""
+
+
+def _copy_notebook_example(directory: Path) -> Path:
+    """Copy the notebook example's definition and notebook to ``directory``; return the first."""
+    for name in ("pipeline.py", "summarize.ipynb"):
+        shutil.copy(_NOTEBOOK_EXAMPLE / name, directory)
+    return directory / "pipeline.py"
+
+
+@pytest.mark.usefixtures("jupyter_dirs")
+def test_the_notebook_example_runs_with_dagger_run_local(tmp_path: Path) -> None:
+    """'dagger run -c pipeline.py --local' on a copy of tests/frontend/notebook_example (pipeline.py and summarize.ipynb) in tmp_path exits 0; summary.csv holds the adult total of 70, and the executed notebook records no error and holds papermill's injected cell with the population file's path."""
+    definition = _copy_notebook_example(tmp_path)
+
+    result = _invoke("run", str(definition))
+
+    assert result.exit_code == 0, _describe(result)
+    summary = _example_product(tmp_path, "summary.csv").read_text().splitlines()
+    assert summary == ["adults", "70"]
+    executed = _example_product(tmp_path, "executed/summarize.ipynb")
+    assert recorded_errors(executed) == []
+    cells = json.loads(executed.read_text())["cells"]
+    [injected] = [
+        "".join(cell["source"])
+        for cell in cells
+        if "injected-parameters" in cell["metadata"].get("tags", [])
+    ]
+    assert str(_example_product(tmp_path, "population.csv").resolve()) in injected, injected
+
+
+def test_the_docs_page_shows_each_code_cell_of_the_notebook_example() -> None:
+    """Each code cell of tests/frontend/notebook_example/summarize.ipynb appears on docs/source/python_pipelines.rst verbatim, indented by three spaces as in a code block."""
+    page = _DOCS_PAGE.read_text()
+    notebook = json.loads((_NOTEBOOK_EXAMPLE / "summarize.ipynb").read_text())
+    sources = [
+        "".join(cell["source"]) for cell in notebook["cells"] if cell["cell_type"] == "code"
+    ]
+
+    assert len(sources) == 2
+    for source in sources:
+        assert textwrap.indent(source, "   ") in page, source
+
+
+_README = Path(__file__).parents[2] / "README.rst"
+"""The README, whose first Python code block is a pipeline definition."""
+
+
+def _readme_definition(directory: Path) -> Path:
+    """Write the README's definition to ``directory`` with its env set to this one."""
+    lines = _README.read_text().splitlines()
+    start = lines.index(".. code-block:: python") + 2
+    end = next(i for i in range(start, len(lines)) if lines[i] and not lines[i][0].isspace())
+    source = textwrap.dedent("\n".join(lines[start:end]))
+    assert source.count('MODEL_ENV = "my_model_env"') == 1, source
+    source = "import sys\n" + re.sub(
+        r'MODEL_ENV = "my_model_env".*', "MODEL_ENV = sys.prefix", source
+    )
+    directory.mkdir()
+    (directory / "model_spec.yaml").write_text("")
+    (directory / "branches.yaml").write_text("")
+    write_source_notebook(
+        directory / "report.ipynb", "adults = None\nsimulation = None\nreport = None"
+    )
+    path = directory / "pipeline.py"
+    path.write_text(source)
+    return path
+
+
+def test_the_readme_definition_loads_previews_and_runs_until_adults(tmp_path: Path) -> None:
+    """The README's pipeline definition, with its env set to this one, previews its four steps, and 'dagger run --local --until adults' writes adults.csv without the 0-14 row."""
+    path = _readme_definition(tmp_path / "readme")
+
+    preview = _invoke("preview", str(path))
+    run = _invoke("run", str(path), "--until", "adults")
+
+    assert preview.exit_code == 0, _describe(preview)
+    planned = [line.split()[1].rstrip(":") for line in preview.stdout.splitlines()[:4]]
+    assert planned == ["population", "adults", "sims/model", "report"], preview.stdout
+    assert run.exit_code == 0, _describe(run)
+    adults = (tmp_path / "readme" / "output" / "example" / "adults.csv").read_text()
+    assert "0-14" not in adults and "15-64,55" in adults, adults
+
+
 # The Pipeline builder (MIC-7805, MIC-7810)
 
 _BUILDER_HEADER = (
@@ -3436,7 +3524,7 @@ def test_show_writes_nothing(tmp_path: Path) -> None:
 
 
 _DOCS_PAGE = Path(__file__).parents[2] / "docs" / "source" / "python_pipelines.rst"
-"""The docs page that shows a sample of 'dagger show' for the command step example."""
+"""The docs page on Python pipelines, which shows the examples' samples and notebook cells."""
 
 _DOCS_ROOT = "/home/user/model"
 """The folder the docs page shows the example's paths under."""

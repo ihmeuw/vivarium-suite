@@ -16,8 +16,8 @@ ENV = sys.prefix
 
 def summarize_deaths(simulation: Path) -> pd.DataFrame:
     """Sum the deaths of every simulation by input draw."""
-    results = sorted((simulation / "results" / "dead").glob("*.parquet"))
-    frame = pd.concat([pd.read_parquet(path) for path in results], ignore_index=True)
+    # pyarrow reads a directory of parquet files, one per simulation, as one table.
+    frame = pd.read_parquet(simulation / "results" / "dead")
     return frame.groupby("input_draw")["value"].sum().reset_index()
 
 
