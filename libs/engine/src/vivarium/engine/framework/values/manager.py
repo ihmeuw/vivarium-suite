@@ -100,7 +100,7 @@ class ValuesManager(Manager):
         self,
         value_name: str,
         source: Callable[..., Any],
-        required_resources: Iterable[str | Resource] = (),
+        required_resources: Sequence[str | Resource] = (),
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: PostProcessor | Sequence[PostProcessor] = (),
         description: str | None = None,
@@ -152,7 +152,7 @@ class ValuesManager(Manager):
         self,
         value_name: str,
         source: Callable[[pd.Index[int]], Any] | list[str],
-        required_resources: Iterable[str | Resource] = (),
+        required_resources: Sequence[str | Resource] = (),
         preferred_combiner: ValueCombiner = replace_combiner,
         preferred_post_processor: AttributePostProcessor
         | Sequence[AttributePostProcessor] = (),
@@ -208,7 +208,7 @@ class ValuesManager(Manager):
         self,
         value_name: str,
         modifier: Callable[..., Any],
-        required_resources: Iterable[str | Resource] = (),
+        required_resources: Sequence[str | Resource] = (),
         description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named value.
@@ -242,7 +242,7 @@ class ValuesManager(Manager):
         self,
         value_name: str,
         modifier: Callable[..., Any] | str,
-        required_resources: Iterable[str | Resource] = (),
+        required_resources: Sequence[str | Resource] = (),
         description: str | None = None,
     ) -> None:
         """Marks a ``Callable`` as the modifier of a named attribute.

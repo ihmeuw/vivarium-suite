@@ -37,7 +37,7 @@ dependencies = [
 interactive = ["vivarium-dependencies[interactive]"]
 test = [
     "vivarium-dependencies[ipython,loguru,networkx,pytest,pyyaml]",
-    "pytest-vivarium",
+    "pytest-vivarium>=0.5.0",
     "vivarium-fuzzy-checker",
 ]
 docs = ["vivarium-dependencies[sphinx]"]
