@@ -14,7 +14,6 @@ For more information about time in the simulation, see the associated
 from __future__ import annotations
 
 import math
-from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -24,9 +23,12 @@ from vivarium.engine.framework.lifecycle import lifecycle_states
 from vivarium.engine.types import ClockStepSize, ClockTime
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     from vivarium.engine.framework.engine import Builder
     from vivarium.engine.framework.event import Event
     from vivarium.engine.framework.population import SimulantData
+    from vivarium.engine.framework.resource import Resource
     from vivarium.engine.framework.values import ValuesManager
 
 from vivarium.engine.framework.values import list_combiner
@@ -111,15 +113,38 @@ class SimulationClock(Manager):
             preferred_post_processor=self.step_size_post_processor,
             description="Each simulant's time step size, which any component may shorten",
         )
-        self.register_step_modifier = partial(
-            builder.value.register_value_modifier,
-            self._simulant_step_size_pipeline,
-        )
+        self._register_value_modifier = builder.value.register_value_modifier
         builder.population.register_initializer(
             initializer=self.initialize_individual_clock, columns=None
         )
         builder.event.register_listener(lifecycle_states.POST_SETUP, self.on_post_setup)
         self._individual_clocks = pd.DataFrame()
+
+    def register_step_modifier(
+        self,
+        modifier: Callable[[pd.Index[int]], pd.Series[ClockStepSize]],
+        required_resources: Sequence[str | Resource] = (),
+        description: str | None = None,
+    ) -> None:
+        """Register a modifier of the simulant step size pipeline.
+
+        Parameters
+        ----------
+        modifier
+            Modifier of the step size pipeline. It takes an index and returns a
+            series of step sizes.
+        required_resources
+            The resources that the modifier requires. A string represents a
+            population attribute.
+        description
+            An optional description of what this modifier does to the step size.
+        """
+        self._register_value_modifier(
+            self._simulant_step_size_pipeline,
+            modifier=modifier,
+            required_resources=required_resources,
+            description=description,
+        )
 
     def on_post_setup(self, event: Event) -> None:
         if not self._step_size_pipeline.modifiers:

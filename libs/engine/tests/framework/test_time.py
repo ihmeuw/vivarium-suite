@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -489,15 +489,23 @@ def test_step_size_post_processor(builder: MagicMock) -> None:
     clock._standard_step_size = clock._minimum_step_size = pd.Timedelta(days=2)
     clock.setup(builder)
 
-    ## Add modifier that set the step size to 7 for even indices and 5 for odd indices
-    clock.register_step_modifier(
-        lambda idx: pd.Series(
+    def seven_or_five_days(idx: pd.Index[int]) -> pd.Series[ClockStepSize]:
+        step_sizes = pd.Series(
             [pd.Timedelta(days=7) if i % 2 == 0 else pd.Timedelta(days=5) for i in idx],
             index=idx,
         )
-    )
+        return cast("pd.Series[ClockStepSize]", step_sizes)
+
+    def nine_days(idx: pd.Index[int]) -> pd.Series[ClockStepSize]:
+        return cast("pd.Series[ClockStepSize]", pd.Series(pd.Timedelta(days=9), index=idx))
+
+    def half_a_day(idx: pd.Index[int]) -> pd.Series[ClockStepSize]:
+        return cast("pd.Series[ClockStepSize]", pd.Series(pd.Timedelta(days=0.5), index=idx))
+
+    ## Add modifier that set the step size to 7 for even indices and 5 for odd indices
+    clock.register_step_modifier(seven_or_five_days)
     ## Add modifier that sets the step size to 9 for all simulants
-    clock.register_step_modifier(lambda idx: pd.Series(pd.Timedelta(days=9), index=idx))
+    clock.register_step_modifier(nine_days)
     value = clock._step_size_pipeline(index)
     evens = value[value.index % 2 == 0]
     odds = value[value.index % 2 == 1]
@@ -506,7 +514,7 @@ def test_step_size_post_processor(builder: MagicMock) -> None:
     assert np.all(evens == pd.Timedelta(days=6))
     assert np.all(odds == pd.Timedelta(days=4))
 
-    clock.register_step_modifier(lambda idx: pd.Series(pd.Timedelta(days=0.5), index=idx))
+    clock.register_step_modifier(half_a_day)
     value = clock._step_size_pipeline(index)
     assert np.all(value == pd.Timedelta(days=2))
 
@@ -571,9 +579,9 @@ def test_simple_clock_time_steps_remaining(base_config: ConfigTree, end: int) ->
 def test_step_size_modifier_forwards_its_description() -> None:
     """A described step size modifier carries its description to the pipeline.
 
-    ``register_step_size_modifier`` reaches ``register_value_modifier`` through a
-    ``functools.partial`` rather than a direct call, so it is the one registration
-    entry point where a dropped argument would not show up as a signature error.
+    ``SimulationClock.register_step_modifier`` passes ``description`` on to
+    ``register_value_modifier``; the signature guard does not check that call, so a
+    dropped argument there would not show up as a signature error.
     """
 
     class DescribedStepModifier(Component):
