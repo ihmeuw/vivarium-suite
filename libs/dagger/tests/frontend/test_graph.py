@@ -21,9 +21,10 @@ from tests.frontend.pipeline_example.pipeline import (
     total_adults,
 )
 from tests.frontend.simulations import summarize_run, write_branches, write_spec
+from vivarium.dagger.backend.build import check_task_order
 from vivarium.dagger.backend.nodes import file_node
 from vivarium.dagger.backend.task import Task
-from vivarium.dagger.frontend import GraphError, Pipeline, graph, run
+from vivarium.dagger.frontend import GraphError, Pipeline, PipelineError, graph, run
 from vivarium.dagger.frontend.builder import freeze
 from vivarium.dagger.harness import stable_code_id
 
@@ -994,4 +995,62 @@ def test_graph_of_something_that_is_not_a_pipeline_raises_type_error(
         with pytest.raises(TypeError):
             graph(not_a_pipeline, graphs / "graph.mmd")  # type: ignore[arg-type]
 
+    assert list(graphs.iterdir()) == []
+
+
+def _hand_copy(name: str, source: Path, target: Path) -> Task:
+    """Build a hand-built command task that copies ``source`` to ``target``."""
+    return Task(
+        name=name,
+        run=f"cp {source} {target}",
+        inputs={"source": file_node(source)},
+        outputs={"target": file_node(target)},
+        resources={},
+        env=None,
+    )
+
+
+def test_graph_of_a_pipeline_out_of_order_or_in_a_cycle_raises_pipeline_error(
+    tmp_path: Path,
+) -> None:
+    """graph() of a Pipeline with a task added before its producer, and of one with a two-task cycle, raises PipelineError with check_task_order's message and exit_code None, before the extension is checked (also for a bad extension), and writes no file."""
+    made, copied = tmp_path.resolve() / "made.txt", tmp_path.resolve() / "copied.txt"
+    out_of_order = Pipeline(tmp_path / "order_out", "run1", state=tmp_path / "order_state")
+    out_of_order.add_task(_hand_copy("consumer", made, copied))
+    out_of_order.add_task(
+        Task(
+            name="producer",
+            run=f"touch {made}",
+            inputs={},
+            outputs={"target": file_node(made)},
+            resources={},
+            env=None,
+        )
+    )
+    x, y = tmp_path.resolve() / "x.txt", tmp_path.resolve() / "y.txt"
+    cycle = Pipeline(tmp_path / "cycle_out", "run1", state=tmp_path / "cycle_state")
+    cycle.add_task(_hand_copy("cycle_alpha", y, x))
+    cycle.add_task(_hand_copy("cycle_bravo", x, y))
+    graphs = tmp_path / "graphs"
+    graphs.mkdir()
+
+    with pytest.raises(ValueError) as cycle_error:
+        check_task_order(freeze(cycle).tasks)
+    expected = {
+        "order": (
+            out_of_order,
+            "Step 'consumer' depends on step 'producer', which comes after it; add step "
+            "'producer' before step 'consumer'.",
+        ),
+        "cycle": (cycle, str(cycle_error.value)),
+    }
+    assert expected["cycle"][1].startswith("The DAG contains cycles"), expected["cycle"][1]
+
+    for case, (pipeline, message) in expected.items():
+        for name in ("graph.mmd", "graph.txt"):
+            with pytest.raises(PipelineError) as info:
+                graph(pipeline, graphs / name)
+
+            assert str(info.value) == message, (case, name)
+            assert info.value.exit_code is None, (case, name)
     assert list(graphs.iterdir()) == []

@@ -43,7 +43,7 @@ from vivarium.dagger.bridge import _jobmon_adapter
 from vivarium.dagger.bridge.plugin import DEFAULT_CLUSTER
 from vivarium.dagger.frontend.builder import _PipelineSnapshot, freeze
 from vivarium.dagger.frontend.definition import DefinitionError, load_pipeline
-from vivarium.dagger.frontend.drawing import GraphError, _graph
+from vivarium.dagger.frontend.drawing import GraphError, _check_order, _graph
 from vivarium.dagger.frontend.execution import (
     PipelineError,
     RunInterrupted,
@@ -174,8 +174,13 @@ def show_definition(definition: str, steps: tuple[str, ...]) -> None:
     The definition is loaded, frozen and checked as for :func:`preview_definition`, with
     the same errors, and nothing runs or is written. So, as for a preview, a pipeline
     root that cannot be written exits with status 2, although ``show`` writes nothing
-    there. The steps are printed in the order the definition adds them, one block each,
-    with a blank line between blocks::
+    there. The steps are then checked with
+    :func:`~vivarium.dagger.backend.build.check_task_order`, before anything is printed:
+    a step pytask cannot take, or a step added before a step it depends on, exits with
+    status 2 and the message a preview gives for it, and steps that depend on each other
+    in a cycle exit with status 2 and pytask's description of the cycle. The steps are
+    printed in the order the definition adds them, one block each, with a blank line
+    between blocks::
 
         Step '<name>' (<kind> step, env <env>)
           input  <name>: '<key>' at <path>
@@ -208,9 +213,11 @@ def show_definition(definition: str, steps: tuple[str, ...]) -> None:
     try:
         pipeline = _load(definition)
         selected: set[str] | None = None
-        if steps:
-            with _verb_errors(pipeline, steps, "'STEP...'"):
+        # Steps are resolved first, so that an order error is never blamed on 'STEP...'.
+        with _verb_errors(pipeline, steps, "'STEP...'"):
+            if steps:
                 selected = _resolve(pipeline, steps)
+            _check_order(pipeline)
         blocks = [
             _step_block(pipeline, task)
             for task in pipeline.tasks
@@ -227,7 +234,9 @@ def graph_definition(definition: str, output: Path) -> None:
 
     The definition is loaded, frozen and checked as for :func:`show_definition`, with the
     same errors, so a pipeline root that cannot be written exits with status 2, although
-    nothing is written there. The graph is then written as
+    nothing is written there, and a step pytask cannot take, or a step added before a
+    step it depends on, or a cycle, exits with status 2 before anything is written. The
+    graph is then written as
     :func:`~vivarium.dagger.frontend.drawing.graph` writes it, and ``output`` is the only
     file written. Nothing is printed on success.
 
@@ -248,6 +257,8 @@ def graph_definition(definition: str, output: Path) -> None:
         pipeline = _load(definition)
         try:
             _graph(pipeline, output)
+        except PipelineError as error:
+            raise _DefinitionProblem(str(error)) from None
         except ValueError as error:
             raise click.BadParameter(str(error), param_hint="'FILE'") from None
         except GraphError as error:

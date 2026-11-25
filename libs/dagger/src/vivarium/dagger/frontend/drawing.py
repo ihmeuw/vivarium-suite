@@ -94,8 +94,9 @@ from pathlib import Path
 
 import pytask
 
-from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY
+from vivarium.dagger.backend.build import CODE_ID_KEY, COMMAND_KEY, check_task_order
 from vivarium.dagger.frontend.builder import Pipeline, _PipelineSnapshot, freeze
+from vivarium.dagger.frontend.execution import PipelineError
 
 TEXT_FORMATS = (".mmd", ".md", ".dot", ".gv")
 """The extensions :func:`graph` writes as text, with no other program."""
@@ -130,6 +131,12 @@ def graph(pipeline: Pipeline, path: Path | str) -> None:
 
     Raises
     ------
+    ~vivarium.dagger.frontend.execution.PipelineError
+        If a step is one pytask cannot take, a step is added before a step it depends on,
+        or steps depend on each other in a cycle, as
+        :func:`~vivarium.dagger.backend.build.check_task_order` describes, with that
+        function's message and ``exit_code`` ``None``. This is checked before the
+        extension, and nothing is written.
     ValueError
         If the extension of ``path`` is not one of :data:`TEXT_FORMATS` or
         :data:`IMAGE_FORMATS`. The message names the extension, or says the path has none,
@@ -152,6 +159,7 @@ def graph(pipeline: Pipeline, path: Path | str) -> None:
 
 def _graph(pipeline: _PipelineSnapshot, path: Path | str) -> None:
     """Write the graph of the snapshot ``pipeline`` to ``path``, as :func:`graph` does."""
+    _check_order(pipeline)
     path = Path(path)
     suffix = path.suffix
     extension = suffix.lower()
@@ -182,6 +190,14 @@ def _graph(pipeline: _PipelineSnapshot, path: Path | str) -> None:
             text = f"```mermaid\n{text}```\n"
         content = text.encode("utf-8")
     path.write_bytes(content)
+
+
+def _check_order(pipeline: _PipelineSnapshot) -> None:
+    """Raise PipelineError, with no exit code, if ``check_task_order`` refuses the steps."""
+    try:
+        check_task_order(pipeline.tasks)
+    except ValueError as error:
+        raise PipelineError(str(error), exit_code=None) from None
 
 
 @dataclass(frozen=True)

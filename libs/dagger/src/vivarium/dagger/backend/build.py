@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any
 
 import pytask
-from _pytask.dag import _create_dag_from_tasks
+from _pytask.dag import _check_if_dag_has_cycles, _create_dag_from_tasks
 from _pytask.dag_graph import DAG
+from _pytask.exceptions import ResolvingDependenciesError
 
 from vivarium.dagger.backend._pickling import reduce_exception
 from vivarium.dagger.backend.env import resolve_env_bin_path, resolve_env_prefix
@@ -370,6 +371,44 @@ def build(
     return pytask.build(
         tasks=pytask_tasks, config=config, task_files=(), **selection, **kwargs
     )
+
+
+def check_task_order(tasks: Iterable[Task]) -> None:
+    """Check that ``tasks`` can run in the order given, without building them.
+
+    The tasks are converted as :func:`build` converts them, and pytask's graph of them is
+    built in memory; nothing is written and pytask is not started. The commands that read
+    a definition without building it, ``dagger show`` and ``dagger graph``, call this so
+    that they refuse what a preview refuses.
+
+    Parameters
+    ----------
+    tasks
+        The tasks, in the order a pipeline added them.
+
+    Raises
+    ------
+    ValueError
+        If a task cannot be converted, with the message :func:`to_pytask_task` gives, as
+        :func:`build` raises it; if a task depends on a task that comes after it, with the
+        message :func:`build` gives for that; or if tasks depend on each other in a cycle,
+        of any length, or a task reads its own output, with pytask's description of the
+        cycle as the message (it starts ``The DAG contains cycles`` and lists the path of
+        steps and files that forms the cycle). An order error is reported before a cycle,
+        as :func:`build` does. A graph that pytask cannot build for another reason is not
+        an error here, as in :func:`build`, which leaves that error to pytask.
+    """
+    pytask_tasks: list[pytask.PTask] = [to_pytask_task(task) for task in tasks]
+    _check_task_order(pytask_tasks)
+    try:
+        dag = _create_dag_from_tasks(tasks=pytask_tasks)
+    except Exception:
+        # As in _check_task_order: pytask reports this error in its own build.
+        return
+    try:
+        _check_if_dag_has_cycles(dag)
+    except ResolvingDependenciesError as error:
+        raise ValueError(str(error)) from None
 
 
 def _check_task_order(tasks: Sequence[pytask.PTask]) -> None:

@@ -176,18 +176,19 @@ Showing what a definition compiled to
 
 ``dagger show`` prints what each step reads, writes and runs, without running anything
 or writing anything. Like ``dagger preview``, it exits with status 2 if the pipeline's
-root cannot be written. Each step is a block of labeled lines, in the order the
-definition adds the steps: the step's name and kind, and its env if it has one; one
-``input`` or ``output`` line per file; and a ``runs`` line with the step's whole shell
-command, or, for a python step, a ``calls`` line with the function it calls. An input
-or output line gives the file's name and, for a file that the pipeline knows (an output
-of a step method or a root input), its file key and absolute path; a run directory is
-shown as ``run directory '<key>' at <path>``. Any other file, such as a notebook's
-source or an output of a task added with
+root cannot be written, if a step is added before a step it depends on, or if steps
+depend on each other in a cycle, with the message a preview gives. Each step is a block
+of labeled lines, in the order the definition adds the steps: the step's name and kind,
+and its env if it has one; one ``input`` or ``output`` line per file; and a ``runs``
+line with the step's whole shell command, or, for a python step, a ``calls`` line with
+the function it calls. An input or output line gives the file's name and, for a file
+that the pipeline knows (an output of a step method or a root input), its file key and
+absolute path; a run directory is shown as ``run directory '<key>' at <path>``. Any
+other file, such as a notebook's source or an output of a task added with
 :meth:`~vivarium.dagger.frontend.builder.Pipeline.add_task`, is shown by its path as the
-step gives it, and a node that is not a file by its name. Each further line of a
-command is on its own line below, indented to the same column; a command step's command
-starts with the line that ``dagger`` adds to create the directories of its outputs.
+step gives it, and a node that is not a file by its name. Each further line of a command
+is on its own line below, indented to the same column; a command step's command starts
+with the line that ``dagger`` adds to create the directories of its outputs.
 ``dagger show -c pipeline.py STEP...`` prints only the named steps.
 
 This is the output for the command example's own ``pipeline.py``, the definition shown
@@ -211,13 +212,15 @@ Drawing a pipeline's graph
 
 ``dagger graph`` draws the definition's steps and the files between them to the file it
 is given, without running anything. The file is the only thing it writes, and, as for
-``dagger show``, it exits with status 2 if the pipeline's root cannot be written. The
-graph has a node for each step, labeled with its name and kind, and a node for each root
-input that a step reads and for each output that no step reads, labeled with its file
-key. There is one edge from a step to each step that reads files it writes, labeled with
-the keys of those files. The edges from root inputs and to final outputs have no label,
-because their nodes carry the keys. A file that a step reads but that is neither written
-by a step nor a root input, such as a notebook's source, is left out.
+``dagger show``, it exits with status 2, and writes nothing, if the pipeline's root
+cannot be written, if a step is added before a step it depends on, or if steps depend on
+each other in a cycle. The graph has a node for each step, labeled with its name and
+kind, and a node for each root input that a step reads and for each output that no step
+reads, labeled with its file key. There is one edge from a step to each step that reads
+files it writes, labeled with the keys of those files. The edges from root inputs and to
+final outputs have no label, because their nodes carry the keys. A file that a step
+reads but that is neither written by a step nor a root input, such as a notebook's
+source, is left out.
 
 The file's extension picks the format. ``.mmd`` writes Mermaid text, which GitHub, VS
 Code's Markdown preview and JupyterLab draw as a picture, and ``.md`` writes the same text
@@ -596,9 +599,9 @@ Each of these exits with status 2 before any step runs:
 - A step is added before a step it depends on, for example a notebook step whose
   notebook a later step writes. A step method refuses an input file key that is neither
   a root input nor an output of an earlier step, when the step is added, as described
-  above. ``dagger`` checks every other dependency when it builds the pipeline, and its
-  message names the step and then the later step it depends on, and says which to add
-  first.
+  above. ``dagger`` checks every other dependency when it builds the pipeline, and
+  ``dagger show`` and ``dagger graph`` check them without building it. The message names
+  the step and then the later step it depends on, and says which to add first.
 - The pipeline cannot be built as defined, for example because a step declares an
   environment that does not exist or steps depend on each other in a cycle. ``dagger``
   prints the reason.

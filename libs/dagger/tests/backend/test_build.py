@@ -12,6 +12,7 @@ import pytest
 from pytask import ExitCode, PickleNode, PNode, PythonNode, Session, TaskOutcome
 
 import vivarium.dagger.backend.build as build_module
+from tests.backend.file_snapshot import changed_files, snapshot_files
 from tests.backend.order_names import EIGHT
 from vivarium.dagger.backend.build import (
     BRIDGE_PLUGIN,
@@ -20,6 +21,7 @@ from vivarium.dagger.backend.build import (
     TASK_KEY,
     TaskExited,
     build,
+    check_task_order,
     describe_exit,
     failure_message,
     outcomes,
@@ -856,3 +858,143 @@ def test_failure_message_of_a_built_session_with_no_failed_step_is_the_exit_code
     session.exit_code = ExitCode.FAILED
 
     assert failure_message(session) == "FAILED"
+
+
+# check_task_order (MIC-7818)
+
+_CYCLE_START = "The DAG contains cycles"
+"""How pytask's description of a cycle starts."""
+
+
+def _checked(tasks: list[Task], folder: Path) -> ValueError | None:
+    """Return the ValueError check_task_order raises for ``tasks``, or ``None``.
+
+    The check runs with ``folder`` as the working directory, and the function asserts
+    that nothing under ``folder`` changed.
+    """
+    before = snapshot_files(folder)
+    error: ValueError | None = None
+    with pytest.MonkeyPatch.context() as patch:
+        patch.chdir(folder)
+        try:
+            check_task_order(tasks)
+        except ValueError as raised:
+            error = raised
+    assert changed_files(before, snapshot_files(folder)) == [], [t.name for t in tasks]
+    return error
+
+
+def _two_task_cycle(folder: Path) -> tuple[Task, Task]:
+    """Build cycle_alpha, which reads y.txt and writes x.txt, and cycle_bravo, the reverse."""
+    x, y = folder / "x.txt", folder / "y.txt"
+    return _copy("cycle_alpha", y, x), _copy("cycle_bravo", x, y)
+
+
+def test_check_task_order_accepts_tasks_in_dependency_order(tmp_path: Path) -> None:
+    """Tasks in dependency order, and tasks that do not depend on each other in any order, raise nothing, and nothing is written under tmp_path."""
+    first, middle, last = _chain(tmp_path)
+    other = _make("other", tmp_path / "other")
+    raw = _write(tmp_path / "raw", "x")
+    orders: list[list[Task]] = [
+        [first, middle, last],
+        [first, other, middle, last],
+        [_copy("reader", raw, tmp_path / "copy"), other],
+    ]
+    orders.extend(
+        [_make(name, tmp_path / name) for name in order]
+        for order in permutations(("a", "b", "c"))
+    )
+
+    for tasks in orders:
+        assert _checked(tasks, tmp_path) is None, [task.name for task in tasks]
+
+
+def test_check_task_order_refuses_a_task_before_its_producer_with_builds_message(
+    tmp_path: Path,
+) -> None:
+    """A consumer listed before its producer raises ValueError with exactly the message build gives for the same tasks, and nothing is written."""
+    made, copied = tmp_path / "made", tmp_path / "copied"
+    first, middle, last = _chain(tmp_path / "chain")
+    a, b = tmp_path / "a", tmp_path / "b"
+    cases: list[list[Task]] = [
+        [_copy("consumer", made, copied), _make("producer", made)],
+        [first, last, middle],
+        [middle, last, first],
+        [
+            _copy("reads_b", b, tmp_path / "b_copy"),
+            _copy("reads_a", a, tmp_path / "a_copy"),
+            _make("makes_a", a),
+            _make("makes_b", b),
+        ],
+    ]
+
+    errors = [_checked(tasks, tmp_path) for tasks in cases]
+
+    assert str(errors[0]) == (
+        "Step 'consumer' depends on step 'producer', which comes after it; add step "
+        "'producer' before step 'consumer'."
+    )
+    for index, (tasks, error) in enumerate(zip(cases, errors)):
+        names = [task.name for task in tasks]
+        assert error is not None, names
+        with pytest.raises(ValueError) as built:
+            build(tasks, tmp_path / f"state{index}")
+        assert str(error) == str(built.value), names
+
+
+def test_check_task_order_refuses_a_cycle_with_pytasks_description(tmp_path: Path) -> None:
+    """Two tasks that each read the other's output, and a task that reads its own output, raise ValueError whose message starts 'The DAG contains cycles' and names each task in the cycle; nothing is written."""
+    alpha, bravo = _two_task_cycle(tmp_path)
+    looped = tmp_path / "loop.txt"
+    pair = ("cycle_alpha", "cycle_bravo", "x.txt", "y.txt")
+    cases: list[tuple[list[Task], tuple[str, ...]]] = [
+        ([alpha, bravo], pair),
+        ([bravo, alpha], pair),
+        ([_copy("self_loop", looped, looped)], ("self_loop", "loop.txt")),
+    ]
+
+    for tasks, named in cases:
+        error = _checked(tasks, tmp_path)
+
+        assert error is not None, [task.name for task in tasks]
+        message = str(error)
+        assert message.startswith(_CYCLE_START), message
+        for name in named:
+            assert name in message, (name, message)
+
+
+def test_check_task_order_reports_an_order_error_before_a_cycle(tmp_path: Path) -> None:
+    """With a cycle and, elsewhere, a consumer listed before its producer, the error is the order error for 'consumer', as build gives it, and nothing is written."""
+    alpha, bravo = _two_task_cycle(tmp_path)
+    made = tmp_path / "made"
+    consumer = _copy("consumer", made, tmp_path / "copied")
+    producer = _make("producer", made)
+
+    for tasks in ([consumer, producer, alpha, bravo], [alpha, consumer, bravo, producer]):
+        error = _checked(tasks, tmp_path)
+
+        assert str(error) == (
+            "Step 'consumer' depends on step 'producer', which comes after it; add step "
+            "'producer' before step 'consumer'."
+        ), [task.name for task in tasks]
+
+
+class _UnsignedNode(_VersionNode):
+    """In-memory node whose ``signature`` raises, so pytask cannot build a graph with it."""
+
+    @property
+    def signature(self) -> str:
+        raise RuntimeError("this node has no signature")
+
+
+def test_check_task_order_accepts_tasks_pytask_cannot_build_a_graph_of(
+    tmp_path: Path,
+) -> None:
+    """check_task_order returns without error, and writes nothing, for tasks of which pytask cannot build a graph: a task whose input node's signature raises, alone and with a consumer listed before its producer."""
+    unsigned = _task("unsigned", _noop, {"value": _UnsignedNode("value")})
+    made = tmp_path / "made"
+    consumer = _copy("consumer", made, tmp_path / "copied")
+    producer = _make("producer", made)
+
+    for tasks in ([unsigned], [unsigned, consumer, producer]):
+        assert _checked(tasks, tmp_path) is None, [task.name for task in tasks]
