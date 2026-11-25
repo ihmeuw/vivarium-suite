@@ -2,6 +2,9 @@
 
 - Add an ``absolute`` argument to ``get()`` and ``get_tree()`` to resolve a key
   path from the root tree
+- Deleting a child with ``del`` clears its link to its former parent. A deleted
+  subtree or node now starts its key paths, its ``find()`` results, its IPython
+  display, and absolute ``get()`` and ``get_tree()`` lookups from itself
 
 **5.3.0b1 - 11/17/26**
 
