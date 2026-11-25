@@ -1,3 +1,11 @@
+**0.5.0 - 11/24/26**
+
+- Add ``pytest_vivarium.signatures``, with ``compare_signatures`` and
+  ``assert_signatures_agree``, to pin a hand-written signature to the definition it
+  mirrors
+- Test that ``pytest_xdist_auto_num_workers`` matches the hook that ``pytest-xdist``
+  declares
+
 **0.4.0 - 11/17/26**
 
 - Require ``vivarium-dependencies>=2.0.0``, which raises the floors of this library's

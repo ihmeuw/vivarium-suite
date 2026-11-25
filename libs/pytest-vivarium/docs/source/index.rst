@@ -33,6 +33,17 @@ ceiling and is clamped to the process's usable CPUs and to the memory available
 to it - reading both node free memory and any cgroup (for example a SLURM
 ``--mem``) limit. The resolved plan is printed in the run header.
 
+Signature agreement
+-------------------
+
+``pytest_vivarium.signatures`` holds test helpers that pin a hand-written
+signature to the definition it mirrors, so a parameter added to the source
+cannot be silently dropped from the copy. Unlike the rest of the plugin, these
+are imported explicitly.
+
+.. automodule:: pytest_vivarium.signatures
+   :members:
+
 .. toctree::
    :hidden:
    :maxdepth: 2

@@ -1,14 +1,17 @@
 """Regression tests for the pytest plugin."""
 
+import inspect
 import os
 from pathlib import Path
 from typing import cast
 
 import pytest
+import xdist.newhooks  # type: ignore[import-untyped]
 from _pytest.config import Config
 
 from pytest_vivarium import plugin
 from pytest_vivarium.plugin import DEFAULT_MAX_WORKERS, _auto_num_workers
+from pytest_vivarium.signatures import compare_signatures
 
 pytest_plugins = ["pytester"]
 
@@ -261,3 +264,15 @@ def test_xdist_auto_num_workers_takes_precedence_over_xdist_default(
     )
     assert result.ret == 0
     result.stdout.fnmatch_lines(["3 workers [[]1 item[]]"])
+
+
+def test_xdist_auto_num_workers_matches_xdist_hookspec() -> None:
+    """The hook resolves by name against ``xdist.newhooks`` and its argument names match the spec."""
+    hook = plugin.pytest_xdist_auto_num_workers
+    spec = getattr(xdist.newhooks, hook.__name__, None)
+
+    assert spec is not None, f"xdist.newhooks defines no hookspec named {hook.__name__!r}"
+    assert list(inspect.signature(hook).parameters) == ["config"]
+    assert list(inspect.signature(spec).parameters) == ["config"]
+    divergences = compare_signatures(hook, spec)
+    assert [d for d in divergences if d.aspect in ("names", "order")] == []
