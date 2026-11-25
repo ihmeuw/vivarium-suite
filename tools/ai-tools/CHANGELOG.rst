@@ -1,4 +1,4 @@
-**0.33.0 - 11/24/26**
+**0.33.0 - 11/25/26**
 
 - ``team-conventions``: refresh a PR's test summaries after every push to it, and
   read the skill before a push
