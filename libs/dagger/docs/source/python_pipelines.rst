@@ -46,10 +46,10 @@ build, and pytask counts every step as stale. A task added with
 was built with, so it can be skipped. In detail:
 
 - ``--until`` is the only way to leave steps out of a run.
-- ``dagger preview`` shows the steps in the order they would run, with pytask's reasons,
-  and every step as ``run``, except the steps that ``--until`` leaves out, which it shows
-  as ``skip <step>: not selected``. ``dagger show`` and ``dagger graph`` show which file
-  each step reads from which step.
+- ``dagger preview`` shows the steps in the order the definition adds them, with
+  pytask's reasons, and every step as ``run``, except the steps that ``--until`` leaves
+  out, which it shows as ``skip <step>: not selected``. ``dagger show`` and
+  ``dagger graph`` show which file each step reads from which step.
 - ``dagger force`` runs the named steps, which would run anyway, so it runs the same
   steps as ``dagger run``.
 - After a step fails or a run is interrupted, the next run runs every step again,
@@ -143,18 +143,19 @@ Previewing a run
    $ dagger preview -c pipeline.py
 
 ``dagger preview`` runs nothing and writes nothing under the state root of a pipeline
-that has run, so it is safe while ``dagger run`` works on the same pipeline. On a pipeline
-that never ran, it creates the state root, its ``pytask.toml`` and pytask's ``.pytask``
-folder, and no output. It prints one line per step, in
-the order the definition adds the steps. A step that would run is printed as ``run <step>``,
-followed by pytask's reasons, separated by semicolons. A step that would not run is
-printed as ``skip <step>: not selected``, because ``--until`` leaves it out. In the alpha
-every other step would run; once a step can declare a fingerprint of its code, a step
-whose inputs and code are unchanged will print as ``skip <step>: unchanged``. A last
-line, such as ``2 of 3 steps would run.``, counts the steps that would run. Each reason
-names a file by its key, a step's code as ``code of '<step>'``, and a step as
-``step '<step>'``, never by a file path. For this
-example, before its first run, the output starts like this::
+that has run, so it is safe while ``dagger run`` works on the same pipeline. On a
+pipeline that never ran, it creates the state root, its ``pytask.toml``, pytask's
+``.pytask`` folder with pytask's database, and the run's empty output folder, and it
+writes no output file. It prints one line per step, in the order the definition adds the steps. A
+step that would run is printed as ``run <step>``, followed by pytask's reasons,
+separated by semicolons. A step that would not run is printed as
+``skip <step>: not selected``, because ``--until`` leaves it out. In the alpha every
+other step would run; once a step can declare a fingerprint of its code, a step whose
+inputs and code are unchanged will print as ``skip <step>: unchanged``. A last line,
+such as ``2 of 3 steps would run.``, counts the steps that would run. Each reason names
+a file by its key, a step's code as ``code of '<step>'``, and a step as
+``step '<step>'``, never by a file path. For this example, before its first run, the
+output starts like this::
 
     run  population: code of 'population' has no recorded state; step 'population' has no recorded state; file 'population.parquet' is missing
     run  adults: step 'population' would run first
